@@ -4,11 +4,8 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AlertTriangle, DollarSign, Clock } from "lucide-react";
 import { AdvancedFilters, useFilters } from "@/components/shared/advanced-filters";
-import { formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { PageShell } from "@/components/page-shell";
-import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 
 export default function UmrahPenalties() {
   const { data: resp, isLoading, isError, error, refetch } = useApiQuery<any>(["umrah-penalties"], "/umrah/penalties");
@@ -34,7 +31,7 @@ export default function UmrahPenalties() {
   const kpiCards = [
     { label: "إجمالي الغرامات", value: items.length, icon: AlertTriangle, color: "text-blue-600 bg-blue-50" },
     { label: "معلقة", value: pendingCount, icon: Clock, color: "text-yellow-600 bg-yellow-50" },
-    { label: "إجمالي المبالغ", value: formatCurrency(totalAmount), icon: DollarSign, color: "text-red-600 bg-red-50" },
+    { label: "إجمالي المبالغ (ريال)", value: totalAmount.toLocaleString(), icon: DollarSign, color: "text-red-600 bg-red-50" },
   ];
 
   const columns: DataTableColumn<any>[] = [
@@ -43,13 +40,15 @@ export default function UmrahPenalties() {
     { key: "agentName", header: "الوكيل" },
     { key: "type", header: "النوع", render: (p) => p.type === "overstay" ? "تجاوز مدة" : p.type },
     { key: "daysOverstayed", header: "أيام التأخر" },
-    { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold text-red-600">{formatCurrency(Number(p.amount))}</span> },
+    { key: "amount", header: "المبلغ (ريال)", render: (p) => <span className="font-bold text-red-600">{Number(p.amount).toLocaleString()}</span> },
     { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
   ];
 
   return (
-    <PageShell title="غرامات العمرة" breadcrumbs={[{ label: "العمرة" }, { label: "الغرامات" }]}>
-      <UmrahTabsNav />
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight">الغرامات</h1>
+      </div>
 
       <div className="grid gap-4 grid-cols-3">
         {kpiCards.map((c) => (
@@ -94,6 +93,6 @@ export default function UmrahPenalties() {
         noToolbar
         pageSize={pageSize}
       />
-    </PageShell>
+    </div>
   );
 }
