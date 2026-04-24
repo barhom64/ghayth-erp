@@ -4,7 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 const createPolicySchema = z.object({
   title: z.string().min(1, "عنوان السياسة مطلوب"),
@@ -70,6 +70,14 @@ router.post("/policies", requirePermission("governance:write"), async (req, res)
     }
     const [row] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1`, [r.insertId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_policies", entityId: r.insertId, after: { title, category } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.policy.created",
+      entity: "governance_policies",
+      entityId: r.insertId,
+      details: JSON.stringify({ title, category }),
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -129,6 +137,13 @@ router.patch("/policies/:id", requirePermission("governance:write"), async (req,
 
     const [row] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_policies", entityId: id }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.policy.updated",
+      entity: "governance_policies",
+      entityId: id,
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -181,6 +196,14 @@ router.post("/policies/:id/new-version", requirePermission("governance:write"), 
 
     const [row] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1`, [r.insertId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_policies", entityId: r.insertId, after: { version: nextVersion, parentId } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.policy.new_version",
+      entity: "governance_policies",
+      entityId: r.insertId,
+      details: JSON.stringify({ version: nextVersion, parentId }),
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -228,6 +251,13 @@ router.delete("/policies/:id", requirePermission("governance:write"), async (req
     const result = await rawExecute(`UPDATE governance_policies SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) throw new NotFoundError("السياسة غير موجودة");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_policies", entityId: id, before }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.policy.deleted",
+      entity: "governance_policies",
+      entityId: id,
+    }).catch(console.error);
     res.json({ message: "تم حذف السياسة بنجاح" });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -254,6 +284,14 @@ router.post("/risks", requirePermission("governance:write"), async (req, res) =>
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "governance_risks", entityId: r.insertId,
       after: { title, severity: severity ?? "medium", status: status || "open" },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.risk.created",
+      entity: "governance_risks",
+      entityId: r.insertId,
+      details: JSON.stringify({ title, severity: severity ?? "medium" }),
     }).catch(console.error);
     res.status(201).json({ id: r.insertId, title, severity: severity ?? "medium", status: status || "open" });
   } catch (err) { handleRouteError(err, res, "Create risk error:"); }
@@ -288,6 +326,13 @@ router.patch("/risks/:id", requirePermission("governance:write"), async (req, re
     if (result.affectedRows === 0) throw new NotFoundError("المخاطرة غير موجودة");
     const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_risks", entityId: id }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.risk.updated",
+      entity: "governance_risks",
+      entityId: id,
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -300,6 +345,13 @@ router.delete("/risks/:id", requirePermission("governance:write"), async (req, r
     const result = await rawExecute(`UPDATE governance_risks SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) throw new NotFoundError("المخاطرة غير موجودة");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_risks", entityId: id, before }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.risk.deleted",
+      entity: "governance_risks",
+      entityId: id,
+    }).catch(console.error);
     res.json({ message: "تم حذف المخاطرة بنجاح" });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -321,6 +373,14 @@ router.post("/audits", requirePermission("governance:write"), async (req, res) =
       [title, auditScope, status || "planned", auditorName, startDate, endDate, findings, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_audits", entityId: r.insertId, after: { title } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.audit.created",
+      entity: "governance_audits",
+      entityId: r.insertId,
+      details: JSON.stringify({ title }),
+    }).catch(console.error);
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -352,6 +412,13 @@ router.patch("/audits/:id", requirePermission("governance:write"), async (req, r
     if (result.affectedRows === 0) throw new NotFoundError("المراجعة غير موجودة");
     const [row] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_audits", entityId: id }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.audit.updated",
+      entity: "governance_audits",
+      entityId: id,
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -364,6 +431,13 @@ router.delete("/audits/:id", requirePermission("governance:write"), async (req, 
     const result = await rawExecute(`UPDATE governance_audits SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) throw new NotFoundError("المراجعة غير موجودة");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_audits", entityId: id, before }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.audit.deleted",
+      entity: "governance_audits",
+      entityId: id,
+    }).catch(console.error);
     res.json({ message: "تم حذف المراجعة بنجاح" });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -385,6 +459,14 @@ router.post("/compliance", requirePermission("governance:write"), async (req, re
       [regulation, description, status || "compliant", dueDate, responsiblePerson, notes, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_compliance", entityId: r.insertId, after: { regulation } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.compliance.created",
+      entity: "governance_compliance",
+      entityId: r.insertId,
+      details: JSON.stringify({ regulation }),
+    }).catch(console.error);
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -417,6 +499,13 @@ router.patch("/compliance/:id", requirePermission("governance:write"), async (re
     if (result.affectedRows === 0) throw new NotFoundError("بند الامتثال غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_compliance", entityId: id }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.compliance.updated",
+      entity: "governance_compliance",
+      entityId: id,
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -429,6 +518,13 @@ router.delete("/compliance/:id", requirePermission("governance:write"), async (r
     const result = await rawExecute(`UPDATE governance_compliance SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) throw new NotFoundError("بند الامتثال غير موجود");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_compliance", entityId: id, before }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.compliance.deleted",
+      entity: "governance_compliance",
+      entityId: id,
+    }).catch(console.error);
     res.json({ message: "تم حذف بند الامتثال بنجاح" });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -504,6 +600,14 @@ router.post("/compliance-actions", requirePermission("governance:write"), async 
     );
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [r.insertId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "policy_compliance_actions", entityId: r.insertId, after: { title: b.title } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.compliance_action.created",
+      entity: "policy_compliance_actions",
+      entityId: r.insertId,
+      details: JSON.stringify({ title: b.title }),
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -524,6 +628,13 @@ router.patch("/compliance-actions/:actionId", requirePermission("governance:writ
     await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "policy_compliance_actions", entityId: id }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.compliance_action.updated",
+      entity: "policy_compliance_actions",
+      entityId: id,
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -535,6 +646,13 @@ router.delete("/compliance-actions/:actionId", requirePermission("governance:wri
     const [before] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     await rawExecute(`UPDATE policy_compliance_actions SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "policy_compliance_actions", entityId: id, before }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.compliance_action.deleted",
+      entity: "policy_compliance_actions",
+      entityId: id,
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -559,6 +677,14 @@ router.post("/policies/:id/compliance-actions", requirePermission("governance:wr
     );
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [r.insertId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "policy_compliance_actions", entityId: r.insertId, after: { policyId, action: b.action } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.compliance_action.created",
+      entity: "policy_compliance_actions",
+      entityId: r.insertId,
+      details: JSON.stringify({ policyId, action: b.action }),
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -579,6 +705,13 @@ router.patch("/compliance-actions/:id", requirePermission("governance:write"), a
     await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "policy_compliance_actions", entityId: id }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.compliance_action.updated",
+      entity: "policy_compliance_actions",
+      entityId: id,
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -598,6 +731,13 @@ router.patch("/risks/:id/treatment", requirePermission("governance:write"), asyn
     await rawExecute(`UPDATE governance_risks SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_risks", entityId: id, after: { treatmentPlan: b.treatmentPlan } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.risk.treatment_updated",
+      entity: "governance_risks",
+      entityId: id,
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -620,6 +760,14 @@ router.post("/capa", requirePermission("governance:write"), async (req, res) => 
     );
     const [row] = await rawQuery<any>(`SELECT * FROM governance_capa WHERE id=$1`, [r.insertId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_capa", entityId: r.insertId, after: { finding: b.finding } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.capa.created",
+      entity: "governance_capa",
+      entityId: r.insertId,
+      details: JSON.stringify({ finding: b.finding }),
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -642,6 +790,13 @@ router.patch("/capa/:id", requirePermission("governance:write"), async (req, res
     await rawExecute(`UPDATE governance_capa SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM governance_capa WHERE id=$1`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_capa", entityId: id }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "governance.capa.updated",
+      entity: "governance_capa",
+      entityId: id,
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });

@@ -4,7 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
 
 const dataRequestSchema = z.object({
@@ -183,6 +183,7 @@ router.post("/data-request", authMiddleware, requirePermission("admin:write"), a
       entity: "data_access_requests", entityId: insertId,
       after: { requestType, requesterName: requesterName ?? scope.userName, dueDate: dueDate.toISOString().split("T")[0] },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "pdpl.data_request.created", entity: "data_access_requests", entityId: insertId, details: JSON.stringify({ requestType, requesterName: requesterName ?? scope.userName }) }).catch(console.error);
 
     res.status(201).json({
       id: insertId,

@@ -16,7 +16,7 @@ import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { Plus, Eye, Pencil, CheckCircle2, Ban, Trash2, Briefcase } from "lucide-react";
 
-type PlanStatus = "active" | "suspended" | "expired";
+type PlanStatus = "active" | "suspended" | "expired" | "pending";
 type CommissionType = "percentage" | "fixed" | "tiered" | "mixed";
 
 interface CommissionPlan {
@@ -39,6 +39,7 @@ const STATUS_LABEL: Record<PlanStatus, { label: string; cls: string }> = {
   active: { label: "مفعّل", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
   suspended: { label: "موقوف", cls: "bg-red-100 text-red-700 border-red-200" },
   expired: { label: "منتهي", cls: "bg-slate-100 text-slate-700 border-slate-200" },
+  pending: { label: "بانتظار الاعتماد", cls: "bg-amber-100 text-amber-700 border-amber-200" },
 };
 
 const TYPE_LABEL: Record<CommissionType, string> = {
@@ -90,6 +91,7 @@ export default function UmrahCommissionPlans() {
     total: plans.length,
     active: plans.filter((p) => p.status === "active").length,
     suspended: plans.filter((p) => p.status === "suspended").length,
+    pending: plans.filter((p) => p.status === "pending").length,
   }), [plans]);
 
   const columns: DataTableColumn<CommissionPlan>[] = [
@@ -219,8 +221,8 @@ export default function UmrahCommissionPlans() {
             <CheckCircle2 className="w-5 h-5 text-amber-600" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-amber-700">{formatNumber(counts.suspended)}</p>
-            <p className="text-xs text-muted-foreground">موقوف</p>
+            <p className="text-2xl font-bold text-amber-700">{formatNumber(counts.pending)}</p>
+            <p className="text-xs text-muted-foreground">بانتظار الاعتماد</p>
           </div>
         </CardContent></Card>
       </div>

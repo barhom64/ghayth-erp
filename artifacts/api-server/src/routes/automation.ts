@@ -4,7 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { triggerJobByName } from "../lib/cronScheduler.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -23,6 +23,7 @@ router.post("/cron-jobs/:id/toggle", requirePermission("admin:write"), async (re
     await rawExecute(`UPDATE cron_jobs SET "isActive" = NOT "isActive" WHERE id=$1`, [Number(id)]);
     const [row] = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE id=$1`, [Number(id)]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "cron_jobs", entityId: Number(id), after: { isActive: row?.isActive } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "automation.cron_job.toggled", entity: "cron_jobs", entityId: Number(id), details: JSON.stringify({ isActive: row?.isActive }) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Toggle cron error:"); }
 });
@@ -37,6 +38,7 @@ router.post("/cron-jobs/:id/trigger", requirePermission("admin:write"), async (r
     const result = await triggerJobByName(job.name);
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "cron_jobs", entityId: Number(id), after: { jobName: job.name, success: result.success } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "automation.cron_job.triggered", entity: "cron_jobs", entityId: Number(id), details: JSON.stringify({ jobName: job.name, success: result.success }) }).catch(console.error);
     if (result.success) {
       res.json({ success: true, message: "تم تشغيل المهمة بنجاح", result: result.result });
     } else {
@@ -107,6 +109,7 @@ router.post("/proactive-rules/:id/toggle", requirePermission("admin:write"), asy
     );
     if (!row) throw new NotFoundError("القاعدة غير موجودة");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "proactive_rules", entityId: Number(id), after: { isActive: row?.isActive } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "automation.proactive_rule.toggled", entity: "proactive_rules", entityId: Number(id), details: JSON.stringify({ isActive: row?.isActive }) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Toggle proactive rule error:"); }
 });

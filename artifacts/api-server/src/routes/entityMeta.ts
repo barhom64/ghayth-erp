@@ -3,7 +3,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError, ValidationError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
 
 const createCommentSchema = z.object({
@@ -63,6 +63,7 @@ router.post("/comments/:entityType/:entityId", requirePermission("admin:write"),
       entity: String(entityType), entityId: Number(entityId),
       after: { body: body.trim() },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.comment.created", entity: "entity_comments", entityId: Number(entityId), details: JSON.stringify({ entityType, body: body.trim() }) }).catch(console.error);
 
     res.json(rows[0]);
   } catch (err) {
@@ -88,6 +89,7 @@ router.delete("/comments/:id", requirePermission("admin:write"), async (req, res
       entity: "entity_comments", entityId: Number(id),
       before,
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.comment.deleted", entity: "entity_comments", entityId: Number(id), details: JSON.stringify({ id: Number(id) }) }).catch(console.error);
 
     res.json({ success: true });
   } catch (err) {
@@ -139,6 +141,7 @@ router.post("/tags/:entityType/:entityId", requirePermission("admin:write"), asy
       entity: String(entityType), entityId: Number(entityId),
       after: { tag: tag.trim(), color: color || "blue" },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.tag.created", entity: "entity_tags", entityId: Number(entityId), details: JSON.stringify({ entityType, tag: tag.trim(), color: color || "blue" }) }).catch(console.error);
 
     res.json(rows[0]);
   } catch (err) {
@@ -164,6 +167,7 @@ router.delete("/tags/:id", requirePermission("admin:write"), async (req, res) =>
       entity: "entity_tags", entityId: Number(id),
       before,
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.tag.deleted", entity: "entity_tags", entityId: Number(id), details: JSON.stringify({ id: Number(id) }) }).catch(console.error);
 
     res.json({ success: true });
   } catch (err) {
@@ -308,6 +312,7 @@ router.post("/bulk-action", requirePermission("admin:write"), async (req, res): 
       entity: entityType, entityId: 0,
       after: { action, entityType, affectedIds, updated },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: `entity.bulk.${action}`, entity: entityType, entityId: 0, details: JSON.stringify({ action, entityType, affectedIds, updated }) }).catch(console.error);
 
     res.json({ success: true, updated, message: `تم تنفيذ الإجراء على ${updated} سجل` });
   } catch (err) {

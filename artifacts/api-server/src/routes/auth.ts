@@ -6,7 +6,7 @@ import { signToken, signRefreshToken, verifyPassword, hashPassword } from "../li
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import rateLimit from "express-rate-limit";
 import { logger } from "../lib/logger.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 const router = Router();
 
@@ -190,6 +190,7 @@ router.post("/login", loginLimiter, async (req, res) => {
       [refreshToken, user.id, expiresAt.toISOString(), userAgent, ipAddress]
     );
 
+    emitEvent({ companyId: primary.companyId, branchId: primary.branchId, userId: user.id, action: "auth.login.success", entity: "users", entityId: user.id, details: JSON.stringify({ email, assignmentId: primary.id }) }).catch(console.error);
     res.json({ token, refreshToken, assignments, userRoles });
   } catch (err) {
     handleRouteError(err, res, "Login error:");
@@ -357,6 +358,7 @@ router.post("/change-password", authMiddleware, changePasswordLimiter, async (re
       companyId: scope.companyId, userId: scope.userId,
       action: "password_change", entity: "users", entityId: scope.userId,
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "auth.password.changed", entity: "users", entityId: scope.userId }).catch(console.error);
     res.json({ success: true, message: "تم تغيير كلمة المرور بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "Change password error:");

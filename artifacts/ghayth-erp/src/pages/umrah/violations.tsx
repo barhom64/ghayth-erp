@@ -1,18 +1,22 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageShell } from "@/components/page-shell";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
-import { Eye, AlertTriangle, Clock, HelpCircle, UserX } from "lucide-react";
+import { Eye, Plus, Pencil, Trash2, AlertTriangle, Clock, HelpCircle, UserX } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 type ViolationType = "overstay" | "absconded" | "other";
 type ViolationStatus = "detected" | "open" | "invoiced" | "paid" | "disputed" | "closed";
@@ -36,6 +40,30 @@ interface Violation {
   detectedAt: string;
 }
 
+interface ViolationForm {
+  type: ViolationType;
+  referenceType: string;
+  referenceNumber: string;
+  mutamerId: string;
+  agentId: string;
+  subAgentId: string;
+  penaltyAmount: string;
+  description: string;
+  status: ViolationStatus;
+}
+
+const EMPTY_FORM: ViolationForm = {
+  type: "overstay",
+  referenceType: "mutamer",
+  referenceNumber: "",
+  mutamerId: "",
+  agentId: "",
+  subAgentId: "",
+  penaltyAmount: "0",
+  description: "",
+  status: "open",
+};
+
 const TYPE_LABEL: Record<ViolationType, { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
   overstay: { label: "تأخر مغادرة", cls: "bg-amber-100 text-amber-700 border-amber-200", icon: Clock },
   absconded: { label: "هروب", cls: "bg-red-100 text-red-700 border-red-200", icon: UserX },
@@ -52,10 +80,9 @@ const STATUS_LABEL: Record<ViolationStatus, { label: string; cls: string }> = {
 };
 
 export default function UmrahViolations() {
-  // TODO: endpoint not yet implemented — placeholder response
+  const { toast } = useToast();
   const violationsQ = useApiQuery<{ data: Violation[] }>(["umrah-violations"], "/umrah/violations");
   const agentsQ = useApiQuery<{ data: any[] }>(["umrah-agents"], "/umrah/agents");
-  // TODO: endpoint not yet implemented — placeholder response
   const subAgentsQ = useApiQuery<{ data: any[] }>(["umrah-sub-agents"], "/umrah/sub-agents");
   const seasonsQ = useApiQuery<{ data: any[] }>(["umrah-seasons"], "/umrah/seasons");
 
@@ -69,6 +96,61 @@ export default function UmrahViolations() {
   const [subAgentFilter, setSubAgentFilter] = useState("");
   const [seasonFilter, setSeasonFilter] = useState("");
 
+  const [editing, setEditing] = useState<(ViolationForm & { id?: number }) | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+
+  const createMut = useApiMutation<any, any>(
+    "/umrah/violations", "POST", [["umrah-violations"]],
+    { onSuccess: () => { violationsQ.refetch(); setEditing(null); toast({ title: "تم إنشاء المخالفة بنجاح" }); } }
+  );
+  const updateMut = useApiMutation<any, any>(
+    () => `/umrah/violations/${editing?.id}`, "PATCH", [["umrah-violations"]],
+    { onSuccess: () => { violationsQ.refetch(); setEditing(null); toast({ title: "تم تحديث المخالفة" }); } }
+  );
+  const deleteMut = useApiMutation<any, any>(
+    () => `/umrah/violations/${deleteId}`, "DELETE", [["umrah-violations"]],
+    { onSuccess: () => { violationsQ.refetch(); setDeleteId(null); toast({ title: "تم حذف المخالفة" }); } }
+  );
+
+  function openCreate() {
+    setEditing({ ...EMPTY_FORM });
+  }
+
+  function openEdit(v: Violation) {
+    setEditing({
+      id: v.id,
+      type: v.type,
+      referenceType: v.referenceType || "mutamer",
+      referenceNumber: v.referenceNumber || "",
+      mutamerId: v.mutamerId ? String(v.mutamerId) : "",
+      agentId: v.agentId ? String(v.agentId) : "",
+      subAgentId: v.subAgentId ? String(v.subAgentId) : "",
+      penaltyAmount: String(v.penaltyAmount || 0),
+      description: v.description || "",
+      status: v.status,
+    });
+  }
+
+  function handleSave() {
+    if (!editing) return;
+    const payload = {
+      type: editing.type,
+      referenceType: editing.referenceType || null,
+      referenceNumber: editing.referenceNumber || null,
+      mutamerId: editing.mutamerId ? Number(editing.mutamerId) : null,
+      agentId: editing.agentId ? Number(editing.agentId) : null,
+      subAgentId: editing.subAgentId ? Number(editing.subAgentId) : null,
+      penaltyAmount: Number(editing.penaltyAmount) || 0,
+      description: editing.description || null,
+      status: editing.status,
+    };
+    if (editing.id) {
+      updateMut.mutate(payload);
+    } else {
+      createMut.mutate(payload);
+    }
+  }
+
   const filtered = useMemo(() => {
     return violations.filter((v) => {
       if (tab !== "all" && v.status !== tab) return false;
@@ -80,7 +162,7 @@ export default function UmrahViolations() {
   }, [violations, tab, agentFilter, subAgentFilter, seasonFilter]);
 
   const summary = useMemo(() => {
-    const openItems = violations.filter((v) => v.status === "open");
+    const openItems = violations.filter((v) => v.status === "open" || v.status === "detected");
     const totalOpen = openItems.reduce((sum, v) => sum + Number(v.penaltyAmount || 0), 0);
     const byType: Record<ViolationType, number> = { overstay: 0, absconded: 0, other: 0 };
     violations.forEach((v) => { byType[v.type] = (byType[v.type] ?? 0) + 1; });
@@ -168,24 +250,41 @@ export default function UmrahViolations() {
       key: "__actions",
       header: "",
       render: (v) => (
-        <Button asChild size="sm" variant="ghost">
-          <Link href={`/details/umrah-violation/${v.id}`}>
-            <Eye className="h-3.5 w-3.5" />
-          </Link>
-        </Button>
+        <div className="flex gap-1">
+          <Button asChild size="sm" variant="ghost">
+            <Link href={`/details/umrah-violation/${v.id}`}>
+              <Eye className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => openEdit(v)}>
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          {(v.status === "open" || v.status === "detected") && (
+            <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setDeleteId(v.id)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
       ),
     },
   ];
+
+  const isSaving = createMut.isPending || updateMut.isPending;
 
   return (
     <PageShell
       title="المخالفات"
       subtitle="رصد المخالفات: تأخر المغادرة، الهروب، وأخرى"
       breadcrumbs={[{ label: "العمرة" }, { label: "المخالفات" }]}
+      actions={
+        <Button onClick={openCreate} className="gap-2">
+          <Plus className="h-4 w-4" />
+          مخالفة جديدة
+        </Button>
+      }
     >
       <UmrahTabsNav />
 
-      {/* Summary strip */}
       <div className="grid gap-3 md:grid-cols-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
@@ -236,6 +335,7 @@ export default function UmrahViolations() {
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
         <TabsList>
           <TabsTrigger value="all">الكل ({formatNumber(violations.length)})</TabsTrigger>
+          <TabsTrigger value="detected">مكتشفة ({formatNumber(summary.countByStatus.detected)})</TabsTrigger>
           <TabsTrigger value="open">مفتوحة ({formatNumber(summary.countByStatus.open)})</TabsTrigger>
           <TabsTrigger value="invoiced">بفاتورة ({formatNumber(summary.countByStatus.invoiced)})</TabsTrigger>
           <TabsTrigger value="paid">مسددة ({formatNumber(summary.countByStatus.paid)})</TabsTrigger>
@@ -289,6 +389,130 @@ export default function UmrahViolations() {
           noToolbar
         />
       </PageStateWrapper>
+
+      {/* Create / Edit Dialog */}
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="max-w-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>{editing?.id ? "تعديل مخالفة" : "مخالفة جديدة"}</DialogTitle>
+          </DialogHeader>
+          {editing && (
+            <div className="grid gap-4 py-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs">نوع المخالفة *</Label>
+                  <Select value={editing.type} onValueChange={(v) => setEditing({ ...editing, type: v as ViolationType })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="overstay">تأخر مغادرة</SelectItem>
+                      <SelectItem value="absconded">هروب</SelectItem>
+                      <SelectItem value="other">أخرى</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">الحالة</Label>
+                  <Select value={editing.status} onValueChange={(v) => setEditing({ ...editing, status: v as ViolationStatus })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="detected">مكتشفة</SelectItem>
+                      <SelectItem value="open">مفتوحة</SelectItem>
+                      <SelectItem value="invoiced">بفاتورة</SelectItem>
+                      <SelectItem value="disputed">متنازع عليها</SelectItem>
+                      <SelectItem value="closed">مغلقة</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs">نوع المرجع</Label>
+                  <Select value={editing.referenceType} onValueChange={(v) => setEditing({ ...editing, referenceType: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mutamer">معتمر</SelectItem>
+                      <SelectItem value="group">مجموعة</SelectItem>
+                      <SelectItem value="passport">جواز سفر</SelectItem>
+                      <SelectItem value="border">حدود</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">رقم المرجع</Label>
+                  <Input
+                    value={editing.referenceNumber}
+                    onChange={(e) => setEditing({ ...editing, referenceNumber: e.target.value })}
+                    placeholder="رقم المرجع"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs">الوكيل</Label>
+                  <Select value={editing.agentId || "none"} onValueChange={(v) => setEditing({ ...editing, agentId: v === "none" ? "" : v })}>
+                    <SelectTrigger><SelectValue placeholder="اختر الوكيل" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">بدون وكيل</SelectItem>
+                      {agents.map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">الوكيل الفرعي</Label>
+                  <Select value={editing.subAgentId || "none"} onValueChange={(v) => setEditing({ ...editing, subAgentId: v === "none" ? "" : v })}>
+                    <SelectTrigger><SelectValue placeholder="اختر الوكيل الفرعي" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">بدون وكيل فرعي</SelectItem>
+                      {subAgents.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">مبلغ الغرامة (ريال)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={editing.penaltyAmount}
+                  onChange={(e) => setEditing({ ...editing, penaltyAmount: e.target.value })}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">الوصف</Label>
+                <Textarea
+                  value={editing.description}
+                  onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                  placeholder="تفاصيل المخالفة..."
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>إلغاء</Button>
+            <Button onClick={handleSave} disabled={isSaving || !editing?.type}>
+              {isSaving ? "جاري الحفظ..." : editing?.id ? "حفظ التعديلات" : "إنشاء المخالفة"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <Dialog open={deleteId !== null} onOpenChange={(o) => !o && setDeleteId(null)}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>تأكيد الحذف</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">هل أنت متأكد من حذف هذه المخالفة؟ لا يمكن التراجع عن هذا الإجراء.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteId(null)}>إلغاء</Button>
+            <Button variant="destructive" onClick={() => deleteMut.mutate({})} disabled={deleteMut.isPending}>
+              {deleteMut.isPending ? "جاري الحذف..." : "حذف"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }

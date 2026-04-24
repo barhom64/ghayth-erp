@@ -5,7 +5,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { sendNotification } from "../lib/notificationService.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { aiEngine } from "../lib/aiEngine.js";
 import { sendPushToCompany, getVapidPublicKey } from "../lib/pushService.js";
 import { encryptPushEndpoint, hashPushEndpoint, decryptPushEndpoint } from "../lib/pushCrypto.js";
@@ -419,6 +419,14 @@ router.post("/send", requirePermission("communications:write"), async (req, res)
     );
     const [row] = await rawQuery<any>(`SELECT * FROM communications_log WHERE id=$1`, [insertId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "communications_log", entityId: insertId, after: { channel: String(b.channel).toLowerCase(), toNumber: b.toNumber ?? b.toEmail } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "communications.message.sent",
+      entity: "communications_log",
+      entityId: insertId,
+      details: JSON.stringify({ channel: String(b.channel).toLowerCase(), toNumber: b.toNumber ?? b.toEmail }),
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Send communication error:"); }
 });
@@ -477,6 +485,13 @@ router.patch("/log/:id", requirePermission("communications:write"), async (req, 
     );
     if (!row) { throw new NotFoundError("السجل غير موجود"); }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "communications_log", entityId: Number(req.params.id) }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "communications.log.updated",
+      entity: "communications_log",
+      entityId: Number(req.params.id),
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -546,6 +561,14 @@ router.post("/log/:id/convert", requirePermission("communications:write"), async
 
     const typeLabels: Record<string, string> = { task: "مهمة متابعة", ticket: "تذكرة دعم", request: "طلب داخلي" };
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: targetType, entityId: createdId!, after: { sourceLogId: logId, targetType } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "communications.log.converted",
+      entity: "communications_log",
+      entityId: logId,
+      details: JSON.stringify({ targetType, createdId }),
+    }).catch(console.error);
     res.json({
       success: true,
       message: `تم تحويل الاتصال إلى ${typeLabels[targetType]}`,
@@ -567,6 +590,13 @@ router.delete("/log/:id", requirePermission("communications:write"), async (req,
     );
     if (!row) { throw new NotFoundError("السجل غير موجود"); }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "communications_log", entityId: id, before }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "communications.log.deleted",
+      entity: "communications_log",
+      entityId: id,
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -696,6 +726,13 @@ router.post("/push/subscribe", requirePermission("communications:write"), async 
     );
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "push_subscriptions", entityId: 0 }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "communications.push.subscribed",
+      entity: "push_subscriptions",
+      entityId: 0,
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Push subscribe error:"); }
 });
@@ -717,6 +754,13 @@ router.delete("/push/unsubscribe", requirePermission("communications:write"), as
     );
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "push_subscriptions", entityId: 0 }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "communications.push.unsubscribed",
+      entity: "push_subscriptions",
+      entityId: 0,
+    }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Push unsubscribe error:"); }
 });

@@ -288,6 +288,15 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
       action: "loan.created", entity: "hr_employee_loans", entityId: insertId,
       reason: `سلفة جديدة: ${loanNumber} بمبلغ ${amount}`,
     });
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "hr.loan.created",
+      entity: "hr_employee_loans",
+      entityId: insertId,
+      details: JSON.stringify({ loanNumber, amount, installmentCount, assignmentId: b.assignmentId }),
+    }).catch(console.error);
 
     res.status(201).json({
       id: insertId, loanNumber,
@@ -343,6 +352,15 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
         type: "loan_rejected", title: "تم رفض طلب السلفة",
         body: `تم رفض السلفة ${loan.loanNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
         priority: "normal", refType: "hr_employee_loan", refId: loan.id,
+      }).catch(console.error);
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "hr.loan.rejected",
+        entity: "hr_employee_loans",
+        entityId: loan.id,
+        details: JSON.stringify({ loanNumber: loan.loanNumber, reason: rejectionReason }),
       }).catch(console.error);
       res.json({ success: true, message: "تم رفض السلفة" });
       return;
@@ -407,6 +425,15 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
       action: "loan.approved", entity: "hr_employee_loans", entityId: loan.id,
       reason: `اعتماد السلفة: ${loan.loanNumber}`,
     });
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "hr.loan.approved",
+      entity: "hr_employee_loans",
+      entityId: loan.id,
+      details: JSON.stringify({ loanNumber: loan.loanNumber, amount: loan.amount, installmentCount: loan.installmentCount }),
+    }).catch(console.error);
 
     res.json({ success: true, message: "تم اعتماد السلفة وتوليد جدول الأقساط" });
   } catch (err) {
@@ -455,6 +482,15 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
       type: "loan_rejected", title: "تم رفض طلب السلفة",
       body: `تم رفض السلفة ${loan.loanNumber}${b.reason ? " — السبب: " + b.reason : ""}`,
       priority: "normal", refType: "hr_employee_loan", refId: loan.id,
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "hr.loan.rejected",
+      entity: "hr_employee_loans",
+      entityId: loan.id,
+      details: JSON.stringify({ loanNumber: loan.loanNumber, reason: b.reason }),
     }).catch(console.error);
 
     res.json({ success: true });

@@ -6,7 +6,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { requireRole } from "../middlewares/roleGuard.js";
 import { aiEngine } from "../lib/aiEngine.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { calculateEmployeeKPIs, getCompanyKPIs } from "../lib/kpiEngine.js";
 import { buildAllSchedules, buildEmployeeSchedule } from "../lib/scheduleBuilder.js";
 import { runSmartAlerts } from "../lib/smartAlerts.js";
@@ -98,6 +98,15 @@ router.post("/alerts/scan", requirePermission("admin:write"), async (req, res): 
     const scope = req.scope!;
     const result = await runSmartAlerts(scope.companyId);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "smart_alerts", entityId: 0, after: { fired: result.fired } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "intelligence.alert.scanned",
+      entity: "smart_alerts",
+      entityId: 0,
+      details: JSON.stringify({ fired: result.fired }),
+    }).catch(console.error);
     res.json({ message: `تم فحص التنبيهات الذكية`, fired: result.fired, details: result.details });
   } catch (err) { handleRouteError(err, res, "Alert scan error:"); }
 });
@@ -111,6 +120,15 @@ router.patch("/alerts/:id/read", requirePermission("admin:write"), async (req, r
       [Number(id), scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "smart_alerts", entityId: Number(id), after: { isRead: true } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "intelligence.alert.read",
+      entity: "smart_alerts",
+      entityId: Number(id),
+      details: JSON.stringify({ isRead: true }),
+    }).catch(console.error);
     res.json({ message: "تم تعليم التنبيه كمقروء" });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -388,6 +406,15 @@ router.post("/ai/categorize", requirePermission("admin:write"), async (req, res)
     const { message, context } = body;
     const result = await aiEngine.receptionCategorize(message, context);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_categorize", entityId: 0, after: { message: message?.substring(0, 100) } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "intelligence.ai.categorized",
+      entity: "ai_categorize",
+      entityId: 0,
+      details: JSON.stringify({ message: message?.substring(0, 100) }),
+    }).catch(console.error);
     res.json(result);
   } catch (err) { handleRouteError(err, res, "AI categorize error:"); }
 });
@@ -401,6 +428,15 @@ router.post("/ai/draft-reply", requirePermission("admin:write"), async (req, res
     const { ticketTitle, ticketDescription, history } = body;
     const draft = await aiEngine.responderDraft(ticketTitle, ticketDescription, history);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_draft_reply", entityId: 0, after: { ticketTitle } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "intelligence.ai.draft_replied",
+      entity: "ai_draft_reply",
+      entityId: 0,
+      details: JSON.stringify({ ticketTitle }),
+    }).catch(console.error);
     res.json({ draft });
   } catch (err) { handleRouteError(err, res, "AI draft reply error:"); }
 });
@@ -414,6 +450,15 @@ router.post("/ai/translate", requirePermission("admin:write"), async (req, res):
     const { text, targetLanguage } = body;
     const translated = await aiEngine.translatorTranslate(text, targetLanguage);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_translate", entityId: 0, after: { targetLanguage } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "intelligence.ai.translated",
+      entity: "ai_translate",
+      entityId: 0,
+      details: JSON.stringify({ targetLanguage }),
+    }).catch(console.error);
     res.json({ translated, targetLanguage });
   } catch (err) { handleRouteError(err, res, "AI translate error:"); }
 });
@@ -427,6 +472,15 @@ router.post("/ai/summarize", requirePermission("admin:write"), async (req, res):
     const { content, maxLength } = body;
     const summary = await aiEngine.summarizerSummarize(content, maxLength);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_summarize", entityId: 0 }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "intelligence.ai.summarized",
+      entity: "ai_summarize",
+      entityId: 0,
+      details: JSON.stringify({ maxLength }),
+    }).catch(console.error);
     res.json({ summary });
   } catch (err) { handleRouteError(err, res, "AI summarize error:"); }
 });
@@ -440,6 +494,15 @@ router.post("/ai/evaluate-rules", requirePermission("admin:write"), async (req, 
     const { context, data, rules } = body;
     const result = await aiEngine.rulesEngineEvaluate({ context, data, rules });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_evaluate_rules", entityId: 0, after: { context } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "intelligence.ai.rules_evaluated",
+      entity: "ai_evaluate_rules",
+      entityId: 0,
+      details: JSON.stringify({ context }),
+    }).catch(console.error);
     res.json(result);
   } catch (err) { handleRouteError(err, res, "AI rules engine error:"); }
 });
@@ -453,6 +516,15 @@ router.post("/ai/forecast", requirePermission("admin:write"), async (req, res): 
     const { metricName, historicalData, forecastPeriods } = body;
     const result = await aiEngine.predictorForecast({ metricName, historicalData, forecastPeriods });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_forecast", entityId: 0, after: { metricName } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "intelligence.ai.forecasted",
+      entity: "ai_forecast",
+      entityId: 0,
+      details: JSON.stringify({ metricName }),
+    }).catch(console.error);
     res.json(result);
   } catch (err) { handleRouteError(err, res, "AI forecast error:"); }
 });
@@ -462,8 +534,18 @@ router.post("/algorithms/haversine", requirePermission("admin:write"), async (re
     const parsed_haversineSchema = haversineSchema.safeParse(req.body);
     if (!parsed_haversineSchema.success) throw new ValidationError(parsed_haversineSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_haversineSchema.data;
+    const scope = req.scope!;
     const { lat1, lon1, lat2, lon2 } = body;
     const distance = haversineDistance(lat1, lon1, lat2, lon2);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "intelligence.algorithm.haversine",
+      entity: "algorithms",
+      entityId: 0,
+      details: JSON.stringify({ lat1, lon1, lat2, lon2, distance }),
+    }).catch(console.error);
     res.json({ distance, unit: "km" });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -473,8 +555,18 @@ router.post("/algorithms/moving-average", requirePermission("admin:write"), asyn
     const parsed_movingAverageSchema = movingAverageSchema.safeParse(req.body);
     if (!parsed_movingAverageSchema.success) throw new ValidationError(parsed_movingAverageSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_movingAverageSchema.data;
+    const scope = req.scope!;
     const { values, periods } = body;
     const result = movingAverage(values, periods);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "intelligence.algorithm.moving_average",
+      entity: "algorithms",
+      entityId: 0,
+      details: JSON.stringify({ periods, dataPoints: values.length }),
+    }).catch(console.error);
     res.json({ result, periods, dataPoints: values.length });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -484,8 +576,18 @@ router.post("/algorithms/load-balance", requirePermission("admin:write"), async 
     const parsed_loadBalanceSchema = loadBalanceSchema.safeParse(req.body);
     if (!parsed_loadBalanceSchema.success) throw new ValidationError(parsed_loadBalanceSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_loadBalanceSchema.data;
+    const scope = req.scope!;
     const { resources, targetLat, targetLon, maxWorkload } = body;
     const selected = selectLeastLoadedResource(resources, { targetLat, targetLon, maxWorkload });
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "intelligence.algorithm.load_balanced",
+      entity: "algorithms",
+      entityId: 0,
+      details: JSON.stringify({ resourceCount: resources.length }),
+    }).catch(console.error);
     res.json({ selected });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -589,6 +691,15 @@ router.post("/smart-assign", requireRole("branch_manager", "general_manager", "o
       [scope.companyId, result.employeeId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "smart_assign", entityId: result.assignmentId, after: { employeeId: result.employeeId, taskType: taskType ?? "general" } }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "intelligence.smart_assign.created",
+      entity: "smart_assign",
+      entityId: result.assignmentId,
+      details: JSON.stringify({ employeeId: result.employeeId, taskType: taskType ?? "general", taskTitle }),
+    }).catch(console.error);
     res.json({
       recommended: {
         employeeId: result.employeeId,

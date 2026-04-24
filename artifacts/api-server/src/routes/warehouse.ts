@@ -858,6 +858,16 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
       inId = inRes.rows[0].id;
     });
 
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "warehouse.transfer.created",
+      entity: "warehouse_movements",
+      entityId: outId,
+      details: JSON.stringify({ transferRef, fromLocation, toLocation, quantity: b.quantity, productId: b.productId }),
+    }).catch(console.error);
+
     res.status(201).json({
       transferRef,
       outMovementId: outId,
@@ -913,6 +923,15 @@ router.post("/categories", requirePermission("warehouse:create"), async (req, re
       [scope.companyId, b.name.trim(), b.parentId || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM warehouse_categories WHERE id=$1`, [insertId]);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "warehouse.category.created",
+      entity: "warehouse_categories",
+      entityId: insertId,
+      details: JSON.stringify({ name: b.name.trim(), parentId: b.parentId || null }),
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create category error:"); }
 });
@@ -959,6 +978,15 @@ router.post("/suppliers", requirePermission("warehouse:create"), async (req, res
       [scope.companyId, b.name.trim(), b.contactPerson, b.phone, b.email, b.address, b.taxNumber, b.paymentTerms || 30]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM suppliers WHERE id=$1`, [insertId]);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "warehouse.supplier.created",
+      entity: "suppliers",
+      entityId: insertId,
+      details: JSON.stringify({ name: b.name.trim() }),
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create supplier error:"); }
 });
@@ -976,6 +1004,15 @@ router.patch("/categories/:id", requirePermission("warehouse:update"), async (re
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE warehouse_categories SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("الفئة غير موجودة");
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "warehouse.category.updated",
+      entity: "warehouse_categories",
+      entityId: id,
+      details: JSON.stringify({ name: b.name, parentId: b.parentId }),
+    }).catch(console.error);
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update category error:"); }
 });
@@ -1012,6 +1049,15 @@ router.delete("/categories/:id", requirePermission("warehouse:delete"), async (r
     }
 
     await rawExecute(`UPDATE warehouse_categories SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "warehouse.category.deleted",
+      entity: "warehouse_categories",
+      entityId: id,
+      details: JSON.stringify({ name: existing.name }),
+    }).catch(console.error);
     res.json({ message: "تم حذف الفئة" });
   } catch (err) { handleRouteError(err, res, "Delete category error:"); }
 });
@@ -1035,6 +1081,15 @@ router.patch("/suppliers/:id", requirePermission("warehouse:update"), async (req
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE suppliers SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("المورد غير موجود");
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "warehouse.supplier.updated",
+      entity: "suppliers",
+      entityId: id,
+      details: JSON.stringify({ name: b.name }),
+    }).catch(console.error);
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update supplier error:"); }
 });
@@ -1046,6 +1101,15 @@ router.delete("/suppliers/:id", requirePermission("warehouse:delete"), async (re
     const [existing] = await rawQuery<any>(`SELECT id FROM suppliers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المورد غير موجود");
     await rawExecute(`UPDATE suppliers SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "warehouse.supplier.deleted",
+      entity: "suppliers",
+      entityId: id,
+      details: JSON.stringify({ id }),
+    }).catch(console.error);
     res.json({ message: "تم حذف المورد" });
   } catch (err) { handleRouteError(err, res, "Delete supplier error:"); }
 });
@@ -1097,6 +1161,15 @@ router.post("/inventory-counts", requirePermission("warehouse:create"), async (r
        b.notes || null, b.warehouseLocation || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM inventory_counts WHERE id=$1`, [insertId]);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "warehouse.inventory_count.created",
+      entity: "inventory_counts",
+      entityId: insertId,
+      details: JSON.stringify({ countDate: b.countDate, warehouseLocation: b.warehouseLocation }),
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create count error:"); }
 });
@@ -1188,6 +1261,15 @@ router.post("/inventory-counts/:id/items", requirePermission("warehouse:create")
         [countId, b.productId, systemStock, physicalCount, variance, b.notes || null]
       );
     }
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "warehouse.inventory_count_item.recorded",
+      entity: "inventory_count_items",
+      entityId: countId,
+      details: JSON.stringify({ productId: b.productId, systemStock, physicalCount, variance }),
+    }).catch(console.error);
     res.json({ productId: b.productId, systemStock, physicalCount, variance });
   } catch (err) { handleRouteError(err, res, "Count item error:"); }
 });
@@ -1292,6 +1374,15 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
     );
 
     const itemsAdjusted = items.filter((i: any) => Number(i.variance) !== 0).length;
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "warehouse.inventory_count.approved",
+      entity: "inventory_counts",
+      entityId: countId,
+      details: JSON.stringify({ itemsAdjusted, totalItems: items.length }),
+    }).catch(console.error);
     const baseMessage = "تم اعتماد الجرد وتحديث المخزون";
     if (glFailures.length > 0 || glSkipped.length > 0) {
       const parts: string[] = [];

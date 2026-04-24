@@ -2,7 +2,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
@@ -73,6 +73,7 @@ router.post("/request-otp", requirePermission("documents:write"), async (req, re
       entity: entityType, entityId: Number(entityId),
       after: { action, ip, deviceFingerprint },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "digital_signature.otp_requested", entity: "digital_signature_otps", entityId: Number(entityId), details: JSON.stringify({ entityType, entityId, action, ip }) }).catch(console.error);
 
     res.json({
       message: "تم إرسال رمز التحقق (OTP) — صالح لمدة 10 دقائق",
@@ -127,6 +128,7 @@ router.post("/verify", requirePermission("documents:write"), async (req, res: Re
       entityId: Number(entityId),
       after: { signatureRef, ip, deviceFingerprint, action, verifiedAt: new Date().toISOString() },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "digital_signature.verified", entity: "digital_signature_logs", entityId: Number(entityId), details: JSON.stringify({ entityType, entityId, action, signatureRef, ip }) }).catch(console.error);
 
     res.json({
       verified: true,

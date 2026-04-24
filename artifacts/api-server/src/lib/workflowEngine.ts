@@ -148,6 +148,24 @@ const DOMAIN_RECORD_HANDLERS: Record<
       await rawExecute(`UPDATE hr_exit_requests SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1`, [refId]);
     }
   },
+  employee_commission_calculations: async (refId, outcome, approvedBy) => {
+    if (outcome === "approved") {
+      await rawExecute(
+        `UPDATE employee_commission_calculations SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2`,
+        [approvedBy ?? null, refId]
+      );
+    } else if (outcome === "rejected") {
+      await rawExecute(
+        `UPDATE employee_commission_calculations SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1`,
+        [refId]
+      );
+    } else {
+      await rawExecute(
+        `UPDATE employee_commission_calculations SET status = 'calculated', "updatedAt" = NOW() WHERE id = $1`,
+        [refId]
+      );
+    }
+  },
 };
 
 async function propagateDomainStatus(

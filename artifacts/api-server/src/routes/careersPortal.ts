@@ -2,7 +2,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
@@ -105,6 +105,7 @@ router.post("/auth/register", portalLimiter, async (req: Request, res: Response)
       entity: "applicant_accounts", entityId: result.insertId,
       after: { name: name.trim(), email: email.trim().toLowerCase() },
     }).catch(console.error);
+    emitEvent({ companyId: 0, branchId: 0, userId: result.insertId, action: "careers.account.registered", entity: "applicant_accounts", entityId: result.insertId, details: JSON.stringify({ name: name.trim(), email: email.trim().toLowerCase() }) }).catch(console.error);
 
     res.json({ token, accountId: result.insertId });
   } catch (err) {
@@ -146,6 +147,7 @@ router.post("/auth/login", portalLimiter, async (req: Request, res: Response) =>
       entity: "applicant_accounts", entityId: account.id,
       after: { email: email.trim().toLowerCase() },
     }).catch(console.error);
+    emitEvent({ companyId: 0, branchId: 0, userId: account.id, action: "careers.account.logged_in", entity: "applicant_accounts", entityId: account.id, details: JSON.stringify({ email: email.trim().toLowerCase() }) }).catch(console.error);
 
     res.json({ token, accountId: account.id });
   } catch (err) {
@@ -232,6 +234,7 @@ router.patch("/me", careersAuth, async (req: Request, res: Response) => {
       entity: "applicant_accounts", entityId: (req as any).applicantId,
       after: { name, phone, city, education, experienceYears },
     }).catch(console.error);
+    emitEvent({ companyId: 0, branchId: 0, userId: (req as any).applicantId, action: "careers.profile.updated", entity: "applicant_accounts", entityId: (req as any).applicantId, details: JSON.stringify({ name, phone, city, education, experienceYears }) }).catch(console.error);
 
     res.json({ message: "تم تحديث البيانات" });
   } catch (err) {
@@ -258,6 +261,7 @@ router.patch("/me/resume", careersAuth, async (req: Request, res: Response) => {
       entity: "applicant_accounts", entityId: (req as any).applicantId,
       after: { resumeUrl },
     }).catch(console.error);
+    emitEvent({ companyId: 0, branchId: 0, userId: (req as any).applicantId, action: "careers.resume.updated", entity: "applicant_accounts", entityId: (req as any).applicantId, details: JSON.stringify({ resumeUrl }) }).catch(console.error);
 
     res.json({ message: "تم حفظ رابط السيرة الذاتية بنجاح" });
   } catch (err) {
@@ -323,6 +327,7 @@ router.post("/apply", careersAuth, async (req: Request, res: Response) => {
       entity: "job_applications", entityId: result.insertId,
       after: { postingId, applicantId, coverLetter: coverLetter ? "provided" : null },
     }).catch(console.error);
+    emitEvent({ companyId: 0, branchId: 0, userId: applicantId, action: "careers.application.submitted", entity: "job_applications", entityId: result.insertId, details: JSON.stringify({ postingId, applicantId }) }).catch(console.error);
 
     res.json({ applicationId: result.insertId, message: "تم تقديم طلبك بنجاح" });
   } catch (err) {

@@ -1,5 +1,5 @@
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
-import { emitEvent } from "./businessHelpers.js";
+import { emitEvent, createJournalEntry, getAccountCodeFromMapping } from "./businessHelpers.js";
 
 type QueryFn = (sql: string, params: any[]) => Promise<{ rows: any[] }>;
 
@@ -125,8 +125,68 @@ export async function calculateCommissionForPlan(
     emitEvent({
       companyId: plan.companyId, branchId: plan.branchId, userId,
       action: "umrah.commission.calculated", entity: "employee_commission_plans", entityId: planId,
-      after: { month, year, finalAmount: result.finalAmount },
+      after: { month, year, finalAmount: result.finalAmount, employeeId: plan.employeeId, assignmentId: plan.assignmentId },
     }).catch(() => {});
+
+    if (result.finalAmount > 0) {
+      // Link to payroll run if one exists
+      try {
+        const [activeRun] = (await client.query(
+          `SELECT id FROM payroll_runs
+           WHERE "companyId"=$1 AND month=$2 AND year=$3 AND status IN ('draft','processing')
+             AND "deletedAt" IS NULL
+           ORDER BY id DESC LIMIT 1`,
+          [plan.companyId, month, year]
+        )).rows;
+
+        if (activeRun) {
+          const [existingLine] = (await client.query(
+            `SELECT id FROM payroll_lines
+             WHERE "runId"=$1 AND "assignmentId"=$2 AND "deletedAt" IS NULL`,
+            [activeRun.id, plan.assignmentId]
+          )).rows;
+
+          if (existingLine) {
+            await client.query(
+              `UPDATE payroll_lines SET commission=$1, "netSalary"="netSalary"+$1 WHERE id=$2`,
+              [result.finalAmount, existingLine.id]
+            );
+          } else {
+            await client.query(
+              `INSERT INTO payroll_lines ("runId","assignmentId","employeeId",basic,"grossSalary",commission,"netSalary")
+               VALUES ($1,$2,$3,0,0,$4,$4)`,
+              [activeRun.id, plan.assignmentId, plan.employeeId, result.finalAmount]
+            );
+          }
+        }
+      } catch (plErr) {
+        console.error(`[UmrahCommission] Payroll line link failed for plan ${planId}:`, plErr);
+      }
+
+      // GL: Debit Commission Expense, Credit Commission Payable (accrual)
+      try {
+        const [expenseCode, payableCode] = await Promise.all([
+          getAccountCodeFromMapping(plan.companyId, "commission_expense", "debit", "6200"),
+          getAccountCodeFromMapping(plan.companyId, "commission_payable", "credit", "2150"),
+        ]);
+        await createJournalEntry({
+          companyId: plan.companyId,
+          branchId: plan.branchId,
+          createdBy: userId,
+          ref: `JE-COMM-${planId}-${year}${String(month).padStart(2, "0")}`,
+          description: `استحقاق عمولة — ${plan.planName} — ${month}/${year}`,
+          type: "accrual",
+          sourceType: "employee_commission_calculations",
+          sourceId: planId,
+          lines: [
+            { accountCode: expenseCode, debit: result.finalAmount, credit: 0, description: `مصروف عمولة — ${plan.planName}` },
+            { accountCode: payableCode, debit: 0, credit: result.finalAmount, description: `عمولة مستحقة — موظف #${plan.employeeId}` },
+          ],
+        });
+      } catch (glErr) {
+        console.error(`[UmrahCommission] GL accrual failed for plan ${planId}:`, glErr);
+      }
+    }
 
     return result;
   });

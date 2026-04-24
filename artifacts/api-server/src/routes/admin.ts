@@ -7,7 +7,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import rateLimit from "express-rate-limit";
 import { integrationService } from "../lib/integrationService.js";
 import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import crypto from "crypto";
 
 const router = Router();
@@ -153,6 +153,14 @@ router.post("/users", requirePermission("admin:write"), async (req, res) => {
       action: "create", entity: "users", entityId: r.insertId,
       after: { email, role: role || "employee", employeeId: employeeId || null },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.user.created",
+      entity: "users",
+      entityId: r.insertId,
+      details: JSON.stringify({ email, role: role || "employee" }),
+    }).catch(console.error);
     res.status(201).json({
       id: r.insertId,
       email,
@@ -217,6 +225,14 @@ router.patch("/users/:id", requirePermission("admin:write"), async (req, res) =>
       action: "update", entity: "users", entityId: id,
       after: { isActive, role, employeeId },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.user.updated",
+      entity: "users",
+      entityId: id,
+      details: JSON.stringify({ isActive, role, employeeId }),
+    }).catch(console.error);
     res.json({ success: true });
   } catch (e: any) { handleRouteError(e, res, "خطأ غير متوقع"); }
 });
@@ -253,6 +269,13 @@ router.delete("/users/:id", requirePermission("admin:write"), async (req, res) =
       companyId: scope.companyId, userId: scope.userId,
       action: "delete", entity: "users", entityId: id,
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.user.deleted",
+      entity: "users",
+      entityId: id,
+    }).catch(console.error);
     res.json({ success: true, message: "تم إلغاء وصول المستخدم في شركتك" });
   } catch (e: any) { handleRouteError(e, res, "خطأ غير متوقع"); }
 });
@@ -284,6 +307,13 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "password_reset", entity: "users", entityId: id,
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.user.password_reset",
+      entity: "users",
+      entityId: id,
     }).catch(console.error);
     res.json({ success: true, message: "تم إعادة تعيين كلمة المرور بنجاح" });
   } catch (e: any) { handleRouteError(e, res, "خطأ غير متوقع"); }
@@ -339,6 +369,14 @@ router.post("/roles", requirePermission("admin:write"), async (req, res) => {
       companyId: scope.companyId, userId: scope.userId,
       action: "create", entity: "roles", entityId: roleKey,
       after: { roleKey, label, level: roleLevel, modules: mods },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.role.created",
+      entity: "roles",
+      entityId: 0,
+      details: JSON.stringify({ roleKey, label, level: roleLevel }),
     }).catch(console.error);
     res.status(201).json({ success: true, roleKey, label, level: roleLevel, modules: mods });
   } catch (e: any) { console.error("Create role error:", e); handleRouteError(e, res, "خطأ غير متوقع"); }
@@ -440,6 +478,14 @@ router.post("/user-roles", requirePermission("admin:write"), async (req, res) =>
       action: "update", entity: "roles", entityId: userId,
       after: { roleKey: def.roleKey, label: def.label },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.user_role.assigned",
+      entity: "user_roles",
+      entityId: userId,
+      details: JSON.stringify({ roleKey: def.roleKey, label: def.label }),
+    }).catch(console.error);
     res.status(201).json({ success: true, roleKey: def.roleKey });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
@@ -460,6 +506,13 @@ router.delete("/user-roles/:id", requirePermission("admin:write"), async (req, r
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "delete", entity: "roles", entityId: id,
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.user_role.deleted",
+      entity: "user_roles",
+      entityId: id,
     }).catch(console.error);
     res.json({ message: "تم حذف الدور بنجاح" });
   } catch (err) { handleRouteError(err, res, "admin"); }
@@ -497,6 +550,14 @@ router.post("/integrations", requirePermission("admin:write"), async (req, res) 
       action: "create", entity: "integrations", entityId: r.insertId,
       after: { type, name, status: status || "inactive" },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.integration.created",
+      entity: "integrations",
+      entityId: r.insertId,
+      details: JSON.stringify({ type, name, status: status || "inactive" }),
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
@@ -527,6 +588,14 @@ router.patch("/integrations/:id", requirePermission("admin:write"), async (req, 
       action: "update", entity: "integrations", entityId: id,
       after: { name: b.name, type: b.type, status: b.status },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.integration.updated",
+      entity: "integrations",
+      entityId: id,
+      details: JSON.stringify({ name: b.name, type: b.type, status: b.status }),
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
@@ -543,6 +612,13 @@ router.delete("/integrations/:id", requirePermission("admin:write"), async (req,
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "delete", entity: "integrations", entityId: Number(req.params.id),
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.integration.deleted",
+      entity: "integrations",
+      entityId: Number(req.params.id),
     }).catch(console.error);
     res.json({ message: "تم حذف التكامل" });
   } catch (err) { handleRouteError(err, res, "admin"); }
@@ -596,6 +672,13 @@ router.post("/integration-logs/retry", requirePermission("admin:write"), async (
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "retry", entity: "integrations", entityId: 0,
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.integration_logs.retried",
+      entity: "integration_logs",
+      entityId: 0,
     }).catch(console.error);
     res.json(result);
   } catch (err) { handleRouteError(err, res, "admin"); }
@@ -811,6 +894,13 @@ router.patch("/violations/:id/resolve", requirePermission("admin:write"), async 
       before: { status: existing.status },
       after: { status: "resolved" },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.violation.resolved",
+      entity: "audit_violations",
+      entityId: id,
+    }).catch(console.error);
     res.json(updated);
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
@@ -914,6 +1004,14 @@ router.post("/role-permissions", requirePermission("admin:write"), async (req, r
       action: "create", entity: "role_permissions", entityId: r.insertId,
       after: { role, permission },
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.role_permission.created",
+      entity: "role_permissions",
+      entityId: r.insertId,
+      details: JSON.stringify({ role, permission }),
+    }).catch(console.error);
     res.status(201).json({ success: true, id: r.insertId, role, permission });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
@@ -932,6 +1030,13 @@ router.delete("/role-permissions/:id", requirePermission("admin:write"), async (
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "delete", entity: "role_permissions", entityId: id,
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.role_permission.deleted",
+      entity: "role_permissions",
+      entityId: id,
     }).catch(console.error);
     res.json({ message: "تم حذف الصلاحية" });
   } catch (err) { handleRouteError(err, res, "admin"); }
@@ -965,6 +1070,14 @@ router.put("/role-permissions/bulk", requirePermission("admin:write"), async (re
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "role_permissions", entityId: 0,
       after: { role, permissionCount: permissions.length },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.role_permissions.bulk_updated",
+      entity: "role_permissions",
+      entityId: 0,
+      details: JSON.stringify({ role, permissionCount: permissions.length }),
     }).catch(console.error);
     res.json({ success: true, role, count: permissions.length });
   } catch (err) { handleRouteError(err, res, "admin"); }

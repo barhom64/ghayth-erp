@@ -1,7 +1,9 @@
 import { eventBus, type EventPayload } from "./eventBus.js";
 import { pool, rawQuery, rawExecute } from "./rawdb.js";
-import { createNotification, getManagerAssignmentId } from "./businessHelpers.js";
+import { createNotification, getManagerAssignmentId, createJournalEntry, getAccountCodeFromMapping } from "./businessHelpers.js";
 import { computeDiff } from "./auditDiff.js";
+import { calculateAllForCompany } from "./umrahCommissionEngine.js";
+import { registerObligation, markObligationMet } from "./obligationsEngine.js";
 
 async function logEvent(event: string, payload: EventPayload) {
   try {
@@ -118,6 +120,11 @@ export function registerEventListeners() {
   eventBus.on("invoice.paid", async (payload) => {
     await logEvent("invoice.paid", payload);
     await logAudit("invoice.paid", { ...payload, action: "update" });
+
+    // Cross-module: mark financial obligation as fulfilled
+    if (payload.companyId && payload.entityId) {
+      await markObligationMet(payload.companyId, "invoices", payload.entityId as number, "payment").catch(() => {});
+    }
   });
 
   eventBus.on("leave.requested", async (payload) => {
@@ -337,6 +344,29 @@ export function registerEventListeners() {
   eventBus.on("expense.created", async (payload) => {
     await logEvent("expense.created", payload);
     await logAudit("expense.created", { ...payload, action: "create" });
+
+    // Cross-module: register payment obligation for the expense
+    if (payload.companyId && payload.entityId) {
+      try {
+        const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
+        if (Number(details.amount) > 0) {
+          const dueDate = new Date();
+          dueDate.setDate(dueDate.getDate() + 14);
+          await registerObligation({
+            companyId: payload.companyId,
+            branchId: payload.branchId as number,
+            entityType: "expenses",
+            entityId: payload.entityId as number,
+            obligationType: "payment",
+            title: `مصروف #${payload.entityId} — ${Number(details.amount)} ر.س`,
+            dueAt: dueDate,
+            dedupeKey: `expense-${payload.entityId}`,
+          });
+        }
+      } catch (oblErr) {
+        console.error("[EventReaction] Expense obligation failed:", oblErr);
+      }
+    }
   });
 
   eventBus.on("vendor.created", async (payload) => {
@@ -718,6 +748,22 @@ export function registerEventListeners() {
   eventBus.on("employee.terminated", async (payload) => {
     await logEvent("employee.terminated", payload);
     await logAudit("employee.terminated", { ...payload, action: "terminate", entity: "employee" });
+
+    // Cross-module: deactivate umrah commission plans for terminated employee
+    if (payload.companyId && payload.entityId) {
+      try {
+        const result = await rawExecute(
+          `UPDATE employee_commission_plans SET status = 'suspended', "updatedAt" = NOW()
+           WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' AND "deletedAt" IS NULL`,
+          [payload.entityId, payload.companyId]
+        );
+        if (result.affectedRows > 0) {
+          console.log(`[EventReaction] Suspended ${result.affectedRows} commission plan(s) for terminated employee #${payload.entityId}`);
+        }
+      } catch (err) {
+        console.error("[EventReaction] Commission plan suspension on termination failed:", err);
+      }
+    }
   });
   eventBus.on("leave.cancelled", async (payload) => {
     await logEvent("leave.cancelled", payload);
@@ -734,10 +780,78 @@ export function registerEventListeners() {
   eventBus.on("payroll.run", async (payload) => {
     await logEvent("payroll.run", payload);
     await logAudit("payroll.run", { ...payload, action: "run", entity: "payroll_run" });
+
+    // Cross-module: auto-calculate umrah commissions when payroll run is created
+    if (payload.companyId) {
+      try {
+        const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
+        const month = Number(details.month) || new Date().getMonth() + 1;
+        const year = Number(details.year) || new Date().getFullYear();
+        const results = await calculateAllForCompany(payload.companyId, month, year, (payload.userId as number) || 0);
+        if (results.length > 0) {
+          const total = results.reduce((s, r) => s + r.finalAmount, 0);
+          console.log(`[EventReaction] Payroll run triggered commission calc: ${results.length} plans, total ${total} SAR`);
+          const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+          if (mgr) {
+            await createNotification({
+              companyId: payload.companyId, assignmentId: mgr,
+              type: "hr", title: "عمولات محسوبة تلقائياً",
+              body: `تم حساب ${results.length} عمولة بإجمالي ${total} ر.س وربطها بمسيّر الرواتب`,
+              priority: "normal", refType: "payroll_runs", refId: payload.entityId as number,
+            });
+          }
+        }
+      } catch (commErr) {
+        console.error("[EventReaction] Auto-commission calculation on payroll.run failed:", commErr);
+      }
+    }
   });
   eventBus.on("payroll.posted", async (payload) => {
     await logEvent("payroll.posted", payload);
     await logAudit("payroll.posted", { ...payload, action: "post", entity: "payroll_run" });
+
+    // Cross-module: when payroll is posted, create GL journal entry for total salaries
+    if (payload.companyId && payload.entityId) {
+      try {
+        const [runTotals] = await rawQuery<any>(
+          `SELECT COALESCE(SUM("grossSalary"),0)::numeric(12,2) AS gross,
+                  COALESCE(SUM(commission),0)::numeric(12,2) AS comm,
+                  COALESCE(SUM("netSalary"),0)::numeric(12,2) AS net
+           FROM payroll_lines WHERE "runId"=$1 AND "deletedAt" IS NULL`,
+          [payload.entityId]
+        );
+        const gross = Number(runTotals?.gross) || 0;
+        const comm = Number(runTotals?.comm) || 0;
+        if (gross + comm > 0) {
+          const [salaryExpCode, salaryPayableCode] = await Promise.all([
+            getAccountCodeFromMapping(payload.companyId, "salary_expense", "debit", "6100"),
+            getAccountCodeFromMapping(payload.companyId, "salary_payable", "credit", "2100"),
+          ]);
+          const lines: Array<{ accountCode: string; debit: number; credit: number; description?: string }> = [
+            { accountCode: salaryExpCode, debit: gross, credit: 0, description: "مصروف رواتب" },
+            { accountCode: salaryPayableCode, debit: 0, credit: gross, description: "رواتب مستحقة" },
+          ];
+          if (comm > 0) {
+            const commPayableCode = await getAccountCodeFromMapping(payload.companyId, "commission_payable", "credit", "2150");
+            lines.push({ accountCode: commPayableCode, debit: comm, credit: 0, description: "تسوية عمولات مستحقة سابقاً" });
+            lines.push({ accountCode: salaryPayableCode, debit: 0, credit: comm, description: "عمولات ضمن الرواتب" });
+          }
+          await createJournalEntry({
+            companyId: payload.companyId,
+            branchId: (payload.branchId as number) || 0,
+            createdBy: (payload.userId as number) || 0,
+            ref: `JE-PAY-${payload.entityId}`,
+            description: `ترحيل مسيّر رواتب #${payload.entityId}`,
+            type: "payroll",
+            sourceType: "payroll_runs",
+            sourceId: payload.entityId as number,
+            lines,
+          });
+        }
+      } catch (glErr) {
+        console.error("[EventReaction] Payroll GL posting failed:", glErr);
+      }
+    }
   });
   eventBus.on("payroll.deleted", async (payload) => {
     await logEvent("payroll.deleted", payload);
@@ -1026,6 +1140,314 @@ export function registerEventListeners() {
   eventBus.on("request.returned", async (payload) => {
     await logEvent("request.returned", payload);
     await logAudit("request.returned", { ...payload, action: "return", entity: "request" });
+  });
+
+  // ── Umrah module ──
+  eventBus.on("umrah.mutamers.imported", async (payload) => {
+    await logEvent("umrah.mutamers.imported", payload);
+    await logAudit("umrah.mutamers.imported", { ...payload, action: "import", entity: "umrah_pilgrims" });
+    if (payload.companyId) {
+      const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+      if (mgr) {
+        const after = payload.after as Record<string, unknown> | undefined;
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "umrah", title: "استيراد معتمرين",
+          body: `تم استيراد دفعة معتمرين — ${after?.newCount ?? 0} جديد، ${after?.updatedCount ?? 0} تحديث`,
+          priority: "normal", refType: "umrah_import_batches", refId: payload.entityId as number,
+          actionUrl: "/umrah/imports",
+        });
+      }
+    }
+  });
+
+  eventBus.on("umrah.vouchers.imported", async (payload) => {
+    await logEvent("umrah.vouchers.imported", payload);
+    await logAudit("umrah.vouchers.imported", { ...payload, action: "import", entity: "umrah_nusk_invoices" });
+    if (payload.companyId) {
+      const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+      if (mgr) {
+        const after = payload.after as Record<string, unknown> | undefined;
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "umrah", title: "استيراد فواتير نسك",
+          body: `تم استيراد ${after?.newCount ?? 0} فاتورة نسك جديدة، ${after?.updatedCount ?? 0} تحديث`,
+          priority: "normal", refType: "umrah_import_batches", refId: payload.entityId as number,
+          actionUrl: "/umrah/imports",
+        });
+      }
+    }
+  });
+
+  eventBus.on("umrah.overstay.detected", async (payload) => {
+    await logEvent("umrah.overstay.detected", payload);
+    await logAudit("umrah.overstay.detected", { ...payload, action: "detect", entity: "umrah_violations" });
+    if (payload.companyId) {
+      const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+      if (mgr) {
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "umrah", title: "تنبيه تجاوز مدة",
+          body: `تم رصد حالة تجاوز مدة الإقامة — مخالفة #${payload.entityId}`,
+          priority: "high", refType: "umrah_violations", refId: payload.entityId as number,
+          actionUrl: `/umrah/violations/${payload.entityId}`,
+        });
+      }
+    }
+  });
+
+  eventBus.on("umrah.absconder.detected", async (payload) => {
+    await logEvent("umrah.absconder.detected", payload);
+    await logAudit("umrah.absconder.detected", { ...payload, action: "detect", entity: "umrah_violations" });
+    if (payload.companyId) {
+      const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+      if (mgr) {
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "umrah", title: "تنبيه هارب",
+          body: `تم رصد حالة هروب معتمر — مخالفة #${payload.entityId}`,
+          priority: "urgent", refType: "umrah_violations", refId: payload.entityId as number,
+          actionUrl: `/umrah/violations/${payload.entityId}`,
+        });
+      }
+    }
+  });
+
+  eventBus.on("umrah.invoice.generated", async (payload) => {
+    await logEvent("umrah.invoice.generated", payload);
+    await logAudit("umrah.invoice.generated", { ...payload, action: "create", entity: "umrah_sales_invoices" });
+    if (!payload.companyId) return;
+
+    const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
+
+    // Cross-module: verify GL journal entry was posted
+    const [glEntry] = await rawQuery<any>(
+      `SELECT id FROM journal_entries WHERE "sourceType"='umrah_sales_invoices' AND "sourceId"=$1 AND "companyId"=$2 LIMIT 1`,
+      [payload.entityId, payload.companyId]
+    );
+    if (!glEntry) {
+      console.warn(`[EventReaction] Invoice #${payload.entityId} missing GL entry — will be posted on approval`);
+    }
+
+    // Cross-module: register receivable obligation for payment tracking
+    try {
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 30);
+      await registerObligation({
+        companyId: payload.companyId,
+        branchId: payload.branchId as number,
+        entityType: "umrah_sales_invoices",
+        entityId: payload.entityId as number,
+        obligationType: "payment",
+        title: `فاتورة عمرة ${details.ref || ""} — ${Number(details.total) || 0} ر.س`,
+        dueAt: dueDate,
+        dedupeKey: `umrah-inv-${payload.entityId}`,
+      });
+    } catch (oblErr) {
+      console.error("[EventReaction] Obligation registration failed:", oblErr);
+    }
+
+    // Notification to manager
+    const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+    if (mgr) {
+      await createNotification({
+        companyId: payload.companyId, assignmentId: mgr,
+        type: "umrah", title: "فاتورة عمرة جديدة",
+        body: `تم إصدار فاتورة مبيعات عمرة ${details.ref ?? ""} بقيمة ${details.total ?? 0} ر.س`,
+        priority: "normal", refType: "umrah_sales_invoices", refId: payload.entityId as number,
+        actionUrl: `/umrah/invoices/${payload.entityId}`,
+      });
+    }
+  });
+
+  eventBus.on("umrah.payment.received", async (payload) => {
+    await logEvent("umrah.payment.received", payload);
+    await logAudit("umrah.payment.received", { ...payload, action: "create", entity: "umrah_payments" });
+    if (!payload.companyId) return;
+
+    const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
+
+    // Cross-module: verify GL journal entry was posted for the payment
+    const [glEntry] = await rawQuery<any>(
+      `SELECT id FROM journal_entries WHERE "sourceType"='umrah_payments' AND "sourceId"=$1 AND "companyId"=$2 LIMIT 1`,
+      [payload.entityId, payload.companyId]
+    );
+    if (!glEntry) {
+      console.warn(`[EventReaction] Payment #${payload.entityId} missing GL entry — attempting recovery`);
+      try {
+        const sarAmount = Number(details.sarAmount) || 0;
+        const method = (details.method as string) || "bank_transfer";
+        const payRef = (details.ref as string) || `UPAY-${payload.entityId}`;
+        if (sarAmount > 0) {
+          const [cashCode, arCode] = await Promise.all([
+            getAccountCodeFromMapping(payload.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
+            getAccountCodeFromMapping(payload.companyId, "invoice_payment_ar", "credit", "1200"),
+          ]);
+          await createJournalEntry({
+            companyId: payload.companyId,
+            branchId: (payload.branchId as number) || 0,
+            createdBy: (payload.userId as number) || 0,
+            ref: `JE-${payRef}`,
+            description: `سداد وكيل فرعي — ${payRef}`,
+            type: "payment",
+            sourceType: "umrah_payments",
+            sourceId: payload.entityId as number,
+            lines: [
+              { accountCode: cashCode, debit: sarAmount, credit: 0 },
+              { accountCode: arCode, debit: 0, credit: sarAmount },
+            ],
+          });
+        }
+      } catch (glErr) {
+        console.error("[EventReaction] Payment GL recovery failed:", glErr);
+      }
+    }
+
+    // Cross-module: mark obligation as fulfilled for fully-paid invoices
+    if (details.allocations && Array.isArray(details.allocations)) {
+      for (const alloc of details.allocations as Array<{ invoiceId: number }>) {
+        const [inv] = await rawQuery<any>(
+          `SELECT status FROM umrah_sales_invoices WHERE id=$1 AND "companyId"=$2`,
+          [alloc.invoiceId, payload.companyId]
+        );
+        if (inv?.status === "paid") {
+          await markObligationMet(payload.companyId, "umrah_sales_invoices", alloc.invoiceId, "payment").catch(() => {});
+        }
+      }
+    }
+
+    // Notification to manager
+    const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+    if (mgr) {
+      await createNotification({
+        companyId: payload.companyId, assignmentId: mgr,
+        type: "umrah", title: "دفعة عمرة مستلمة",
+        body: `تم تسجيل دفعة ${details.ref ?? ""} بقيمة ${details.sarAmount ?? 0} ر.س`,
+        priority: "normal", refType: "umrah_payments", refId: payload.entityId as number,
+        actionUrl: `/umrah/payments`,
+      });
+    }
+  });
+
+  eventBus.on("umrah.commission.calculated", async (payload) => {
+    await logEvent("umrah.commission.calculated", payload);
+    await logAudit("umrah.commission.calculated", { ...payload, action: "calculate", entity: "employee_commission_plans" });
+    if (!payload.companyId) return;
+
+    const after = payload.after as Record<string, unknown> | undefined;
+    const finalAmount = Number(after?.finalAmount) || 0;
+    const month = after?.month as number;
+    const year = after?.year as number;
+    const planId = payload.entityId as number;
+
+    // Cross-module: verify GL accrual was posted
+    if (finalAmount > 0) {
+      const [glEntry] = await rawQuery<any>(
+        `SELECT id FROM journal_entries WHERE "sourceType"='employee_commission_calculations' AND "sourceId"=$1 AND "companyId"=$2 LIMIT 1`,
+        [planId, payload.companyId]
+      );
+      if (!glEntry) {
+        console.warn(`[EventReaction] Commission plan #${planId} missing GL accrual — attempting recovery`);
+        try {
+          const [expenseCode, payableCode] = await Promise.all([
+            getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "6200"),
+            getAccountCodeFromMapping(payload.companyId, "commission_payable", "credit", "2150"),
+          ]);
+          await createJournalEntry({
+            companyId: payload.companyId,
+            branchId: (payload.branchId as number) || 0,
+            createdBy: (payload.userId as number) || 0,
+            ref: `JE-COMM-${planId}-${year}${String(month).padStart(2, "0")}`,
+            description: `استحقاق عمولة — خطة ${planId} — ${month}/${year}`,
+            type: "accrual",
+            sourceType: "employee_commission_calculations",
+            sourceId: planId,
+            lines: [
+              { accountCode: expenseCode, debit: finalAmount, credit: 0, description: `مصروف عمولة` },
+              { accountCode: payableCode, debit: 0, credit: finalAmount, description: `عمولة مستحقة` },
+            ],
+          });
+        } catch (glErr) {
+          console.error("[EventReaction] Commission GL recovery failed:", glErr);
+        }
+      }
+    }
+
+    // Notification to employee
+    if (after?.assignmentId) {
+      await createNotification({
+        companyId: payload.companyId,
+        assignmentId: after.assignmentId as number,
+        type: "umrah", title: "تم حساب عمولتك",
+        body: `عمولة شهر ${month}/${year}: ${finalAmount} ر.س`,
+        priority: "normal", refType: "employee_commission_plans", refId: planId,
+      });
+    }
+
+    // Notification to manager
+    const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+    if (mgr) {
+      await createNotification({
+        companyId: payload.companyId, assignmentId: mgr,
+        type: "hr", title: "عمولة موظف جديدة",
+        body: `تم حساب عمولة بقيمة ${finalAmount} ر.س — خطة #${planId} — ${month}/${year}`,
+        priority: "normal", refType: "employee_commission_plans", refId: planId,
+      });
+    }
+  });
+
+  eventBus.on("umrah.agent.linked", async (payload) => {
+    await logEvent("umrah.agent.linked", payload);
+    await logAudit("umrah.agent.linked", { ...payload, action: "link", entity: "umrah_sub_agents" });
+    if (payload.companyId) {
+      const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+      if (mgr) {
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "umrah", title: "ربط وكيل فرعي بعميل",
+          body: `تم ربط وكيل فرعي بعميل في النظام`,
+          priority: "normal", refType: "umrah_sub_agents", refId: payload.entityId as number,
+          actionUrl: `/umrah/sub-agents`,
+        });
+      }
+    }
+  });
+
+  eventBus.on("umrah.violation.created", async (payload) => {
+    await logEvent("umrah.violation.created", payload);
+    await logAudit("umrah.violation.created", { ...payload, action: "create", entity: "umrah_violations" });
+    if (payload.companyId) {
+      const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+      if (mgr) {
+        const after = payload.after as Record<string, unknown> | undefined;
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "umrah", title: "مخالفة عمرة جديدة",
+          body: `تم تسجيل مخالفة ${after?.type === "absconded" ? "هروب" : "تجاوز"} — غرامة ${after?.penaltyAmount ?? 0} ر.س`,
+          priority: after?.type === "absconded" ? "urgent" : "high",
+          refType: "umrah_violations", refId: payload.entityId as number,
+          actionUrl: `/umrah/violations`,
+        });
+      }
+    }
+  });
+
+  eventBus.on("umrah.season.opened", async (payload) => {
+    await logEvent("umrah.season.opened", payload);
+    await logAudit("umrah.season.opened", { ...payload, action: "create", entity: "umrah_seasons" });
+    if (payload.companyId) {
+      const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
+      if (mgr) {
+        const after = payload.after as Record<string, unknown> | undefined;
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "umrah", title: "موسم عمرة جديد",
+          body: `تم فتح ${after?.name ?? "موسم جديد"} — يرجى مراجعة ربط الوكلاء`,
+          priority: "high", refType: "umrah_seasons", refId: payload.entityId as number,
+          actionUrl: `/umrah/sub-agents`,
+        });
+      }
+    }
   });
 
   const auditEntities = [
