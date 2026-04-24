@@ -409,7 +409,7 @@ export default function ManagerBoard() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <DataTable<any>
+          <DataTable
             columns={pendingColumns}
             data={allPending}
             rowKey={(item) => `${item._type}-${item.id}`}
