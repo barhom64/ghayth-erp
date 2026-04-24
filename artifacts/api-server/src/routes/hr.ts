@@ -20,7 +20,7 @@ import {
   getManagerAssignmentId,
   initiateApprovalChain,
   processApprovalStep,
-  createJournalEntry,
+  createGuardedJournalEntry,
   getAccountCodeFromMapping,
   checkFinancialPeriodOpen,
 } from "../lib/businessHelpers.js";
@@ -2339,7 +2339,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
         getAccountCodeFromMapping(scope.companyId, "payroll_deductions_payable", "credit", "2210"),
       ]);
 
-      await createJournalEntry({
+      await createGuardedJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
         createdBy: scope.activeAssignmentId,
@@ -2353,7 +2353,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
           { accountCode: gosiPayableCode, debit: 0, credit: totalGosiPayable },
           { accountCode: deductionsPayableCode, debit: 0, credit: totalOtherDeductions },
         ].filter(l => l.debit > 0 || l.credit > 0),
-      });
+      }, { table: "payroll_runs", id: runId });
     } catch (journalErr) {
       throw new IntegrationError(
         "تم صرف الرواتب لكن فشل القيد المحاسبي. راجع المدير المالي",
@@ -3794,7 +3794,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
       if (!updatedRun) throw new Error("دورة الرواتب غير موجودة");
 
       const jeRef = `PAYROLL-POST-${period}`;
-      await createJournalEntry({
+      await createGuardedJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
         createdBy: scope.activeAssignmentId,
@@ -3809,7 +3809,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
           credit: l.credit,
           description: l.desc,
         })),
-      });
+      }, { table: "payroll_runs", id: Number(req.params.id) });
 
       // Register monthly GOSI submission obligation (due 14th of NEXT month)
       try {
@@ -6049,14 +6049,14 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
 
     let journalId: number | null = null;
     try {
-      journalId = await createJournalEntry({
+      journalId = await createGuardedJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
         createdBy: scope.activeAssignmentId,
         ref,
         description: `استحقاقات شهرية: إجازات ${totalLeaveAccrual} + نهاية خدمة ${totalEosAccrual} (${employees.length} موظف)`,
         lines,
-      });
+      }, { table: "journal_entries", id: 0 });
     } catch (journalErr) {
       throw new IntegrationError("فشل تسجيل قيد الاستحقاقات", {
         meta: { integration: "journal", period: targetPeriod },
