@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Cog, Building, Users, Building2, ScrollText, Plus, X, Save, Pencil, Trash2, Printer, Eye, Shield, SlidersHorizontal, GitBranch, CheckCircle, Settings2, Workflow, Clock, AlertTriangle, BookOpen, ArrowLeftRight, AlertCircle, Zap, MessageSquare, Link2, WifiOff, Wifi, RefreshCw, ToggleLeft, ToggleRight, Key } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
@@ -101,9 +100,9 @@ function GeneralSettings() {
         <div><Label>الهاتف</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
         <div><Label>البريد الإلكتروني</Label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
         <div className="md:col-span-2"><Label>العنوان</Label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
-        <div><Label>العملة</Label><Select value={form.currency} onValueChange={(v) => setForm({ ...form, currency: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SAR">ريال سعودي</SelectItem><SelectItem value="USD">دولار أمريكي</SelectItem><SelectItem value="AED">درهم إماراتي</SelectItem></SelectContent></Select></div>
-        <div><Label>المنطقة الزمنية</Label><Select value={form.timezone} onValueChange={(v) => setForm({ ...form, timezone: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Asia/Riyadh">الرياض (توقيت غرينتش+3)</SelectItem><SelectItem value="Asia/Dubai">دبي (توقيت غرينتش+4)</SelectItem></SelectContent></Select></div>
-        <div><Label>التقويم الافتراضي</Label><Select value={form.calendarMode} onValueChange={(v) => setForm({ ...form, calendarMode: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="hijri">هجري</SelectItem><SelectItem value="gregorian">ميلادي</SelectItem><SelectItem value="both">كلاهما (هجري وميلادي)</SelectItem></SelectContent></Select></div>
+        <div><Label>العملة</Label><select className="w-full border rounded-md p-2" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}><option value="SAR">ريال سعودي</option><option value="USD">دولار أمريكي</option><option value="AED">درهم إماراتي</option></select></div>
+        <div><Label>المنطقة الزمنية</Label><select className="w-full border rounded-md p-2" value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })}><option value="Asia/Riyadh">الرياض (توقيت غرينتش+3)</option><option value="Asia/Dubai">دبي (توقيت غرينتش+4)</option></select></div>
+        <div><Label>التقويم الافتراضي</Label><select className="w-full border rounded-md p-2" value={form.calendarMode} onChange={(e) => setForm({ ...form, calendarMode: e.target.value })}><option value="hijri">هجري</option><option value="gregorian">ميلادي</option><option value="both">كلاهما (هجري وميلادي)</option></select></div>
         <div className="md:col-span-2 pt-2"><Button onClick={handleSave} disabled={saving}><Save className="h-4 w-4 me-1" />{saving ? "جاري الحفظ..." : "حفظ الإعدادات"}</Button></div>
       </CardContent></Card>
     </div>
