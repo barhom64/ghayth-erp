@@ -191,8 +191,9 @@ router.get("/user-permissions", requirePermission("permissions:read"), async (re
     const { userId } = req.query as { userId?: string };
     const targetId = userId ? Number(userId) : scope.userId;
     const rows = await rawQuery<any>(
-      `SELECT p.*, u.name AS "userName" FROM permissions p
+      `SELECT p.*, COALESCE(e.name, u.email) AS "userName" FROM permissions p
        LEFT JOIN users u ON u.id = p."userId"
+       LEFT JOIN employees e ON e.id = u."employeeId"
        WHERE p."userId" = $1 AND (p."companyId" IS NULL OR p."companyId" = $2)
        ORDER BY p.permission`,
       [targetId, scope.companyId]
