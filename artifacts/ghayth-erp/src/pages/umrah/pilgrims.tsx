@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
-import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Button } from "@/components/ui/button";
@@ -10,8 +9,6 @@ import { AdvancedFilters, useFilters, exportToCSV } from "@/components/shared/ad
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { PageShell } from "@/components/page-shell";
-import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 
 export default function UmrahPilgrims() {
   const [filters, setFilters] = useFilters();
@@ -55,13 +52,13 @@ export default function UmrahPilgrims() {
       key: "arrivalDate",
       header: "الوصول",
       sortable: true,
-      render: (p) => formatDateAr(p.arrivalDate),
+      render: (p) => (p.arrivalDate ? new Date(p.arrivalDate).toLocaleDateString("ar-SA") : "-"),
     },
     {
       key: "departureDate",
       header: "المغادرة",
       sortable: true,
-      render: (p) => formatDateAr(p.departureDate),
+      render: (p) => (p.departureDate ? new Date(p.departureDate).toLocaleDateString("ar-SA") : "-"),
     },
     {
       key: "status",
@@ -72,10 +69,10 @@ export default function UmrahPilgrims() {
   ];
 
   return (
-    <PageShell title="المعتمرون" breadcrumbs={[{ label: "العمرة" }, { label: "المعتمرون" }]}>
-      <UmrahTabsNav />
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
+          <h1 className="text-3xl font-bold tracking-tight">المعتمرين</h1>
           <p className="text-sm text-muted-foreground mt-0.5">متابعة ملفات المعتمرين وحالاتهم</p>
         </div>
         <Link href="/umrah/pilgrims/create">
@@ -139,6 +136,6 @@ export default function UmrahPilgrims() {
         onPageChange={setPage}
         noToolbar
       />
-    </PageShell>
+    </div>
   );
 }
