@@ -5,23 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-// Phase A.1 — employee detail page on PageShell with a friendly
-// not-found state. Replaces the bare "الموظف غير موجود" text
-// (regression the programmer reported on /employees/734) with a
-// proper error card that links back to the list and the hub.
-import { PageShell } from "@/components/page-shell";
+import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { Link } from "wouter";
 import {
   User, Phone, Mail, Briefcase, Calendar, Building, CreditCard,
   ListTodo, Clock, BookOpen, DollarSign, AlertTriangle, Printer,
-  ArrowLeft, Home,
-  FileText, TrendingUp, Award, History, Activity, CheckCircle2,
+  FileText, TrendingUp, Award, Activity, CheckCircle2,
   XCircle, AlertCircle, ChevronDown, ChevronUp, Pencil, Check, X
 } from "lucide-react";
-import { ROLES } from "@/lib/constants";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { useRoute } from "wouter";
@@ -34,26 +25,10 @@ import { formatDateAr, formatTimeAr, formatCurrency } from "@/lib/formatters";
 import { PrintPreviewModal } from "@/components/print-layout";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmployeeDisciplineSummary } from "@/components/shared/employee-discipline-summary";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
-const TABS = [
-  { key: "overview", label: "نظرة عامة", icon: Activity },
-  { key: "info", label: "المعلومات", icon: User },
-  { key: "attendance", label: "الحضور", icon: Clock },
-  { key: "leaves", label: "الإجازات", icon: Calendar },
-  { key: "payroll", label: "الرواتب", icon: DollarSign },
-  { key: "violations", label: "المخالفات", icon: AlertTriangle },
-  { key: "finance", label: "المالية", icon: BookOpen },
-  { key: "tasks", label: "المهام", icon: ListTodo },
-  { key: "trainings", label: "التدريب", icon: TrendingUp },
-  { key: "documents", label: "المستندات", icon: FileText },
-  { key: "timeline", label: "السجل الزمني", icon: History },
-] as const;
-
-type TabKey = (typeof TABS)[number]["key"];
 
 type OperationalStatus = {
   status: string;
@@ -239,11 +214,23 @@ function ViolationTimeline({ violations }: { violations: any[] }) {
   );
 }
 
+const TABS = [
+  { key: "overview", label: "نظرة شاملة", icon: Activity },
+  { key: "info", label: "البيانات الشخصية", icon: User },
+  { key: "attendance", label: "الحضور", icon: Clock },
+  { key: "leaves", label: "الإجازات", icon: Calendar },
+  { key: "payroll", label: "الرواتب", icon: DollarSign },
+  { key: "violations", label: "المخالفات", icon: AlertTriangle },
+  { key: "tasks", label: "المهام", icon: ListTodo },
+  { key: "trainings", label: "التدريب", icon: Award },
+  { key: "finance", label: "المالية", icon: BookOpen },
+] as const;
+type TabKey = (typeof TABS)[number]["key"];
+
 export default function EmployeeDetail({ id: propId }: { id?: string }) {
   const [, params] = useRoute("/employees/:id");
   const id = propId || params?.id || "";
-  const { data: employee, isLoading, isError, error } = useApiQuery<any>(["employee", id], `/employees/${id}`, !!id);
-  const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const { data: employee, isLoading, isError, error, refetch } = useApiQuery<any>(["employee", id], `/employees/${id}`, !!id);
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
   const [printHtml, setPrintHtml] = useState("");
@@ -253,6 +240,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
   const qc = useQueryClient();
   const branch = useBranchLetterhead(user?.branchId);
   const { data: templatesResp } = useApiQuery<any>(["doc-templates"], "/documents/templates");
+  const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [govEditing, setGovEditing] = useState(false);
   const [govForm, setGovForm] = useState<Record<string, string>>({});
 
@@ -301,64 +289,22 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
     }
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError || !employee) return <ErrorState />;
+  const tasks: any[] = employee?.tasks || [];
+  const attendance: any[] = employee?.attendance || [];
+  const leaves: any[] = employee?.leaves || [];
+  const trainings: any[] = employee?.trainings || [];
+  const payroll: any[] = employee?.payroll || [];
+  const violations: any[] = employee?.violations || [];
+  const loans: any[] = employee?.loans || [];
+  const overtime: any[] = employee?.overtime || [];
 
-  const tasks: any[] = employee.tasks || [];
-  const attendance: any[] = employee.attendance || [];
-  const leaves: any[] = employee.leaves || [];
-  const trainings: any[] = employee.trainings || [];
-  const payroll: any[] = employee.payroll || [];
-  const violations: any[] = employee.violations || [];
-  const loans: any[] = employee.loans || [];
-  const overtime: any[] = employee.overtime || [];
-
-  const hireDate = employee.hireDate ? new Date(employee.hireDate) : null;
+  const hireDate = employee?.hireDate ? new Date(employee.hireDate) : null;
   const serviceDays = hireDate ? Math.floor((Date.now() - hireDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
 
   const pendingTasks = tasks.filter(t => t.status !== "completed" && t.status !== "cancelled").length;
 
-  return (
-    <PageShell
-      title={employee.name}
-      subtitle={`${employee.empNumber || "—"} · ${employee.jobTitle || "—"} · ${employee.branchName || "—"}`}
-      breadcrumbs={[
-        { href: "/hr", label: "الموارد البشرية" },
-        { href: "/employees", label: "الموظفون" },
-      ]}
-      resetKey={id}
-      actions={
-        <div className="flex items-center gap-2 flex-wrap">
-          <OperationalStatusBar employeeId={id} />
-          <div className="relative">
-            <Button variant="outline" size="sm" onClick={() => setShowPrintMenu(!showPrintMenu)}>
-              <Printer className="h-4 w-4 me-1" />طباعة
-            </Button>
-            {showPrintMenu && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowPrintMenu(false)} />
-                <div className="absolute start-0 top-full mt-1 z-50 bg-white border rounded-lg shadow-lg min-w-[200px] py-1">
-                  {hrTemplates.length === 0 ? (
-                    <p className="px-3 py-2 text-xs text-gray-400">لا توجد قوالب</p>
-                  ) : (
-                    hrTemplates.map((t: any) => (
-                      <button
-                        key={t.id}
-                        className="w-full text-right px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                        onClick={() => handlePrintTemplate(t)}
-                      >
-                        <FileText className="h-3.5 w-3.5 text-gray-400" />
-                        {t.name}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      }
-    >
+  const overview = (
+    <div className="space-y-4">
       <div className="flex gap-1 border-b overflow-x-auto pb-px">
         {TABS.map((tab) => {
           const count = tab.key === "tasks" ? tasks.length
@@ -883,25 +829,54 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
         </div>
       )}
 
-      {activeTab === "documents" && (
-        <EntityDocuments entityType="employee" entityId={id} />
-      )}
+    </div>
+  );
 
-      {activeTab === "timeline" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <History className="h-5 w-5 text-muted-foreground" />
-              السجل الزمني الشامل
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <EntityTimeline entityType="employees" entityId={id} maxItems={50} />
-            <EntityTimeline entityType="employee" entityId={id} />
-          </CardContent>
-        </Card>
-      )}
-
+  return (
+    <>
+      <DetailPageLayout
+        title={employee?.name || "تفاصيل الموظف"}
+        subtitle={employee ? `${employee.empNumber || "—"} · ${employee.jobTitle || "—"} · ${employee.branchName || "—"}` : undefined}
+        backPath="/employees"
+        entityType="employee"
+        entityId={id}
+        overview={overview}
+        isLoading={isLoading}
+        error={isError ? (error || new Error("خطأ في تحميل بيانات الموظف")) : undefined}
+        onRetry={refetch}
+        hideTabs={["tasks"]}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <OperationalStatusBar employeeId={id} />
+            <div className="relative">
+              <Button variant="outline" size="sm" onClick={() => setShowPrintMenu(!showPrintMenu)}>
+                <Printer className="h-4 w-4 me-1" />طباعة
+              </Button>
+              {showPrintMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowPrintMenu(false)} />
+                  <div className="absolute start-0 top-full mt-1 z-50 bg-white border rounded-lg shadow-lg min-w-[200px] py-1">
+                    {hrTemplates.length === 0 ? (
+                      <p className="px-3 py-2 text-xs text-gray-400">لا توجد قوالب</p>
+                    ) : (
+                      hrTemplates.map((t: any) => (
+                        <button
+                          key={t.id}
+                          className="w-full text-right px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                          onClick={() => handlePrintTemplate(t)}
+                        >
+                          <FileText className="h-3.5 w-3.5 text-gray-400" />
+                          {t.name}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        }
+      />
       {printPreviewOpen && (
         <PrintPreviewModal
           open={printPreviewOpen}
@@ -914,7 +889,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
           <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(printHtml) }} />
         </PrintPreviewModal>
       )}
-    </PageShell>
+    </>
   );
 }
 
