@@ -10009,6 +10009,36 @@ CREATE TABLE public.suppliers (
 );
 
 
+CREATE TABLE public.vendor_contracts (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "vendorId" integer NOT NULL,
+    title character varying(300),
+    "startDate" date,
+    "endDate" date,
+    value numeric(15,2) DEFAULT 0,
+    status character varying(20) DEFAULT 'active',
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
+);
+
+CREATE SEQUENCE public.vendor_contracts_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+
+ALTER SEQUENCE public.vendor_contracts_id_seq OWNED BY public.vendor_contracts.id;
+
+ALTER TABLE ONLY public.vendor_contracts ALTER COLUMN id SET DEFAULT nextval('public.vendor_contracts_id_seq'::regclass);
+
+ALTER TABLE ONLY public.vendor_contracts
+    ADD CONSTRAINT vendor_contracts_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.vendor_contracts
+    ADD CONSTRAINT "vendor_contracts_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES public.suppliers(id);
+
+
 --
 -- Name: suppliers_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --

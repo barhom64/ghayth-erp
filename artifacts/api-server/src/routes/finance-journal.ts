@@ -235,7 +235,7 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
     let costCenterValidationEnabled = false;
     try {
       const [costCenterSettingRow] = await rawQuery<any>(
-        `SELECT value FROM company_settings WHERE "companyId" = $1 AND key = 'costCenterEnabled' LIMIT 1`,
+        `SELECT value FROM system_settings WHERE "companyId" = $1 AND key = 'costCenterEnabled' LIMIT 1`,
         [effectiveCompanyId]
       );
       costCenterValidationEnabled = costCenterSettingRow?.value === "true";

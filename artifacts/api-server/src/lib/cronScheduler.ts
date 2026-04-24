@@ -2391,7 +2391,7 @@ async function vendorContractExpiryAlerts(): Promise<string> {
               vc."endDate", (vc."endDate"::date - CURRENT_DATE) AS "daysLeft",
               vc.title AS "contractTitle"
        FROM vendor_contracts vc
-       JOIN vendors v ON v.id = vc."vendorId"
+       JOIN suppliers v ON v.id = vc."vendorId"
        WHERE vc."companyId" = $1 AND vc.status = 'active'
          AND vc."endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'
          AND NOT EXISTS (

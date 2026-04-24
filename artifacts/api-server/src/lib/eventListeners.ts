@@ -1439,9 +1439,10 @@ export function registerEventListeners() {
     if (finalAmount > 0) {
       const assignmentId = after?.assignmentId as number | undefined;
       const employeeId = after?.employeeId as number | undefined;
+      const periodKey = `${year}-${String(month).padStart(2, "0")}`;
       const [activeRun] = await rawQuery<any>(
-        `SELECT id FROM payroll_runs WHERE "companyId"=$1 AND month=$2 AND year=$3 AND status IN ('draft','processing') AND "deletedAt" IS NULL ORDER BY id DESC LIMIT 1`,
-        [payload.companyId, month, year]
+        `SELECT id FROM payroll_runs WHERE "companyId"=$1 AND period=$2 AND status IN ('draft','processing') AND "deletedAt" IS NULL ORDER BY id DESC LIMIT 1`,
+        [payload.companyId, periodKey]
       );
       if (activeRun && assignmentId) {
         try {
