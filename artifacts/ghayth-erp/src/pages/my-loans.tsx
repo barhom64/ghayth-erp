@@ -107,7 +107,7 @@ export default function MyLoans() {
         })}
       </div>
 
-      <DataTable<any>
+      <DataTable
         columns={loanColumns}
         data={loans}
         emptyMessage="لا توجد سلف مسجّلة"
