@@ -39,7 +39,24 @@ The project is structured as a pnpm workspace monorepo.
 -   `artifacts/client-portal`: Client self-service portal (port 25516).
 -   `artifacts/careers-portal`: Careers/recruitment portal (port 23179).
 
-**GitHub Sync:** Repository `barhom64/ghayth-erp` (private). Connected via GitHub integration. Changes pushed via GitHub API.
+**GitHub Sync:** Repository `barhom64/ghayth-erp` (private). Connected via GitHub integration. Changes pushed via GitHub API using `scripts/_push2.mjs` (PUT /contents path-by-path) — incremental, resumable via `/tmp/_push2_state.json`. Note: GitHub App token lacks `workflows: write`, so `.github/workflows/*` files cannot be pushed and must be edited directly on GitHub. Local destructive `git` commands (commit/push/remote ops) are blocked in this environment — all syncs go through the GitHub REST API. Stale `subrepl-*` remote entries in `.git/config` are harmless leftovers from sub-agent clones and can be ignored.
+
+**Upstream batch reconciliation pattern:** When the user pushes a large upstream batch on GitHub and asks to pull it locally:
+1. Fetch the diff via the GitHub connector (`scripts/github-pull.mjs`).
+2. Copy any new `migrations/NNN_*.sql` into `artifacts/api-server/src/migrations/` using sequential numbers (renumber as needed).
+3. Re-apply local fixes that get overwritten by the pull (the recurring ones are listed below in **Local Fixes Re-applied After Each Pull**).
+4. Restart `api-server` and verify migrations applied; patch any failed migration with `DO $$ IF EXISTS ... $$` guards (most common: column doesn't exist yet on the target schema).
+5. Hit a sweep of endpoints with the admin token to confirm 200/304/404, never 500.
+6. Push back to GitHub via `scripts/_push2.mjs`.
+
+**Local Fixes Re-applied After Each Pull (recurring):**
+- `routes/permissions.ts`, `routes/correspondence.ts` (list+get), `routes/finance-custodies.ts` (approval actions): replace `users.name` selects with `COALESCE(employees.name, users.email) AS "<alias>"` plus `LEFT JOIN employees e ON e.id = u."employeeId"` — the `users` table has no `name` column.
+- `lib/umrahImportEngine.ts`: keep SAVEPOINT/dedupe wrapping in the mutamers and vouchers loops so a single bad row doesn't abort the whole batch.
+- `routes/umrah-entities.ts`: drop `deletedAt` and `uploadedAt` from `/import/batches` and `/:id/changes` (those columns don't exist on `umrah_import_batches`); keep `ORDER BY "createdAt" DESC`.
+- `lib/obligationsEngine.ts`: `ensureObligationsTable()` must use `pool.query` (not `rawExecute`) — `rawExecute` auto-appends `RETURNING id` which breaks DDL.
+- `migrations/106_performance_indexes.sql`: wrap the `payroll_lines` index in a `DO $$ IF EXISTS column 'payrollRunId' THEN ... ELSIF column 'runId' THEN ... END $$` block (the upstream uses `payrollRunId` but our schema has `runId`); also drop `CONCURRENTLY` and wrap the `employees.department` index in a column-exists guard.
+- `migrations/105_missing_tables.sql`: add `ALTER TABLE fx_rates ADD COLUMN IF NOT EXISTS "effectiveDate"`, plus `source`, plus a `UPDATE` to backfill from `rateDate`.
+- `migrations/107_missing_tables_phase2.sql`: add `ALTER TABLE correspondence ADD COLUMN IF NOT EXISTS "deletedAt"` and same for `company_documents` BEFORE the indexes that reference `deletedAt`.
 
 **Shared Libraries:**
 
