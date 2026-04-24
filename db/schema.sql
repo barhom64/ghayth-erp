@@ -6234,7 +6234,11 @@ CREATE TABLE public.invoices (
     "taxCategoryCode" character varying(10) DEFAULT 'S'::character varying,
     "exemptionReason" text,
     "projectId" integer,
-    CONSTRAINT invoices_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending_approval'::character varying)::text, ('sent'::character varying)::text, ('partial'::character varying)::text, ('paid'::character varying)::text, ('overdue'::character varying)::text, ('cancelled'::character varying)::text, ('returned'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('delivered'::character varying)::text, ('ordered'::character varying)::text])))
+    "approvedBy" integer,
+    "approvedAt" timestamp with time zone,
+    "postedBy" integer,
+    "postedAt" timestamp with time zone,
+    CONSTRAINT invoices_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending_approval'::character varying)::text, ('sent'::character varying)::text, ('partial'::character varying)::text, ('paid'::character varying)::text, ('overdue'::character varying)::text, ('cancelled'::character varying)::text, ('returned'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('delivered'::character varying)::text, ('ordered'::character varying)::text, ('posted'::character varying)::text, ('closed'::character varying)::text])))
 );
 
 

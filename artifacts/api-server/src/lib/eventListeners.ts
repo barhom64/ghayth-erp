@@ -1394,6 +1394,23 @@ export function registerEventListeners() {
         priority: "normal", refType: "employee_commission_plans", refId: planId,
       });
     }
+
+    // Cross-module: detect commission calculated without active payroll run
+    if (finalAmount > 0) {
+      const [activeRun] = await rawQuery<any>(
+        `SELECT id FROM payroll_runs WHERE "companyId"=$1 AND month=$2 AND year=$3 AND status IN ('draft','processing') LIMIT 1`,
+        [payload.companyId, month, year]
+      );
+      if (!activeRun && mgr) {
+        await createNotification({
+          companyId: payload.companyId, assignmentId: mgr,
+          type: "hr", title: "عمولة بدون مسيّر رواتب",
+          body: `عمولة ${finalAmount} ر.س (خطة #${planId}) محسوبة لشهر ${month}/${year} لكن لا يوجد مسيّر رواتب نشط — يرجى إنشاء مسيّر لتضمين العمولة`,
+          priority: "high", refType: "employee_commission_plans", refId: planId,
+          actionUrl: `/hr/payroll`,
+        });
+      }
+    }
   });
 
   eventBus.on("umrah.agent.linked", async (payload) => {

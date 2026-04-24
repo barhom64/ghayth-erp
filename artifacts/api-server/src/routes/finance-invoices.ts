@@ -10,6 +10,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { requireOwnership } from "../middlewares/contextualRbac.js";
 import {
   createNotification,
   emitEvent,
@@ -410,24 +411,8 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
       }
     });
 
-    // Create the journal entry via the centralized helper (handles balance
-    // validation, rounding-difference auto-correction, updateAccountBalances,
-    // and event bus emission).
-    await createJournalEntry({
-      companyId: effectiveCompanyId,
-      branchId: branchId ?? scope.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref: `JE-${ref}`,
-      description: `فاتورة ${ref}${description ? ` – ${description}` : ""}`,
-      type: "invoice",
-      sourceType: "invoice",
-      sourceId: insertId,
-      lines: [
-        { accountCode: invArCode, debit: total, credit: 0 },
-        { accountCode: invRevenueCode, debit: 0, credit: baseAmount },
-        { accountCode: invVatPayableCode, debit: 0, credit: vatAmount },
-      ],
-    });
+    // GL entry deferred to approval (POST /invoices/:id/approve)
+    // to prevent unapproved drafts from affecting the ledger.
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.created", entity: "invoices", entityId: insertId, details: JSON.stringify({ ref, total, dueDate: finalDueDate, vatAmount, lineCount: validatedLines.length }) }).catch(console.error);
     createNotification({ companyId: scope.companyId, assignmentId: scope.activeAssignmentId, type: "invoice_created", title: "تم إنشاء فاتورة جديدة", body: `فاتورة ${ref} بمبلغ ${total.toLocaleString()} ﷼`, priority: "normal", refType: "invoices", refId: insertId }).catch(console.error);
@@ -501,6 +486,107 @@ invoicesRouter.post("/invoices/:id/send", requirePermission("finance:create"), a
     res.json({ message: "تم إرسال الفاتورة بنجاح", status: "sent", channels, ref: invoice.ref });
   } catch (err) {
     handleRouteError(err, res, "Send invoice error:");
+  }
+});
+
+invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"), requireOwnership({ table: "invoices", checks: ["company", "branch"] }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+
+    const [invoice] = await rawQuery<any>(
+      `SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId"
+       WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
+
+    await applyTransition({
+      entity: "invoices",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "invoice.approved",
+      fromStates: ["draft", "sent", "returned"],
+      toState: "approved",
+      setExtras: { approvedBy: scope.userId, approvedAt: { raw: "NOW()" } },
+      extraWhere: `"deletedAt" IS NULL`,
+      after: { ref: invoice.ref, total: invoice.total },
+    });
+
+    // GL entry created ONLY upon approval
+    try {
+      const [invArCode, invRevenueCode, invVatPayableCode] = await Promise.all([
+        getAccountCodeFromMapping(scope.companyId, "invoice_ar", "debit", "1200"),
+        getAccountCodeFromMapping(scope.companyId, "invoice_revenue", "credit", "4000"),
+        getAccountCodeFromMapping(scope.companyId, "invoice_vat_payable", "credit", "2300"),
+      ]);
+      await createJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId || 0,
+        createdBy: scope.activeAssignmentId,
+        ref: `JE-${invoice.ref}`,
+        description: `فاتورة ${invoice.ref}${invoice.description ? ` – ${invoice.description}` : ""}`,
+        type: "invoice",
+        sourceType: "invoice",
+        sourceId: id,
+        lines: [
+          { accountCode: invArCode, debit: Number(invoice.total), credit: 0 },
+          { accountCode: invRevenueCode, debit: 0, credit: Number(invoice.total) - Number(invoice.vatAmount || 0) },
+          { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0) },
+        ],
+      });
+    } catch (glErr) {
+      console.error("[invoice-approve] GL journal entry failed:", glErr);
+    }
+
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.approved", entity: "invoices", entityId: id, details: JSON.stringify({ ref: invoice.ref, total: invoice.total }) }).catch(console.error);
+
+    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1`, [id]);
+    res.json(updated);
+  } catch (err) {
+    if (typeof lifecycleErrorResponse === 'function') {
+      const mapped = lifecycleErrorResponse(err);
+      if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    }
+    handleRouteError(err, res, "Approve invoice error:");
+  }
+});
+
+invoicesRouter.post("/invoices/:id/post", requirePermission("finance:approve"), requireOwnership({ table: "invoices", checks: ["company", "branch"] }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+
+    await applyTransition({
+      entity: "invoices",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "invoice.posted",
+      fromStates: ["approved"],
+      toState: "posted",
+      setExtras: { postedBy: scope.userId, postedAt: { raw: "NOW()" } },
+      extraWhere: `"deletedAt" IS NULL`,
+    });
+
+    // Verify GL entry exists
+    const [glEntry] = await rawQuery<any>(
+      `SELECT id FROM journal_entries WHERE "sourceType"='invoice' AND "sourceId"=$1 AND "companyId"=$2 LIMIT 1`,
+      [id, scope.companyId]
+    );
+    if (!glEntry) {
+      console.warn(`[invoice-post] Invoice #${id} has no GL entry — should have been created on approval`);
+    }
+
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.posted", entity: "invoices", entityId: id }).catch(console.error);
+
+    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1`, [id]);
+    res.json(updated);
+  } catch (err) {
+    if (typeof lifecycleErrorResponse === 'function') {
+      const mapped = lifecycleErrorResponse(err);
+      if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    }
+    handleRouteError(err, res, "Post invoice error:");
   }
 });
 

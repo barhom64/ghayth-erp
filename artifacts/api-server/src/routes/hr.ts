@@ -10,6 +10,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission, requireAnyPermission } from "../middlewares/permissionMiddleware.js";
+import { requireOwnership } from "../middlewares/contextualRbac.js";
 import rateLimit from "express-rate-limit";
 import {
   haversineDistance,
@@ -1340,7 +1341,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
 });
 
 // Staged leave approval: manager (stage 1) → HR (stage 2)
-router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), async (req, res) => {
+router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requireOwnership({ table: "hr_leave_requests", checks: ["company", "branch"] }), async (req, res) => {
   // Step 6 of the HR operational audit — leave approval workflow.
   // 4 authorization / state branches rewritten to ForbiddenError +
   // ConflictError, each one carrying meta so the frontend can show
