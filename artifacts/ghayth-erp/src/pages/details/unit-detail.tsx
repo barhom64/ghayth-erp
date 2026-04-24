@@ -410,7 +410,7 @@ export default function UnitDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <DataTable<any>
+                <DataTable
                   columns={[
                     { key: "tenantName", header: "المستأجر" },
                     { key: "dueDate", header: "الاستحقاق", render: (p) => <span className="text-red-600">{formatDateAr(p.dueDate)}</span> },
@@ -497,7 +497,7 @@ export default function UnitDetail() {
             {contracts.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لا توجد عقود</p>
             ) : (
-              <DataTable<any>
+              <DataTable
                 columns={[
                   { key: "tenantName", header: "المستأجر", render: (c) => <span className="font-medium">{c.tenantName}</span> },
                   { key: "startDate", header: "من", render: (c) => <span className="text-gray-500">{formatDateAr(c.startDate)}</span> },
@@ -527,7 +527,7 @@ export default function UnitDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <DataTable<any>
+                <DataTable
                   columns={[
                     { key: "tenantName", header: "المستأجر" },
                     { key: "dueDate", header: "تاريخ الاستحقاق", render: (p) => <span className="text-red-600">{formatDateAr(p.dueDate)}</span> },
@@ -553,7 +553,7 @@ export default function UnitDetail() {
               {payments.length === 0 ? (
                 <p className="text-center text-gray-400 py-8">لا توجد مدفوعات</p>
               ) : (
-                <DataTable<any>
+                <DataTable
                   columns={[
                     { key: "tenantName", header: "المستأجر" },
                     { key: "dueDate", header: "تاريخ الاستحقاق", render: (p) => <span className="text-gray-500">{formatDateAr(p.dueDate)}</span> },
@@ -584,7 +584,7 @@ export default function UnitDetail() {
             {maintenance.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لا توجد سجلات صيانة</p>
             ) : (
-              <DataTable<any>
+              <DataTable
                 columns={[
                   { key: "category", header: "الفئة", render: (m) => <span className="font-medium">{m.category || "-"}</span> },
                   { key: "description", header: "الوصف", render: (m) => <span className="text-gray-500 max-w-xs truncate block">{m.description || "-"}</span> },
