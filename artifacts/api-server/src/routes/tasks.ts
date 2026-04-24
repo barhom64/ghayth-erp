@@ -307,6 +307,7 @@ router.post("/", requirePermission("tasks:write"), async (req, res) => {
     );
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "tasks", entityId: rows[0]?.id, after: { title, type: type || "task", priority: priority || "medium", assignedTo: finalAssignedTo } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "task.created", entity: "tasks", entityId: rows[0]?.id, details: JSON.stringify({ title, type: type || "task", priority: priority || "medium" }) }).catch(console.error);
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create task error:"); }
 });
@@ -415,6 +416,7 @@ router.delete("/:id", requirePermission("tasks:write"), async (req, res) => {
     );
     if (rows.length === 0) { throw new NotFoundError("المهمة غير موجودة"); }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "tasks", entityId: Number(req.params.id), before }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "task.deleted", entity: "tasks", entityId: Number(req.params.id), details: JSON.stringify({ title: before?.title }) }).catch(console.error);
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete task error:");

@@ -777,6 +777,7 @@ router.post("/push/test", requirePermission("communications:write"), async (req,
       "تم تفعيل إشعارات المتصفح بنجاح! ستصلك الإشعارات حتى بدون فتح التطبيق.",
       { type: "test" }
     );
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "communications.push.test", entity: "push_subscriptions", entityId: 0 }).catch(console.error);
     res.json({ success: true, ...result });
   } catch (err) { handleRouteError(err, res, "Push test error:"); }
 });

@@ -248,6 +248,7 @@ router.post("/", requirePermission("requests:write"), async (req, res) => {
       action: "create", entity: "requests", entityId: r.insertId,
       after: { typeId: typeId ? Number(typeId) : null, title, description, priority: priority || "medium", ref },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.created", entity: "approval_requests", entityId: r.insertId }).catch(console.error);
     res.status(201).json({ id: r.insertId, ref, title, description, priority: priority || "medium", status: "pending" });
   } catch (err) { handleRouteError(err, res, "Create request error:"); }
 });
@@ -340,6 +341,7 @@ router.post("/types", requirePermission("requests:write"), async (req, res) => {
       [name, description, category, requiredFields ? JSON.stringify(requiredFields) : '[]', approvalFlow ? JSON.stringify(approvalFlow) : '[]', isActive !== false, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "request_types", entityId: r.insertId, after: { name, category, isActive: isActive !== false } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request_type.created", entity: "request_types", entityId: r.insertId }).catch(console.error);
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
@@ -363,6 +365,7 @@ router.post("/workflows", requirePermission("requests:write"), async (req, res) 
       [name, description, steps ? JSON.stringify(steps) : '[]', scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflows", entityId: r.insertId, after: { name, description } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "workflow.created", entity: "workflow_definitions", entityId: r.insertId }).catch(console.error);
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
@@ -480,6 +483,7 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
         reason: b.notes || b.returnReason || undefined,
       });
     }
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.updated", entity: "approval_requests", entityId: id }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
@@ -716,6 +720,7 @@ router.delete("/:id", requirePermission("requests:write"), async (req, res) => {
       before: { status: request.status, requesterId: request.requesterId },
     }).catch(console.error);
 
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.deleted", entity: "approval_requests", entityId: id }).catch(console.error);
     res.json({ message: "تم حذف الطلب بنجاح" });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
