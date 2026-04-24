@@ -2,6 +2,7 @@ import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { emitEvent } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -271,6 +272,7 @@ router.post("/", async (req, res): Promise<void> => {
       }
     }
 
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "impact.previewed", entity: entityType, entityId: Number(entityId) || 0, details: JSON.stringify({ entityType, entityId, action }) }).catch(console.error);
     res.json({ impacts });
   } catch (err) {
     handleRouteError(err, res, "Impact preview error:");

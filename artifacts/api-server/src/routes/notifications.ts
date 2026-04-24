@@ -3,7 +3,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
 
 /* ── Zod Schemas ────────────────────────────────────────────── */
@@ -62,6 +62,7 @@ router.patch("/:id/read", requirePermission("notifications:write"), async (req, 
       entity: "notifications", entityId: Number(id),
       after: { isRead: true },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "notification.read", entity: "notifications", entityId: Number(id), details: JSON.stringify({ isRead: true }) }).catch(console.error);
 
     res.json({ message: "تم تعليم الإشعار كمقروء" });
   } catch (err) {
@@ -117,6 +118,7 @@ router.post("/preferences", requirePermission("notifications:write"), async (req
       entity: "notification_preferences", entityId: insertId,
       after: { channel, category, enabled },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "notification.preference.updated", entity: "notification_preferences", entityId: insertId, details: JSON.stringify({ channel, category, enabled }) }).catch(console.error);
 
     res.status(201).json(row);
   } catch (err) {
@@ -138,6 +140,7 @@ router.patch("/mark-all-read", requirePermission("notifications:write"), async (
       entity: "notifications", entityId: 0,
       after: { updated: affectedRows },
     }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "notification.all_read", entity: "notifications", entityId: 0, details: JSON.stringify({ updated: affectedRows }) }).catch(console.error);
 
     res.json({ message: "تم تعليم جميع الإشعارات كمقروءة", updated: affectedRows });
   } catch (err) {

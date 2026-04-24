@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword } from "../lib/auth.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError, isTypedError } from "../lib/errorHandler.js";
+import { emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 
@@ -202,6 +203,7 @@ router.post("/auth/login", loginLimiter, async (req, res) => {
       `UPDATE client_portal_accounts SET "lastLoginAt" = NOW() WHERE id = $1`,
       [account.id]
     );
+    emitEvent({ companyId: account.companyId, branchId: 0, userId: 0, action: "portal.login", entity: "client_portal_accounts", entityId: account.id, details: JSON.stringify({ clientId: account.clientId, email }) }).catch(console.error);
     const token = signPortalToken({
       accountId: account.id,
       clientId: account.clientId,

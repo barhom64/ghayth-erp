@@ -4,7 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -62,6 +62,7 @@ router.post("/dashboards", requirePermission("bi:write"), async (req, res) => {
       [title, description, layout ? JSON.stringify(layout) : '{}', isDefault || false, scope.userId, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_dashboards", entityId: r.insertId, after: { title } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.dashboard.created", entity: "bi_dashboards", entityId: r.insertId, details: JSON.stringify({ title }) }).catch(console.error);
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
@@ -86,6 +87,7 @@ router.post("/kpis", requirePermission("bi:write"), async (req, res) => {
       [name, description, module, formula, target, currentValue, unit, frequency || "monthly", scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_kpis", entityId: r.insertId, after: { name, module } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.kpi.created", entity: "bi_kpis", entityId: r.insertId, details: JSON.stringify({ name, module }) }).catch(console.error);
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
@@ -110,6 +112,7 @@ router.post("/reports", requirePermission("bi:write"), async (req, res) => {
       [title, description, type, query, filters ? JSON.stringify(filters) : '{}', scheduledAt || null, scope.userId, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_reports", entityId: r.insertId, after: { title, type } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.report.created", entity: "bi_reports", entityId: r.insertId, details: JSON.stringify({ title, type }) }).catch(console.error);
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
@@ -1258,6 +1261,7 @@ router.patch("/ai-insights/:id/dismiss", requirePermission("bi:write"), async (r
       `UPDATE smart_alerts SET "isDismissed" = true WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.insight.dismissed", entity: "smart_alerts", entityId: id, details: JSON.stringify({ isDismissed: true }) }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Dismiss insight"); }
 });
@@ -1270,6 +1274,7 @@ router.patch("/ai-insights/:id/read", requirePermission("bi:write"), async (req,
       `UPDATE smart_alerts SET "isRead" = true WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.insight.read", entity: "smart_alerts", entityId: id, details: JSON.stringify({ isRead: true }) }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Mark insight read"); }
 });
@@ -1300,6 +1305,7 @@ router.post("/alert-fatigue/mute", requirePermission("bi:write"), async (req, re
          SET "muteUntil" = $4, reason = $5, "updatedAt" = NOW()`,
       [scope.companyId, scope.activeAssignmentId, alertType, muteUntil || null, reason || null]
     );
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.alert.muted", entity: "alert_mute_rules", entityId: 0, details: JSON.stringify({ alertType, muteUntil }) }).catch(console.error);
     res.json({ success: true, message: `تم كتم تنبيهات "${alertType}"` });
   } catch (err) { handleRouteError(err, res, "Mute alert type"); }
 });
@@ -1312,6 +1318,7 @@ router.delete("/alert-fatigue/mute/:alertType", requirePermission("bi:write"), a
       `DELETE FROM alert_mute_rules WHERE "assignmentId" = $1 AND "alertType" = $2`,
       [scope.activeAssignmentId, alertType]
     );
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.alert.unmuted", entity: "alert_mute_rules", entityId: 0, details: JSON.stringify({ alertType }) }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Unmute alert type"); }
 });

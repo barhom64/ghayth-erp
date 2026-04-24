@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import rateLimit from "express-rate-limit";
 
 const forgotPasswordSchema = z.object({
@@ -73,6 +73,8 @@ router.post("/forgot-password", publicLimiter, async (req, res) => {
       entity: "password_reset_requests", entityId: 0,
       after: { email: email.trim().toLowerCase() },
     }).catch(console.error);
+
+    emitEvent({ companyId: 0, branchId: 0, userId: 0, action: "password_reset.requested", entity: "password_reset_requests", entityId: 0, details: JSON.stringify({ email: email.trim().toLowerCase() }) }).catch(console.error);
 
     res.json({ message: "تم إرسال طلب استعادة كلمة المرور بنجاح. سيقوم مدير النظام بمراجعة طلبك." });
   } catch (err) {

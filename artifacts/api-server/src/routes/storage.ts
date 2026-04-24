@@ -5,7 +5,7 @@ import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { rawQuery } from "../lib/rawdb.js";
 import rateLimit from "express-rate-limit";
 
@@ -75,6 +75,7 @@ router.post("/storage/uploads/request-url", uploadLimiter, authMiddleware, requi
         entity: "storage", entityId: 0,
         after: { name, size, contentType, objectPath },
       }).catch(console.error);
+      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "storage.upload_requested", entity: "storage", entityId: 0, details: JSON.stringify({ name, size, contentType, objectPath }) }).catch(console.error);
     }
 
     res.json(

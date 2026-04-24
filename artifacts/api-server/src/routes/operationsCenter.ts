@@ -4,6 +4,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError, ValidationError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
+import { emitEvent } from "../lib/businessHelpers.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 
 // ── Zod validation schemas ──────────────────────────────────────────
@@ -589,6 +590,7 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
       );
     } catch (_e) { console.error("OpsCenter: audit log for daily close failed:", _e); }
 
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "daily_close.executed", entity: "daily_close_log", entityId: 0, details: JSON.stringify({ date: today, forced: forceClose }) }).catch(console.error);
     res.json({ success: true, message: "تم إقفال اليوم بنجاح", date: today, forced: forceClose });
   } catch (err) {
     handleRouteError(err, res, "إقفال اليوم");
