@@ -303,7 +303,15 @@ export function handleRouteError(err: unknown, res: any, logContext: string): vo
     return;
   }
 
-  console.error(`[ERROR] ${logContext}:`, err);
+  try {
+    const e: any = err;
+    const safeFields = e && typeof e === "object"
+      ? { message: e.message, code: e.code, detail: e.detail, hint: e.hint, table: e.table, column: e.column, constraint: e.constraint, position: e.position, where: e.where }
+      : { message: String(e) };
+    console.error(`[ERROR] ${logContext}:`, JSON.stringify(safeFields), e?.stack ?? "");
+  } catch {
+    console.error(`[ERROR] ${logContext}: <unprintable error>`);
+  }
   const { status, message, code, field, fix } = classifyDbError(err);
   if (res.headersSent) return;
   // Forward the full typed shape the client expects. Legacy consumers that
