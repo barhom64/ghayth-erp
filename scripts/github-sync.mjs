@@ -106,7 +106,12 @@ async function main() {
     const tree = await ghApi(connectors, `/repos/${OWNER}/${REPO}/git/trees`, "POST", {
       base_tree: currentTree, tree: batch,
     });
-    if (!tree.sha) { console.error("[sync] Tree failed"); process.exit(1); }
+    if (!tree.sha) {
+      console.error("[sync] Tree failed at batch", i, "size", batch.length);
+      console.error("[sync] response:", JSON.stringify(tree).substring(0, 600));
+      console.error("[sync] sample entries:", JSON.stringify(batch.slice(0, 2)));
+      process.exit(1);
+    }
     currentTree = tree.sha;
     await new Promise(r => setTimeout(r, 1000));
   }
