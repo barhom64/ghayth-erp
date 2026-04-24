@@ -38,9 +38,6 @@ export default function VersionUploadPage() {
   const [notes, setNotes] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
   const handleUploadVersion = useCallback(async () => {
     if (!file || !docId) return;
     setUploading(true);
