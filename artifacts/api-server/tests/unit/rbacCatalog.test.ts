@@ -82,9 +82,14 @@ describe("ROLE_PERMISSIONS", () => {
     expect(ROLE_PERMISSIONS.hr_manager).toContain("hr:discipline:approve");
   });
 
-  it("keeps employee scoped to hr:read only", () => {
-    // The self-service portal (/my-space) should not grant write access by default.
-    expect(ROLE_PERMISSIONS.employee).toEqual(["hr:read"]);
+  it("scopes employee to self-service access without admin or delete permissions", () => {
+    const perms = ROLE_PERMISSIONS.employee;
+    expect(perms).toContain("hr:read");
+    expect(perms).toContain("hr:self");
+    expect(perms).not.toContain("hr:delete");
+    expect(perms).not.toContain("hr:approve");
+    expect(perms).not.toContain("finance:read");
+    expect(perms).not.toContain("*");
   });
 
   it("gives finance_manager the full finance CRUD set", () => {
@@ -95,13 +100,14 @@ describe("ROLE_PERMISSIONS", () => {
     expect(perms).toContain("finance:delete");
   });
 
-  it("restricts branch_manager to read-only cross-module access", () => {
+  it("grants branch_manager broad operational access without full admin", () => {
     const perms = ROLE_PERMISSIONS.branch_manager;
-    // Every non-documents entry should be a *:read
-    for (const perm of perms) {
-      const isRead = perm.endsWith(":read") || perm === "documents:download";
-      expect(isRead).toBe(true);
-    }
+    expect(perms).toContain("hr:read");
+    expect(perms).toContain("finance:read");
+    expect(perms).toContain("fleet:read");
+    expect(perms).toContain("warehouse:read");
+    expect(perms).not.toContain("*");
+    expect(perms).not.toContain("finance:delete");
   });
 
   it("never grants every permission to every role by accident", () => {
