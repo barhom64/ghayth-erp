@@ -1,11 +1,9 @@
 import { useApiQuery, asList } from "@/lib/api";
-import { formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
+import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
 interface Session {
   id: number;
@@ -23,7 +21,7 @@ interface Session {
 
 const columns: DataTableColumn<Session>[] = [
   { key: "caseTitle", header: "القضية", sortable: true, searchable: true },
-  { key: "sessionDate", header: "تاريخ الجلسة", sortable: true, render: (r) => formatDateAr(r.sessionDate) },
+  { key: "sessionDate", header: "تاريخ الجلسة", sortable: true, render: (r) => r.sessionDate ? new Date(r.sessionDate).toLocaleDateString("ar-SA") : "-" },
   { key: "daysUntil", header: "المتبقي (أيام)", render: (r) => r.daysUntil !== undefined ? `${r.daysUntil} يوم` : "-" },
   { key: "location", header: "الموقع / المحكمة", searchable: true },
   { key: "judge", header: "القاضي" },
@@ -36,16 +34,18 @@ const columns: DataTableColumn<Session>[] = [
     }
   },
   { key: "result", header: "النتيجة", render: (r) => <span className="line-clamp-1">{r.result || "-"}</span> },
-  { key: "nextSessionDate", header: "الجلسة التالية", render: (r) => formatDateAr(r.nextSessionDate) },
+  { key: "nextSessionDate", header: "الجلسة التالية", render: (r) => r.nextSessionDate ? new Date(r.nextSessionDate).toLocaleDateString("ar-SA") : "-" },
   { key: "notes", header: "ملاحظات", render: (r) => <span className="line-clamp-1">{r.notes || "-"}</span> },
 ];
 
 export default function LegalSessions() {
   const { data, isLoading, isError, error } = useApiQuery<any>(["legal-sessions"], "/legal/sessions/upcoming");
   const rows = asList(data?.data || data);
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const [filters, setFilters] = useFilters();
+  const filtered = applyFilters(rows, filters, {
+    searchFields: ["caseTitle", "location", "judge", "lawyerName"],
+    statusField: "priority",
+  });
 
   return (
     <PageShell
@@ -54,8 +54,8 @@ export default function LegalSessions() {
       breadcrumbs={[{ href: "/legal", label: "الشؤون القانونية" }, { label: "الجلسات القادمة" }]}
       loading={isLoading}
     >
-      <LegalTabsNav />
-      <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
+      <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />
+      <DataTable columns={columns} data={filtered} isLoading={isLoading} isError={isError} error={error} />
     </PageShell>
   );
 }
