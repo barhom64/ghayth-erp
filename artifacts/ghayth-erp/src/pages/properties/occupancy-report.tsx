@@ -165,7 +165,7 @@ export default function OccupancyReportPage() {
           <CardTitle className="text-sm">قائمة الوحدات ({units.length})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <DataTable<any>
+          <DataTable
             columns={unitColumns}
             data={units}
             searchPlaceholder={null}
