@@ -64,6 +64,7 @@ router.post("/sub-agents", requirePermission("umrah:write"), async (req, res) =>
        b.notes || null, scope.userId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sub_agents", entityId: rows[0]?.id, after: { name: b.name } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.created", entity: "umrah_sub_agents", entityId: rows[0]?.id, details: JSON.stringify({ name: b.name, nuskCode: b.nuskCode }) }).catch(console.error);
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create sub-agent"); }
 });
@@ -84,6 +85,7 @@ router.patch("/sub-agents/:id", requirePermission("umrah:write"), async (req, re
     await rawExecute(`UPDATE umrah_sub_agents SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery(`SELECT * FROM umrah_sub_agents WHERE id=$1 AND "companyId"=$2`, [req.params.id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: Number(req.params.id), after: b }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.updated", entity: "umrah_sub_agents", entityId: Number(req.params.id), details: JSON.stringify(b) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update sub-agent"); }
 });
@@ -96,6 +98,7 @@ router.delete("/sub-agents/:id", requirePermission("umrah:write"), async (req, r
       [scope.userId, req.params.id, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_sub_agents", entityId: Number(req.params.id) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.deleted", entity: "umrah_sub_agents", entityId: Number(req.params.id), details: "{}" }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete sub-agent"); }
 });
@@ -254,6 +257,7 @@ router.post("/pricing", requirePermission("umrah:write"), async (req, res) => {
        b.validFrom, b.validTo, b.notes || null, scope.userId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_pricing", entityId: rows[0]?.id, after: b }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pricing.created", entity: "umrah_pricing", entityId: rows[0]?.id, details: JSON.stringify({ agentId: b.agentId, pricePerMutamer: b.pricePerMutamer }) }).catch(console.error);
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create pricing"); }
 });
@@ -295,6 +299,7 @@ router.patch("/pricing/:id", requirePermission("umrah:write"), async (req, res) 
     await rawExecute(`UPDATE umrah_pricing SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery(`SELECT * FROM umrah_pricing WHERE id=$1 AND "companyId"=$2`, [req.params.id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pricing", entityId: Number(req.params.id), after: b }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pricing.updated", entity: "umrah_pricing", entityId: Number(req.params.id), details: JSON.stringify(b) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update pricing"); }
 });
@@ -307,6 +312,7 @@ router.delete("/pricing/:id", requirePermission("umrah:write"), async (req, res)
       [scope.userId, req.params.id, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_pricing", entityId: Number(req.params.id) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pricing.deleted", entity: "umrah_pricing", entityId: Number(req.params.id), details: "{}" }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete pricing"); }
 });
@@ -396,6 +402,7 @@ router.patch("/violations/:id", requirePermission("umrah:write"), async (req, re
     await rawExecute(`UPDATE umrah_violations SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery(`SELECT * FROM umrah_violations WHERE id=$1 AND "companyId"=$2`, [req.params.id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_violations", entityId: Number(req.params.id), after: b }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.violation.updated", entity: "umrah_violations", entityId: Number(req.params.id), details: JSON.stringify(b) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update violation"); }
 });
@@ -408,6 +415,7 @@ router.delete("/violations/:id", requirePermission("umrah:write"), async (req, r
       [scope.userId, req.params.id, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_violations", entityId: Number(req.params.id) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.violation.deleted", entity: "umrah_violations", entityId: Number(req.params.id), details: "{}" }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete violation"); }
 });
@@ -552,6 +560,7 @@ router.post("/commission-plans", requirePermission("umrah:write"), async (req, r
     });
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "employee_commission_plans", entityId: result.id, after: { planName: b.planName } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission_plan.created", entity: "employee_commission_plans", entityId: result.id, details: JSON.stringify({ planName: b.planName }) }).catch(console.error);
     res.status(201).json(result);
   } catch (err) { handleRouteError(err, res, "Create commission plan"); }
 });
@@ -602,6 +611,7 @@ router.patch("/commission-plans/:id", requirePermission("umrah:write"), async (r
       `SELECT * FROM employee_commission_plans WHERE id=$1 AND "companyId"=$2`,
       [req.params.id, scope.companyId]
     );
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission_plan.updated", entity: "employee_commission_plans", entityId: Number(req.params.id), details: JSON.stringify({ planName: b.planName }) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update commission plan"); }
 });
