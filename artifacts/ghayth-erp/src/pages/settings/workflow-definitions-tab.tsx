@@ -1,17 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Workflow, Clock, AlertTriangle, Plus, X, Save, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 
 export function WorkflowDefinitionsTab() {
   const { data, refetch, isLoading, isError } = useApiQuery<any>(["workflow-definitions"], "/workflows/definitions");
@@ -20,7 +16,6 @@ export function WorkflowDefinitionsTab() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showSlaForm, setShowSlaForm] = useState(false);
-  const [deletingDef, setDeletingDef] = useState<{ id: number; name: string } | null>(null);
 
   const REQUEST_TYPES = [
     { value: "leave", label: "إجازة" },
@@ -64,39 +59,6 @@ export function WorkflowDefinitionsTab() {
 
   const defs = asList(data?.data ?? data);
   const slas = asList(slaData?.data ?? slaData);
-
-  const slaColumns = useMemo<DataTableColumn<any>[]>(() => [
-    {
-      key: "requestType",
-      header: "النوع",
-      render: (s: any) => REQUEST_TYPES.find(t => t.value === s.requestType)?.label || s.requestType,
-    },
-    {
-      key: "warningHours",
-      header: "تنبيه",
-      render: (s: any) => `${s.warningHours}س`,
-    },
-    {
-      key: "deadlineHours",
-      header: "مهلة",
-      render: (s: any) => `${s.deadlineHours}س`,
-    },
-    {
-      key: "escalationHours",
-      header: "تصعيد",
-      render: (s: any) => `${s.escalationHours}س`,
-    },
-    {
-      key: "escalateTo",
-      header: "تصعيد إلى",
-      render: (s: any) => ROLES.find(r => r.value === s.escalateTo)?.label || s.escalateTo,
-    },
-    {
-      key: "autoApproveOnTimeout",
-      header: "تلقائي",
-      render: (s: any) => s.autoApproveOnTimeout ? "نعم" : "لا",
-    },
-  ], []);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -154,9 +116,15 @@ export function WorkflowDefinitionsTab() {
     }
   };
 
-  const handleDeleteDone = () => {
-    setDeletingDef(null);
-    refetch();
+  const handleDelete = async (id: number) => {
+    if (!confirm("هل أنت متأكد من حذف هذا التعريف؟")) return;
+    try {
+      await apiFetch(`/workflows/definitions/${id}`, { method: "DELETE" });
+      toast({ title: "تم الحذف" });
+      refetch();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: e.message || "خطأ" });
+    }
   };
 
   const handleSaveSla = async () => {
@@ -210,28 +178,22 @@ export function WorkflowDefinitionsTab() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label>نوع الطلب</Label>
-                <Select value={slaForm.requestType} onValueChange={(v) => setSlaForm({ ...slaForm, requestType: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {REQUEST_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <select className="w-full border rounded-md p-2" value={slaForm.requestType} onChange={(e) => setSlaForm({ ...slaForm, requestType: e.target.value })}>
+                  {REQUEST_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
               </div>
               <div><Label>تنبيه بعد (ساعة)</Label><Input type="number" value={slaForm.warningHours} onChange={(e) => setSlaForm({ ...slaForm, warningHours: Number(e.target.value) })} /></div>
               <div><Label>المهلة القصوى (ساعة)</Label><Input type="number" value={slaForm.deadlineHours} onChange={(e) => setSlaForm({ ...slaForm, deadlineHours: Number(e.target.value) })} /></div>
               <div><Label>تصعيد بعد (ساعة)</Label><Input type="number" value={slaForm.escalationHours} onChange={(e) => setSlaForm({ ...slaForm, escalationHours: Number(e.target.value) })} /></div>
               <div>
                 <Label>تصعيد إلى</Label>
-                <Select value={slaForm.escalateTo} onValueChange={(v) => setSlaForm({ ...slaForm, escalateTo: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <select className="w-full border rounded-md p-2" value={slaForm.escalateTo} onChange={(e) => setSlaForm({ ...slaForm, escalateTo: e.target.value })}>
+                  {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
               </div>
               <div className="flex items-end gap-2 pb-1">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox checked={slaForm.autoApproveOnTimeout} onCheckedChange={(v) => setSlaForm({ ...slaForm, autoApproveOnTimeout: v === true })} />
+                  <input type="checkbox" checked={slaForm.autoApproveOnTimeout} onChange={(e) => setSlaForm({ ...slaForm, autoApproveOnTimeout: e.target.checked })} className="rounded" />
                   <span className="text-sm">موافقة تلقائية عند التجاوز</span>
                 </label>
               </div>
@@ -239,14 +201,22 @@ export function WorkflowDefinitionsTab() {
             <Button size="sm" onClick={handleSaveSla}><Save className="h-4 w-4 me-1" />حفظ إعدادات مستوى الخدمة</Button>
 
             {slas.length > 0 && (
-              <div className="mt-4">
-                <DataTable
-                  columns={slaColumns}
-                  data={slas}
-                  pageSize={0}
-                  noToolbar
-                  searchPlaceholder={null}
-                />
+              <div className="border rounded-lg overflow-hidden mt-4">
+                <table className="w-full text-sm">
+                  <thead><tr className="bg-gray-50 border-b"><th className="p-2 text-start">النوع</th><th className="p-2 text-start">تنبيه</th><th className="p-2 text-start">مهلة</th><th className="p-2 text-start">تصعيد</th><th className="p-2 text-start">تصعيد إلى</th><th className="p-2 text-start">تلقائي</th></tr></thead>
+                  <tbody>
+                    {slas.map((s: any) => (
+                      <tr key={s.id} className="border-b">
+                        <td className="p-2">{REQUEST_TYPES.find(t => t.value === s.requestType)?.label || s.requestType}</td>
+                        <td className="p-2">{s.warningHours}س</td>
+                        <td className="p-2">{s.deadlineHours}س</td>
+                        <td className="p-2">{s.escalationHours}س</td>
+                        <td className="p-2">{ROLES.find(r => r.value === s.escalateTo)?.label || s.escalateTo}</td>
+                        <td className="p-2">{s.autoApproveOnTimeout ? "نعم" : "لا"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </CardContent>
@@ -259,29 +229,26 @@ export function WorkflowDefinitionsTab() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>نوع الطلب</Label>
-                <Select value={form.requestType}
-                  onValueChange={(v) => {
-                    const t = REQUEST_TYPES.find(r => r.value === v);
-                    setForm({ ...form, requestType: v, requestTypeLabel: t?.label || v });
+                <select className="w-full border rounded-md p-2" value={form.requestType}
+                  onChange={(e) => {
+                    const t = REQUEST_TYPES.find(r => r.value === e.target.value);
+                    setForm({ ...form, requestType: e.target.value, requestTypeLabel: t?.label || e.target.value });
                   }}
                   disabled={!!editingId}
                 >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {REQUEST_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                  {REQUEST_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
               </div>
               <div><Label>العنوان</Label><Input value={form.requestTypeLabel} onChange={(e) => setForm({ ...form, requestTypeLabel: e.target.value })} /></div>
               <div className="md:col-span-2"><Label>الوصف</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
               <div><Label>المهلة الافتراضية (ساعة)</Label><Input type="number" value={form.defaultSlaHours} onChange={(e) => setForm({ ...form, defaultSlaHours: Number(e.target.value) })} /></div>
               <div className="flex items-center gap-6 pt-6">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox checked={form.isReturnable} onCheckedChange={(v) => setForm({ ...form, isReturnable: v === true })} />
+                  <input type="checkbox" checked={form.isReturnable} onChange={(e) => setForm({ ...form, isReturnable: e.target.checked })} className="rounded" />
                   <span className="text-sm">قابل للإرجاع</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox checked={form.enableEscalation} onCheckedChange={(v) => setForm({ ...form, enableEscalation: v === true })} />
+                  <input type="checkbox" checked={form.enableEscalation} onChange={(e) => setForm({ ...form, enableEscalation: e.target.checked })} className="rounded" />
                   <span className="text-sm">تصعيد تلقائي</span>
                 </label>
               </div>
@@ -298,15 +265,12 @@ export function WorkflowDefinitionsTab() {
                     <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-sm font-bold shrink-0">{idx + 1}</div>
                     <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-2">
                       <Input placeholder="اسم الخطوة" value={step.stepName} onChange={(e) => updateStep(idx, "stepName", e.target.value)} />
-                      <Select value={step.requiredRole} onValueChange={(v) => updateStep(idx, "requiredRole", v)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <select className="border rounded-md p-2" value={step.requiredRole} onChange={(e) => updateStep(idx, "requiredRole", e.target.value)}>
+                        {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                      </select>
                       <Input type="number" placeholder="مهلة (ساعة)" value={step.slaHours} onChange={(e) => updateStep(idx, "slaHours", Number(e.target.value))} />
                       <label className="flex items-center gap-1 text-xs cursor-pointer">
-                        <Checkbox checked={step.autoApproveOnTimeout} onCheckedChange={(v) => updateStep(idx, "autoApproveOnTimeout", v === true)} />
+                        <input type="checkbox" checked={step.autoApproveOnTimeout} onChange={(e) => updateStep(idx, "autoApproveOnTimeout", e.target.checked)} className="rounded" />
                         موافقة تلقائية
                       </label>
                     </div>
@@ -341,7 +305,7 @@ export function WorkflowDefinitionsTab() {
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" onClick={() => handleEdit(def)}><Pencil className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="sm" className="text-red-500" onClick={() => setDeletingDef({ id: def.id, name: def.requestTypeLabel })}><Trash2 className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" className="text-red-500" onClick={() => handleDelete(def.id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
               {def.description && <p className="text-sm text-gray-500 mb-2">{def.description}</p>}
@@ -361,19 +325,6 @@ export function WorkflowDefinitionsTab() {
           </CardContent></Card>
         )}
       </div>
-
-      <ConfirmDeleteDialog
-        open={deletingDef !== null}
-        onOpenChange={(v) => !v && setDeletingDef(null)}
-        entity={{
-          type: "workflow-definition",
-          id: deletingDef?.id ?? 0,
-          name: deletingDef?.name ?? "",
-        }}
-        deletePath={`/workflows/definitions/${deletingDef?.id}`}
-        invalidateKeys={[["workflow-definitions"]]}
-        onDeleted={handleDeleteDone}
-      />
     </div>
   );
 }
