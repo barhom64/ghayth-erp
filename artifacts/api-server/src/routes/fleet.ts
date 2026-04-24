@@ -999,26 +999,11 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
       details: `رحلة #${tripId} — ${actualDistanceKm.toFixed(1)} كم — تكلفة ${totalCost.toFixed(2)} ريال`,
     }).catch(console.error);
 
-    // Bus emission — closes the fleet.trip.started → fleet.trip.completed
-    // pair so rules engine + audit-log subscribers see the full lifecycle.
-    eventBus.emit("fleet.trip.completed", {
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      entity: "fleet_trips",
-      entityId: tripId,
-      action: "update",
-      before: { status: trip.status, distance: trip.distance, cost: trip.cost },
-      after: {
-        status: "completed",
-        distance: actualDistanceKm,
-        cost: totalCost,
-        fuelCost: actualFuelCost,
-        driverFare,
-        depreciation,
-        journalEntryId,
-      },
-    });
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.trip.completed", entity: "fleet_trips", entityId: tripId,
+      details: JSON.stringify({ status: "completed", distance: actualDistanceKm, cost: totalCost, fuelCost: actualFuelCost, driverFare, depreciation, journalEntryId }),
+    }).catch(console.error);
 
     const [updated] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1`, [tripId]);
     res.json({
@@ -1205,14 +1190,11 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
 
     if (b.type && ["breakdown", "emergency"].includes(b.type)) {
       const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [b.vehicleId]);
-      eventBus.emit("fleet.vehicle.breakdown", {
-        companyId: scope.companyId,
-        entityId: b.vehicleId,
-        plateNumber: vehicle?.plateNumber || `مركبة #${b.vehicleId}`,
-        description: b.description,
-        source: "manual_maintenance",
-        userId: scope.userId,
-      });
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId ?? 0, userId: scope.userId,
+        action: "fleet.vehicle.breakdown", entity: "fleet_vehicles", entityId: b.vehicleId,
+        details: JSON.stringify({ plateNumber: vehicle?.plateNumber, description: b.description, source: "manual_maintenance" }),
+      }).catch(console.error);
     }
 
     // Register obligation for the scheduled service date (for previews, inspections, etc.)
