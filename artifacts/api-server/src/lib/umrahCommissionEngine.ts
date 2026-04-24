@@ -1,5 +1,5 @@
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
-import { emitEvent } from "./businessHelpers.js";
+import { emitEvent, createJournalEntry, getAccountCodeFromMapping } from "./businessHelpers.js";
 
 type QueryFn = (sql: string, params: any[]) => Promise<{ rows: any[] }>;
 
@@ -125,10 +125,11 @@ export async function calculateCommissionForPlan(
     emitEvent({
       companyId: plan.companyId, branchId: plan.branchId, userId,
       action: "umrah.commission.calculated", entity: "employee_commission_plans", entityId: planId,
-      after: { month, year, finalAmount: result.finalAmount },
+      after: { month, year, finalAmount: result.finalAmount, employeeId: plan.employeeId, assignmentId: plan.assignmentId },
     }).catch(() => {});
 
     if (result.finalAmount > 0) {
+      // Link to payroll run if one exists
       try {
         const [activeRun] = (await client.query(
           `SELECT id FROM payroll_runs
@@ -160,6 +161,30 @@ export async function calculateCommissionForPlan(
         }
       } catch (plErr) {
         console.error(`[UmrahCommission] Payroll line link failed for plan ${planId}:`, plErr);
+      }
+
+      // GL: Debit Commission Expense, Credit Commission Payable (accrual)
+      try {
+        const [expenseCode, payableCode] = await Promise.all([
+          getAccountCodeFromMapping(plan.companyId, "commission_expense", "debit", "6200"),
+          getAccountCodeFromMapping(plan.companyId, "commission_payable", "credit", "2150"),
+        ]);
+        await createJournalEntry({
+          companyId: plan.companyId,
+          branchId: plan.branchId,
+          createdBy: userId,
+          ref: `JE-COMM-${planId}-${year}${String(month).padStart(2, "0")}`,
+          description: `استحقاق عمولة — ${plan.planName} — ${month}/${year}`,
+          type: "accrual",
+          sourceType: "employee_commission_calculations",
+          sourceId: planId,
+          lines: [
+            { accountCode: expenseCode, debit: result.finalAmount, credit: 0, description: `مصروف عمولة — ${plan.planName}` },
+            { accountCode: payableCode, debit: 0, credit: result.finalAmount, description: `عمولة مستحقة — موظف #${plan.employeeId}` },
+          ],
+        });
+      } catch (glErr) {
+        console.error(`[UmrahCommission] GL accrual failed for plan ${planId}:`, glErr);
       }
     }
 

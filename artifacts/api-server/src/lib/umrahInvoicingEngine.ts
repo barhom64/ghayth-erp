@@ -212,6 +212,31 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     }
   });
 
+  // GL: Debit Accounts Receivable, Credit Umrah Revenue
+  try {
+    const [arCode, revCode] = await Promise.all([
+      getAccountCodeFromMapping(scope.companyId, "umrah_invoice_ar", "debit", "1200"),
+      getAccountCodeFromMapping(scope.companyId, "umrah_invoice_revenue", "credit", "4200"),
+    ]);
+    await createJournalEntry({
+      companyId: scope.companyId,
+      branchId: scope.branchId || 0,
+      createdBy: scope.userId,
+      ref: `JE-${ref}`,
+      description: `فاتورة مبيعات عمرة — ${ref}`,
+      type: "sales",
+      sourceType: "umrah_sales_invoices",
+      sourceId: invoiceId,
+      lines: [
+        { accountCode: arCode, debit: total, credit: 0, description: `ذمم مدينة — ${subAgent.clientName || "وكيل فرعي"}` },
+        { accountCode: revCode, debit: 0, credit: subtotal, description: `إيراد خدمات عمرة — ${ref}` },
+        ...(penaltiesTotal > 0 ? [{ accountCode: revCode, debit: 0, credit: penaltiesTotal, description: `إيراد غرامات — ${ref}` }] : []),
+      ],
+    });
+  } catch (err) {
+    console.error("[umrah-invoice] GL journal entry failed (non-blocking):", err);
+  }
+
   emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.invoice.generated", entity: "umrah_sales_invoices", entityId: invoiceId, details: JSON.stringify({ ref, total, subAgentId, groupCount: groups.length, pilgrimCount: totalPilgrims }) }).catch(console.error);
   createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sales_invoices", entityId: invoiceId, after: { ref, total } }).catch(console.error);
 
