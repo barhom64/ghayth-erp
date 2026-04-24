@@ -68,9 +68,10 @@ correspondenceRouter.get("/", requirePermission("communications:read"), async (r
     }
 
     const rows = await rawQuery<any>(
-      `SELECT c.*, u.name AS "createdByName"
+      `SELECT c.*, COALESCE(e.name, u.email) AS "createdByName"
        FROM correspondence c
        LEFT JOIN users u ON u.id = c."createdBy"
+       LEFT JOIN employees e ON e.id = u."employeeId"
        WHERE ${where}
        ORDER BY c."createdAt" DESC
        LIMIT 200`,
@@ -88,9 +89,10 @@ correspondenceRouter.get("/:id", requirePermission("communications:read"), async
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [row] = await rawQuery<any>(
-      `SELECT c.*, u.name AS "createdByName"
+      `SELECT c.*, COALESCE(e.name, u.email) AS "createdByName"
        FROM correspondence c
        LEFT JOIN users u ON u.id = c."createdBy"
+       LEFT JOIN employees e ON e.id = u."employeeId"
        WHERE c.id = $1 AND c."companyId" = $2`,
       [id, scope.companyId]
     );
