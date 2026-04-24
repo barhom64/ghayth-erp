@@ -10,7 +10,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, createJournalEntry, emitEvent, getLegalResponsible, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, createGuardedJournalEntry, emitEvent, getLegalResponsible, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { z } from "zod";
@@ -425,6 +425,16 @@ router.post("/contracts/:id/renew", requirePermission("legal:write"), async (req
         renewalCount: (current.renewalCount ?? 0) + 1,
       },
     });
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "legal.contract.renewed",
+      entity: "legal_contracts",
+      entityId: id,
+      details: JSON.stringify({ newEndDate, newValue, renewalCount: (current.renewalCount ?? 0) + 1 }),
+    }).catch(console.error);
+
     res.json({ ...updated, event: "legal.contract.renewed" });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -464,6 +474,16 @@ router.post("/contracts/:id/terminate", requirePermission("legal:write"), async 
         terminationDate: effectiveDate ?? new Date().toISOString(),
       },
     });
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "legal.contract.terminated",
+      entity: "legal_contracts",
+      entityId: id,
+      details: JSON.stringify({ reason, effectiveDate }),
+    }).catch(console.error);
+
     res.json({ ...updated, event: "legal.contract.terminated" });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -865,25 +885,33 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
       // accounting_mappings so orgs with non-default CoA don't silently post
       // to phantom accounts. Falls back to the historical default codes if
       // no mapping exists so existing deployments keep working.
-      try {
-        const totalWithVat = billingAmount + vatAmount;
-        const feeExpenseCode = await getAccountCodeFromMapping(scope.companyId, "legal_fee", "debit", "5400");
-        const vatReceivableCode = await getAccountCodeFromMapping(scope.companyId, "legal_fee", "credit", "1400");
-        const apCode = await getAccountCodeFromMapping(scope.companyId, "legal_fee_payable", "credit", "2100");
-        journalEntryId = await createJournalEntry({
-          companyId: scope.companyId,
-          branchId: scope.branchId,
-          createdBy: scope.activeAssignmentId ?? scope.userId,
-          ref: `LEGAL-FEE-${insertId}`,
-          description: `أتعاب قانونية / ${legalCase.title} / جلسة ${b.sessionDate} / ${billingAmount.toLocaleString()} ريال`,
-          lines: [
-            { accountCode: feeExpenseCode, debit: billingAmount, credit: 0 },
-            { accountCode: vatReceivableCode, debit: vatAmount, credit: 0 },
-            { accountCode: apCode, debit: 0, credit: totalWithVat },
-          ],
-        });
-      } catch (jErr) { console.error("Legal fee journal entry failed:", jErr); }
+      const totalWithVat = billingAmount + vatAmount;
+      const feeExpenseCode = await getAccountCodeFromMapping(scope.companyId, "legal_fee", "debit", "5400");
+      const vatReceivableCode = await getAccountCodeFromMapping(scope.companyId, "legal_fee", "credit", "1400");
+      const apCode = await getAccountCodeFromMapping(scope.companyId, "legal_fee_payable", "credit", "2100");
+      journalEntryId = await createGuardedJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId ?? scope.userId,
+        ref: `LEGAL-FEE-${insertId}`,
+        description: `أتعاب قانونية / ${legalCase.title} / جلسة ${b.sessionDate} / ${billingAmount.toLocaleString()} ريال`,
+        lines: [
+          { accountCode: feeExpenseCode, debit: billingAmount, credit: 0 },
+          { accountCode: vatReceivableCode, debit: vatAmount, credit: 0 },
+          { accountCode: apCode, debit: 0, credit: totalWithVat },
+        ],
+      }, { table: "legal_sessions", id: insertId });
     }
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "legal.session.created",
+      entity: "legal_sessions",
+      entityId: insertId,
+      details: JSON.stringify({ caseId, sessionDate: b.sessionDate, location: b.location, judge: b.judge }),
+    }).catch(console.error);
 
     const [row] = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE id=$1`, [insertId]);
     res.status(201).json({ ...row, distanceToCourtKm, invoiceId, invoiceError, journalEntryId, calendarTaskCreated: !!legalCase.lawyerName });
@@ -933,6 +961,17 @@ router.post("/cases/:caseId/correspondence", requirePermission("legal:create"), 
       [caseId, scope.companyId, b.direction || 'outgoing', b.subject, b.parties, b.correspondenceDate || new Date().toISOString().split('T')[0], b.documentRef || null, b.notes || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM legal_correspondence WHERE id=$1`, [insertId]);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "legal.correspondence.created",
+      entity: "legal_case_correspondence",
+      entityId: insertId,
+      details: JSON.stringify({ caseId, direction: b.direction, subject: b.subject }),
+    }).catch(console.error);
+
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create correspondence error:"); }
 });
@@ -1072,6 +1111,16 @@ router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), a
       ).catch(console.error);
     }
 
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "legal.judgment.updated",
+      entity: "legal_judgments",
+      entityId: id,
+      details: JSON.stringify({ caseId, paidAmount: b.paidAmount, verdict: b.verdict, dueDate: b.dueDate }),
+    }).catch(console.error);
+
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update judgment error:"); }
 });
@@ -1115,6 +1164,16 @@ router.patch("/cases/:id/financial-risk", requirePermission("legal:write"), asyn
       entityId: id,
       before: { financialRisk: existing.financialRisk, riskLevel: existing.riskLevel },
       after: { financialRisk: financialRisk || 0, riskLevel: riskLevel || 'medium' },
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "legal.case.risk_updated",
+      entity: "legal_cases",
+      entityId: id,
+      details: JSON.stringify({ financialRisk: financialRisk || 0, riskLevel: riskLevel || 'medium' }),
     }).catch(console.error);
 
     res.json(row);

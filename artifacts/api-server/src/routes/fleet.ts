@@ -10,7 +10,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createAuditLog, createNotification, createJournalEntry, emitEvent, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, createJournalEntry, createGuardedJournalEntry, emitEvent, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { eventBus } from "../lib/eventBus.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
@@ -918,6 +918,11 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
     });
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1`, [insertId]);
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.trip.created", entity: "fleet_trips", entityId: insertId,
+      details: JSON.stringify({ vehicleId: selectedVehicleId, driverId: selectedDriverId, distance: estimatedDistanceKm }),
+    }).catch(console.error);
     res.status(201).json({
       ...row,
       estimatedCostBreakdown: { fuel: estimatedFuelCost, driverFare, depreciation, total: totalEstimatedCost },
@@ -974,31 +979,26 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
       );
     }
 
-    let journalEntryId: number | null = null;
-    try {
-      const [fuelCode, fareCode, depCode, cashCode] = await Promise.all([
-        getAccountCodeFromMapping(scope.companyId, "fleet_fuel_expense", "debit", "5200"),
-        getAccountCodeFromMapping(scope.companyId, "fleet_driver_fare", "debit", "5210"),
-        getAccountCodeFromMapping(scope.companyId, "fleet_depreciation", "debit", "5220"),
-        getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100"),
-      ]);
-      journalEntryId = await createJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.userId,
-        ref: `JE-FLEET-${tripId}-${Date.now()}`,
-        description: `تكلفة رحلة #${tripId} — وقود: ${actualFuelCost.toFixed(2)} + أجرة: ${driverFare.toFixed(2)} + استهلاك: ${depreciation.toFixed(2)} = ${totalCost.toFixed(2)} ريال`,
-        type: "fleet", sourceType: "fleet_trip", sourceId: tripId,
-        lines: [
-          { accountCode: fuelCode, debit: actualFuelCost, credit: 0, vehicleId: trip.vehicleId },
-          { accountCode: fareCode, debit: driverFare, credit: 0, vehicleId: trip.vehicleId },
-          { accountCode: depCode, debit: depreciation, credit: 0, vehicleId: trip.vehicleId },
-          { accountCode: cashCode, debit: 0, credit: totalCost },
-        ],
-      });
-    } catch (jeErr) {
-      console.error("Journal entry creation failed for trip", tripId, jeErr);
-    }
+    const [fuelCode, fareCode, depCode, cashCode] = await Promise.all([
+      getAccountCodeFromMapping(scope.companyId, "fleet_fuel_expense", "debit", "5200"),
+      getAccountCodeFromMapping(scope.companyId, "fleet_driver_fare", "debit", "5210"),
+      getAccountCodeFromMapping(scope.companyId, "fleet_depreciation", "debit", "5220"),
+      getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100"),
+    ]);
+    const journalEntryId = await createGuardedJournalEntry({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      createdBy: scope.userId,
+      ref: `JE-FLEET-${tripId}-${Date.now()}`,
+      description: `تكلفة رحلة #${tripId} — وقود: ${actualFuelCost.toFixed(2)} + أجرة: ${driverFare.toFixed(2)} + استهلاك: ${depreciation.toFixed(2)} = ${totalCost.toFixed(2)} ريال`,
+      type: "fleet", sourceType: "fleet_trip", sourceId: tripId,
+      lines: [
+        { accountCode: fuelCode, debit: actualFuelCost, credit: 0, vehicleId: trip.vehicleId },
+        { accountCode: fareCode, debit: driverFare, credit: 0, vehicleId: trip.vehicleId },
+        { accountCode: depCode, debit: depreciation, credit: 0, vehicleId: trip.vehicleId },
+        { accountCode: cashCode, debit: 0, credit: totalCost },
+      ],
+    }, { table: "fleet_trips", id: tripId });
 
     // Persist audit + event via the shared helpers so they land in audit_logs
     // and event_logs with consistent shape. Swallowing this behind a raw
@@ -1092,6 +1092,11 @@ router.post("/trips/:id/cancel", requirePermission("fleet:update"), async (req, 
         }
       },
     });
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.trip.cancelled", entity: "fleet_trips", entityId: tripId,
+      details: JSON.stringify({ tripId, reason }),
+    }).catch(console.error);
     res.json({ ...updated, event: "fleet.trip.cancelled" });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -1122,6 +1127,11 @@ router.post("/trips/:id/waypoints", requirePermission("fleet:update"), async (re
       `INSERT INTO fleet_gps_tracking ("vehicleId","driverId",latitude,longitude,speed,"recordedAt") VALUES ($1,$2,$3,$4,$5,NOW())`,
       [trip.vehicleId, trip.driverId, lat, lon, b.speed || 0]
     );
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.trip.waypoint_added", entity: "fleet_trip_waypoints", entityId: insertId,
+      details: JSON.stringify({ tripId, lat, lon }),
+    }).catch(console.error);
     res.status(201).json({ id: insertId, tripId, lat, lon });
   } catch (err) { handleRouteError(err, res, "Waypoint error:"); }
 });
@@ -1276,26 +1286,24 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
 
     // Auto journal entry for maintenance cost
     if (finalCost > 0) {
-      try {
-        const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [m.vehicleId]);
-        const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
-        const maintExpCode = await getAccountCodeFromMapping(scope.companyId, "fleet_maintenance_expense", "debit", "5300");
-        const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100");
-        await createJournalEntry({
-          companyId: scope.companyId,
-          branchId: scope.branchId,
-          createdBy: scope.activeAssignmentId ?? scope.userId,
-          ref: `MAINT-${id}`,
-          description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}`,
-          type: "fleet",
-          sourceType: "fleet_maintenance",
-          sourceId: id,
-          lines: [
-            { accountCode: maintExpCode, debit: finalCost, credit: 0, vehicleId: m.vehicleId },
-            { accountCode: cashCode, debit: 0, credit: finalCost },
-          ],
-        });
-      } catch (jErr) { console.error("Maintenance journal entry failed:", jErr); }
+      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [m.vehicleId]);
+      const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
+      const maintExpCode = await getAccountCodeFromMapping(scope.companyId, "fleet_maintenance_expense", "debit", "5300");
+      const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100");
+      await createGuardedJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId ?? scope.userId,
+        ref: `MAINT-${id}`,
+        description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}`,
+        type: "fleet",
+        sourceType: "fleet_maintenance",
+        sourceId: id,
+        lines: [
+          { accountCode: maintExpCode, debit: finalCost, credit: 0, vehicleId: m.vehicleId },
+          { accountCode: cashCode, debit: 0, credit: finalCost },
+        ],
+      }, { table: "fleet_maintenance", id });
     }
 
     // Mark the scheduled obligation as met and register the next one
@@ -1605,29 +1613,32 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
 
     // Auto journal entry for fuel cost
     if (totalCost > 0) {
-      try {
-        const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [resolvedVehicleId]);
-        const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
-        const fuelExpCode = await getAccountCodeFromMapping(scope.companyId, "fleet_fuel_expense", "debit", "5200");
-        const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100");
-        await createJournalEntry({
-          companyId: scope.companyId,
-          branchId: scope.branchId,
-          createdBy: scope.activeAssignmentId ?? scope.userId,
-          ref: `FUEL-${insertId}`,
-          description: `مصروف وقود${plateLabel} / ${liters} لتر / ${stationName ?? ""}`,
-          type: "fleet",
-          sourceType: "fleet_fuel_log",
-          sourceId: insertId,
-          lines: [
-            { accountCode: fuelExpCode, debit: totalCost, credit: 0, vehicleId: resolvedVehicleId },
-            { accountCode: cashCode, debit: 0, credit: totalCost },
-          ],
-        });
-      } catch (jErr) { console.error("Fuel log journal entry failed:", jErr); }
+      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [resolvedVehicleId]);
+      const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
+      const fuelExpCode = await getAccountCodeFromMapping(scope.companyId, "fleet_fuel_expense", "debit", "5200");
+      const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100");
+      await createGuardedJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId ?? scope.userId,
+        ref: `FUEL-${insertId}`,
+        description: `مصروف وقود${plateLabel} / ${liters} لتر / ${stationName ?? ""}`,
+        type: "fleet",
+        sourceType: "fleet_fuel_log",
+        sourceId: insertId,
+        lines: [
+          { accountCode: fuelExpCode, debit: totalCost, credit: 0, vehicleId: resolvedVehicleId },
+          { accountCode: cashCode, debit: 0, credit: totalCost },
+        ],
+      }, { table: "fleet_fuel_logs", id: insertId });
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_fuel_logs WHERE id=$1`, [insertId]);
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.fuel_log.created", entity: "fleet_fuel_logs", entityId: insertId,
+      details: JSON.stringify({ vehicleId: resolvedVehicleId, liters, totalCost }),
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create fuel log error:"); }
 });
@@ -1684,31 +1695,34 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
 
     // Auto journal entry for insurance premium
     if (premium > 0) {
-      try {
-        const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [b.vehicleId]);
-        const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
-        const insuranceType = b.type || b.insuranceType || 'comprehensive';
-        const insuranceTypeLabel = insuranceType === 'comprehensive' ? 'شامل' : insuranceType === 'third_party' ? 'طرف ثالث' : insuranceType;
-        const prepaidInsCode = await getAccountCodeFromMapping(scope.companyId, "fleet_prepaid_insurance", "debit", "1350");
-        const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100");
-        await createJournalEntry({
-          companyId: scope.companyId,
-          branchId: scope.branchId,
-          createdBy: scope.activeAssignmentId ?? scope.userId,
-          ref: `INS-${insertId}`,
-          description: `مصروف تأمين${plateLabel} / ${insuranceTypeLabel} / ${b.provider ?? ""}`,
-          type: "fleet",
-          sourceType: "fleet_insurance",
-          sourceId: insertId,
-          lines: [
-            { accountCode: prepaidInsCode, debit: premium, credit: 0, vehicleId: Number(b.vehicleId) },
-            { accountCode: cashCode, debit: 0, credit: premium },
-          ],
-        });
-      } catch (jErr) { console.error("Insurance journal entry failed:", jErr); }
+      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [b.vehicleId]);
+      const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
+      const insuranceType = b.type || b.insuranceType || 'comprehensive';
+      const insuranceTypeLabel = insuranceType === 'comprehensive' ? 'شامل' : insuranceType === 'third_party' ? 'طرف ثالث' : insuranceType;
+      const prepaidInsCode = await getAccountCodeFromMapping(scope.companyId, "fleet_prepaid_insurance", "debit", "1350");
+      const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100");
+      await createGuardedJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId ?? scope.userId,
+        ref: `INS-${insertId}`,
+        description: `مصروف تأمين${plateLabel} / ${insuranceTypeLabel} / ${b.provider ?? ""}`,
+        type: "fleet",
+        sourceType: "fleet_insurance",
+        sourceId: insertId,
+        lines: [
+          { accountCode: prepaidInsCode, debit: premium, credit: 0, vehicleId: Number(b.vehicleId) },
+          { accountCode: cashCode, debit: 0, credit: premium },
+        ],
+      }, { table: "fleet_insurance", id: insertId });
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_insurance WHERE id=$1`, [insertId]);
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.insurance.created", entity: "fleet_insurance", entityId: insertId,
+      details: JSON.stringify({ vehicleId: b.vehicleId, provider: b.provider, premium }),
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create insurance error:"); }
 });
@@ -2046,6 +2060,11 @@ router.patch("/fuel-logs/:id", requirePermission("fleet:update"), async (req, re
       after,
     }).catch(console.error);
 
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.fuel_log.updated", entity: "fleet_fuel_logs", entityId: id,
+      details: JSON.stringify({ id, ...after }),
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update fuel log error:"); }
 });
@@ -2144,6 +2163,11 @@ router.patch("/insurance/:id", requirePermission("fleet:update"), async (req, re
       after,
     }).catch(console.error);
 
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.insurance.updated", entity: "fleet_insurance", entityId: id,
+      details: JSON.stringify({ id, ...after }),
+    }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update insurance error:"); }
 });
@@ -2273,6 +2297,11 @@ router.post("/preventive-plans", requirePermission("fleet:create"), async (req, 
        b.estimatedCost || 0, b.notes || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_preventive_plans WHERE id=$1`, [insertId]);
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.preventive.created", entity: "fleet_preventive_plans", entityId: insertId,
+      details: JSON.stringify({ vehicleId: b.vehicleId, serviceType: b.serviceType }),
+    }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create preventive plan error:"); }
 });
@@ -2346,6 +2375,11 @@ router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (
       }
     }
 
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.preventive.updated", entity: "fleet_preventive_plans", entityId: id,
+      details: JSON.stringify({ id }),
+    }).catch(console.error);
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update preventive plan error:"); }
 });

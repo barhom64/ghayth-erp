@@ -14,6 +14,7 @@ import {
   emitEvent,
   createAuditLog,
   createJournalEntry,
+  createGuardedJournalEntry,
   initiateApprovalChain,
   createNotification,
   updateBudgetUsed,
@@ -658,25 +659,22 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
     ]);
 
     let journalId: number | null = null;
-    try {
-      journalId = await createJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref: grnRef,
-        description: `استلام بضاعة ${grnRef} - أمر ${po.ref}`,
-        sourceType: "goods_receipt",
-        lines: [
-          { accountCode: invAccount, debit: subtotal, credit: 0, vendorId: po.supplierId },
-          ...(vatAmount > 0 ? [{ accountCode: vatAccount, debit: vatAmount, credit: 0, vendorId: po.supplierId }] : []),
-          { accountCode: grniAccount, debit: 0, credit: grnTotal, vendorId: po.supplierId },
-        ],
-      });
-      if (journalId) {
-        await rawExecute(`UPDATE goods_receipts SET "journalId" = $1 WHERE id = $2`, [journalId, grnId]);
-      }
-    } catch (journalErr) {
-      console.error("GRN journal error:", journalErr);
+    journalId = await createGuardedJournalEntry({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      createdBy: scope.activeAssignmentId,
+      ref: grnRef,
+      description: `استلام بضاعة ${grnRef} - أمر ${po.ref}`,
+      sourceType: "goods_receipt",
+      sourceId: grnId,
+      lines: [
+        { accountCode: invAccount, debit: subtotal, credit: 0, vendorId: po.supplierId },
+        ...(vatAmount > 0 ? [{ accountCode: vatAccount, debit: vatAmount, credit: 0, vendorId: po.supplierId }] : []),
+        { accountCode: grniAccount, debit: 0, credit: grnTotal, vendorId: po.supplierId },
+      ],
+    }, { table: "goods_receipts", id: grnId });
+    if (journalId) {
+      await rawExecute(`UPDATE goods_receipts SET "journalId" = $1 WHERE id = $2`, [journalId, grnId]);
     }
 
     // Update PO header status — partial vs fully received
@@ -982,27 +980,23 @@ purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"),
     // Post a single aggregated journal entry for the whole run, with one AP
     // debit per PO so per-vendor subledger still reconciles.
     let journalId: number | null = null;
-    try {
-      const lines: any[] = [];
-      for (const po of pos) {
-        lines.push({ accountCode: apAccount, debit: Number(po.totalAmount), credit: 0, vendorId: po.supplierId });
-      }
-      lines.push({ accountCode: cashAccount, debit: 0, credit: totalPayment });
-
-      journalId = await createJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref: runRef,
-        description: `دفعة مجمّعة ${runRef}: ${pos.length} أمر شراء بإجمالي ${totalPayment}`,
-        sourceType: "payment_run",
-        lines,
-      });
-      if (journalId && runId) {
-        await rawExecute(`UPDATE payment_runs SET "journalId" = $1 WHERE id = $2`, [journalId, runId]);
-      }
-    } catch (je) {
-      console.error("Payment run JE error:", je);
+    const lines: any[] = [];
+    for (const po of pos) {
+      lines.push({ accountCode: apAccount, debit: Number(po.totalAmount), credit: 0, vendorId: po.supplierId });
+    }
+    lines.push({ accountCode: cashAccount, debit: 0, credit: totalPayment });
+    journalId = await createGuardedJournalEntry({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      createdBy: scope.activeAssignmentId,
+      ref: runRef,
+      description: `دفعة مجمّعة ${runRef}: ${pos.length} أمر شراء بإجمالي ${totalPayment}`,
+      sourceType: "payment_run",
+      sourceId: runId ?? 0,
+      lines,
+    }, { table: "payment_runs", id: runId ?? 0 });
+    if (journalId && runId) {
+      await rawExecute(`UPDATE payment_runs SET "journalId" = $1 WHERE id = $2`, [journalId, runId]);
     }
 
     emitEvent({

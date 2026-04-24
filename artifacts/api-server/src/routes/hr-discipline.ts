@@ -273,6 +273,15 @@ router.post("/regulation", requirePermission("hr:create"), async (req, res) => {
       entity: "hr_discipline_regulation", entityId: insertId,
       after: body,
     });
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "hr.discipline.regulation.created",
+      entity: "hr_discipline_regulations",
+      entityId: insertId,
+      details: JSON.stringify({ section, articleNumber, title, severity: severity ?? "medium" }),
+    }).catch(console.error);
     res.status(201).json({ id: insertId });
   } catch (err) {
     handleRouteError(err, res, "Create regulation article error:");
@@ -312,6 +321,15 @@ router.patch("/regulation/:id", requirePermission("hr:update"), async (req, res)
       entity: "hr_discipline_regulation", entityId: id,
       after: body,
     });
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "hr.discipline.regulation.updated",
+      entity: "hr_discipline_regulations",
+      entityId: id,
+      details: JSON.stringify(body),
+    }).catch(console.error);
     res.json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "Update regulation article error:");
@@ -333,6 +351,15 @@ router.delete("/regulation/:id", requirePermission("hr:delete"), async (req, res
       action: "hr.discipline.regulation.delete",
       entity: "hr_discipline_regulation", entityId: id,
     });
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "hr.discipline.regulation.deleted",
+      entity: "hr_discipline_regulations",
+      entityId: id,
+      details: JSON.stringify({ id }),
+    }).catch(console.error);
     res.json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "Delete regulation article error:");
@@ -824,6 +851,15 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
       memoId: id, companyId: scope.companyId, actorId: scope.userId,
       actorRole: "hr", action: "cancelled", note: reason ?? undefined,
     });
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "hr.memo.cancelled",
+      entity: "hr_memos",
+      entityId: id,
+      details: JSON.stringify({ reason, memoNumber: memo.memoNumber, employeeId: memo.employeeId }),
+    }).catch(console.error);
     res.json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "Cancel memo error:");
@@ -861,6 +897,15 @@ router.post("/memos/:id/appeal", requirePermission("hr:read"), async (req, res) 
       title: `استئناف على محضر ${memo.memoNumber}`,
       body: `قدّم الموظف استئنافاً على قرار الجزاء`,
       priority: "high", refType: "hr_inquiry_memo", refId: id,
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "hr.memo.appealed",
+      entity: "hr_memos",
+      entityId: id,
+      details: JSON.stringify({ reason: reason.trim(), memoNumber: memo.memoNumber, employeeId: memo.employeeId }),
     }).catch(console.error);
     res.json({ ok: true, status: "appeal_pending" });
   } catch (err) { handleRouteError(err, res, "Appeal error:"); }
@@ -903,6 +948,15 @@ router.post("/memos/:id/appeal-decision", requirePermission("hr:discipline:appro
       body: `نتيجة استئنافك على المحضر ${memo.memoNumber}: ${decision === "accepted" ? "قُبل" : "رُفض"}`,
       priority: "high", refType: "hr_inquiry_memo", refId: id,
     }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "hr.memo.appeal_decided",
+      entity: "hr_memos",
+      entityId: id,
+      details: JSON.stringify({ decision, comment, newStatus, memoNumber: memo.memoNumber, employeeId: memo.employeeId }),
+    }).catch(console.error);
     res.json({ ok: true, status: newStatus });
   } catch (err) { handleRouteError(err, res, "Appeal decision error:"); }
 });
@@ -934,6 +988,15 @@ router.post("/memos/:id/close", requirePermission("hr:update"), async (req, res)
       memoId: id, companyId: scope.companyId, actorId: scope.userId,
       actorRole: "hr", action: "closed", note: req.body.note ?? undefined,
     });
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "hr.memo.closed",
+      entity: "hr_memos",
+      entityId: id,
+      details: JSON.stringify({ memoNumber: memo.memoNumber, employeeId: memo.employeeId, previousStatus: memo.status }),
+    }).catch(console.error);
     res.json({ ok: true, status: "closed" });
   } catch (err) { handleRouteError(err, res, "Close memo error:"); }
 });

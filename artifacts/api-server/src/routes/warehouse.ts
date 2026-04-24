@@ -14,7 +14,7 @@ import { movingAverage } from "../lib/algorithms.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { eventBus } from "../lib/eventBus.js";
 import {
-  createJournalEntry,
+  createGuardedJournalEntry,
   checkFinancialPeriodOpen,
   getAccountCodeFromMapping,
   createAuditLog,
@@ -263,7 +263,7 @@ async function postInventoryMovementGl(params: {
 
     if (lines.length === 0) return null;
 
-    const journalId = await createJournalEntry({
+    const journalId = await createGuardedJournalEntry({
       companyId: params.companyId,
       branchId: params.branchId,
       createdBy: params.createdBy,
@@ -273,7 +273,7 @@ async function postInventoryMovementGl(params: {
       sourceId: params.movementId,
       operationType,
       lines,
-    });
+    }, { table: "warehouse_movements", id: params.movementId });
     return journalId;
   } catch (glErr) {
     console.error(
