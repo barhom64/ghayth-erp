@@ -6107,10 +6107,11 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
     let journalId: number | null = null;
     try {
       const { hrEngine } = await import("../lib/engines/index.js");
-      journalId = await hrEngine.postMonthlyAccrualsGL(
+      const glResult = await hrEngine.postMonthlyAccrualsGL(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
         { ref, period: targetPeriod, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length }
       );
+      journalId = glResult.journalId;
     } catch (journalErr) {
       throw new IntegrationError("فشل تسجيل قيد الاستحقاقات", {
         meta: { integration: "journal", period: targetPeriod },

@@ -16,6 +16,7 @@ import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { eventBus } from "../lib/eventBus.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
+import { propertiesEngine } from "../lib/engines/index.js";
 
 const createUnitSchema = z.object({
   unitNumber: z.string().min(1, "رقم الوحدة مطلوب"),
@@ -1621,7 +1622,7 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
               priority: "high",
               refType: "legal_case",
               refId: payment.id,
-              actionUrl: `/legal/cases/${caseId}`,
+              actionUrl: `/legal/cases`,
             }).catch(console.error);
           }
         } catch (legalErr) {
@@ -1991,6 +1992,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
       completeParams
     );
 
+    let invoiceId: number | null = null;
     if (cost > 0 && !b.coveredByContract) {
       const monthNum = String(new Date().getMonth() + 1).padStart(2, "0");
       const yearShort = String(new Date().getFullYear()).slice(2);

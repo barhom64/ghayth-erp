@@ -836,7 +836,7 @@ journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), 
       entity: "journal_entries",
       entityId: id,
       reason,
-      after: { newJournalId, newRef, reverseDate: effectiveDate },
+      after: { newJournalId, newRef, reverseDate },
     }).catch(() => {});
 
     emitEvent({

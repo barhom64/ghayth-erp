@@ -912,10 +912,11 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
         invoiceError = "فشل إنشاء فاتورة الأتعاب";
       }
 
-      journalEntryId = await legalEngine.postLegalSessionFeeGL(
+      const glResult = await legalEngine.postLegalSessionFeeGL(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
         { id: insertId, caseTitle: legalCase.title, sessionDate: b.sessionDate, billingAmount, vatAmount }
       );
+      journalEntryId = glResult.journalId;
     }
 
     createAuditLog({

@@ -31,6 +31,10 @@ describe("guard.sh integrity", () => {
     expect(guardScript).toContain('run_step "audit:boundaries"');
   });
 
+  it("runs audit:domain-routes", () => {
+    expect(guardScript).toContain('run_step "audit:domain-routes"');
+  });
+
   it("runs test suite", () => {
     expect(guardScript).toContain('run_step "test"');
   });
@@ -87,6 +91,10 @@ describe("Package.json guard scripts", () => {
 
   it("has audit:boundaries script", () => {
     expect(rootPkg.scripts["audit:boundaries"]).toBeDefined();
+  });
+
+  it("has audit:domain-routes script", () => {
+    expect(rootPkg.scripts["audit:domain-routes"]).toBeDefined();
   });
 });
 

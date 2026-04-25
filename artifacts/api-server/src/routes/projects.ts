@@ -1811,10 +1811,11 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
           ).catch(() => {});
         } else {
           const { projectsEngine } = await import("../lib/engines/index.js");
-          journalEntryId = await projectsEngine.postProjectCostGL(
+          const glResult = await projectsEngine.postProjectCostGL(
             { companyId: scope.companyId, branchId: scope.branchId, createdBy: (scope as any).activeAssignmentId ?? scope.userId },
             { id: insertId, projectId, projectName: project.name, amount, description: b.description, sourceType: b.sourceType || b.category }
           );
+          journalEntryId = glResult.journalId;
         }
       }
     } catch (glErr) {
@@ -1883,10 +1884,11 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
           );
         } else {
           const { projectsEngine } = await import("../lib/engines/index.js");
-          journalEntryId = await projectsEngine.postProjectClosureGL(
+          const glResult = await projectsEngine.postProjectClosureGL(
             { companyId: scope.companyId, branchId: scope.branchId, createdBy: (scope as any).activeAssignmentId ?? scope.userId },
             { projectId, projectName: project.name, totalWip }
           );
+          journalEntryId = glResult.journalId;
         }
       } catch (glErr) {
         console.error(

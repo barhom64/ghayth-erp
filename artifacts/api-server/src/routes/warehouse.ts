@@ -169,11 +169,11 @@ async function postInventoryMovementGl(params: {
 
     const trigger = params.trigger as "receipt" | "issue" | "variance_in" | "variance_out";
     const { warehouseEngine } = await import("../lib/engines/index.js");
-    const journalId = await warehouseEngine.postMovementGL(
+    const glResult = await warehouseEngine.postMovementGL(
       { companyId: params.companyId, branchId: params.branchId, createdBy: params.createdBy },
       { id: params.movementId, trigger, totalValue, productName: params.productName, ref }
     );
-    return journalId;
+    return glResult.journalId;
   } catch (glErr) {
     console.error(
       `[warehouse-gl] journal entry failed for movement ${params.movementId}:`,
