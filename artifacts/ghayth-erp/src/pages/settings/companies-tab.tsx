@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Plus, X, Pencil, Trash2, CheckCircle, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 export function CompaniesTab() {
   const { refreshFilters } = useAppContext();
@@ -22,8 +22,44 @@ export function CompaniesTab() {
   const [lastBootstrapOps, setLastBootstrapOps] = useState<string[] | null>(null);
   const items = asList(data);
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const companyColumns: DataTableColumn<any>[] = [
+    {
+      key: "name",
+      header: "اسم الشركة",
+      sortable: true,
+      searchable: true,
+      render: (r: any) => (
+        <div className="font-medium">
+          {r.name}
+          {r.nameEn && <span className="text-gray-400 text-xs me-2 block">{r.nameEn}</span>}
+        </div>
+      ),
+    },
+    { key: "taxNumber", header: "الرقم الضريبي", searchable: true, render: (r: any) => <span className="text-gray-500">{r.taxNumber || "-"}</span> },
+    { key: "crNumber", header: "السجل التجاري", searchable: true, render: (r: any) => <span className="text-gray-500">{r.crNumber || "-"}</span> },
+    {
+      key: "actions",
+      header: "إجراءات",
+      width: "100px",
+      render: (r: any) => (
+        <div className="flex gap-1">
+          <Button variant="ghost" size="sm" onClick={() => handleEdit(r)} title="تعديل"><Pencil className="h-4 w-4" /></Button>
+          <Button
+            variant="ghost" size="sm"
+            onClick={() => { if (confirm("تحذير: حذف الشركة سيؤثر على جميع البيانات المرتبطة بها. هل أنت متأكد؟")) handleDelete(r.id); }}
+            disabled={deleting === r.id}
+            title="حذف"
+            className="text-red-500 hover:text-red-700"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  if (isLoading) return <DataTable columns={companyColumns} data={[]} isLoading={true} searchPlaceholder={null} noToolbar />;
+  if (isError) return <DataTable columns={companyColumns} data={[]} isError={true} onRetry={() => window.location.reload()} searchPlaceholder={null} noToolbar />;
 
   const resetForm = () => {
     setForm({ name: "", nameEn: "", taxNumber: "", crNumber: "" });
@@ -168,47 +204,13 @@ export function CompaniesTab() {
         </Card>
       )}
 
-      <Card><CardContent className="p-0">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-gray-50">
-              <th className="p-3 text-right">اسم الشركة</th>
-              <th className="p-3 text-right">الرقم الضريبي</th>
-              <th className="p-3 text-right">السجل التجاري</th>
-              <th className="p-3 text-start w-24">إجراءات</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item: any) => (
-              <tr key={item.id} className="border-b hover:bg-gray-50">
-                <td className="p-3 font-medium">
-                  {item.name}
-                  {item.nameEn && <span className="text-gray-400 text-xs me-2 block">{item.nameEn}</span>}
-                </td>
-                <td className="p-3 text-gray-500">{item.taxNumber || "-"}</td>
-                <td className="p-3 text-gray-500">{item.crNumber || "-"}</td>
-                <td className="p-3">
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => handleEdit(item)} title="تعديل"><Pencil className="h-4 w-4" /></Button>
-                    <Button
-                      variant="ghost" size="sm"
-                      onClick={() => { if (confirm("تحذير: حذف الشركة سيؤثر على جميع البيانات المرتبطة بها. هل أنت متأكد؟")) handleDelete(item.id); }}
-                      disabled={deleting === item.id}
-                      title="حذف"
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {items.length === 0 && (
-              <tr><td colSpan={4} className="p-8 text-center text-gray-400">لا توجد شركات مضافة</td></tr>
-            )}
-          </tbody>
-        </table>
-      </CardContent></Card>
+      <DataTable
+        columns={companyColumns}
+        data={items}
+        searchPlaceholder="بحث في الشركات..."
+        emptyMessage="لا توجد شركات مضافة"
+        pageSize={0}
+      />
     </div>
   );
 }

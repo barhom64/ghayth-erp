@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 export function BranchesTab() {
   const { refreshFilters } = useAppContext();
@@ -37,8 +37,56 @@ export function BranchesTab() {
     }
   }, [companies]);
 
-  if (isLoading || companiesLoading) return <LoadingSpinner />;
-  if (isError || companiesError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const branchColumns: DataTableColumn<any>[] = [
+    {
+      key: "name",
+      header: "اسم الفرع",
+      sortable: true,
+      searchable: true,
+      render: (r: any) => (
+        <div className="font-medium">
+          {r.name}
+          {r.nameEn && <span className="text-gray-400 text-xs me-2 block">{r.nameEn}</span>}
+        </div>
+      ),
+    },
+    ...(companies.length > 1
+      ? [{
+          key: "companyId",
+          header: "الشركة",
+          sortable: true,
+          render: (r: any) => (
+            <span className="text-gray-500">
+              {companies.find((c: any) => c.id === r.companyId)?.name || "-"}
+            </span>
+          ),
+        }]
+      : []),
+    { key: "city", header: "المدينة", sortable: true, searchable: true, render: (r: any) => <span className="text-gray-500">{r.city || "-"}</span> },
+    { key: "phone", header: "الهاتف", render: (r: any) => <span className="text-gray-500">{r.phone || "-"}</span> },
+    {
+      key: "actions",
+      header: "إجراءات",
+      width: "100px",
+      render: (r: any) => (
+        <div className="flex gap-1">
+          <Button variant="ghost" size="sm" onClick={() => handleEdit(r)} title="تعديل"><Pencil className="h-4 w-4" /></Button>
+          <Button
+            variant="ghost" size="sm"
+            onClick={() => { if (confirm("هل أنت متأكد من حذف هذا الفرع؟ سيؤثر ذلك على جميع البيانات المرتبطة به.")) handleDelete(r.id); }}
+            disabled={deleting === r.id}
+            title="حذف"
+            className="text-red-500 hover:text-red-700"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  if (isLoading || companiesLoading) return <DataTable columns={branchColumns} data={[]} isLoading={true} searchPlaceholder={null} noToolbar />;
+  if (isError || companiesError) return <DataTable columns={branchColumns} data={[]} isError={true} onRetry={() => window.location.reload()} searchPlaceholder={null} noToolbar />;
 
   const handleEdit = (item: any) => {
     setForm({
@@ -163,53 +211,13 @@ export function BranchesTab() {
         </div>
       )}
 
-      <Card><CardContent className="p-0">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-gray-50">
-              <th className="p-3 text-right">اسم الفرع</th>
-              {companies.length > 1 && <th className="p-3 text-right">الشركة</th>}
-              <th className="p-3 text-right">المدينة</th>
-              <th className="p-3 text-right">الهاتف</th>
-              <th className="p-3 text-start w-24">إجراءات</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredItems.map((item: any) => (
-              <tr key={item.id} className="border-b hover:bg-gray-50">
-                <td className="p-3 font-medium">
-                  {item.name}
-                  {item.nameEn && <span className="text-gray-400 text-xs me-2 block">{item.nameEn}</span>}
-                </td>
-                {companies.length > 1 && (
-                  <td className="p-3 text-gray-500">
-                    {companies.find((c: any) => c.id === item.companyId)?.name || "-"}
-                  </td>
-                )}
-                <td className="p-3 text-gray-500">{item.city || "-"}</td>
-                <td className="p-3 text-gray-500">{item.phone || "-"}</td>
-                <td className="p-3">
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => handleEdit(item)} title="تعديل"><Pencil className="h-4 w-4" /></Button>
-                    <Button
-                      variant="ghost" size="sm"
-                      onClick={() => { if (confirm("هل أنت متأكد من حذف هذا الفرع؟ سيؤثر ذلك على جميع البيانات المرتبطة به.")) handleDelete(item.id); }}
-                      disabled={deleting === item.id}
-                      title="حذف"
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {filteredItems.length === 0 && (
-              <tr><td colSpan={companies.length > 1 ? 5 : 4} className="p-8 text-center text-gray-400">لا توجد فروع</td></tr>
-            )}
-          </tbody>
-        </table>
-      </CardContent></Card>
+      <DataTable
+        columns={branchColumns}
+        data={filteredItems}
+        searchPlaceholder="بحث في الفروع..."
+        emptyMessage="لا توجد فروع"
+        pageSize={0}
+      />
     </div>
   );
 }

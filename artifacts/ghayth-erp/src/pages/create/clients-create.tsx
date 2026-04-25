@@ -108,7 +108,7 @@ export default function ClientsCreate() {
             </SelectContent>
           </Select>
         </FormFieldWrapper>
-        <TextField label="رقم الجوال" dir="ltr" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} placeholder="05xxxxxxxx" error={fieldErrors.phone} />
+        <TextField label="رقم الجوال" type="tel" inputMode="tel" dir="ltr" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} placeholder="05xxxxxxxx" error={fieldErrors.phone} />
         <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} error={fieldErrors.email} />
         <TextField label="الجنسية" value={form.nationality} onChange={(v) => setForm((f) => ({ ...f, nationality: v }))} placeholder="سعودي" />
         <FormFieldWrapper label="اللغة المفضلة">

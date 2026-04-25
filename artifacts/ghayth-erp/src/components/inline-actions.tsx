@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { Pencil, Trash2, Check, X, Loader2 } from "lucide-react";
 import { apiPatch, apiDelete } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -102,6 +103,14 @@ export function InlineEditForm({
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
+            ) : f.type === "date" ? (
+              <UnifiedDateInput
+                value={form[f.key] ?? ""}
+                onChange={(v) => setForm({ ...form, [f.key]: v })}
+                variant="compact"
+                showDualCalendar
+                showPresets
+              />
             ) : (
               <Input
                 type={f.type || "text"}

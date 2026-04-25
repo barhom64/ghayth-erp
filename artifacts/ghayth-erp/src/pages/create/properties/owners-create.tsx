@@ -78,7 +78,7 @@ export default function OwnersCreate() {
             {form.ownerType === "company" && (
               <TextField label="رقم السجل التجاري" dir="ltr" value={form.crNumber} onChange={v => setForm({ ...form, crNumber: v })} />
             )}
-            <TextField label="الهاتف" dir="ltr" value={form.phone} onChange={v => setForm({ ...form, phone: v })} error={fieldErrors.phone} />
+            <TextField label="الهاتف" type="tel" inputMode="tel" dir="ltr" value={form.phone} onChange={v => setForm({ ...form, phone: v })} error={fieldErrors.phone} />
             <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={v => setForm({ ...form, email: v })} error={fieldErrors.email} />
           </div>
 

@@ -125,8 +125,8 @@ export default function CrmCreate() {
             </Select>
           </FormFieldWrapper>
           <TextField label="جهة الاتصال" value={form.contactName} onChange={(v) => setForm((f) => ({ ...f, contactName: v }))} placeholder="اسم جهة الاتصال" />
-          <TextField label="الهاتف" dir="ltr" value={form.contactPhone} onChange={(v) => setForm((f) => ({ ...f, contactPhone: v }))} placeholder="05xxxxxxxx" />
-          <TextField label="البريد الإلكتروني" dir="ltr" value={form.contactEmail} onChange={(v) => setForm((f) => ({ ...f, contactEmail: v }))} placeholder="email@example.com" />
+          <TextField label="الهاتف" type="tel" inputMode="tel" dir="ltr" value={form.contactPhone} onChange={(v) => setForm((f) => ({ ...f, contactPhone: v }))} placeholder="05xxxxxxxx" />
+          <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.contactEmail} onChange={(v) => setForm((f) => ({ ...f, contactEmail: v }))} placeholder="email@example.com" />
           <FormFieldWrapper label="المصدر">
             <Select value={form.source || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, source: v === "_none" ? "" : v }))}>
               <SelectTrigger><SelectValue placeholder="اختر المصدر" /></SelectTrigger>

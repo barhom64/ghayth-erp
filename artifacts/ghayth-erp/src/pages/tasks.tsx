@@ -1,4 +1,4 @@
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
@@ -6,10 +6,10 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckSquare, Calendar, Building2, Phone, Plus, User, Pencil, Trash2, Check, X, PlayCircle, CheckCircle2, Loader2, Copy, Eye, ChevronDown, ChevronUp, Link2 } from "lucide-react";
+import { CheckSquare, Plus, Pencil, Trash2, Check, X, PlayCircle, CheckCircle2, Loader2, Copy, Eye, ChevronDown, ChevronUp, Link2 } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 import { DeleteConfirmImpact } from "@/components/delete-confirm-impact";
@@ -17,7 +17,7 @@ import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/compon
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
-import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
+import { BulkActionsBar, useBulkSelection } from "@/components/shared/bulk-actions";
 import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
 
 const statusOptions = [
@@ -139,6 +139,122 @@ export default function Tasks() {
     quickStatusMut.mutate({ id, status: newStatus });
   };
 
+  const taskColumns: DataTableColumn<any>[] = [
+    { key: "title", header: "العنوان", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.title}</span> },
+    { key: "tags", header: "الوسوم", render: (r: any) => <EntityTags entityType="task" entityId={r.id} inline /> },
+    { key: "linkedEntity", header: "الكيان المرتبط", render: (r: any) => (
+      r.linkedEntityType ? (
+        <Link href={getEntityLink(r.linkedEntityType, r.linkedEntityId)}>
+          <span className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline cursor-pointer">
+            <Link2 className="h-3 w-3" />
+            {ENTITY_TYPE_LABELS[r.linkedEntityType] || r.linkedEntityType}
+            {r.linkedEntityName ? (
+              <span className="font-medium"> {r.linkedEntityName}</span>
+            ) : r.linkedEntityId ? (
+              <span className="font-mono"> #{r.linkedEntityId}</span>
+            ) : null}
+          </span>
+        </Link>
+      ) : (
+        <span className="text-xs text-gray-400">{"—"}</span>
+      )
+    ) },
+    { key: "type", header: "النوع", sortable: true, render: (r: any) => <span className="text-muted-foreground">{typeLabels[r.type] || "مهمة عامة"}</span> },
+    { key: "priority", header: "الأولوية", sortable: true, render: (r: any) => (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+        r.priority === "high" ? "bg-rose-100 text-rose-700" :
+        r.priority === "medium" ? "bg-amber-100 text-amber-700" :
+        "bg-emerald-100 text-emerald-700"
+      }`}>
+        {priorityLabels[r.priority] || r.priority}
+      </span>
+    ) },
+    { key: "status", header: "الحالة", sortable: true, render: (r: any) => <PageStatusBadge status={r.status} /> },
+    { key: "scheduledDate", header: "الموعد", sortable: true, render: (r: any) => (
+      <span className="text-muted-foreground">
+        {r.scheduledStart
+          ? formatDateAr(r.scheduledStart)
+          : r.scheduledDate
+          ? formatDateAr(r.scheduledDate)
+          : "-"
+        }
+      </span>
+    ) },
+    { key: "assigneeName", header: "المكلّف", sortable: true, searchable: true, render: (r: any) => <span className="text-muted-foreground">{r.assigneeName || "-"}</span> },
+    { key: "actions", header: "الإجراءات", width: "200px", render: (r: any) => (
+      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-muted-foreground hover:text-foreground"
+          onClick={() => setPreviewItem(r)}
+          title="معاينة سريعة"
+        >
+          <Eye className="h-4 w-4" />
+        </Button>
+        {r.status !== "completed" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+            onClick={() => quickStatusChange(r.id, "completed")}
+            title="إكمال المهمة"
+          >
+            <CheckCircle2 className="h-4 w-4" />
+          </Button>
+        )}
+        {r.status === "pending" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+            onClick={() => quickStatusChange(r.id, "in_progress")}
+            title="بدء العمل"
+          >
+            <PlayCircle className="h-4 w-4" />
+          </Button>
+        )}
+        <Link href={`/tasks/create?copyFrom=${r.id}&title=${encodeURIComponent(r.title)}&type=${r.type}&priority=${r.priority}`}>
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground hover:text-foreground" title="نسخ">
+            <Copy className="h-4 w-4" />
+          </Button>
+        </Link>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-muted-foreground hover:text-foreground"
+          onClick={() => navigate(`/tasks/create?copy=${encodeURIComponent(JSON.stringify({ title: r.title + " (نسخة)", description: r.description, type: r.type, priority: r.priority }))}`)}
+          title="نسخ المهمة"
+        >
+          <Copy className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-muted-foreground hover:text-foreground"
+          onClick={() => startEdit(r)}
+          title="تعديل"
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+        {isOwner && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+            onClick={() => { setDeletingId(r.id); setEditingId(null); }}
+            title="حذف"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
+        <button onClick={() => setExpandedId(expandedId === r.id ? null : r.id)} className="text-gray-400 hover:text-gray-600 p-1">
+          {expandedId === r.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
+      </div>
+    ) },
+  ];
+
   return (
     <PageShell
       title="إدارة المهام"
@@ -203,234 +319,101 @@ export default function Tasks() {
         actions={["close", "export", "delete"]}
       />
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/30">
-                  <th className="p-3 w-8"><BulkCheckbox checked={selectedIds.size === (filtered || []).length && (filtered || []).length > 0} indeterminate={selectedIds.size > 0 && selectedIds.size < (filtered || []).length} onChange={() => toggleAll((filtered || []).map((t: any) => t.id))} /></th>
-                  <th className="text-start p-3 font-medium">العنوان</th>
-                  <th className="text-start p-3 font-medium">الوسوم</th>
-                  <th className="text-start p-3 font-medium">الكيان المرتبط</th>
-                  <th className="text-start p-3 font-medium">النوع</th>
-                  <th className="text-start p-3 font-medium">الأولوية</th>
-                  <th className="text-start p-3 font-medium">الحالة</th>
-                  <th className="text-start p-3 font-medium">الموعد</th>
-                  <th className="text-start p-3 font-medium">المكلّف</th>
-                  <th className="text-start p-3 font-medium w-[200px]">الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  [...Array(5)].map((_, i) => (
-                    <tr key={i} className="border-b">
-                      {[...Array(8)].map((_, j) => (
-                        <td key={j} className="p-3"><Skeleton className="h-5 w-full" /></td>
-                      ))}
-                    </tr>
-                  ))
-                ) : filtered?.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} className="p-12 text-center text-muted-foreground">
-                      لا توجد مهام تطابق معايير البحث
-                    </td>
-                  </tr>
-                ) : (
-                  filtered?.map((task: any) => (
-                    <Fragment key={task.id}>
-                      <tr className={`border-b hover:bg-muted/20 transition-colors ${editingId === task.id ? "bg-blue-50" : ""} ${selectedIds.has(task.id) ? "bg-blue-50/50" : ""}`}>
-                        <td className="p-3"><BulkCheckbox checked={selectedIds.has(task.id)} onChange={() => toggleSelect(task.id)} /></td>
-                        <td className="p-3 font-medium">{task.title}</td>
-                        <td className="p-3"><EntityTags entityType="task" entityId={task.id} inline /></td>
-                        <td className="p-3">
-                          {task.linkedEntityType ? (
-                            <Link href={getEntityLink(task.linkedEntityType, task.linkedEntityId)}>
-                              <span className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline cursor-pointer">
-                                <Link2 className="h-3 w-3" />
-                                {ENTITY_TYPE_LABELS[task.linkedEntityType] || task.linkedEntityType}
-                                {task.linkedEntityName ? (
-                                  <span className="font-medium"> {task.linkedEntityName}</span>
-                                ) : task.linkedEntityId ? (
-                                  <span className="font-mono"> #{task.linkedEntityId}</span>
-                                ) : null}
-                              </span>
-                            </Link>
-                          ) : (
-                            <span className="text-xs text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-muted-foreground">{typeLabels[task.type] || "مهمة عامة"}</td>
-                        <td className="p-3">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                            task.priority === "high" ? "bg-rose-100 text-rose-700" :
-                            task.priority === "medium" ? "bg-amber-100 text-amber-700" :
-                            "bg-emerald-100 text-emerald-700"
-                          }`}>
-                            {priorityLabels[task.priority] || task.priority}
-                          </span>
-                        </td>
-                        <td className="p-3"><PageStatusBadge status={task.status} /></td>
-                        <td className="p-3 text-muted-foreground">
-                          {task.scheduledStart
-                            ? formatDateAr(task.scheduledStart)
-                            : task.scheduledDate
-                            ? formatDateAr(task.scheduledDate)
-                            : "-"
-                          }
-                        </td>
-                        <td className="p-3 text-muted-foreground">{task.assigneeName || "-"}</td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-muted-foreground hover:text-foreground"
-                              onClick={() => setPreviewItem(task)}
-                              title="معاينة سريعة"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            {task.status !== "completed" && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                onClick={() => quickStatusChange(task.id, "completed")}
-                                title="إكمال المهمة"
-                              >
-                                <CheckCircle2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                            {task.status === "pending" && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                onClick={() => quickStatusChange(task.id, "in_progress")}
-                                title="بدء العمل"
-                              >
-                                <PlayCircle className="h-4 w-4" />
-                              </Button>
-                            )}
-                            <Link href={`/tasks/create?copyFrom=${task.id}&title=${encodeURIComponent(task.title)}&type=${task.type}&priority=${task.priority}`}>
-                              <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground hover:text-foreground" title="نسخ">
-                                <Copy className="h-4 w-4" />
-                              </Button>
-                            </Link>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-muted-foreground hover:text-foreground"
-                              onClick={() => navigate(`/tasks/create?copy=${encodeURIComponent(JSON.stringify({ title: task.title + " (نسخة)", description: task.description, type: task.type, priority: task.priority }))}`)}
-                              title="نسخ المهمة"
-                            >
-                              <Copy className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-muted-foreground hover:text-foreground"
-                              onClick={() => startEdit(task)}
-                              title="تعديل"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            {isOwner && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
-                                onClick={() => { setDeletingId(task.id); setEditingId(null); }}
-                                title="حذف"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                            <button onClick={() => setExpandedId(expandedId === task.id ? null : task.id)} className="text-gray-400 hover:text-gray-600 p-1">
-                              {expandedId === task.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      {expandedId === task.id && (
-                        <tr className="bg-gray-50/50 border-b">
-                          <td colSpan={10} className="p-4">
-                            <div className="space-y-3">
-                              <EntityTags entityType="task" entityId={task.id} />
-                              <EntityComments entityType="task" entityId={task.id} />
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                      {editingId === task.id && (
-                        <tr className="bg-blue-50/50 border-b">
-                          <td colSpan={10} className="p-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                              <div>
-                                <label className="text-xs text-muted-foreground mb-1 block">العنوان</label>
-                                <Input
-                                  value={editForm.title || ""}
-                                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                                />
-                              </div>
-                              <div>
-                                <label className="text-xs text-muted-foreground mb-1 block">الأولوية</label>
-                                <Select value={editForm.priority || "medium"} onValueChange={(v) => setEditForm({ ...editForm, priority: v })}>
-                                  <SelectTrigger><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="low">منخفضة</SelectItem>
-                                    <SelectItem value="medium">متوسطة</SelectItem>
-                                    <SelectItem value="high">عالية</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div>
-                                <label className="text-xs text-muted-foreground mb-1 block">الحالة</label>
-                                <Select value={editForm.status || "pending"} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
-                                  <SelectTrigger><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    {statusOptions.map((s) => (
-                                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="flex items-end gap-2">
-                                <Button size="sm" onClick={saveEdit} disabled={saving} className="gap-1">
-                                  {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                                  حفظ
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={cancelEdit} className="gap-1">
-                                  <X className="h-3 w-3" /> إلغاء
-                                </Button>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                      {deletingId === task.id && (
-                        <tr className="bg-rose-50/50 border-b">
-                          <td colSpan={10} className="p-4">
-                            <DeleteConfirmImpact
-                              entityType="task"
-                              entityId={task.id}
-                              entityName={task.title}
-                              onConfirm={() => handleDelete(task.id)}
-                              onCancel={() => setDeletingId(null)}
-                              isPending={saving}
-                            />
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={taskColumns}
+        data={filtered}
+        isLoading={isLoading}
+        isError={isError}
+        noToolbar
+        emptyMessage="لا توجد مهام تطابق معايير البحث"
+        emptyIcon={<CheckSquare className="h-6 w-6 text-slate-400" />}
+        selectable
+        onSelectionChange={(ids) => {
+          // Sync DataTable selection with BulkActionsBar
+          const currentIds = new Set(ids);
+          (filtered || []).forEach((t: any) => {
+            if (currentIds.has(t.id) && !selectedIds.has(t.id)) toggleSelect(t.id);
+            if (!currentIds.has(t.id) && selectedIds.has(t.id)) toggleSelect(t.id);
+          });
+        }}
+        rowClassName={(task: any) =>
+          editingId === task.id ? "bg-blue-50" : selectedIds.has(task.id) ? "bg-blue-50/50" : undefined
+        }
+        renderRowExtras={(task: any) => {
+          const parts: React.ReactNode[] = [];
+          if (expandedId === task.id) {
+            parts.push(
+              <div key="expanded" className="bg-gray-50/50 p-4">
+                <div className="space-y-3">
+                  <EntityTags entityType="task" entityId={task.id} />
+                  <EntityComments entityType="task" entityId={task.id} />
+                </div>
+              </div>
+            );
+          }
+          if (editingId === task.id) {
+            parts.push(
+              <div key="edit" className="bg-blue-50/50 p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">العنوان</label>
+                    <Input
+                      value={editForm.title || ""}
+                      onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">الأولوية</label>
+                    <Select value={editForm.priority || "medium"} onValueChange={(v) => setEditForm({ ...editForm, priority: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">منخفضة</SelectItem>
+                        <SelectItem value="medium">متوسطة</SelectItem>
+                        <SelectItem value="high">عالية</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">الحالة</label>
+                    <Select value={editForm.status || "pending"} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {statusOptions.map((s) => (
+                          <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <Button size="sm" onClick={saveEdit} disabled={saving} className="gap-1">
+                      {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                      حفظ
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={cancelEdit} className="gap-1">
+                      <X className="h-3 w-3" /> إلغاء
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          if (deletingId === task.id) {
+            parts.push(
+              <div key="delete" className="bg-rose-50/50 p-4">
+                <DeleteConfirmImpact
+                  entityType="task"
+                  entityId={task.id}
+                  entityName={task.title}
+                  onConfirm={() => handleDelete(task.id)}
+                  onCancel={() => setDeletingId(null)}
+                  isPending={saving}
+                />
+              </div>
+            );
+          }
+          return parts.length > 0 ? <>{parts}</> : null;
+        }}
+      />
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="معاينة المهمة" data={previewItem} fields={previewFields} />
     </PageShell>
   );

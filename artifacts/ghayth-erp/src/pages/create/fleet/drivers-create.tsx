@@ -99,6 +99,8 @@ export default function DriversCreate() {
         <TextField
           label="الهاتف"
           required
+          type="tel"
+          inputMode="tel"
           dir="ltr"
           value={form.phone}
           onChange={(v) => setForm((f) => ({ ...f, phone: v }))}

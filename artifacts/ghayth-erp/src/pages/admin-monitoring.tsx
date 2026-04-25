@@ -4,6 +4,7 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
@@ -47,6 +48,36 @@ export default function AdminMonitoring() {
   // the dashboard this is the page that must tell them WHICH 13.
   const failedCronJobs = cronJobs.filter((j: any) => j.lastStatus === "failed" && j.isActive);
   const healthyCronJobs = cronJobs.filter((j: any) => j.lastStatus !== "failed" || !j.isActive);
+
+  const cronJobColumns: DataTableColumn<any>[] = [
+    { key: "name", header: "المهمة", searchable: true, render: (r: any) => <span className="font-medium text-xs">{r.name}</span> },
+    { key: "schedule", header: "الجدول", render: (r: any) => <span className="font-mono text-xs text-gray-500">{r.schedule}</span> },
+    { key: "lastRunAt", header: "آخر تشغيل", render: (r: any) => <span className="text-xs">{r.lastRunAt ? formatDateAr(r.lastRunAt) : "-"}</span> },
+    { key: "lastStatus", header: "الحالة", render: (r: any) => (
+      <div className="flex items-center gap-1">
+        {r.isActive ? (
+          <CheckCircle className="w-3 h-3 text-green-500" />
+        ) : (
+          <XCircle className="w-3 h-3 text-gray-400" />
+        )}
+        {r.lastStatus && <PageStatusBadge status={r.lastStatus} />}
+      </div>
+    )},
+  ];
+
+  const cronLogColumns: DataTableColumn<any>[] = [
+    { key: "jobName", header: "المهمة", searchable: true, render: (r: any) => <span className="font-medium text-xs">{r.jobName}</span> },
+    { key: "status", header: "الحالة", render: (r: any) => <PageStatusBadge status={r.status} /> },
+    { key: "duration", header: "المدة", render: (r: any) => <span className="text-xs">{r.duration ? `${r.duration}ms` : "-"}</span> },
+    { key: "createdAt", header: "التاريخ", render: (r: any) => <span className="text-xs">{formatDateAr(r.createdAt)}</span> },
+  ];
+
+  const errorColumns: DataTableColumn<any>[] = [
+    { key: "action", header: "الإجراء", searchable: true, render: (r: any) => <span className="font-medium text-xs text-red-600">{r.action}</span> },
+    { key: "entity", header: "الوحدة", render: (r: any) => <span className="text-xs">{r.entity || "-"}</span> },
+    { key: "details", header: "التفاصيل", render: (r: any) => <span className="text-xs max-w-[300px] truncate block">{typeof r.details === "object" ? JSON.stringify(r.details) : r.details || "-"}</span> },
+    { key: "createdAt", header: "التاريخ", render: (r: any) => <span className="text-xs">{formatDateAr(r.createdAt)}</span> },
+  ];
 
   return (
     <PageShell
@@ -182,67 +213,26 @@ export default function AdminMonitoring() {
         <Card>
           <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Clock className="w-4 h-4" />المهام المجدولة</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <div className="max-h-[400px] overflow-auto">
-              <table className="w-full text-sm">
-                <thead><tr className="border-b bg-gray-50 sticky top-0">
-                  <th className="p-2 text-start">المهمة</th>
-                  <th className="p-2 text-start">الجدول</th>
-                  <th className="p-2 text-start">آخر تشغيل</th>
-                  <th className="p-2 text-start">الحالة</th>
-                </tr></thead>
-                <tbody>
-                  {healthyCronJobs.map((job: any, i: number) => (
-                    <tr key={i} className="border-b hover:bg-gray-50">
-                      <td className="p-2 font-medium text-xs">{job.name}</td>
-                      <td className="p-2 font-mono text-xs text-gray-500">{job.schedule}</td>
-                      <td className="p-2 text-xs">{job.lastRunAt ? formatDateAr(job.lastRunAt) : "-"}</td>
-                      <td className="p-2">
-                        <div className="flex items-center gap-1">
-                          {job.isActive ? (
-                            <CheckCircle className="w-3 h-3 text-green-500" />
-                          ) : (
-                            <XCircle className="w-3 h-3 text-gray-400" />
-                          )}
-                          {job.lastStatus && <PageStatusBadge status={job.lastStatus} />}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {healthyCronJobs.length === 0 && (
-                    <tr><td colSpan={4} className="p-6 text-center text-gray-400">لا توجد مهام مجدولة</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={cronJobColumns}
+              data={healthyCronJobs}
+              noToolbar
+              pageSize={0}
+              emptyMessage="لا توجد مهام مجدولة"
+            />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Activity className="w-4 h-4" />آخر تنفيذات المهام</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <div className="max-h-[400px] overflow-auto">
-              <table className="w-full text-sm">
-                <thead><tr className="border-b bg-gray-50 sticky top-0">
-                  <th className="p-2 text-start">المهمة</th>
-                  <th className="p-2 text-start">الحالة</th>
-                  <th className="p-2 text-start">المدة</th>
-                  <th className="p-2 text-start">التاريخ</th>
-                </tr></thead>
-                <tbody>
-                  {recentCronLogs.map((log: any, i: number) => (
-                    <tr key={i} className="border-b hover:bg-gray-50">
-                      <td className="p-2 font-medium text-xs">{log.jobName}</td>
-                      <td className="p-2"><PageStatusBadge status={log.status} /></td>
-                      <td className="p-2 text-xs">{log.duration ? `${log.duration}ms` : "-"}</td>
-                      <td className="p-2 text-xs">{formatDateAr(log.createdAt)}</td>
-                    </tr>
-                  ))}
-                  {recentCronLogs.length === 0 && (
-                    <tr><td colSpan={4} className="p-6 text-center text-gray-400">لا توجد سجلات</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={cronLogColumns}
+              data={recentCronLogs}
+              noToolbar
+              pageSize={0}
+              emptyMessage="لا توجد سجلات"
+            />
           </CardContent>
         </Card>
       </div>
@@ -251,24 +241,12 @@ export default function AdminMonitoring() {
         <Card>
           <CardHeader><CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-red-500" />أحدث الأخطاء</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-gray-50">
-                <th className="p-2 text-start">الإجراء</th>
-                <th className="p-2 text-start">الوحدة</th>
-                <th className="p-2 text-start">التفاصيل</th>
-                <th className="p-2 text-start">التاريخ</th>
-              </tr></thead>
-              <tbody>
-                {recentErrors.map((err: any, i: number) => (
-                  <tr key={i} className="border-b hover:bg-gray-50">
-                    <td className="p-2 font-medium text-xs text-red-600">{err.action}</td>
-                    <td className="p-2 text-xs">{err.entity || "-"}</td>
-                    <td className="p-2 text-xs max-w-[300px] truncate">{typeof err.details === "object" ? JSON.stringify(err.details) : err.details || "-"}</td>
-                    <td className="p-2 text-xs">{formatDateAr(err.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              columns={errorColumns}
+              data={recentErrors}
+              noToolbar
+              pageSize={0}
+            />
           </CardContent>
         </Card>
       )}

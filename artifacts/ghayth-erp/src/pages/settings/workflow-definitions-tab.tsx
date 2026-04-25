@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Workflow, Clock, AlertTriangle, Plus, X, Save, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 export function WorkflowDefinitionsTab() {
   const { data, refetch, isLoading, isError } = useApiQuery<any>(["workflow-definitions"], "/workflows/definitions");
@@ -60,8 +60,17 @@ export function WorkflowDefinitionsTab() {
   const defs = asList(data?.data ?? data);
   const slas = asList(slaData?.data ?? slaData);
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const slaColumns: DataTableColumn<any>[] = [
+    { key: "requestType", header: "النوع", render: (r: any) => REQUEST_TYPES.find(t => t.value === r.requestType)?.label || r.requestType },
+    { key: "warningHours", header: "تنبيه", render: (r: any) => `${r.warningHours}س` },
+    { key: "deadlineHours", header: "مهلة", render: (r: any) => `${r.deadlineHours}س` },
+    { key: "escalationHours", header: "تصعيد", render: (r: any) => `${r.escalationHours}س` },
+    { key: "escalateTo", header: "تصعيد إلى", render: (r: any) => ROLES.find(role => role.value === r.escalateTo)?.label || r.escalateTo },
+    { key: "autoApproveOnTimeout", header: "تلقائي", render: (r: any) => r.autoApproveOnTimeout ? "نعم" : "لا" },
+  ];
+
+  if (isLoading) return <DataTable columns={slaColumns} data={[]} isLoading={true} searchPlaceholder={null} noToolbar />;
+  if (isError) return <DataTable columns={slaColumns} data={[]} isError={true} onRetry={() => window.location.reload()} searchPlaceholder={null} noToolbar />;
 
   const resetForm = () => {
     setForm({
@@ -201,22 +210,14 @@ export function WorkflowDefinitionsTab() {
             <Button size="sm" onClick={handleSaveSla}><Save className="h-4 w-4 me-1" />حفظ إعدادات مستوى الخدمة</Button>
 
             {slas.length > 0 && (
-              <div className="border rounded-lg overflow-hidden mt-4">
-                <table className="w-full text-sm">
-                  <thead><tr className="bg-gray-50 border-b"><th className="p-2 text-start">النوع</th><th className="p-2 text-start">تنبيه</th><th className="p-2 text-start">مهلة</th><th className="p-2 text-start">تصعيد</th><th className="p-2 text-start">تصعيد إلى</th><th className="p-2 text-start">تلقائي</th></tr></thead>
-                  <tbody>
-                    {slas.map((s: any) => (
-                      <tr key={s.id} className="border-b">
-                        <td className="p-2">{REQUEST_TYPES.find(t => t.value === s.requestType)?.label || s.requestType}</td>
-                        <td className="p-2">{s.warningHours}س</td>
-                        <td className="p-2">{s.deadlineHours}س</td>
-                        <td className="p-2">{s.escalationHours}س</td>
-                        <td className="p-2">{ROLES.find(r => r.value === s.escalateTo)?.label || s.escalateTo}</td>
-                        <td className="p-2">{s.autoApproveOnTimeout ? "نعم" : "لا"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="mt-4">
+                <DataTable
+                  columns={slaColumns}
+                  data={slas}
+                  pageSize={0}
+                  noToolbar
+                  emptyMessage="لا توجد إعدادات مهل"
+                />
               </div>
             )}
           </CardContent>

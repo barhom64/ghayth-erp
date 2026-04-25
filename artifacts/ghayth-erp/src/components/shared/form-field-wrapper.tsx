@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { UnifiedDateInput, type DateInputVariant } from "@/components/ui/unified-date-input";
+import { UnifiedDateInput, type DateInputVariant, type DateInputMode } from "@/components/ui/unified-date-input";
 import { cn } from "@/lib/utils";
 
 /**
@@ -67,6 +67,7 @@ interface TextFieldProps {
   placeholder?: string;
   dir?: "ltr" | "rtl";
   type?: string;
+  inputMode?: "text" | "tel" | "email" | "url" | "numeric" | "decimal" | "search" | "none";
   disabled?: boolean;
   hint?: ReactNode;
   className?: string;
@@ -83,6 +84,7 @@ export function TextField({
   placeholder,
   dir,
   type = "text",
+  inputMode,
   disabled,
   hint,
   className,
@@ -101,6 +103,7 @@ export function TextField({
       <Input
         id={id}
         type={type}
+        inputMode={inputMode}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
@@ -220,6 +223,7 @@ interface DateFieldProps {
   className?: string;
   id?: string;
   variant?: DateInputVariant;
+  mode?: DateInputMode;
   minDate?: string;
   maxDate?: string;
   noFuture?: boolean;
@@ -238,6 +242,7 @@ export function DateField({
   className,
   id,
   variant = "default",
+  mode,
   minDate,
   maxDate,
   noFuture,
@@ -259,6 +264,7 @@ export function DateField({
         placeholder={placeholder}
         disabled={disabled}
         variant={variant}
+        mode={mode}
         required={required}
         minDate={minDate}
         maxDate={maxDate}

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
@@ -10,7 +9,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
-import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { TextField, TextAreaField, NumberField, DateField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { VehicleSelect, EmployeeSelect, ClientSelect } from "@/components/shared/entity-selects";
 
 const DRAFT_KEY = "fleet_trips_create";
@@ -90,12 +89,8 @@ export default function TripsCreate() {
         <TextField label="إلى" required value={form.toLocation} onChange={(v) => setForm((f) => ({ ...f, toLocation: v }))} placeholder="الوجهة" error={fieldErrors.toLocation} />
         <NumberField label="المسافة (كم)" value={form.distance} onChange={(v) => setForm((f) => ({ ...f, distance: v }))} min={0} />
         <NumberField label="التكلفة" value={form.cost} onChange={(v) => setForm((f) => ({ ...f, cost: v }))} step={0.01} min={0} />
-        <FormFieldWrapper label="وقت المغادرة">
-          <Input type="datetime-local" value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} />
-        </FormFieldWrapper>
-        <FormFieldWrapper label="وقت الوصول" error={fieldErrors.endTime}>
-          <Input type="datetime-local" value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} />
-        </FormFieldWrapper>
+        <DateField label="وقت المغادرة" mode="datetime" value={form.startTime} onChange={(v) => setForm((f) => ({ ...f, startTime: v }))} />
+        <DateField label="وقت الوصول" mode="datetime" value={form.endTime} onChange={(v) => setForm((f) => ({ ...f, endTime: v }))} error={fieldErrors.endTime} />
         <FormFieldWrapper label="الحالة">
           <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
             <SelectTrigger><SelectValue /></SelectTrigger>

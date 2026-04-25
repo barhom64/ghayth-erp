@@ -124,7 +124,7 @@ export default function ApplicantsCreate() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <TextField label="الاسم الكامل" required value={form.applicantName} onChange={(v) => set("applicantName", v)} placeholder="الاسم الرباعي" error={fieldErrors.applicantName} />
             <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={(v) => set("email", v)} placeholder="email@example.com" error={fieldErrors.email} />
-            <TextField label="الهاتف" dir="ltr" value={form.phone} onChange={(v) => set("phone", v)} placeholder="+966 5xx xxx xxx" />
+            <TextField label="الهاتف" type="tel" inputMode="tel" dir="ltr" value={form.phone} onChange={(v) => set("phone", v)} placeholder="+966 5xx xxx xxx" />
           </div>
         </div>
 

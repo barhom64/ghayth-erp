@@ -105,7 +105,7 @@ export default function TenantsCreate() {
                 </Select>
               </FormFieldWrapper>
               <TextField label={isCompany ? "اسم الشركة" : "الاسم الكامل"} required value={form.name} onChange={v => set("name", v)} placeholder={isCompany ? "اسم الشركة أو المؤسسة" : "الاسم الرباعي"} error={fieldErrors.name} />
-              <TextField label="رقم الجوال" dir="ltr" value={form.phone} onChange={v => set("phone", v)} placeholder="05XXXXXXXX" error={fieldErrors.phone} />
+              <TextField label="رقم الجوال" type="tel" inputMode="tel" dir="ltr" value={form.phone} onChange={v => set("phone", v)} placeholder="05XXXXXXXX" error={fieldErrors.phone} />
               <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={v => set("email", v)} placeholder="example@email.com" />
               <FormFieldWrapper label="نوع الهوية">
                 <Select value={form.idType} onValueChange={v => set("idType", v)}>
@@ -185,7 +185,7 @@ export default function TenantsCreate() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <TextField label="اسم الكفيل / الضامن" value={form.guarantorName} onChange={v => set("guarantorName", v)} placeholder="اسم الكفيل الكامل" />
               <TextField label="رقم هوية الكفيل" dir="ltr" value={form.guarantorId} onChange={v => set("guarantorId", v)} placeholder="رقم الهوية" />
-              <TextField label="هاتف الكفيل" dir="ltr" value={form.guarantorPhone} onChange={v => set("guarantorPhone", v)} placeholder="05XXXXXXXX" />
+              <TextField label="هاتف الكفيل" type="tel" inputMode="tel" dir="ltr" value={form.guarantorPhone} onChange={v => set("guarantorPhone", v)} placeholder="05XXXXXXXX" />
               <TextField label="صلة القرابة" value={form.guarantorRelation} onChange={v => set("guarantorRelation", v)} placeholder="مثل: أخ، زميل عمل" />
             </div>
           </CardContent>
@@ -198,10 +198,10 @@ export default function TenantsCreate() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <TextField label="اسم شخص الطوارئ" value={form.emergencyName} onChange={v => set("emergencyName", v)} />
-              <TextField label="هاتف الطوارئ" dir="ltr" value={form.emergencyContact} onChange={v => set("emergencyContact", v)} />
+              <TextField label="هاتف الطوارئ" type="tel" inputMode="tel" dir="ltr" value={form.emergencyContact} onChange={v => set("emergencyContact", v)} />
               <TextField label="عنوان السكن السابق" value={form.previousAddress} onChange={v => set("previousAddress", v)} />
               <TextField label="اسم المؤجر السابق" value={form.previousLandlord} onChange={v => set("previousLandlord", v)} />
-              <TextField label="هاتف المؤجر السابق" dir="ltr" value={form.previousLandlordPhone} onChange={v => set("previousLandlordPhone", v)} />
+              <TextField label="هاتف المؤجر السابق" type="tel" inputMode="tel" dir="ltr" value={form.previousLandlordPhone} onChange={v => set("previousLandlordPhone", v)} />
             </div>
           </CardContent>
         </Card>

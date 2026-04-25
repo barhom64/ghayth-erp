@@ -3,8 +3,8 @@ import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -89,26 +89,20 @@ export default function StoreOrderDetailPage() {
         <Card>
           <CardHeader><CardTitle>بنود الطلب</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-gray-50">
-                <th className="p-3 text-start">#</th>
-                <th className="p-3 text-start">المنتج</th>
-                <th className="p-3 text-start">الكمية</th>
-                <th className="p-3 text-start">السعر</th>
-                <th className="p-3 text-start">الإجمالي</th>
-              </tr></thead>
-              <tbody>
-                {items.map((item: any, i: number) => (
-                  <tr key={i} className="border-b">
-                    <td className="p-3 text-gray-400">{i + 1}</td>
-                    <td className="p-3 font-medium">{item.name || item.description || "-"}</td>
-                    <td className="p-3">{item.quantity || 1}</td>
-                    <td className="p-3">{formatCurrency(Number(item.price || item.unitPrice || 0))}</td>
-                    <td className="p-3 font-bold">{formatCurrency(Number(item.total || (item.quantity || 1) * (item.price || item.unitPrice || 0)))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              columns={[
+                { key: "_index", header: "#", render: (_r: any, i: number) => <span className="text-gray-400">{i + 1}</span> },
+                { key: "name", header: "المنتج", render: (r: any) => <span className="font-medium">{r.name || r.description || "-"}</span> },
+                { key: "quantity", header: "الكمية", sortable: true, render: (r: any) => r.quantity || 1 },
+                { key: "price", header: "السعر", sortable: true, render: (r: any) => formatCurrency(Number(r.price || r.unitPrice || 0)) },
+                { key: "total", header: "الإجمالي", sortable: true, render: (r: any) => <span className="font-bold">{formatCurrency(Number(r.total || (r.quantity || 1) * (r.price || r.unitPrice || 0)))}</span> },
+              ] satisfies DataTableColumn<any>[]}
+              data={items}
+              pageSize={0}
+              noToolbar
+              searchPlaceholder={null}
+              emptyMessage="لا توجد بنود"
+            />
           </CardContent>
         </Card>
       )}

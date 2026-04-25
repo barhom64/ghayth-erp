@@ -192,6 +192,19 @@ function MonitorTab() {
   const filterRows = (rows: any[]) =>
     statusFilter === "all" ? rows : rows.filter((r) => r.status === statusFilter);
 
+  const recentMsgColumns: DataTableColumn<any>[] = [
+    { key: "recipient", header: "المستلم", ltr: true, render: (r: any) => <span className="max-w-[100px] truncate inline-block">{r.recipient}</span> },
+    { key: "status", header: "الحالة", render: (r: any) => (
+      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+        r.status === "sent" ? "bg-green-100 text-green-700" :
+        r.status === "failed" ? "bg-red-100 text-red-700" :
+        "bg-amber-100 text-amber-700"
+      }`}>{r.status}</span>
+    ) },
+    { key: "attemptCount", header: "المحاولات", align: "center", render: (r: any) => r.attemptCount ?? 0 },
+    { key: "createdAt", header: "التاريخ", ltr: true, render: (r: any) => <span className="text-gray-400">{formatDateAr(r.createdAt)}</span> },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -328,35 +341,14 @@ function MonitorTab() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">آخر الرسائل النصية</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b text-gray-500">
-                        <th className="text-start pb-1">المستلم</th>
-                        <th className="text-start pb-1">الحالة</th>
-                        <th className="text-start pb-1">المحاولات</th>
-                        <th className="text-start pb-1">التاريخ</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filterRows(recentSms).map((row: any) => (
-                        <tr key={row.id} className="border-b border-gray-50 py-1">
-                          <td className="py-1 max-w-[100px] truncate" dir="ltr">{row.recipient}</td>
-                          <td className="py-1">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                              row.status === "sent" ? "bg-green-100 text-green-700" :
-                              row.status === "failed" ? "bg-red-100 text-red-700" :
-                              "bg-amber-100 text-amber-700"
-                            }`}>{row.status}</span>
-                          </td>
-                          <td className="py-1 text-center">{row.attemptCount ?? 0}</td>
-                          <td className="py-1 text-gray-400" dir="ltr">{formatDateAr(row.createdAt)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              <CardContent className="p-0">
+                <DataTable
+                  columns={recentMsgColumns}
+                  data={filterRows(recentSms)}
+                  noToolbar
+                  pageSize={0}
+                  emptyMessage="لا توجد رسائل"
+                />
               </CardContent>
             </Card>
           )}
@@ -365,35 +357,14 @@ function MonitorTab() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">آخر رسائل واتساب</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b text-gray-500">
-                        <th className="text-start pb-1">المستلم</th>
-                        <th className="text-start pb-1">الحالة</th>
-                        <th className="text-start pb-1">المحاولات</th>
-                        <th className="text-start pb-1">التاريخ</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filterRows(recentWa).map((row: any) => (
-                        <tr key={row.id} className="border-b border-gray-50 py-1">
-                          <td className="py-1 max-w-[100px] truncate" dir="ltr">{row.recipient}</td>
-                          <td className="py-1">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                              row.status === "sent" ? "bg-green-100 text-green-700" :
-                              row.status === "failed" ? "bg-red-100 text-red-700" :
-                              "bg-amber-100 text-amber-700"
-                            }`}>{row.status}</span>
-                          </td>
-                          <td className="py-1 text-center">{row.attemptCount ?? 0}</td>
-                          <td className="py-1 text-gray-400" dir="ltr">{formatDateAr(row.createdAt)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              <CardContent className="p-0">
+                <DataTable
+                  columns={recentMsgColumns}
+                  data={filterRows(recentWa)}
+                  noToolbar
+                  pageSize={0}
+                  emptyMessage="لا توجد رسائل"
+                />
               </CardContent>
             </Card>
           )}
