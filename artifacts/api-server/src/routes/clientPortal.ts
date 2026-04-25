@@ -458,10 +458,8 @@ protectedRouter.post("/tickets/:id/replies", withPortalScope(async (req, res) =>
        VALUES ($1, $2, 'client', 'العميل')`,
       [Number(id), message]
     );
-    await rawExecute(
-      `UPDATE support_tickets SET status = 'in_progress', "updatedAt" = NOW() WHERE id = $1 AND status = 'open'`,
-      [Number(id)]
-    );
+    const { supportEngine } = await import("../lib/engines/index.js");
+    await supportEngine.markTicketInProgress(Number(id));
     createAuditLog({
       companyId: scope.companyId, userId: scope.accountId,
       action: "create", entity: "ticket_replies", entityId: Number(id),
@@ -487,11 +485,19 @@ protectedRouter.post("/tickets", withPortalScope(async (req, res) => {
     const { title, description, category, invoiceId, contractId } = body;
     const priority = body.priority ?? "medium";
     const ref = `TKT-${Date.now().toString(36).toUpperCase()}`;
-    const { insertId } = await portalScopedExecute(scope,
-      `INSERT INTO support_tickets (ref, title, description, category, priority, status, "clientId", "companyId", "invoiceId", "contractId")
-       VALUES ($1, $2, $3, $4, $5, 'open', $6, $7, $8, $9)`,
-      [ref, title, description ?? null, category ?? "general", priority, clientId, companyId, invoiceId || null, contractId || null]
-    );
+    assertPortalScopeInParams(scope, [clientId, companyId]);
+    const { supportEngine } = await import("../lib/engines/index.js");
+    const { insertId } = await supportEngine.createPortalTicket({
+      companyId,
+      clientId,
+      ref,
+      title,
+      description: description ?? null,
+      category: category ?? "general",
+      priority,
+      invoiceId: invoiceId || null,
+      contractId: contractId || null,
+    });
     const [ticket] = await portalScopedQuery<any>(scope,
       `SELECT id, ref, title, status, priority, category, "invoiceId", "contractId", "createdAt" FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
       [clientId, companyId, insertId]

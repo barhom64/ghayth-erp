@@ -11,7 +11,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent, getLegalResponsible, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { eventBus } from "../lib/eventBus.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
@@ -2411,9 +2411,6 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
             { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
             { id: insertId, purchasePrice: Number(b.purchasePrice), name: b.name }
           );
-          const assetCode = await getAccountCodeFromMapping(scope.companyId, "property_building_asset", "debit", "1520");
-          const depExpCode = await getAccountCodeFromMapping(scope.companyId, "property_depreciation", "debit", "6100");
-          const accDepCode = await getAccountCodeFromMapping(scope.companyId, "property_acc_depreciation", "credit", "1590");
           const usefulYears = Number(b.usefulLifeYears) || 20;
           const salvage = Number(b.salvageValue) || 0;
           propertiesEngine.requestFixedAssetRegistration(
@@ -2427,9 +2424,6 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
               purchaseCost: Number(b.purchasePrice),
               salvageValue: salvage,
               usefulLifeYears: usefulYears,
-              assetAccountCode: assetCode,
-              depreciationAccountCode: depExpCode,
-              accDepreciationAccountCode: accDepCode,
             }
           );
           createNotification({

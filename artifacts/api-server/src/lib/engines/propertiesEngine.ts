@@ -304,16 +304,22 @@ class PropertiesEngineImpl implements DomainEngine {
       purchaseCost: number;
       salvageValue: number;
       usefulLifeYears: number;
-      assetAccountCode: string;
-      depreciationAccountCode: string;
-      accDepreciationAccountCode: string;
     }
   ) {
+    const [assetAccountCode, depreciationAccountCode, accDepreciationAccountCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "debit", "1520"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_depreciation", "debit", "6100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_acc_depreciation", "credit", "1590"),
+    ]);
+
     eventBus.emit("finance.fixed_asset.requested", {
       companyId: ctx.companyId,
       branchId: ctx.branchId,
       userId: ctx.createdBy,
       category: "عقارات",
+      assetAccountCode,
+      depreciationAccountCode,
+      accDepreciationAccountCode,
       ...asset,
     });
     return { requested: true };

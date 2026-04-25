@@ -10,7 +10,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createAuditLog, createNotification, emitEvent, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { eventBus } from "../lib/eventBus.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
@@ -183,9 +183,6 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
             { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
             { id: insertId, purchasePrice: Number(b.purchasePrice), plateNumber, make: b.make, model: b.model }
           );
-          const depExpCode = await getAccountCodeFromMapping(scope.companyId, "fleet_depreciation", "debit", "6100");
-          const accDepCode = await getAccountCodeFromMapping(scope.companyId, "fleet_acc_depreciation", "credit", "1590");
-          const assetCode = await getAccountCodeFromMapping(scope.companyId, "fleet_vehicle_asset", "debit", "1510");
           const vName = `${plateNumber} ${b.make || ""} ${b.model || ""}`.trim();
           const usefulYears = Number(b.usefulLifeYears) || 5;
           const salvage = Number(b.salvageValue) || 0;
@@ -200,9 +197,6 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
               purchaseCost: Number(b.purchasePrice),
               salvageValue: salvage,
               usefulLifeYears: usefulYears,
-              assetAccountCode: assetCode,
-              depreciationAccountCode: depExpCode,
-              accDepreciationAccountCode: accDepCode,
             }
           );
           createNotification({

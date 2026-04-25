@@ -10,6 +10,7 @@
     "lint:patterns": "node scripts/src/lint-patterns.mjs",
     "audit:routes": "node scripts/src/audit-routes.mjs",
     "audit:schema": "node scripts/src/audit-schema-drift.mjs",
+    "audit:boundaries": "node scripts/src/audit-domain-boundaries.mjs",
     "guard": "bash scripts/guard.sh",
     "postinstall": "bash scripts/install-hooks.sh",
     "db:bootstrap": "bash db/bootstrap.sh",

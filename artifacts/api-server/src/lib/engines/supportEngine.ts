@@ -61,6 +61,31 @@ class SupportEngineImpl implements DomainEngine {
     );
     return { insertId };
   }
+
+  async createPortalTicket(params: {
+    companyId: number;
+    clientId: number;
+    ref: string;
+    title: string;
+    description: string | null;
+    category: string;
+    priority: string;
+    invoiceId: number | null;
+    contractId: number | null;
+  }): Promise<{ insertId: number }> {
+    const { insertId } = await rawExecute(
+      `INSERT INTO support_tickets (ref, title, description, category, priority, status, "clientId", "companyId", "invoiceId", "contractId") VALUES ($1, $2, $3, $4, $5, 'open', $6, $7, $8, $9)`,
+      [params.ref, params.title, params.description, params.category, params.priority, params.clientId, params.companyId, params.invoiceId, params.contractId]
+    );
+    return { insertId };
+  }
+
+  async markTicketInProgress(ticketId: number): Promise<void> {
+    await rawExecute(
+      `UPDATE support_tickets SET status = 'in_progress', "updatedAt" = NOW() WHERE id = $1 AND status = 'open'`,
+      [ticketId]
+    );
+  }
 }
 
 export const supportEngine = new SupportEngineImpl();

@@ -10,6 +10,7 @@
 #   2. Banned legacy patterns                   → lint:patterns
 #   3. Pages built but never wired to a route   → audit:routes
 #   4. Raw SQL referencing dropped/typo columns → audit:schema
+#   5. Cross-domain SQL writes (boundary leak)  → audit:domain-boundaries
 #
 # Run directly:
 #
@@ -49,10 +50,11 @@ run_step() {
   fi
 }
 
-run_step "typecheck"      pnpm -s run typecheck
-run_step "lint:patterns"  pnpm -s run lint:patterns
-run_step "audit:routes"   node scripts/src/audit-routes.mjs
-run_step "audit:schema"   node scripts/src/audit-schema-drift.mjs
+run_step "typecheck"          pnpm -s run typecheck
+run_step "lint:patterns"      pnpm -s run lint:patterns
+run_step "audit:routes"       node scripts/src/audit-routes.mjs
+run_step "audit:schema"       node scripts/src/audit-schema-drift.mjs
+run_step "audit:boundaries"   node scripts/src/audit-domain-boundaries.mjs
 
 END=$(date +%s)
 echo

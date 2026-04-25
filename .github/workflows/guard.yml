@@ -39,5 +39,5 @@ jobs:
           # inside Actions but we skip it explicitly to keep the log clean.
           HUSKY: '0'
 
-      - name: Run guard suite (typecheck + lint:patterns + audit:routes + audit:schema)
+      - name: Run guard suite (typecheck + lint:patterns + audit:routes + audit:schema + audit:boundaries)
         run: bash scripts/guard.sh
