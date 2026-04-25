@@ -5,7 +5,7 @@
 
 import { financialEngine } from "./financialEngine.js";
 import { rawQuery, rawExecute } from "../rawdb.js";
-import { eventBus } from "../eventBus.js";
+import { registerCrossDomainHandler } from "../eventBus.js";
 import type { DomainEngine } from "./domainEngineBase.js";
 
 interface HRGLContext {
@@ -391,20 +391,15 @@ class HREngineImpl implements DomainEngine {
 
 export const hrEngine = new HREngineImpl();
 
-// Listen for cross-domain deduction requests
-eventBus.on("fleet.violation.deduction_requested", (payload: any) => {
+registerCrossDomainHandler("fleet.violation.deduction_requested", async (payload) => {
   if (!payload?.companyId || !payload?.employeeId || !payload?.amount) return;
-  hrEngine
-    .createPayrollDeduction({
-      companyId: payload.companyId,
-      employeeId: payload.employeeId,
-      type: "traffic_violation",
-      amount: payload.amount,
-      reason: payload.reason ?? "خصم مخالفة مرورية",
-      sourceType: "fleet_traffic_violations",
-      sourceId: payload.violationId,
-    })
-    .catch((err) => {
-      console.error("[HREngine] Failed to create payroll deduction from fleet event:", err);
-    });
+  await hrEngine.createPayrollDeduction({
+    companyId: payload.companyId,
+    employeeId: payload.employeeId as number,
+    type: "traffic_violation",
+    amount: payload.amount as number,
+    reason: (payload.reason as string) ?? "خصم مخالفة مرورية",
+    sourceType: "fleet_traffic_violations",
+    sourceId: payload.violationId as number,
+  });
 });
