@@ -20,8 +20,6 @@ import {
   getManagerAssignmentId,
   initiateApprovalChain,
   processApprovalStep,
-  createGuardedJournalEntry,
-  getAccountCodeFromMapping,
   checkFinancialPeriodOpen,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -2378,30 +2376,21 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     });
 
     try {
-      const [salaryExpenseCode, gosiExpenseCode, overtimeExpenseCode, bankCode, gosiPayableCode, deductionsPayableCode] = await Promise.all([
-        getAccountCodeFromMapping(scope.companyId, "payroll_salary_expense", "debit", "5100"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_gosi_expense", "debit", "5110"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_overtime_expense", "debit", "5120"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_bank_payout", "credit", "1100"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_gosi_payable", "credit", "2200"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_deductions_payable", "credit", "2210"),
-      ]);
-
-      await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref: `PAYROLL-${targetPeriod}`,
-        description: `صرف رواتب ${targetPeriod} – ${lines.length} موظف`,
-        lines: [
-          { accountCode: salaryExpenseCode, debit: totalGross, credit: 0 },
-          { accountCode: overtimeExpenseCode, debit: totalOvertime, credit: 0 },
-          { accountCode: gosiExpenseCode, debit: Math.round(totalGosiEmployer * 100) / 100, credit: 0 },
-          { accountCode: bankCode, debit: 0, credit: totalBankPayout },
-          { accountCode: gosiPayableCode, debit: 0, credit: totalGosiPayable },
-          { accountCode: deductionsPayableCode, debit: 0, credit: totalOtherDeductions },
-        ].filter(l => l.debit > 0 || l.credit > 0),
-      }, { table: "payroll_runs", id: runId });
+      const { hrEngine } = await import("../lib/engines/index.js");
+      await hrEngine.postPayrollRunGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+        {
+          runId,
+          period: targetPeriod,
+          employeeCount: lines.length,
+          totalGross,
+          totalOvertime,
+          totalGosiEmployer,
+          totalBankPayout,
+          totalGosiPayable,
+          totalOtherDeductions,
+        }
+      );
     } catch (journalErr) {
       throw new IntegrationError(
         "تم صرف الرواتب لكن فشل القيد المحاسبي. راجع المدير المالي",
@@ -3812,52 +3801,24 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
       const totalGosiPayable = totalGosiEmployee + totalGosiEmployer;
       const totalBankPayout = Math.max(0, totalNet);
 
-      const [salaryExpenseCode, gosiExpenseCode, bankCode, gosiPayableCode] = await Promise.all([
-        getAccountCodeFromMapping(scope.companyId, "payroll_salary_expense", "debit", "5100"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_gosi_expense", "debit", "5110"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_bank_payout", "credit", "1100"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_gosi_payable", "credit", "2200"),
-      ]);
-
-      const jlLines = [
-        { code: salaryExpenseCode, debit: totalGross, credit: 0, desc: "مصاريف رواتب" },
-        { code: gosiExpenseCode, debit: Math.round(totalGosiEmployer * 100) / 100, credit: 0, desc: "تأمينات اجتماعية صاحب عمل" },
-        { code: bankCode, debit: 0, credit: totalBankPayout, desc: "صرف رواتب — بنك" },
-        { code: gosiPayableCode, debit: 0, credit: Math.round(totalGosiPayable * 100) / 100, desc: "تأمينات اجتماعية مستحقة" },
-      ].filter(l => l.debit > 0 || l.credit > 0);
-
-      const totalJeDebit = jlLines.reduce((s, l) => s + l.debit, 0);
-      const totalJeCredit = jlLines.reduce((s, l) => s + l.credit, 0);
-      if (Math.abs(totalJeDebit - totalJeCredit) > 0.01) {
-        throw new ValidationError(
-          `لا يمكن ترحيل الرواتب: القيد المحاسبي غير متوازن (مدين=${totalJeDebit.toFixed(2)} ≠ دائن=${totalJeCredit.toFixed(2)})`,
-          { meta: { totalJeDebit, totalJeCredit } },
-        );
-      }
-
       const [updatedRun] = await rawQuery<any>(
         `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL RETURNING *`,
         [status, Number(req.params.id), scope.companyId]
       );
       if (!updatedRun) throw new Error("دورة الرواتب غير موجودة");
 
-      const jeRef = `PAYROLL-POST-${period}`;
-      await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref: jeRef,
-        description: `قيد إقفال رواتب ${period}`,
-        type: "payroll",
-        sourceType: "payroll_run",
-        sourceId: Number(req.params.id),
-        lines: jlLines.map(l => ({
-          accountCode: l.code,
-          debit: l.debit,
-          credit: l.credit,
-          description: l.desc,
-        })),
-      }, { table: "payroll_runs", id: Number(req.params.id) });
+      const { hrEngine } = await import("../lib/engines/index.js");
+      await hrEngine.postPayrollPostGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+        {
+          runId: Number(req.params.id),
+          period,
+          totalGross,
+          totalGosiEmployer,
+          totalBankPayout,
+          totalGosiPayable,
+        }
+      );
 
       // Register monthly GOSI submission obligation (due 14th of NEXT month)
       try {
@@ -6147,30 +6108,13 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
       throw new ValidationError("لا توجد مبالغ استحقاق لاحتسابها");
     }
 
-    const [leaveExpenseCode, leaveLiabilityCode, eosExpenseCode, eosLiabilityCode] = await Promise.all([
-      getAccountCodeFromMapping(scope.companyId, "hr_leave_accrual_expense", "debit", "5120"),
-      getAccountCodeFromMapping(scope.companyId, "hr_leave_accrual_liability", "credit", "2220"),
-      getAccountCodeFromMapping(scope.companyId, "hr_eos_accrual_expense", "debit", "5130"),
-      getAccountCodeFromMapping(scope.companyId, "hr_eos_accrual_liability", "credit", "2230"),
-    ]);
-
-    const lines = [
-      { accountCode: leaveExpenseCode, debit: totalLeaveAccrual, credit: 0 },
-      { accountCode: eosExpenseCode, debit: totalEosAccrual, credit: 0 },
-      { accountCode: leaveLiabilityCode, debit: 0, credit: totalLeaveAccrual },
-      { accountCode: eosLiabilityCode, debit: 0, credit: totalEosAccrual },
-    ].filter((l) => l.debit > 0 || l.credit > 0);
-
     let journalId: number | null = null;
     try {
-      journalId = await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref,
-        description: `استحقاقات شهرية: إجازات ${totalLeaveAccrual} + نهاية خدمة ${totalEosAccrual} (${employees.length} موظف)`,
-        lines,
-      }, { table: "journal_entries", id: 0 });
+      const { hrEngine } = await import("../lib/engines/index.js");
+      journalId = await hrEngine.postMonthlyAccrualsGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+        { ref, period: targetPeriod, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length }
+      );
     } catch (journalErr) {
       throw new IntegrationError("فشل تسجيل قيد الاستحقاقات", {
         meta: { integration: "journal", period: targetPeriod },

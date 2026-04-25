@@ -15,9 +15,7 @@ import { criticalPathLength } from "../lib/algorithms.js";
 import {
   createNotification,
   createAuditLog,
-  createGuardedJournalEntry,
   checkFinancialPeriodOpen,
-  getAccountCodeFromMapping,
   emitEvent,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -1801,63 +1799,11 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
             ]
           ).catch(() => {});
         } else {
-          const srcType: string = String(
-            b.sourceType || b.category || "cash"
-          ).toLowerCase();
-          let creditFallback = "1100"; // cash default
-          if (
-            srcType === "ap" ||
-            srcType === "vendor" ||
-            srcType === "supplier" ||
-            srcType === "invoice"
-          )
-            creditFallback = "2100";
-          else if (
-            srcType === "inventory" ||
-            srcType === "material" ||
-            srcType === "materials" ||
-            srcType === "stock"
-          )
-            creditFallback = "1300";
-
-          const debitCode = await getAccountCodeFromMapping(
-            scope.companyId,
-            "project_wip",
-            "debit",
-            "1350"
+          const { projectsEngine } = await import("../lib/engines/index.js");
+          journalEntryId = await projectsEngine.postProjectCostGL(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: (scope as any).activeAssignmentId ?? scope.userId },
+            { id: insertId, projectId, projectName: project.name, amount, description: b.description, sourceType: b.sourceType || b.category }
           );
-          const creditCode = await getAccountCodeFromMapping(
-            scope.companyId,
-            "project_wip",
-            "credit",
-            creditFallback
-          );
-
-          journalEntryId = await createGuardedJournalEntry({
-            companyId: scope.companyId,
-            branchId: scope.branchId,
-            createdBy: (scope as any).activeAssignmentId ?? scope.userId,
-            ref: `PROJ-COST-${insertId}`,
-            description: `تكلفة مشروع "${project.name}" — ${b.description}`,
-            sourceType: "project_cost",
-            sourceId: insertId,
-            operationType: "project_wip",
-            lines: [
-              {
-                accountCode: debitCode,
-                debit: amount,
-                credit: 0,
-                projectId,
-                description: b.description,
-              },
-              {
-                accountCode: creditCode,
-                debit: 0,
-                credit: amount,
-                projectId,
-              },
-            ],
-          }, { table: "project_costs", id: insertId });
         }
       }
     } catch (glErr) {
@@ -1925,43 +1871,11 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
             `[projects-gl] project close ${projectId}: financial period "${period.periodName}" is closed — GL posting skipped`
           );
         } else {
-          const debitCode = await getAccountCodeFromMapping(
-            scope.companyId,
-            "project_cost_transfer",
-            "debit",
-            "5225"
+          const { projectsEngine } = await import("../lib/engines/index.js");
+          journalEntryId = await projectsEngine.postProjectClosureGL(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: (scope as any).activeAssignmentId ?? scope.userId },
+            { projectId, projectName: project.name, totalWip }
           );
-          const creditCode = await getAccountCodeFromMapping(
-            scope.companyId,
-            "project_cost_transfer",
-            "credit",
-            "1350"
-          );
-          journalEntryId = await createGuardedJournalEntry({
-            companyId: scope.companyId,
-            branchId: scope.branchId,
-            createdBy: (scope as any).activeAssignmentId ?? scope.userId,
-            ref: `PROJ-CLOSE-${projectId}`,
-            description: `إقفال مشروع "${project.name}" — تحويل WIP ${totalWip.toFixed(2)} ريال إلى تكلفة المشاريع`,
-            sourceType: "project_closure",
-            sourceId: projectId,
-            operationType: "project_cost_transfer",
-            lines: [
-              {
-                accountCode: debitCode,
-                debit: totalWip,
-                credit: 0,
-                projectId,
-                description: "تحويل WIP إلى تكلفة المشروع",
-              },
-              {
-                accountCode: creditCode,
-                debit: 0,
-                credit: totalWip,
-                projectId,
-              },
-            ],
-          }, { table: "projects", id: projectId });
         }
       } catch (glErr) {
         console.error(

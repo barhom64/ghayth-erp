@@ -103,6 +103,42 @@ class LegalEngineImpl implements DomainEngine {
       ],
     });
   }
+  async postLegalSessionFeeGL(
+    ctx: LegalGLContext,
+    session: {
+      id: number;
+      caseTitle: string;
+      sessionDate: string;
+      billingAmount: number;
+      vatAmount: number;
+    }
+  ) {
+    const totalWithVat = session.billingAmount + session.vatAmount;
+    const [feeExpenseCode, vatReceivableCode, apCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "legal_fee", "debit", "5400"),
+      financialEngine.resolveAccountCode(ctx.companyId, "legal_fee", "credit", "1400"),
+      financialEngine.resolveAccountCode(ctx.companyId, "legal_fee_payable", "credit", "2100"),
+    ]);
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `LEGAL-FEE-${session.id}`,
+      description: `أتعاب قانونية / ${session.caseTitle} / جلسة ${session.sessionDate} / ${session.billingAmount.toLocaleString()} ريال`,
+      type: "general",
+      sourceType: "legal_sessions",
+      sourceId: session.id,
+      sourceKey: `legal:session_fee:${session.id}`,
+      guardTable: "legal_sessions",
+      guardId: session.id,
+      lines: [
+        { accountCode: feeExpenseCode, debit: session.billingAmount, credit: 0 },
+        { accountCode: vatReceivableCode, debit: session.vatAmount, credit: 0 },
+        { accountCode: apCode, debit: 0, credit: totalWithVat },
+      ],
+    });
+  }
 }
 
 export const legalEngine = new LegalEngineImpl();

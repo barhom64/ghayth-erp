@@ -10,7 +10,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { slaDeadlineForPriority, haversineKm, loadBalanceAssign } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent, createGuardedJournalEntry, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 const router = Router();
 router.use(authMiddleware);
@@ -467,21 +467,11 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
 
       const billableAmount = Number(b.billableAmount || 0);
       if (billableAmount > 0 && ticket.clientId) {
-        const arCode = await getAccountCodeFromMapping(scope.companyId, "support_ar", "debit", "1200");
-        const serviceRevenueCode = await getAccountCodeFromMapping(scope.companyId, "support_service_revenue", "credit", "4300");
-        await createGuardedJournalEntry({
-          companyId: scope.companyId,
-          branchId: scope.branchId || 0,
-          createdBy: scope.userId,
-          ref: `SUPPORT-${ticket.ref}`,
-          description: `قيد خدمة دعم فني — تذكرة ${ticket.ref}`,
-          sourceType: "support_ticket",
-          sourceId: ticketId,
-          lines: [
-            { accountCode: arCode, debit: billableAmount, credit: 0, description: `ذمم مدينة — دعم فني ${ticket.ref}`, clientId: ticket.clientId },
-            { accountCode: serviceRevenueCode, debit: 0, credit: billableAmount, description: `إيراد خدمة دعم — ${ticket.ref}`, clientId: ticket.clientId },
-          ],
-        }, { table: "support_tickets", id: ticketId });
+        const { supportEngine } = await import("../lib/engines/index.js");
+        await supportEngine.postBillingGL(
+          { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+          { id: ticketId, ref: ticket.ref, clientId: ticket.clientId, billableAmount }
+        );
       }
 
       // Actually queue the satisfaction survey (used to just be a console.log).

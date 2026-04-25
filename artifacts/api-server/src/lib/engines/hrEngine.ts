@@ -231,6 +231,143 @@ class HREngineImpl implements DomainEngine {
     });
   }
 
+  async postPayrollRunGL(
+    ctx: HRGLContext,
+    payroll: {
+      runId: number;
+      period: string;
+      employeeCount: number;
+      totalGross: number;
+      totalOvertime: number;
+      totalGosiEmployer: number;
+      totalBankPayout: number;
+      totalGosiPayable: number;
+      totalOtherDeductions: number;
+    }
+  ) {
+    const [salaryExpenseCode, gosiExpenseCode, overtimeExpenseCode, bankCode, gosiPayableCode, deductionsPayableCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_salary_expense", "debit", "5100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_expense", "debit", "5110"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_overtime_expense", "debit", "5120"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_bank_payout", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_payable", "credit", "2200"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_deductions_payable", "credit", "2210"),
+    ]);
+
+    const lines = [
+      { accountCode: salaryExpenseCode, debit: payroll.totalGross, credit: 0 },
+      { accountCode: overtimeExpenseCode, debit: payroll.totalOvertime, credit: 0 },
+      { accountCode: gosiExpenseCode, debit: Math.round(payroll.totalGosiEmployer * 100) / 100, credit: 0 },
+      { accountCode: bankCode, debit: 0, credit: payroll.totalBankPayout },
+      { accountCode: gosiPayableCode, debit: 0, credit: payroll.totalGosiPayable },
+      { accountCode: deductionsPayableCode, debit: 0, credit: payroll.totalOtherDeductions },
+    ].filter(l => l.debit > 0 || l.credit > 0);
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `PAYROLL-${payroll.period}`,
+      description: `صرف رواتب ${payroll.period} – ${payroll.employeeCount} موظف`,
+      type: "general",
+      sourceType: "payroll_runs",
+      sourceId: payroll.runId,
+      sourceKey: `hr:payroll_run:${payroll.runId}`,
+      guardTable: "payroll_runs",
+      guardId: payroll.runId,
+      lines,
+    });
+  }
+
+  async postPayrollPostGL(
+    ctx: HRGLContext,
+    payroll: {
+      runId: number;
+      period: string;
+      totalGross: number;
+      totalGosiEmployer: number;
+      totalBankPayout: number;
+      totalGosiPayable: number;
+    }
+  ) {
+    const [salaryExpenseCode, gosiExpenseCode, bankCode, gosiPayableCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_salary_expense", "debit", "5100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_expense", "debit", "5110"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_bank_payout", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_payable", "credit", "2200"),
+    ]);
+
+    const jlLines = [
+      { accountCode: salaryExpenseCode, debit: payroll.totalGross, credit: 0, description: "مصاريف رواتب" },
+      { accountCode: gosiExpenseCode, debit: Math.round(payroll.totalGosiEmployer * 100) / 100, credit: 0, description: "تأمينات اجتماعية صاحب عمل" },
+      { accountCode: bankCode, debit: 0, credit: payroll.totalBankPayout, description: "صرف رواتب — بنك" },
+      { accountCode: gosiPayableCode, debit: 0, credit: Math.round(payroll.totalGosiPayable * 100) / 100, description: "تأمينات اجتماعية مستحقة" },
+    ].filter(l => l.debit > 0 || l.credit > 0);
+
+    const totalJeDebit = jlLines.reduce((s, l) => s + l.debit, 0);
+    const totalJeCredit = jlLines.reduce((s, l) => s + l.credit, 0);
+    if (Math.abs(totalJeDebit - totalJeCredit) > 0.01) {
+      throw new Error(
+        `لا يمكن ترحيل الرواتب: القيد المحاسبي غير متوازن (مدين=${totalJeDebit.toFixed(2)} ≠ دائن=${totalJeCredit.toFixed(2)})`
+      );
+    }
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `PAYROLL-POST-${payroll.period}`,
+      description: `قيد إقفال رواتب ${payroll.period}`,
+      type: "payroll",
+      sourceType: "payroll_run",
+      sourceId: payroll.runId,
+      sourceKey: `hr:payroll_post:${payroll.runId}`,
+      guardTable: "payroll_runs",
+      guardId: payroll.runId,
+      lines: jlLines,
+    });
+  }
+
+  async postMonthlyAccrualsGL(
+    ctx: HRGLContext,
+    accruals: {
+      ref: string;
+      period: string;
+      totalLeaveAccrual: number;
+      totalEosAccrual: number;
+      employeeCount: number;
+    }
+  ) {
+    const [leaveExpenseCode, leaveLiabilityCode, eosExpenseCode, eosLiabilityCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "hr_leave_accrual_expense", "debit", "5120"),
+      financialEngine.resolveAccountCode(ctx.companyId, "hr_leave_accrual_liability", "credit", "2220"),
+      financialEngine.resolveAccountCode(ctx.companyId, "hr_eos_accrual_expense", "debit", "5130"),
+      financialEngine.resolveAccountCode(ctx.companyId, "hr_eos_accrual_liability", "credit", "2230"),
+    ]);
+
+    const lines = [
+      { accountCode: leaveExpenseCode, debit: accruals.totalLeaveAccrual, credit: 0 },
+      { accountCode: eosExpenseCode, debit: accruals.totalEosAccrual, credit: 0 },
+      { accountCode: leaveLiabilityCode, debit: 0, credit: accruals.totalLeaveAccrual },
+      { accountCode: eosLiabilityCode, debit: 0, credit: accruals.totalEosAccrual },
+    ].filter(l => l.debit > 0 || l.credit > 0);
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: accruals.ref,
+      description: `استحقاقات شهرية: إجازات ${accruals.totalLeaveAccrual} + نهاية خدمة ${accruals.totalEosAccrual} (${accruals.employeeCount} موظف)`,
+      type: "general",
+      sourceType: "hr_monthly_accruals",
+      sourceId: 0,
+      sourceKey: `hr:monthly_accruals:${ctx.companyId}:${accruals.period}`,
+      guardTable: "journal_entries",
+      guardId: 0,
+      lines,
+    });
+  }
+
   /**
    * Handle a payroll deduction request from another domain (e.g. Fleet).
    * This is the proper boundary — only HR writes to payroll_deductions.

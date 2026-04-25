@@ -9,7 +9,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, createGuardedJournalEntry, emitEvent, getLegalResponsible, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { z } from "zod";
@@ -902,26 +902,11 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
         invoiceError = "فشل إنشاء فاتورة الأتعاب";
       }
 
-      // Auto journal entry for legal fees. Pull account codes from
-      // accounting_mappings so orgs with non-default CoA don't silently post
-      // to phantom accounts. Falls back to the historical default codes if
-      // no mapping exists so existing deployments keep working.
-      const totalWithVat = billingAmount + vatAmount;
-      const feeExpenseCode = await getAccountCodeFromMapping(scope.companyId, "legal_fee", "debit", "5400");
-      const vatReceivableCode = await getAccountCodeFromMapping(scope.companyId, "legal_fee", "credit", "1400");
-      const apCode = await getAccountCodeFromMapping(scope.companyId, "legal_fee_payable", "credit", "2100");
-      journalEntryId = await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId ?? scope.userId,
-        ref: `LEGAL-FEE-${insertId}`,
-        description: `أتعاب قانونية / ${legalCase.title} / جلسة ${b.sessionDate} / ${billingAmount.toLocaleString()} ريال`,
-        lines: [
-          { accountCode: feeExpenseCode, debit: billingAmount, credit: 0 },
-          { accountCode: vatReceivableCode, debit: vatAmount, credit: 0 },
-          { accountCode: apCode, debit: 0, credit: totalWithVat },
-        ],
-      }, { table: "legal_sessions", id: insertId });
+      const { legalEngine } = await import("../lib/engines/index.js");
+      journalEntryId = await legalEngine.postLegalSessionFeeGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+        { id: insertId, caseTitle: legalCase.title, sessionDate: b.sessionDate, billingAmount, vatAmount }
+      );
     }
 
     createAuditLog({
