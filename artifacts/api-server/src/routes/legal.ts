@@ -891,18 +891,27 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
       const monthNum = String(new Date().getMonth() + 1).padStart(2, "0");
       const yearShort = String(new Date().getFullYear()).slice(2);
       const ref = `INV-LEGAL-${yearShort}${monthNum}-${insertId}`;
+      const { legalEngine } = await import("../lib/engines/index.js");
       try {
-        const { insertId: iId } = await rawExecute(
-          `INSERT INTO invoices ("companyId","clientId",ref,description,subtotal,total,"vatAmount","vatRate","paidAmount",status,"dueDate","createdBy") VALUES ($1,NULL,$2,$3,$4,$5,$6,15,0,'draft',$7,$8)`,
-          [scope.companyId, ref, `أتعاب قانونية - جلسة ${b.sessionDate} - ${legalCase.title}`, billingAmount, billingAmount + vatAmount, vatAmount, new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0], scope.userId]
+        legalEngine.requestInvoiceCreation(
+          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+          {
+            ref,
+            description: `أتعاب قانونية - جلسة ${b.sessionDate} - ${legalCase.title}`,
+            subtotal: billingAmount,
+            vatAmount,
+            total: billingAmount + vatAmount,
+            dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+            sourceType: "legal_sessions",
+            sourceId: insertId,
+          }
         );
-        invoiceId = iId;
+        invoiceId = insertId;
       } catch (invoiceErr) {
-        console.error("Failed to create legal session invoice:", invoiceErr);
+        console.error("Failed to request legal session invoice:", invoiceErr);
         invoiceError = "فشل إنشاء فاتورة الأتعاب";
       }
 
-      const { legalEngine } = await import("../lib/engines/index.js");
       journalEntryId = await legalEngine.postLegalSessionFeeGL(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
         { id: insertId, caseTitle: legalCase.title, sessionDate: b.sessionDate, billingAmount, vatAmount }

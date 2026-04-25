@@ -3,6 +3,7 @@
 // All journal entries go through the Financial Engine.
 
 import { financialEngine } from "./financialEngine.js";
+import { eventBus } from "../eventBus.js";
 import type { DomainEngine } from "./domainEngineBase.js";
 
 interface LegalGLContext {
@@ -138,6 +139,28 @@ class LegalEngineImpl implements DomainEngine {
         { accountCode: apCode, debit: 0, credit: totalWithVat },
       ],
     });
+  }
+
+  async requestInvoiceCreation(
+    ctx: LegalGLContext,
+    params: {
+      ref: string;
+      description: string;
+      subtotal: number;
+      vatAmount: number;
+      total: number;
+      dueDate: string;
+      sourceType: string;
+      sourceId: number;
+    }
+  ) {
+    eventBus.emit("legal.invoice.requested", {
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      userId: ctx.createdBy,
+      ...params,
+    });
+    return { requested: true };
   }
 }
 

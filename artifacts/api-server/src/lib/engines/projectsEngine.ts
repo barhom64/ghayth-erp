@@ -3,6 +3,7 @@
 // All journal entries go through the Financial Engine.
 
 import { financialEngine } from "./financialEngine.js";
+import { eventBus } from "../eventBus.js";
 import type { DomainEngine } from "./domainEngineBase.js";
 
 interface ProjectsGLContext {
@@ -87,6 +88,29 @@ class ProjectsEngineImpl implements DomainEngine {
         { accountCode: creditCode, debit: 0, credit: closure.totalWip, projectId: closure.projectId },
       ],
     });
+  }
+
+  async requestInvoiceCreation(
+    ctx: ProjectsGLContext,
+    params: {
+      clientId: number;
+      ref: string;
+      description: string;
+      subtotal: number;
+      vatAmount: number;
+      total: number;
+      dueDate: string;
+      sourceType: string;
+      sourceId: number;
+    }
+  ) {
+    eventBus.emit("project.invoice.requested", {
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      userId: ctx.createdBy,
+      ...params,
+    });
+    return { requested: true };
   }
 }
 

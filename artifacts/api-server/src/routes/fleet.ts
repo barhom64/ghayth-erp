@@ -189,17 +189,21 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
           const vName = `${plateNumber} ${b.make || ""} ${b.model || ""}`.trim();
           const usefulYears = Number(b.usefulLifeYears) || 5;
           const salvage = Number(b.salvageValue) || 0;
-          await rawExecute(
-            `INSERT INTO fixed_assets ("companyId","branchId",code,name,description,category,
-              "purchaseDate","purchaseCost","salvageValue","usefulLifeYears",
-              "depreciationMethod","currentBookValue","accumulatedDepreciation",
-              "assetAccountCode","depreciationAccountCode","accDepreciationAccountCode",status)
-             VALUES ($1,$2,$3,$4,$5,'مركبات',$6,$7,$8,$9,'straight_line',$7,0,$10,$11,$12,'active')`,
-            [scope.companyId, scope.branchId, `VEH-${insertId}`, vName,
-             `أصل ثابت — مركبة ${vName}`,
-             b.purchaseDate || new Date().toISOString().slice(0, 10),
-             Number(b.purchasePrice), salvage, usefulYears,
-             assetCode, depExpCode, accDepCode]
+          fleetEngine.requestFixedAssetRegistration(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+            {
+              vehicleId: insertId,
+              code: `VEH-${insertId}`,
+              name: vName,
+              description: `أصل ثابت — مركبة ${vName}`,
+              purchaseDate: b.purchaseDate || new Date().toISOString().slice(0, 10),
+              purchaseCost: Number(b.purchasePrice),
+              salvageValue: salvage,
+              usefulLifeYears: usefulYears,
+              assetAccountCode: assetCode,
+              depreciationAccountCode: depExpCode,
+              accDepreciationAccountCode: accDepCode,
+            }
           );
           createNotification({
             companyId: scope.companyId, assignmentId: scope.activeAssignmentId,
@@ -1162,17 +1166,10 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
     }
 
     if (b.partsUsed && Array.isArray(b.partsUsed)) {
-      for (const part of b.partsUsed) {
-        try {
-          await rawExecute(`UPDATE warehouse_products SET "currentStock"="currentStock"-$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`, [part.quantity, part.productId, scope.companyId]);
-          await rawExecute(
-            `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy") VALUES ($1,$2,'out',$3,$4,$5,$6,$7)`,
-            [scope.companyId, part.productId, part.quantity, part.unitCost || 0, `MAINT-${insertId}`, `صيانة مركبة - طلب #${insertId}`, scope.userId]
-          );
-        } catch (partErr) {
-          console.error(`Failed to deduct part ${part.productId} for maintenance ${insertId}:`, partErr);
-        }
-      }
+      fleetEngine.requestWarehouseDeduction(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+        { maintenanceId: insertId, parts: b.partsUsed }
+      );
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1`, [insertId]);
@@ -2355,22 +2352,11 @@ router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (
     );
     if (!rows[0]) throw new NotFoundError("الخطة غير موجودة");
 
-    // If parts were consumed during this service, deduct from warehouse inventory
     if (b.partsUsed && Array.isArray(b.partsUsed) && b.partsUsed.length > 0) {
-      for (const part of b.partsUsed) {
-        try {
-          await rawExecute(
-            `UPDATE warehouse_products SET "currentStock"="currentStock"-$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
-            [part.quantity, part.productId, scope.companyId]
-          );
-          await rawExecute(
-            `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy") VALUES ($1,$2,'out',$3,$4,$5,$6,$7)`,
-            [scope.companyId, part.productId, part.quantity, part.unitCost || 0, `PM-PLAN-${id}`, `صيانة وقائية - خطة #${id} (${existing.serviceType})`, scope.userId]
-          );
-        } catch (partErr) {
-          console.error(`Failed to deduct spare part ${part.productId} for preventive plan ${id}:`, partErr);
-        }
-      }
+      fleetEngine.requestWarehouseDeduction(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+        { maintenanceId: id, parts: b.partsUsed }
+      );
     }
 
     emitEvent({

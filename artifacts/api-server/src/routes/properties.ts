@@ -1598,16 +1598,18 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
           const responsible = await getLegalResponsible(cid);
           const lawyerName = responsible?.employeeName ?? null;
 
-          const { insertId: caseId } = await rawExecute(
-            `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty","lawyerName",status,priority,description) VALUES ($1,$2,$3,'property_rent',$4,$5,'open','high',$6)`,
-            [cid, `RENT-${payment.id}-${Date.now()}`, `تحصيل إيجار - ${payment.unitNumber} - ${payment.tenantName}`, payment.tenantName, lawyerName, `إيجار متأخر ${lateDays} يوم - وحدة ${payment.unitNumber} - مبلغ ${payment.amount} ريال`]
+          propertiesEngine.requestLegalCaseCreation(
+            { companyId: cid, branchId: scope.branchId, createdBy: scope.userId },
+            {
+              caseNumber: `RENT-${payment.id}-${Date.now()}`,
+              title: `تحصيل إيجار - ${payment.unitNumber} - ${payment.tenantName}`,
+              caseType: "property_rent",
+              opposingParty: payment.tenantName,
+              lawyerName,
+              description: `إيجار متأخر ${lateDays} يوم - وحدة ${payment.unitNumber} - مبلغ ${payment.amount} ريال`,
+              priority: "high",
+            }
           );
-
-          emitEvent({
-            companyId: cid, userId: scope.userId,
-            action: "legal.case.created", entity: "legal_cases", entityId: Number(caseId),
-            details: `قضية إيجار متأخر — ${payment.tenantName}`,
-          }).catch(console.error);
 
           if (responsible) {
             createNotification({
@@ -1618,7 +1620,7 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
               body: `تم إنشاء قضية تحصيل إيجار متأخر للمستأجر ${payment.tenantName} — وحدة ${payment.unitNumber}`,
               priority: "high",
               refType: "legal_case",
-              refId: Number(caseId),
+              refId: payment.id,
               actionUrl: `/legal/cases/${caseId}`,
             }).catch(console.error);
           }
@@ -2414,17 +2416,21 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
           const accDepCode = await getAccountCodeFromMapping(scope.companyId, "property_acc_depreciation", "credit", "1590");
           const usefulYears = Number(b.usefulLifeYears) || 20;
           const salvage = Number(b.salvageValue) || 0;
-          await rawExecute(
-            `INSERT INTO fixed_assets ("companyId","branchId",code,name,description,category,
-              "purchaseDate","purchaseCost","salvageValue","usefulLifeYears",
-              "depreciationMethod","currentBookValue","accumulatedDepreciation",
-              "assetAccountCode","depreciationAccountCode","accDepreciationAccountCode",status)
-             VALUES ($1,$2,$3,$4,$5,'عقارات',$6,$7,$8,$9,'straight_line',$7,0,$10,$11,$12,'active')`,
-            [scope.companyId, scope.branchId, `BLDG-${insertId}`, b.name,
-             `أصل ثابت — مبنى ${b.name}${b.city ? ` — ${b.city}` : ""}`,
-             b.purchaseDate || new Date().toISOString().slice(0, 10),
-             Number(b.purchasePrice), salvage, usefulYears,
-             assetCode, depExpCode, accDepCode]
+          propertiesEngine.requestFixedAssetRegistration(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+            {
+              buildingId: insertId,
+              code: `BLDG-${insertId}`,
+              name: b.name,
+              description: `أصل ثابت — مبنى ${b.name}${b.city ? ` — ${b.city}` : ""}`,
+              purchaseDate: b.purchaseDate || new Date().toISOString().slice(0, 10),
+              purchaseCost: Number(b.purchasePrice),
+              salvageValue: salvage,
+              usefulLifeYears: usefulYears,
+              assetAccountCode: assetCode,
+              depreciationAccountCode: depExpCode,
+              accDepreciationAccountCode: accDepCode,
+            }
           );
           createNotification({
             companyId: scope.companyId, assignmentId: scope.activeAssignmentId,

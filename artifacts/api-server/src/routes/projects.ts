@@ -824,9 +824,20 @@ router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update
         const yearShort = String(new Date().getFullYear()).slice(2);
         const ref = `INV-MS-${yearShort}${monthNum}-${phaseId}`;
         const vatAmount = milestoneAmount * 0.15;
-        await rawExecute(
-          `INSERT INTO invoices ("companyId","clientId",ref,description,subtotal,total,"vatAmount","vatRate","paidAmount",status,"dueDate","createdBy") VALUES ($1,$2,$3,$4,$5,$6,$7,15,0,'draft',$8,$9)`,
-          [scope.companyId, project.clientId, ref, `فاتورة إنجاز مرحلة: ${phase?.name || ''} - مشروع: ${project.name}`, milestoneAmount, milestoneAmount + vatAmount, vatAmount, new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0], scope.userId]
+        const { projectsEngine } = await import("../lib/engines/index.js");
+        projectsEngine.requestInvoiceCreation(
+          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+          {
+            clientId: project.clientId,
+            ref,
+            description: `فاتورة إنجاز مرحلة: ${phase?.name || ''} - مشروع: ${project.name}`,
+            subtotal: milestoneAmount,
+            vatAmount,
+            total: milestoneAmount + vatAmount,
+            dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+            sourceType: "project_phases",
+            sourceId: phaseId,
+          }
         );
         milestoneInvoiceCreated = true;
       } catch (milestoneInvoiceErr) {

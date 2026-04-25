@@ -292,6 +292,53 @@ class PropertiesEngineImpl implements DomainEngine {
 
     return { requested: true };
   }
+
+  async requestFixedAssetRegistration(
+    ctx: PropertyGLContext,
+    asset: {
+      buildingId: number;
+      code: string;
+      name: string;
+      description: string;
+      purchaseDate: string;
+      purchaseCost: number;
+      salvageValue: number;
+      usefulLifeYears: number;
+      assetAccountCode: string;
+      depreciationAccountCode: string;
+      accDepreciationAccountCode: string;
+    }
+  ) {
+    eventBus.emit("finance.fixed_asset.requested", {
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      userId: ctx.createdBy,
+      category: "عقارات",
+      ...asset,
+    });
+    return { requested: true };
+  }
+
+  async requestLegalCaseCreation(
+    ctx: PropertyGLContext,
+    params: {
+      caseNumber: string;
+      title: string;
+      caseType: string;
+      opposingParty: string;
+      lawyerName: string | null;
+      description: string;
+      priority: string;
+    }
+  ) {
+    eventBus.emit("property.legal_case.requested", {
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      userId: ctx.createdBy,
+      ...params,
+    });
+    return { requested: true };
+  }
 }
 
 export const propertiesEngine = new PropertiesEngineImpl();

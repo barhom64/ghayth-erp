@@ -287,6 +287,53 @@ class FleetEngineImpl implements DomainEngine {
       ],
     });
   }
+
+  async requestFixedAssetRegistration(
+    ctx: FleetGLContext,
+    asset: {
+      vehicleId: number;
+      code: string;
+      name: string;
+      description: string;
+      purchaseDate: string;
+      purchaseCost: number;
+      salvageValue: number;
+      usefulLifeYears: number;
+      assetAccountCode: string;
+      depreciationAccountCode: string;
+      accDepreciationAccountCode: string;
+    }
+  ) {
+    eventBus.emit("finance.fixed_asset.requested", {
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      userId: ctx.createdBy,
+      category: "مركبات",
+      ...asset,
+    });
+    return { requested: true };
+  }
+
+  async requestWarehouseDeduction(
+    ctx: FleetGLContext,
+    params: {
+      maintenanceId: number;
+      parts: Array<{
+        productId: number;
+        quantity: number;
+        unitCost?: number;
+      }>;
+    }
+  ) {
+    eventBus.emit("fleet.warehouse_deduction.requested", {
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      userId: ctx.createdBy,
+      maintenanceId: params.maintenanceId,
+      parts: params.parts,
+    });
+    return { requested: true };
+  }
 }
 
 export const fleetEngine = new FleetEngineImpl();

@@ -1587,6 +1587,88 @@ export function registerEventListeners() {
 
   eventBus.on("property.invoice.requested", invoiceRequestHandler);
   eventBus.on("crm.deal.invoice_requested", invoiceRequestHandler);
+  eventBus.on("legal.invoice.requested", invoiceRequestHandler);
+  eventBus.on("project.invoice.requested", invoiceRequestHandler);
+
+  // ─── Cross-Domain Fixed Asset Registration ────────────────────────────
+  // Fleet and Property domains emit events when they need to register
+  // a fixed asset. Finance domain processes these here.
+  eventBus.on("finance.fixed_asset.requested", async (payload: EventPayload) => {
+    if (!payload?.companyId) return;
+    try {
+      await rawExecute(
+        `INSERT INTO fixed_assets ("companyId","branchId",code,name,description,category,
+          "purchaseDate","purchaseCost","salvageValue","usefulLifeYears",
+          "depreciationMethod","currentBookValue","accumulatedDepreciation",
+          "assetAccountCode","depreciationAccountCode","accDepreciationAccountCode",status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'straight_line',$8,0,$11,$12,$13,'active')`,
+        [
+          payload.companyId,
+          payload.branchId ?? null,
+          payload.code,
+          payload.name,
+          payload.description ?? "",
+          payload.category ?? "أخرى",
+          payload.purchaseDate ?? new Date().toISOString().slice(0, 10),
+          Number(payload.purchaseCost ?? 0),
+          Number(payload.salvageValue ?? 0),
+          Number(payload.usefulLifeYears ?? 5),
+          payload.assetAccountCode,
+          payload.depreciationAccountCode,
+          payload.accDepreciationAccountCode,
+        ]
+      );
+    } catch (err) {
+      console.error("[EventListeners] Cross-domain fixed asset registration failed:", err);
+    }
+  });
+
+  // ─── Cross-Domain Warehouse Deduction ─────────────────────────────────
+  // Fleet domain emits events when maintenance uses spare parts.
+  // Warehouse domain processes the stock deduction here.
+  eventBus.on("fleet.warehouse_deduction.requested", async (payload: EventPayload) => {
+    if (!payload?.companyId || !payload?.parts) return;
+    const parts = payload.parts as Array<{ productId: number; quantity: number; unitCost?: number }>;
+    const maintenanceId = payload.maintenanceId as number;
+    for (const part of parts) {
+      try {
+        await rawExecute(
+          `UPDATE warehouse_products SET "currentStock"="currentStock"-$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+          [part.quantity, part.productId, payload.companyId]
+        );
+        await rawExecute(
+          `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy") VALUES ($1,$2,'out',$3,$4,$5,$6,$7)`,
+          [payload.companyId, part.productId, part.quantity, part.unitCost || 0, `MAINT-${maintenanceId}`, `صيانة مركبة - طلب #${maintenanceId}`, payload.userId ?? 0]
+        );
+      } catch (err) {
+        console.error(`[EventListeners] Warehouse deduction failed for part ${part.productId}:`, err);
+      }
+    }
+  });
+
+  // ─── Cross-Domain Legal Case Creation ─────────────────────────────────
+  // Property domain emits events when overdue rent triggers legal action.
+  // Legal domain processes the case creation here.
+  eventBus.on("property.legal_case.requested", async (payload: EventPayload) => {
+    if (!payload?.companyId) return;
+    try {
+      await rawExecute(
+        `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty","lawyerName",status,priority,description) VALUES ($1,$2,$3,$4,$5,$6,'open',$7,$8)`,
+        [
+          payload.companyId,
+          payload.caseNumber,
+          payload.title,
+          payload.caseType ?? "civil",
+          payload.opposingParty ?? null,
+          payload.lawyerName ?? null,
+          payload.priority ?? "normal",
+          payload.description ?? "",
+        ]
+      );
+    } catch (err) {
+      console.error("[EventListeners] Cross-domain legal case creation failed:", err);
+    }
+  });
 
   console.log("[EventSystem] All event listeners registered successfully");
 }
