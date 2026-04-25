@@ -220,31 +220,37 @@ describe("GLPostingRequest shape", () => {
 // ─── Domain Engine <-> Registry Cross-Reference ─────────────────────────────
 
 describe("Domain-Engine cross-reference", () => {
-  const IMPLEMENTED_ENGINES = new Set([
+  const CLASS_BASED_ENGINES = new Set([
     "financialEngine", "fleetEngine", "hrEngine", "propertiesEngine",
     "storeEngine", "crmEngine", "legalEngine", "umrahEngine",
     "projectsEngine", "warehouseEngine", "supportEngine",
   ]);
+  const LEGACY_ENGINES = new Set([
+    "obligationsEngine", "lifecycleEngine", "workflowEngine",
+    "disciplineEngine", "rulesEngine",
+    "umrahCommissionEngine", "umrahImportEngine", "umrahInvoicingEngine",
+  ]);
 
-  it("catalogs which registry engines lack implementations", () => {
+  it("every registry-declared engine has either a class-based or legacy implementation", () => {
     const allDeclared = new Set(DOMAIN_REGISTRY.flatMap(d => d.engines));
-    const unimplemented = [...allDeclared].filter(e => !IMPLEMENTED_ENGINES.has(e));
-    // These are known unimplemented engines — document them here
-    const knownUnimplemented = new Set([
-      "disciplineEngine", "lifecycleEngine", "workflowEngine",
-      "obligationsEngine", "umrahInvoicingEngine", "umrahCommissionEngine",
-      "umrahImportEngine", "rulesEngine",
-    ]);
-    for (const e of unimplemented) {
-      expect(knownUnimplemented.has(e)).toBe(true);
+    for (const engineName of allDeclared) {
+      const isImplemented = CLASS_BASED_ENGINES.has(engineName) || LEGACY_ENGINES.has(engineName);
+      expect(isImplemented).toBe(true);
     }
   });
 
-  it("all GL-integrated domains have at least one implemented engine", () => {
+  it("all GL-integrated domains have at least one class-based engine", () => {
     const glDomains = getDomainsWithGL();
     for (const d of glDomains) {
-      const hasImpl = d.engines.some(e => IMPLEMENTED_ENGINES.has(e));
+      const hasImpl = d.engines.some(e => CLASS_BASED_ENGINES.has(e));
       expect(hasImpl).toBe(true);
+    }
+  });
+
+  it("engines barrel re-exports all legacy engines", async () => {
+    const barrel = await import("../../src/lib/engines/index.js");
+    for (const name of LEGACY_ENGINES) {
+      expect(barrel).toHaveProperty(name);
     }
   });
 });

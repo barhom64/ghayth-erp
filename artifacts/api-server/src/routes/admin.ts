@@ -1505,17 +1505,24 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
 
     // 9. Domain engine coverage
     const allDeclaredEngines = new Set(DOMAIN_REGISTRY.flatMap(d => d.engines));
-    const implementedEngines = new Set([
+    const classBasedEngines = new Set([
       "financialEngine", "fleetEngine", "hrEngine", "propertiesEngine",
       "storeEngine", "crmEngine", "legalEngine", "umrahEngine",
       "projectsEngine", "warehouseEngine", "supportEngine",
     ]);
-    const unimplemented = [...allDeclaredEngines].filter(e => !implementedEngines.has(e));
+    const legacyEngines = new Set([
+      "obligationsEngine", "lifecycleEngine", "workflowEngine",
+      "disciplineEngine", "rulesEngine",
+      "umrahCommissionEngine", "umrahImportEngine", "umrahInvoicingEngine",
+    ]);
+    const unimplemented = [...allDeclaredEngines].filter(
+      e => !classBasedEngines.has(e) && !legacyEngines.has(e)
+    );
     checks.push({
       name: "engine_coverage",
       status: unimplemented.length === 0 ? "ok" : "warn",
-      detail: `${implementedEngines.size}/${allDeclaredEngines.size} engines implemented` +
-        (unimplemented.length > 0 ? ` — pending: ${unimplemented.join(", ")}` : ""),
+      detail: `${classBasedEngines.size} class-based + ${legacyEngines.size} legacy engines available` +
+        (unimplemented.length > 0 ? ` — missing: ${unimplemented.join(", ")}` : ""),
     });
 
     const overall = checks.every(c => c.status === "ok")
