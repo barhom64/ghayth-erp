@@ -328,6 +328,7 @@ export default function Employees() {
         page={page}
         total={total}
         onPageChange={setPage}
+        onRowClick={(e) => setLocation(`/employees/${e.id}`)}
         noToolbar
         emptyMessage="لا يوجد موظفين — أضف أول موظف للبدء"
         emptyIcon={<Users className="h-6 w-6 text-slate-400" />}

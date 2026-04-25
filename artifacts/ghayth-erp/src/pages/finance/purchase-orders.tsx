@@ -224,7 +224,7 @@ export default function PurchaseOrdersPage() {
       />
 
       <BulkActionsBar
-        entityType="purchase_order"
+        entityType="purchase-order"
         items={filtered}
         selectedIds={selectedIds}
         onToggle={toggleSelect}
@@ -265,7 +265,7 @@ export default function PurchaseOrdersPage() {
                 <div className="bg-white p-4 rounded-lg border border-amber-200">
                   <h4 className="font-semibold mb-3">اتخاذ إجراء</h4>
                   <ApprovalActions
-                    entityType="purchase_order"
+                    entityType="purchase-order"
                     entityId={po.id}
                     currentStatus={po.status}
                     approveEndpoint={`/finance/purchase-orders/${po.id}/approve`}
@@ -277,7 +277,7 @@ export default function PurchaseOrdersPage() {
                   />
                 </div>
               )}
-              <ActionHistory entityType="purchase_order" entityId={po.id} defaultOpen />
+              <ActionHistory entityType="purchase-order" entityId={po.id} defaultOpen />
             </div>
           );
         }}

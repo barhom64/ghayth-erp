@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -15,6 +15,7 @@ import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/compon
 import { useAppContext } from "@/contexts/app-context";
 
 export default function Properties() {
+  const [, navigate] = useLocation();
   const { roleLevel, permissions, scopeQueryString } = useAppContext();
   const canManage = permissions.canManageProperty || roleLevel >= 50;
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
@@ -143,6 +144,7 @@ export default function Properties() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(u) => navigate(`/properties/${u.id}`)}
             emptyMessage="لا توجد وحدات"
             emptyIcon={<Building className="h-6 w-6 text-slate-400" />}
             noToolbar
@@ -155,7 +157,7 @@ export default function Properties() {
                 return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(u.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
               }
               if (deletingId === u.id) {
-                return <InlineDeleteConfirm onConfirm={() => handleDelete(u.id)} onCancel={cancelDelete} isPending={isPending} itemName={u.unitNumber} entityType="property_unit" entityId={u.id} />;
+                return <InlineDeleteConfirm onConfirm={() => handleDelete(u.id)} onCancel={cancelDelete} isPending={isPending} itemName={u.unitNumber} entityType="property-unit" entityId={u.id} />;
               }
               return null;
             }}

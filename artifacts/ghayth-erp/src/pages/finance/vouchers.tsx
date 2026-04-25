@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 
 
 export default function VouchersPage() {
+  const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["vouchers", scopeQueryString], `/finance/vouchers${scopeSuffix}`);
@@ -205,7 +206,7 @@ export default function VouchersPage() {
         onRetry={() => refetch()}
         emptyMessage="لا توجد سندات"
         emptyIcon={<FileText className="h-6 w-6 text-slate-400" />}
-        onRowClick={(v) => setExpandedId(expandedId === v.id ? null : v.id)}
+        onRowClick={(v) => navigate(`/finance/vouchers/${v.id}`)}
         noToolbar
         renderRowExtras={(v) => {
           if (expandedId !== v.id) return null;

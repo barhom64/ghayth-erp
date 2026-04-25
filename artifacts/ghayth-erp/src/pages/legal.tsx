@@ -50,6 +50,7 @@ export default function Legal() {
 }
 
 function ContractsTab() {
+  const [, navigate] = useLocation();
   const { data: stats } = useApiQuery<any>(["legal-stats"], "/legal/stats");
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useFilters();
@@ -159,6 +160,7 @@ function ContractsTab() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(c) => navigate(`/legal/contracts/${c.id}`)}
             emptyMessage="لا توجد عقود"
             emptyIcon={<FileText className="h-6 w-6 text-slate-400" />}
             noToolbar

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ export default function Fleet() {
 }
 
 function VehiclesTab() {
+  const [, navigate] = useLocation();
   const { permissions, scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
   const { data: stats } = useApiQuery<any>(["fleet-stats", scopeQueryString], `/fleet/stats${scopeQueryString ? `?${scopeQueryString}` : ""}`);
@@ -197,6 +198,7 @@ function VehiclesTab() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(v) => navigate(`/fleet/${v.id}`)}
             emptyMessage="لا توجد مركبات"
             emptyIcon={<Car className="h-6 w-6 text-slate-400" />}
             noToolbar
@@ -325,6 +327,7 @@ function DriversTab() {
 }
 
 function TripsTab() {
+  const [, navigate] = useLocation();
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useFilters();
   const pageSize = 20;
@@ -384,6 +387,7 @@ function TripsTab() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(t) => navigate(`/fleet/trips/${t.id}`)}
             emptyMessage="لا توجد رحلات"
             emptyIcon={<MapPin className="h-6 w-6 text-slate-400" />}
             noToolbar

@@ -191,7 +191,7 @@ export default function RecruitmentPage() {
       />
 
       <BulkActionsBar
-        entityType="job_posting"
+        entityType="job-posting"
         items={filteredJobs}
         selectedIds={selectedIds}
         onToggle={toggleSelect}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -49,6 +50,7 @@ const overtimeColumns: DataTableColumn<any>[] = [
 ];
 
 export default function MyOvertime() {
+  const [, navigate] = useLocation();
   const today = new Date();
   const [month, setMonth] = useState(today.toISOString().slice(0, 7));
 
@@ -104,6 +106,7 @@ export default function MyOvertime() {
       <DataTable
         columns={overtimeColumns}
         data={records}
+        onRowClick={(r) => navigate(`/hr/overtime/${r.id}`)}
         emptyMessage="لا توجد سجلات وقت إضافي لهذا الشهر"
         emptyIcon={<Timer size={36} className="opacity-40" />}
         searchPlaceholder="بحث..."

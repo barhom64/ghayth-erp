@@ -132,7 +132,7 @@ export default function TrainingPage() {
       />
 
       <BulkActionsBar
-        entityType="training_program"
+        entityType="training-program"
         items={filtered}
         selectedIds={selectedIds}
         onToggle={toggleSelect}

@@ -111,7 +111,7 @@ export default function SalaryAdvancesPage() {
       hidden: !canApprove,
       render: (s) => (
         <ApprovalActions
-          entityType="salary_advance"
+          entityType="salary-advance"
           entityId={s.id}
           currentStatus={s.status || "pending"}
           approveEndpoint={`/finance/salary-advances/${s.id}/approve`}

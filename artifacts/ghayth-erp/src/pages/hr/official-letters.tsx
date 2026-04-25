@@ -67,7 +67,7 @@ export default function OfficialLettersPage() {
       hidden: !canApprove,
       render: (l) => (
         <ApprovalActions
-          entityType="official_letter"
+          entityType="official-letter"
           entityId={l.id}
           currentStatus={l.status}
           approveEndpoint={`/hr/official-letters/${l.id}/approve`}

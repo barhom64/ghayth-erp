@@ -265,6 +265,7 @@ function MovementsTab() {
 }
 
 function CategoriesTab() {
+  const [, navigate] = useLocation();
   const { data: categoriesResp, isLoading, isError, error, refetch } = useApiQuery<any>(["warehouse-categories"], "/warehouse/categories");
   const categories = asList(categoriesResp);
   const [filters, setFilters] = useFilters();
@@ -310,6 +311,7 @@ function CategoriesTab() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(c) => navigate(`/warehouse/categories/${c.id}`)}
             emptyMessage="لا توجد تصنيفات"
             emptyIcon={<Layers className="h-6 w-6 text-slate-400" />}
             noToolbar
@@ -322,6 +324,7 @@ function CategoriesTab() {
 }
 
 function SuppliersTab() {
+  const [, navigate] = useLocation();
   const { data: suppliersResp, isLoading, isError, error, refetch } = useApiQuery<any>(["warehouse-suppliers"], "/warehouse/suppliers");
   const suppliers = asList(suppliersResp);
   const [filters, setFilters] = useFilters();
@@ -378,6 +381,7 @@ function SuppliersTab() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(s) => navigate(`/warehouse/suppliers/${s.id}`)}
             emptyMessage="لا يوجد موردون"
             emptyIcon={<Truck className="h-6 w-6 text-slate-400" />}
             noToolbar

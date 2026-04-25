@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
  */
 
 export default function JournalPage() {
+  const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(
@@ -217,7 +218,7 @@ export default function JournalPage() {
       />
 
       <BulkActionsBar
-        entityType="journal_entry"
+        entityType="journal-entry"
         items={filtered}
         selectedIds={selectedIds}
         onToggle={toggleSelect}
@@ -242,7 +243,7 @@ export default function JournalPage() {
         onRetry={() => refetch()}
         emptyMessage="لا توجد قيود"
         emptyIcon={<ScrollText className="h-6 w-6 text-slate-400" />}
-        onRowClick={(j) => setExpandedId(expandedId === j.id ? null : j.id)}
+        onRowClick={(j) => navigate(`/finance/journal/${j.id}`)}
         noToolbar
         renderRowExtras={(j) => {
           if (expandedId !== j.id) return null;

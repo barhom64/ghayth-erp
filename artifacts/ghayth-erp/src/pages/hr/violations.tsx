@@ -427,7 +427,7 @@ function MemosTab({ memos }: { memos: any[] }) {
       />
 
       <BulkActionsBar
-        entityType="discipline_memo"
+        entityType="discipline-memo"
         items={filtered}
         selectedIds={selectedIds}
         onToggle={toggleSelect}

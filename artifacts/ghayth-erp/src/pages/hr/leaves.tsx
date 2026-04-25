@@ -245,7 +245,7 @@ export default function LeavesPage() {
       <KpiGrid items={kpis} />
 
       <BulkActionsBar
-        entityType="leave_request"
+        entityType="leave-request"
         items={filtered}
         selectedIds={selectedIds}
         onToggle={toggleSelect}
@@ -275,7 +275,7 @@ export default function LeavesPage() {
             <div className="p-4 bg-gray-50/50 space-y-4">
               <LeaveApprovalStages leaveId={l.id} leaveStatus={l.status} />
               <ActionHistory entityType="leave" entityId={l.id} defaultOpen />
-              <EntityTimeline entityType="hr_leave_requests" entityId={l.id} maxItems={10} />
+              <EntityTimeline entityType="leave-request" entityId={l.id} maxItems={10} />
             </div>
           ) : null
         }

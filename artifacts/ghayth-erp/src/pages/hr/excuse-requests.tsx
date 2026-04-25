@@ -110,7 +110,7 @@ export default function ExcuseRequestsPage() {
       header: "إجراءات",
       render: (r) => (
         <ApprovalActions
-          entityType="excuse_request"
+          entityType="excuse-request"
           entityId={r.id}
           currentStatus={r.status}
           approveEndpoint={`/hr/excuse-requests/${r.id}/approve`}
@@ -164,7 +164,7 @@ export default function ExcuseRequestsPage() {
       <KpiGrid items={kpis} />
 
       <BulkActionsBar
-        entityType="excuse_request"
+        entityType="excuse-request"
         items={filtered}
         selectedIds={selectedIds}
         onToggle={toggleSelect}

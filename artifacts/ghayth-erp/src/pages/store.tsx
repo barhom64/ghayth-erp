@@ -125,7 +125,7 @@ function ProductsTab() {
             onRowClick={(p) => navigate(`/store/products/${p.id}`)}
             renderRowExtras={(p) => {
               if (editingId === p.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(p.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
-              if (deletingId === p.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.name} entityType="store_product" entityId={p.id} />;
+              if (deletingId === p.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.name} entityType="store-product" entityId={p.id} />;
               return null;
             }}
           />
@@ -245,7 +245,7 @@ function OrdersTab() {
             pageSize={20}
             renderRowExtras={(o) => {
               if (editingId === o.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(o.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
-              if (deletingId === o.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(o.id)} onCancel={cancelDelete} isPending={isPending} itemName={o.orderNumber || `#${o.id}`} entityType="store_order" entityId={o.id} />;
+              if (deletingId === o.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(o.id)} onCancel={cancelDelete} isPending={isPending} itemName={o.orderNumber || `#${o.id}`} entityType="store-order" entityId={o.id} />;
               return null;
             }}
           />
