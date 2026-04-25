@@ -11,6 +11,7 @@
 #   3. Pages built but never wired to a route   → audit:routes
 #   4. Raw SQL referencing dropped/typo columns → audit:schema
 #   5. Cross-domain SQL writes (boundary leak)  → audit:domain-boundaries
+#   6. Unit/smoke tests                         → test
 #
 # Run directly:
 #
@@ -55,6 +56,7 @@ run_step "lint:patterns"      pnpm -s run lint:patterns
 run_step "audit:routes"       node scripts/src/audit-routes.mjs
 run_step "audit:schema"       node scripts/src/audit-schema-drift.mjs
 run_step "audit:boundaries"   node scripts/src/audit-domain-boundaries.mjs
+run_step "test"               pnpm -s --filter @workspace/api-server run test
 
 END=$(date +%s)
 echo
