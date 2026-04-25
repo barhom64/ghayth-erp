@@ -7,7 +7,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { TextField, TextAreaField, DateField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { EmployeeSelect } from "@/components/shared/entity-selects";
 
 export default function ContractsCreate() {
@@ -88,9 +88,9 @@ export default function ContractsCreate() {
               </SelectContent>
             </Select>
           </FormFieldWrapper>
-          <TextField label="تاريخ البداية" required value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} placeholder="YYYY-MM-DD" error={fieldErrors.startDate} />
-          <TextField label="تاريخ النهاية" value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} placeholder="YYYY-MM-DD (اختياري)" />
-          <TextField label="نهاية فترة التجربة" value={form.probationEndDate} onChange={(v) => setForm((f) => ({ ...f, probationEndDate: v }))} placeholder="YYYY-MM-DD" />
+          <DateField label="تاريخ البداية" required value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} error={fieldErrors.startDate} />
+          <DateField label="تاريخ النهاية" value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} placeholder="اختياري" />
+          <DateField label="نهاية فترة التجربة" value={form.probationEndDate} onChange={(v) => setForm((f) => ({ ...f, probationEndDate: v }))} />
           <TextField label="الراتب الأساسي" value={form.salary} onChange={(v) => setForm((f) => ({ ...f, salary: v }))} placeholder="0.00" />
           <TextField label="بدل السكن" value={form.housingAllowance} onChange={(v) => setForm((f) => ({ ...f, housingAllowance: v }))} placeholder="0.00" />
           <TextField label="بدل النقل" value={form.transportAllowance} onChange={(v) => setForm((f) => ({ ...f, transportAllowance: v }))} placeholder="0.00" />

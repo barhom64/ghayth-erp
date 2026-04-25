@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Wrench, Plus, AlertCircle, CheckCircle, Clock } from "lucide-react";
 import { apiFetch } from "@/lib/api";
@@ -203,11 +204,11 @@ export default function PreventivePlansPage() {
             </div>
             <div>
               <Label>آخر خدمة</Label>
-              <Input type="date" value={form.lastServiceDate} onChange={(e) => setForm({ ...form, lastServiceDate: e.target.value })} />
+              <UnifiedDateInput value={form.lastServiceDate} onChange={(v) => setForm({ ...form, lastServiceDate: v })} showDualCalendar showPresets />
             </div>
             <div>
               <Label>موعد الخدمة القادمة</Label>
-              <Input type="date" value={form.nextServiceDate} onChange={(e) => setForm({ ...form, nextServiceDate: e.target.value })} />
+              <UnifiedDateInput value={form.nextServiceDate} onChange={(v) => setForm({ ...form, nextServiceDate: v })} showDualCalendar showPresets />
             </div>
             <div>
               <Label>التكلفة التقديرية (ر.س)</Label>

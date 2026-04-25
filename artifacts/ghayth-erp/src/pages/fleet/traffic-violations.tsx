@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, Plus, CheckCircle, DollarSign } from "lucide-react";
 import { apiFetch } from "@/lib/api";
@@ -197,7 +198,7 @@ export default function TrafficViolationsPage() {
             </div>
             <div>
               <Label>تاريخ المخالفة</Label>
-              <Input type="date" value={form.violationDate} onChange={(e) => setForm({ ...form, violationDate: e.target.value })} />
+              <UnifiedDateInput value={form.violationDate} onChange={(v) => setForm({ ...form, violationDate: v })} showDualCalendar showPresets />
             </div>
             <div>
               <Label>مبلغ الغرامة (ر.س)</Label>

@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { UnifiedDateInput, type DateInputVariant } from "@/components/ui/unified-date-input";
 import { cn } from "@/lib/utils";
 
 /**
@@ -202,6 +203,70 @@ export function NumberField({
         step={step}
         disabled={disabled}
         className={fieldErrorClass(error)}
+      />
+    </FormFieldWrapper>
+  );
+}
+
+interface DateFieldProps {
+  label: string;
+  value: string;
+  onChange: (iso: string) => void;
+  error?: string;
+  required?: boolean;
+  placeholder?: string;
+  disabled?: boolean;
+  hint?: ReactNode;
+  className?: string;
+  id?: string;
+  variant?: DateInputVariant;
+  minDate?: string;
+  maxDate?: string;
+  noFuture?: boolean;
+  noPast?: boolean;
+}
+
+export function DateField({
+  label,
+  value,
+  onChange,
+  error,
+  required,
+  placeholder,
+  disabled,
+  hint,
+  className,
+  id,
+  variant = "default",
+  minDate,
+  maxDate,
+  noFuture,
+  noPast,
+}: DateFieldProps) {
+  return (
+    <FormFieldWrapper
+      label={label}
+      required={required}
+      error={error}
+      hint={hint}
+      className={className}
+      htmlFor={id}
+    >
+      <UnifiedDateInput
+        id={id}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        disabled={disabled}
+        variant={variant}
+        required={required}
+        minDate={minDate}
+        maxDate={maxDate}
+        noFuture={noFuture}
+        noPast={noPast}
+        externalError={error}
+        showDualCalendar
+        showPresets
       />
     </FormFieldWrapper>
   );
