@@ -21,7 +21,7 @@ import {
   type JournalEntryLine,
 } from "../businessHelpers.js";
 import { eventBus } from "../eventBus.js";
-import { rawQuery } from "../rawdb.js";
+import { rawQuery, rawExecute } from "../rawdb.js";
 import type { DomainEngine, GLPostingRequest } from "./domainEngineBase.js";
 
 export interface GLPostingResult {
@@ -165,6 +165,62 @@ class FinancialEngineImpl implements DomainEngine {
     period?: string;
   }) {
     return updateBudgetUsed(params);
+  }
+
+  async updateJournalStatus(
+    journalId: number,
+    newStatus: "posted" | "rejected",
+    requiredCurrentStatus = "pending_approval"
+  ): Promise<{ updated: boolean }> {
+    const { affectedRows } = await rawExecute(
+      `UPDATE journal_entries SET status = $1 WHERE id = $2 AND status = $3`,
+      [newStatus, journalId, requiredCurrentStatus]
+    );
+    return { updated: affectedRows > 0 };
+  }
+
+  async recordInvoicePayment(params: {
+    invoiceId: number;
+    companyId: number;
+    clientId: number;
+    amount: number;
+    method: string;
+    transactionRef: string;
+    source: string;
+  }): Promise<{ newPaid: number; newStatus: string }> {
+    const rows = await rawQuery<{ total: number; paidAmount: number }>(
+      `SELECT total, "paidAmount" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [params.invoiceId, params.companyId]
+    );
+    if (!rows.length) throw new Error("الفاتورة غير موجودة");
+
+    const payAmt = Math.min(params.amount, Number(rows[0].total) - Number(rows[0].paidAmount));
+    const newPaid = Number(rows[0].paidAmount) + payAmt;
+    const newStatus = newPaid >= Number(rows[0].total) ? "paid" : "partial";
+
+    await rawExecute(
+      `UPDATE invoices SET "paidAmount"=$1, status=$2, "updatedAt"=NOW() WHERE id=$3`,
+      [newPaid, newStatus, params.invoiceId]
+    );
+    await rawExecute(
+      `INSERT INTO invoice_payments ("invoiceId","companyId","clientId",amount,method,"transactionRef","paidAt",source) VALUES ($1,$2,$3,$4,$5,$6,NOW(),$7) ON CONFLICT DO NOTHING`,
+      [params.invoiceId, params.companyId, params.clientId, payAmt, params.method, params.transactionRef, params.source]
+    ).catch(console.error);
+
+    return { newPaid, newStatus };
+  }
+
+  async createPurchaseOrder(params: {
+    companyId: number;
+    ref: string;
+    description: string;
+    requestedBy: number;
+  }): Promise<{ insertId: number }> {
+    const { insertId } = await rawExecute(
+      `INSERT INTO purchase_orders ("companyId", ref, description, status, "requestedBy", "createdAt") VALUES ($1, $2, $3, 'draft', $4, NOW())`,
+      [params.companyId, params.ref, params.description, params.requestedBy]
+    );
+    return { insertId };
   }
 }
 

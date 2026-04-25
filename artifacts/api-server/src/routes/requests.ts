@@ -749,30 +749,36 @@ router.post("/:id/convert", requirePermission("requests:write"), async (req, res
     let targetEndpoint = "";
 
     if (targetType === "maintenance") {
-      const { insertId } = await rawExecute(
-        `INSERT INTO support_tickets ("companyId", title, description, status, priority, "createdAt")
-         VALUES ($1, $2, $3, 'open', $4, NOW())`,
-        [scope.companyId, `صيانة: ${request.title}`, request.description || request.title, request.priority || "medium"]
-      );
+      const { supportEngine } = await import("../lib/engines/index.js");
+      const { insertId } = await supportEngine.createTicket({
+        companyId: scope.companyId,
+        title: `صيانة: ${request.title}`,
+        description: request.description || request.title,
+        priority: request.priority || "medium",
+      });
       createdId = insertId;
       targetEndpoint = `/support/${insertId}`;
     } else if (targetType === "purchase") {
-      const { insertId } = await rawExecute(
-        `INSERT INTO purchase_orders ("companyId", ref, description, status, "requestedBy", "createdAt")
-         VALUES ($1, $2, $3, 'draft', $4, NOW())`,
-        [scope.companyId, `PO-REQ-${id}`, request.title + (request.description ? `: ${request.description}` : ""), scope.userId]
-      );
+      const { financialEngine } = await import("../lib/engines/index.js");
+      const { insertId } = await financialEngine.createPurchaseOrder({
+        companyId: scope.companyId,
+        ref: `PO-REQ-${id}`,
+        description: request.title + (request.description ? `: ${request.description}` : ""),
+        requestedBy: scope.userId,
+      });
       createdId = insertId;
       targetEndpoint = `/finance/purchase-orders/${insertId}`;
     } else if (targetType === "case") {
-      // Auto-resolve the responsible lawyer/manager so the case is never
-      // stuck in "unassigned" purgatory after conversion from a request.
       const legalResp = await getLegalResponsible(scope.companyId);
-      const { insertId } = await rawExecute(
-        `INSERT INTO legal_cases ("companyId", title, description, status, priority, "caseType", "lawyerName", "createdAt")
-         VALUES ($1, $2, $3, 'open', $4, 'civil', $5, NOW())`,
-        [scope.companyId, `قضية: ${request.title}`, request.description || request.title, request.priority || "medium", legalResp?.employeeName ?? null]
-      );
+      const { legalEngine } = await import("../lib/engines/index.js");
+      const { insertId } = await legalEngine.createCase({
+        companyId: scope.companyId,
+        title: `قضية: ${request.title}`,
+        description: request.description || request.title,
+        priority: request.priority || "medium",
+        caseType: "civil",
+        lawyerName: legalResp?.employeeName ?? null,
+      });
       createdId = insertId;
       targetEndpoint = `/legal/cases/${insertId}`;
       if (legalResp?.assignmentId) {

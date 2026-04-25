@@ -565,18 +565,18 @@ protectedRouter.post("/invoices/:id/pay", withPortalScope(async (req, res) => {
     if (invoice.status === 'paid') throw new ValidationError("الفاتورة مدفوعة بالكامل مسبقاً");
 
     const payAmt = Math.min(Number(amount), Number(invoice.total) - Number(invoice.paidAmount));
-    const newPaid = Number(invoice.paidAmount) + payAmt;
-    const newStatus = newPaid >= Number(invoice.total) ? 'paid' : 'partial';
-
-    await rawExecute(
-      `UPDATE invoices SET "paidAmount"=$1, status=$2, "updatedAt"=NOW() WHERE id=$3`,
-      [newPaid, newStatus, invoice.id]
-    );
     const paymentRef = transactionRef || `PAY-PORTAL-${Date.now().toString(36).toUpperCase()}`;
-    await rawExecute(
-      `INSERT INTO invoice_payments ("invoiceId","companyId","clientId",amount,method,"transactionRef","paidAt",source) VALUES ($1,$2,$3,$4,$5,$6,NOW(),'portal') ON CONFLICT DO NOTHING`,
-      [invoice.id, scope.companyId, scope.clientId, payAmt, method, paymentRef]
-    ).catch(console.error);
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const { newPaid, newStatus } = await financialEngine.recordInvoicePayment({
+      invoiceId: invoice.id,
+      companyId: scope.companyId,
+      clientId: scope.clientId,
+      amount: payAmt,
+      method,
+      transactionRef: paymentRef,
+      source: "portal",
+    });
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.accountId,

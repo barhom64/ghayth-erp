@@ -4,6 +4,7 @@
 
 import { financialEngine } from "./financialEngine.js";
 import { eventBus } from "../eventBus.js";
+import { rawExecute } from "../rawdb.js";
 import type { DomainEngine } from "./domainEngineBase.js";
 
 interface LegalGLContext {
@@ -161,6 +162,21 @@ class LegalEngineImpl implements DomainEngine {
       ...params,
     });
     return { requested: true };
+  }
+
+  async createCase(params: {
+    companyId: number;
+    title: string;
+    description: string;
+    priority: string;
+    caseType: string;
+    lawyerName: string | null;
+  }): Promise<{ insertId: number }> {
+    const { insertId } = await rawExecute(
+      `INSERT INTO legal_cases ("companyId", title, description, status, priority, "caseType", "lawyerName", "createdAt") VALUES ($1, $2, $3, 'open', $4, $5, $6, NOW())`,
+      [params.companyId, params.title, params.description, params.priority, params.caseType, params.lawyerName]
+    );
+    return { insertId };
   }
 }
 

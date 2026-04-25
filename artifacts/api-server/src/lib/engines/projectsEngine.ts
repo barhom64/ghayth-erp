@@ -4,6 +4,7 @@
 
 import { financialEngine } from "./financialEngine.js";
 import { eventBus } from "../eventBus.js";
+import { rawExecute } from "../rawdb.js";
 import type { DomainEngine } from "./domainEngineBase.js";
 
 interface ProjectsGLContext {
@@ -111,6 +112,21 @@ class ProjectsEngineImpl implements DomainEngine {
       ...params,
     });
     return { requested: true };
+  }
+
+  async reassignTasks(params: {
+    fromEmployeeQuery: { table: string; idColumn: string; id: number };
+    toEmployeeQuery: { table: string; idColumn: string; id: number };
+    startDate: string;
+    endDate: string;
+  }): Promise<void> {
+    await rawExecute(
+      `UPDATE project_tasks SET "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1)
+       WHERE "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $2)
+         AND status NOT IN ('completed','cancelled')
+         AND ("dueDate" IS NULL OR "dueDate" BETWEEN $3 AND $4)`,
+      [params.toEmployeeQuery.id, params.fromEmployeeQuery.id, params.startDate, params.endDate]
+    ).catch(() => {});
   }
 }
 

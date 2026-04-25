@@ -3,6 +3,7 @@
 // All journal entries go through the Financial Engine.
 
 import { financialEngine } from "./financialEngine.js";
+import { rawExecute } from "../rawdb.js";
 import type { DomainEngine } from "./domainEngineBase.js";
 
 interface SupportGLContext {
@@ -46,6 +47,19 @@ class SupportEngineImpl implements DomainEngine {
         { accountCode: revenueCode, debit: 0, credit: ticket.billableAmount, description: `إيراد خدمة دعم — ${ticket.ref}`, clientId: ticket.clientId },
       ],
     });
+  }
+
+  async createTicket(params: {
+    companyId: number;
+    title: string;
+    description: string;
+    priority: string;
+  }): Promise<{ insertId: number }> {
+    const { insertId } = await rawExecute(
+      `INSERT INTO support_tickets ("companyId", title, description, status, priority, "createdAt") VALUES ($1, $2, $3, 'open', $4, NOW())`,
+      [params.companyId, params.title, params.description, params.priority]
+    );
+    return { insertId };
   }
 }
 

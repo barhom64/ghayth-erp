@@ -1732,13 +1732,13 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
           [asn.companyId, asn.branchId, aId]
         );
         if (managerAId) {
-          await rawExecute(
-            `UPDATE project_tasks SET "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1)
-             WHERE "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $2)
-               AND status NOT IN ('completed','cancelled')
-               AND ("dueDate" IS NULL OR "dueDate" BETWEEN $3 AND $4)`,
-            [managerAId.id, aId, request.startDate, request.endDate]
-          ).catch(() => {});
+          const { projectsEngine } = await import("../lib/engines/index.js");
+          await projectsEngine.reassignTasks({
+            fromEmployeeQuery: { table: "employee_assignments", idColumn: "id", id: aId },
+            toEmployeeQuery: { table: "employee_assignments", idColumn: "id", id: managerAId.id },
+            startDate: request.startDate,
+            endDate: request.endDate,
+          });
         }
       }
     }
@@ -3062,10 +3062,8 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       }
       const journalRefTypes = ["expense", "salary_advance", "custody"];
       if (journalRefTypes.includes(request.refType)) {
-        await rawExecute(
-          `UPDATE journal_entries SET status = 'posted' WHERE id = $1 AND status = 'pending_approval'`,
-          [request.refId]
-        );
+        const { financialEngine } = await import("../lib/engines/index.js");
+        await financialEngine.updateJournalStatus(request.refId, "posted");
       }
     } else if (result.status === "rejected") {
       const entityUpdateMap: Record<string, { table: string; column: string }> = {
@@ -3081,10 +3079,8 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       }
       const journalRefTypes = ["expense", "salary_advance", "custody"];
       if (journalRefTypes.includes(request.refType)) {
-        await rawExecute(
-          `UPDATE journal_entries SET status = 'rejected' WHERE id = $1 AND status = 'pending_approval'`,
-          [request.refId]
-        );
+        const { financialEngine } = await import("../lib/engines/index.js");
+        await financialEngine.updateJournalStatus(request.refId, "rejected");
       }
 
       // Cancel any queued email/WhatsApp dispatches for a rejected official
