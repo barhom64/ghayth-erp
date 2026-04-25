@@ -2005,25 +2005,33 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
       completeParams
     );
 
-    let invoiceId: number | null = null;
     if (cost > 0 && !b.coveredByContract) {
       const monthNum = String(new Date().getMonth() + 1).padStart(2, "0");
       const yearShort = String(new Date().getFullYear()).slice(2);
       const ref = `INV-MAINT-${yearShort}${monthNum}-${id}`;
       const vatAmount = cost * 0.15;
-      const { insertId: iId } = await rawExecute(
-        `INSERT INTO invoices ("companyId","clientId",ref,description,subtotal,total,"vatAmount","vatRate","paidAmount",status,"dueDate","createdBy") VALUES ($1,NULL,$2,$3,$4,$5,$6,15,0,'draft',$7,$8)`,
-        [scope.companyId, ref, `صيانة - ${mr.category} - ${mr.tenantName}`, cost, cost + vatAmount, vatAmount, new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0], scope.userId]
-      );
-      invoiceId = iId;
+      const { propertiesEngine } = await import("../lib/engines/index.js");
+      propertiesEngine.requestInvoiceCreation(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+        {
+          ref,
+          description: `صيانة - ${mr.category} - ${mr.tenantName}`,
+          subtotal: cost,
+          vatAmount,
+          total: cost + vatAmount,
+          dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+          sourceType: "maintenance_requests",
+          sourceId: id,
+        }
+      ).catch(console.error);
       try {
         await createAuditLog({
           companyId: scope.companyId,
           userId: scope.userId,
-          action: "auto_invoice_created",
+          action: "auto_invoice_requested",
           entity: "maintenance_requests",
           entityId: id,
-          after: { message: `تم إنشاء فاتورة مسودة تلقائياً بقيمة ${cost.toFixed(2)} ريال`, invoiceId: iId, ref },
+          after: { message: `تم طلب إنشاء فاتورة مسودة تلقائياً بقيمة ${cost.toFixed(2)} ريال`, ref },
         });
       } catch (aErr) { console.error("Auto-invoice audit log failed:", aErr); }
     }
@@ -2796,33 +2804,34 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
           const yearShort = String(new Date().getFullYear()).slice(2);
           const ref = `INV-MAINT-${yearShort}${monthNum}-${id}`;
           const vatAmount = updatedCost * 0.15;
-          const { insertId: iId } = await rawExecute(
-            `INSERT INTO invoices ("companyId","clientId",ref,description,subtotal,total,"vatAmount","vatRate","paidAmount",status,"dueDate","createdBy") VALUES ($1,NULL,$2,$3,$4,$5,$6,15,0,'draft',$7,$8)`,
-            [scope.companyId, ref, `صيانة - ${existing.category} - ${existing.tenantName}`, updatedCost, updatedCost + vatAmount, vatAmount, new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0], scope.userId]
-          );
+          const { propertiesEngine } = await import("../lib/engines/index.js");
+          propertiesEngine.requestInvoiceCreation(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+            {
+              ref,
+              description: `صيانة - ${existing.category} - ${existing.tenantName}`,
+              subtotal: updatedCost,
+              vatAmount,
+              total: updatedCost + vatAmount,
+              dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+              sourceType: "maintenance_requests",
+              sourceId: id,
+            }
+          ).catch(console.error);
           await createAuditLog({
             userId: scope.userId, entity: "maintenance_requests", entityId: id,
-            action: "auto_invoice", companyId: scope.companyId,
-            before: null, after: { invoiceId: iId, ref, amount: updatedCost + vatAmount },
+            action: "auto_invoice_requested", companyId: scope.companyId,
+            before: null, after: { ref, amount: updatedCost + vatAmount },
           });
         } catch (invErr) { console.error("PATCH completion invoice error:", invErr); }
 
-        const maintExpCode = await getAccountCodeFromMapping(scope.companyId, "property_maintenance_expense", "debit", "5400");
-        const cashCode = await getAccountCodeFromMapping(scope.companyId, "property_cash_source", "credit", "1100");
-        await createGuardedJournalEntry({
-          companyId: scope.companyId,
-          branchId: scope.branchId,
-          createdBy: scope.activeAssignmentId ?? scope.userId,
-          ref: `PROP-MAINT-${id}`,
-          description: `مصروف صيانة عقار — ${existing.category || ""} / ${existing.tenantName || ""}`,
-          type: "property",
-          sourceType: "maintenance_request",
-          sourceId: id,
-          lines: [
-            { accountCode: maintExpCode, debit: updatedCost, credit: 0, propertyId: existing.unitId ? Number(existing.unitId) : undefined },
-            { accountCode: cashCode, debit: 0, credit: updatedCost },
-          ],
-        }, { table: "property_maintenance", id: Number(id) }).catch(() => {});
+        try {
+          const { propertiesEngine } = await import("../lib/engines/index.js");
+          await propertiesEngine.postMaintenanceExpenseGL(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+            { id, propertyId: existing.unitId ? Number(existing.unitId) : 0, totalCost: updatedCost, type: existing.category }
+          );
+        } catch (jeErr) { console.error("PATCH maintenance GL posting via engine failed:", jeErr); }
       }
       try {
         await rawQuery<any>(

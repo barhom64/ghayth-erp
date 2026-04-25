@@ -664,32 +664,37 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
     const invoiceRef = `INV-CRM-${yearShort}${monthNum}-${opp.id}`;
     const vatAmount = dealValue * 0.15;
     const totalAmount = dealValue + vatAmount;
+
+    // Request invoice creation via CRM Engine (event-based, no direct write to finance table)
     try {
-      await rawExecute(
-        `INSERT INTO invoices ("companyId","clientId",ref,description,subtotal,total,"vatAmount","vatRate","paidAmount",status,"dueDate","createdBy") VALUES ($1,$2,$3,$4,$5,$6,$7,15,0,'draft',$8,$9)`,
-        [scope.companyId, clientId, invoiceRef, `فاتورة أولى - ${opp.title}`, dealValue, totalAmount, vatAmount, new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0], scope.userId]
+      const { crmEngine } = await import("../lib/engines/index.js");
+      await crmEngine.requestInvoiceCreation(
+        { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+        {
+          clientId: clientId || 0,
+          opportunityId: opp.id,
+          ref: invoiceRef,
+          description: `فاتورة أولى - ${opp.title}`,
+          subtotal: dealValue,
+          vatAmount,
+          total: totalAmount,
+          dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+        }
       );
     } catch (invoiceErr) {
-      console.error("Failed to create invoice for deal-won:", invoiceErr);
+      console.error("Failed to request invoice for deal-won:", invoiceErr);
     }
 
-    const arCode = await getAccountCodeFromMapping(scope.companyId, "invoice_ar", "debit", "1200");
-    const revenueCode = await getAccountCodeFromMapping(scope.companyId, "invoice_revenue", "credit", "4000");
-    const vatCode = await getAccountCodeFromMapping(scope.companyId, "invoice_vat_payable", "credit", "2300");
-    await createGuardedJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId || 0,
-      createdBy: scope.userId,
-      ref: invoiceRef,
-      description: `قيد فاتورة CRM — ${opp.title}`,
-      sourceType: "crm_deal_won",
-      sourceId: opp.id,
-      lines: [
-        { accountCode: arCode, debit: totalAmount, credit: 0, description: `ذمم مدينة — ${opp.title}`, clientId: clientId || undefined },
-        { accountCode: revenueCode, debit: 0, credit: dealValue, description: `إيراد مبيعات — ${opp.title}`, clientId: clientId || undefined },
-        { accountCode: vatCode, debit: 0, credit: vatAmount, description: `ضريبة قيمة مضافة — ${opp.title}` },
-      ],
-    }, { table: "crm_opportunities", id: opp.id });
+    // GL posting via CRM Engine → Financial Engine (with period check + sourceKey)
+    try {
+      const { crmEngine } = await import("../lib/engines/index.js");
+      await crmEngine.postDealWonGL(
+        { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+        { id: opp.id, clientId: clientId || 0, amount: dealValue, vatAmount, description: `قيد فاتورة CRM — ${opp.title}` }
+      );
+    } catch (jeErr) {
+      console.error("CRM deal-won GL posting via engine failed:", jeErr);
+    }
 
     if (clientId) {
       try {

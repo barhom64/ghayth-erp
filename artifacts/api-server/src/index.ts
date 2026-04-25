@@ -4,6 +4,7 @@ import { runMigrations } from "./lib/migrate.js";
 import { startCronScheduler } from "./lib/cronScheduler.js";
 import { registerEventListeners } from "./lib/eventListeners.js";
 import { registerRulesEngineListener } from "./lib/rulesEngine.js";
+import "./lib/engines/hrEngine.js";
 import { seedDemoData } from "./lib/seedDemoData.js";
 import { bootstrapAdminUser } from "./lib/bootstrapAdmin.js";
 import { pool } from "./lib/rawdb.js";

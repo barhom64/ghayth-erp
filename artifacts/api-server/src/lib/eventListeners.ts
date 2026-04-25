@@ -1553,5 +1553,40 @@ export function registerEventListeners() {
     }
   }
 
+  // ─── Cross-Domain Invoice Creation ─────────────────────────────────────
+  // When Property, CRM, or other domains need to create invoices, they emit
+  // events instead of writing directly to the finance-owned invoices table.
+  // Finance domain processes these requests here.
+
+  const invoiceRequestHandler = async (payload: EventPayload) => {
+    if (!payload?.companyId) return;
+    try {
+      const ref = payload.ref as string;
+      const subtotal = Number(payload.subtotal ?? 0);
+      const vatAmount = Number(payload.vatAmount ?? 0);
+      const total = Number(payload.total ?? subtotal + vatAmount);
+      await rawExecute(
+        `INSERT INTO invoices ("companyId","clientId",ref,description,subtotal,total,"vatAmount","vatRate","paidAmount",status,"dueDate","createdBy")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,15,0,'draft',$8,$9)`,
+        [
+          payload.companyId,
+          payload.clientId ?? null,
+          ref,
+          payload.description ?? "",
+          subtotal,
+          total,
+          vatAmount,
+          payload.dueDate ?? new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0],
+          payload.userId ?? 0,
+        ]
+      );
+    } catch (err) {
+      console.error("[EventListeners] Cross-domain invoice creation failed:", err);
+    }
+  };
+
+  eventBus.on("property.invoice.requested", invoiceRequestHandler);
+  eventBus.on("crm.deal.invoice_requested", invoiceRequestHandler);
+
   console.log("[EventSystem] All event listeners registered successfully");
 }

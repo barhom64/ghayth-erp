@@ -2546,9 +2546,8 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
       }
     }
 
-    // Driver-liability: create a payroll deduction + notify the driver so
-    // they see the deduction before it lands on their payslip.
-    let deductionId: number | null = null;
+    // Driver-liability: request a payroll deduction via Fleet Engine →
+    // HR Engine event boundary (no direct write to HR-owned table).
     let driverAssignmentId: number | null = null;
     if (fineAmount > 0 && liability === 'driver' && b.driverId) {
       try {
@@ -2560,16 +2559,20 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
           [b.driverId, scope.companyId]
         );
         if (driver?.employeeId) {
-          const { insertId: pdId } = await rawExecute(
-            `INSERT INTO payroll_deductions ("companyId","employeeId",type,amount,reason,date,"createdAt")
-             VALUES ($1,$2,'traffic_violation',$3,$4,CURRENT_DATE,NOW())`,
-            [scope.companyId, driver.employeeId, fineAmount, `مخالفة مرورية: ${b.violationType}`]
+          const { fleetEngine } = await import("../lib/engines/index.js");
+          await fleetEngine.requestPayrollDeduction(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+            {
+              employeeId: driver.employeeId,
+              violationId: insertId,
+              amount: fineAmount,
+              reason: `مخالفة مرورية: ${b.violationType}`,
+            }
           );
-          deductionId = pdId;
           driverAssignmentId = driver.assignmentId ?? null;
         }
       } catch (pdErr) {
-        console.error("Traffic violation payroll deduction failed:", pdErr);
+        console.error("Traffic violation payroll deduction request failed:", pdErr);
       }
       if (driverAssignmentId) {
         createNotification({
@@ -2592,7 +2595,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
       after: {
         vehicleId: b.vehicleId, driverId: b.driverId ?? null,
         violationType: b.violationType, fineAmount, liability,
-        journalEntryId, deductionId,
+        journalEntryId, deductionRequested: liability === 'driver',
       },
     }).catch(console.error);
     emitEvent({
@@ -2602,7 +2605,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
     }).catch(console.error);
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1`, [insertId]);
-    res.status(201).json({ ...row, journalEntryId, deductionId, liability });
+    res.status(201).json({ ...row, journalEntryId, liability });
   } catch (err) { handleRouteError(err, res, "Create traffic violation error:"); }
 });
 

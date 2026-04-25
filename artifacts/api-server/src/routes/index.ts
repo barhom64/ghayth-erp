@@ -185,19 +185,19 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), cos
 // finance-vendors.ts, and finance-reports.ts during canonicalisation.
 router.use("/notifications", notificationsRouter);
 router.use("/tasks", requireModule("operations"), tasksRouter);
-router.use("/fleet", requireModule("fleet"), fleetRouter);
+router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetRouter);
 router.use("/warehouse", requireModule("warehouse"), warehouseRouter);
-router.use("/properties", requireModule("property"), propertiesRouter);
-router.use("/legal", requireModule("legal"), legalRouter);
+router.use("/properties", requireModule("property"), requireGuards("financial"), propertiesRouter);
+router.use("/legal", requireModule("legal"), requireGuards("financial"), legalRouter);
 router.use("/projects", requireModule("operations"), projectsRouter);
 router.use("/support", requireModule("support"), supportRouter);
-router.use("/crm", requireModule("crm"), crmRouter);
+router.use("/crm", requireModule("crm"), requireGuards("financial"), crmRouter);
 router.use("/intelligence", requireModule("bi"), intelligenceRouter);
 router.use("/automation", automationRouter);
 router.use("/communications", requireModule("comms"), communicationsRouter);
 router.use("/governance", requireModule("governance"), governanceRouter);
 router.use("/bi", requireModule("bi"), biRouter);
-router.use("/store", requireModule("store"), storeRouter);
+router.use("/store", requireModule("store"), requireGuards("financial"), storeRouter);
 router.use("/documents", requireModule("documents"), documentsRouter);
 router.use("/requests", requireModule("requests"), requestsRouter);
 router.use("/request-catalog", requireModule("requests"), (req, res, next) => {
@@ -219,7 +219,7 @@ router.use("/impact-preview", impactPreviewRouter);
 router.use("/my-space", mySpaceRouter);
 router.use("/action-center", actionCenterRouter);
 router.use("/entity-meta", entityMetaRouter);
-router.use("/umrah", requireModule("operations"), umrahRouter);
+router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahRouter);
 router.use("/umrah", requireModule("operations"), umrahEntitiesRouter);
 router.use("/operations-center", requireModule("operations"), requireMinLevel(40), operationsCenterRouter);
 router.use("/export", requireMinLevel(30), exportRouter);
