@@ -647,16 +647,22 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
       await rawExecute(`UPDATE crm_opportunities SET "clientId"=$1 WHERE id=$2`, [clientId, opp.id]);
     }
 
-    const contractRef = `CTR-CRM-${Date.now().toString(36).toUpperCase()}`;
-    const contractStart = new Date().toISOString().split('T')[0];
-    const contractEnd = new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0];
     try {
-      await rawExecute(
-        `INSERT INTO legal_contracts ("companyId",ref,title,"contractType","partyName","startDate","endDate",value,status,"createdBy") VALUES ($1,$2,$3,'service',$4,$5,$6,$7,'active',$8)`,
-        [scope.companyId, contractRef, `عقد خدمات - ${opp.title}`, opp.contactName || 'عميل', contractStart, contractEnd, dealValue, scope.userId]
+      const { crmEngine } = await import("../lib/engines/index.js");
+      crmEngine.requestLegalContractCreation(
+        { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+        {
+          ref: `CTR-CRM-${Date.now().toString(36).toUpperCase()}`,
+          title: `عقد خدمات - ${opp.title}`,
+          contractType: "service",
+          partyName: opp.contactName || 'عميل',
+          startDate: new Date().toISOString().split('T')[0],
+          endDate: new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0],
+          value: dealValue,
+        }
       );
     } catch (contractErr) {
-      console.error("Failed to create legal contract for deal-won:", contractErr);
+      console.error("Failed to request legal contract for deal-won:", contractErr);
     }
 
     const monthNum = String(new Date().getMonth() + 1).padStart(2, "0");

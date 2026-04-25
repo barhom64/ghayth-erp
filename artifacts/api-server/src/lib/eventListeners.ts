@@ -1670,5 +1670,30 @@ export function registerEventListeners() {
     }
   });
 
+  // ─── Cross-Domain Legal Contract Creation ──────────────────────────────
+  // CRM domain emits events when a deal is won and a service contract
+  // needs to be created. Legal domain processes it here.
+  eventBus.on("crm.legal_contract.requested", async (payload: EventPayload) => {
+    if (!payload?.companyId) return;
+    try {
+      await rawExecute(
+        `INSERT INTO legal_contracts ("companyId",ref,title,"contractType","partyName","startDate","endDate",value,status,"createdBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9)`,
+        [
+          payload.companyId,
+          payload.ref,
+          payload.title,
+          payload.contractType ?? "service",
+          payload.partyName ?? "",
+          payload.startDate,
+          payload.endDate,
+          Number(payload.value ?? 0),
+          payload.userId ?? 0,
+        ]
+      );
+    } catch (err) {
+      console.error("[EventListeners] Cross-domain legal contract creation failed:", err);
+    }
+  });
+
   console.log("[EventSystem] All event listeners registered successfully");
 }

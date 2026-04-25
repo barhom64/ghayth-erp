@@ -101,6 +101,27 @@ class CRMEngineImpl implements DomainEngine {
 
     return { requested: true };
   }
+
+  async requestLegalContractCreation(
+    ctx: CRMGLContext,
+    params: {
+      ref: string;
+      title: string;
+      contractType: string;
+      partyName: string;
+      startDate: string;
+      endDate: string;
+      value: number;
+    }
+  ) {
+    eventBus.emit("crm.legal_contract.requested", {
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      userId: ctx.createdBy,
+      ...params,
+    });
+    return { requested: true };
+  }
 }
 
 export const crmEngine = new CRMEngineImpl();
