@@ -26,7 +26,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { DetailPageLayout, type DetailStatus } from "@/components/shared/detail-page-layout";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 
 /**
  * Invoice detail page — migrated to DetailPageLayout which provides
@@ -465,7 +465,7 @@ export default function InvoiceDetailPage() {
           </div>
           <div className="info-item" style={{ display: "flex", gap: "4px" }}>
             <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{invoice.status || "-"}</span>
+            <span className="info-value" style={{ fontWeight: 600 }}>{resolveStatus(invoice.status, "invoice")?.label || invoice.status || "-"}</span>
           </div>
         </div>
 
@@ -555,7 +555,7 @@ export default function InvoiceDetailPage() {
             </div>
             <div className="info-item" style={{ display: "flex", gap: "4px" }}>
               <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{invoice.status || "-"}</span>
+              <span className="info-value" style={{ fontWeight: 600 }}>{resolveStatus(invoice.status, "invoice")?.label || invoice.status || "-"}</span>
             </div>
           </div>
           {lines.length > 0 && (

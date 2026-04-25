@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useAppContext } from "@/contexts/app-context";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DollarSign, Users, Building2, CheckCircle2, Info } from "lucide-react";
 import { TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -74,7 +74,7 @@ export default function PayrollCreate() {
   };
 
   const monthLabel = form.month
-    ? new Date(form.month + "-01").toLocaleDateString("ar-SA", { year: "numeric", month: "long" })
+    ? formatDateAr(form.month + "-01")
     : "";
 
   return (

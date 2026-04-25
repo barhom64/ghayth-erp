@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -177,7 +178,7 @@ export default function TrainingPage() {
                   </div>
                   <div className="space-y-2 text-sm text-gray-500">
                     {t.trainer && <p>المدرب: <span className="text-gray-700">{t.trainer}</span></p>}
-                    {t.startDate && <p>التاريخ: {t.startDate} {t.endDate ? `— ${t.endDate}` : ""}</p>}
+                    {t.startDate && <p>التاريخ: {formatDateAr(t.startDate)} {t.endDate ? `— ${formatDateAr(t.endDate)}` : ""}</p>}
                     {t.location && <p>الموقع: {t.location}</p>}
                     <div className="flex items-center justify-between pt-2 border-t">
                       <span>المشاركين: {t.enrolled || t.currentParticipants || 0}/{t.capacity || t.maxParticipants || 0}</span>

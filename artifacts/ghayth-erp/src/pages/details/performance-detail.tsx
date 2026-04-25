@@ -6,7 +6,9 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ActionHistory } from "@/components/approval-actions";
+import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
+import { useToast } from "@/hooks/use-toast";
 import { Edit, Star, Target, TrendingUp } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
@@ -71,6 +73,8 @@ export default function PerformanceDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/hr/performance/:id");
   const id = params?.id ? Number(params.id) : null;
+
+  const { toast } = useToast();
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["performance", String(id)],
@@ -320,8 +324,37 @@ export default function PerformanceDetail() {
       </Card>
 
       <div className="space-y-3">
-        {/* Action history — performance reviews don't have an approval
-            flow, but keeping the audit trail still matters. */}
+        {/* Approval actions */}
+        {id && review && ["pending", "draft", "returned"].includes(review.status) && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ApprovalActions
+                entityType="performance"
+                entityId={id}
+                currentStatus={review.status}
+                approveEndpoint={`/hr/performance/${id}/approve`}
+                rejectEndpoint={`/hr/performance/${id}/approve`}
+                returnEndpoint={`/hr/performance/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, notes })}
+                returnBody={(notes) => ({ approved: "returned", notes })}
+                pendingStatuses={["pending", "draft", "returned"]}
+                onDone={() => {
+                  refetch();
+                  toast({ title: "تم تحديث التقييم" });
+                }}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Action history */}
         {id && (
           <Card>
             <CardHeader className="pb-2">
@@ -333,6 +366,8 @@ export default function PerformanceDetail() {
           </Card>
         )}
       </div>
+
+      {id && <ApprovalTimeline entityType="performance" entityId={id} />}
 
       {id && <EntityComments entityType="performance" entityId={id} />}
       {id && <EntityTags entityType="performance" entityId={id} />}

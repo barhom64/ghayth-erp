@@ -6,7 +6,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ActionHistory } from "@/components/approval-actions";
+import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { Edit, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -174,6 +174,33 @@ export default function HrContractDetail() {
       </Card>
 
       <div className="space-y-3">
+        {/* Approval actions */}
+        {id && contract && ["pending", "draft", "returned"].includes(contract.status) && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ApprovalActions
+                entityType="hr-contract"
+                entityId={id}
+                currentStatus={contract.status}
+                approveEndpoint={`/hr/contracts/${id}/approve`}
+                rejectEndpoint={`/hr/contracts/${id}/approve`}
+                returnEndpoint={`/hr/contracts/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, notes })}
+                returnBody={(notes) => ({ approved: "returned", notes })}
+                pendingStatuses={["pending", "draft", "returned"]}
+                onDone={() => { refetch(); }}
+              />
+            </CardContent>
+          </Card>
+        )}
+
         {/* Action history */}
         {id && (
           <Card>

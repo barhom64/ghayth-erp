@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, FileText, Clock, Shield, Car, Building2, User } from "lucide-react";
@@ -92,9 +93,7 @@ export default function ExpiringDocumentsPage() {
       sortable: true,
       render: (v) => (
         <span className="text-sm text-gray-600">
-          {v.expiryDate
-            ? new Date(v.expiryDate).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })
-            : "-"}
+          {formatDateAr(v.expiryDate)}
         </span>
       ),
     },

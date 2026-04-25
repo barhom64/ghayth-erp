@@ -161,9 +161,7 @@ export default function AutoDetectionPage() {
       sortable: true,
       render: (row) => (
         <span className="font-mono text-sm">
-          {new Date(row.targetDate).toLocaleDateString("ar-SA", {
-            year: "numeric", month: "short", day: "numeric",
-          })}
+          {formatDateAr(row.targetDate)}
         </span>
       ),
     },
@@ -520,9 +518,7 @@ export default function AutoDetectionPage() {
               <CardTitle className="text-sm text-blue-700 flex items-center gap-2">
                 <FileText className="h-4 w-4" />
                 تفاصيل الرصد —{" "}
-                {new Date(log.targetDate).toLocaleDateString("ar-SA", {
-                  year: "numeric", month: "long", day: "numeric",
-                })}
+                {formatDateAr(log.targetDate)}
               </CardTitle>
             </CardHeader>
             <CardContent>

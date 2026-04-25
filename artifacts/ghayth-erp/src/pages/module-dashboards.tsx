@@ -117,7 +117,7 @@ function HrDashboard() {
                       <div className="bg-red-400" style={{ height: `${(Number(d.absent) / total) * 60}px` }} />
                       <div className="bg-orange-400 rounded-b" style={{ height: `${(Number(d.late) / total) * 60}px` }} />
                     </div>
-                    <span className="text-[9px] text-muted-foreground">{d.date ? new Date(d.date).toLocaleDateString("ar-SA", { weekday: "short" }) : ""}</span>
+                    <span className="text-[9px] text-muted-foreground">{d.date ? formatDateAr(d.date) : ""}</span>
                   </div>
                 );
               })}
@@ -537,7 +537,7 @@ function SupportDashboard() {
                       <div className="bg-blue-400 rounded-t" style={{ height: `${(Number(d.created) / maxVal) * 60}px` }} />
                       <div className="bg-green-400 rounded-b" style={{ height: `${(Number(d.resolved) / maxVal) * 60}px` }} />
                     </div>
-                    <span className="text-[9px] text-muted-foreground">{d.date ? new Date(d.date).toLocaleDateString("ar-SA", { weekday: "short" }) : ""}</span>
+                    <span className="text-[9px] text-muted-foreground">{d.date ? formatDateAr(d.date) : ""}</span>
                   </div>
                 );
               })}

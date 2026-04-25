@@ -7,6 +7,7 @@ import { EntityPrintButton, type PrintSection } from "@/components/shared/entity
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -214,6 +215,8 @@ export default function FinancialRequestDetail() {
           </Card>
         )}
       </div>
+
+      {id && <ApprovalTimeline entityType="financial_request" entityId={id} />}
 
       {id && <EntityComments entityType="financial_request" entityId={id} />}
       {id && <EntityTags entityType="financial_request" entityId={id} />}

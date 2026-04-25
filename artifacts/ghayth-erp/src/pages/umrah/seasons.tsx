@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,8 +43,8 @@ export default function UmrahSeasons() {
 
   const columns: DataTableColumn<any>[] = [
     { key: "title", header: "العنوان", sortable: true, searchable: true },
-    { key: "startDate", header: "تاريخ البداية", sortable: true, render: (r: any) => r.startDate ? new Date(r.startDate).toLocaleDateString("ar-SA") : "-" },
-    { key: "endDate", header: "تاريخ النهاية", sortable: true, render: (r: any) => r.endDate ? new Date(r.endDate).toLocaleDateString("ar-SA") : "-" },
+    { key: "startDate", header: "تاريخ البداية", sortable: true, render: (r: any) => formatDateAr(r.startDate) },
+    { key: "endDate", header: "تاريخ النهاية", sortable: true, render: (r: any) => formatDateAr(r.endDate) },
     { key: "status", header: "الحالة", render: (r: any) => <PageStatusBadge status={r.status} /> },
     {
       key: "actions" as any, header: "إجراءات", render: (r: any) =>

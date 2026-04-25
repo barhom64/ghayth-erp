@@ -1,4 +1,5 @@
 import { useApiQuery, asList } from "@/lib/api";
+import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Truck } from "lucide-react";
@@ -17,12 +18,12 @@ interface TransportEntry {
 }
 
 const columns: DataTableColumn<TransportEntry>[] = [
-  { key: "tripDate", header: "تاريخ الرحلة", sortable: true, render: (r) => r.tripDate ? new Date(r.tripDate).toLocaleDateString("ar-SA") : "-" },
+  { key: "tripDate", header: "تاريخ الرحلة", sortable: true, render: (r) => formatDateAr(r.tripDate) },
   { key: "fromLocation", header: "من", searchable: true },
   { key: "toLocation", header: "إلى", searchable: true },
   { key: "capacity", header: "السعة" },
   { key: "pilgrimCount", header: "عدد المعتمرين" },
-  { key: "cost", header: "التكلفة", render: (r) => r.cost ? `${Number(r.cost).toLocaleString("ar-SA")} ر.س` : "-" },
+  { key: "cost", header: "التكلفة", render: (r) => r.cost ? formatCurrency(Number(r.cost)) : "-" },
   {
     key: "status", header: "الحالة", render: (r) => {
       const v = r.status;

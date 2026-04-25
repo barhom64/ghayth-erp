@@ -7,6 +7,7 @@ import { EntityPrintButton, type PrintSection } from "@/components/shared/entity
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -218,6 +219,8 @@ export default function SalaryAdvanceDetail() {
           </Card>
         )}
       </div>
+
+      {id && <ApprovalTimeline entityType="salary_advance" entityId={id} />}
 
       {id && <EntityComments entityType="salary_advance" entityId={id} />}
       {id && <EntityTags entityType="salary_advance" entityId={id} />}

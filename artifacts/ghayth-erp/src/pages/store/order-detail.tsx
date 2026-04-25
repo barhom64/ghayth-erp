@@ -3,7 +3,7 @@ import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
@@ -144,7 +144,7 @@ export default function StoreOrderDetailPage() {
           </div>
           <div className="info-item" style={{ display: "flex", gap: "4px" }}>
             <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{order.status || "-"}</span>
+            <span className="info-value" style={{ fontWeight: 600 }}>{resolveStatus(order.status)?.label || order.status || "-"}</span>
           </div>
         </div>
 
@@ -163,8 +163,8 @@ export default function StoreOrderDetailPage() {
                   <td>{i + 1}</td>
                   <td>{item.name || item.description || "-"}</td>
                   <td>{item.quantity || 1}</td>
-                  <td>{Number(item.price || item.unitPrice || 0).toLocaleString()} ﷼</td>
-                  <td style={{ fontWeight: "bold" }}>{Number(item.total || (item.quantity || 1) * (item.price || item.unitPrice || 0)).toLocaleString()} ﷼</td>
+                  <td>{formatCurrency(Number(item.price || item.unitPrice || 0))}</td>
+                  <td style={{ fontWeight: "bold" }}>{formatCurrency(Number(item.total || (item.quantity || 1) * (item.price || item.unitPrice || 0)))}</td>
                 </tr>
               ))}
             </tbody>
@@ -175,7 +175,7 @@ export default function StoreOrderDetailPage() {
           <tbody>
             <tr>
               <td className="label" style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ الإجمالي:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{Number(order.totalAmount || 0).toLocaleString()} ﷼</td>
+              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(order.totalAmount || 0))}</td>
             </tr>
           </tbody>
         </table>
@@ -194,7 +194,7 @@ export default function StoreOrderDetailPage() {
             </div>
             <div className="info-item" style={{ display: "flex", gap: "4px" }}>
               <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{order.status || "-"}</span>
+              <span className="info-value" style={{ fontWeight: 600 }}>{resolveStatus(order.status)?.label || order.status || "-"}</span>
             </div>
           </div>
           {items.length > 0 && (
@@ -202,14 +202,14 @@ export default function StoreOrderDetailPage() {
               <thead><tr><th>#</th><th>المنتج</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
               <tbody>
                 {items.map((item: any, i: number) => (
-                  <tr key={i}><td>{i + 1}</td><td>{item.name || item.description || "-"}</td><td>{item.quantity || 1}</td><td>{Number(item.price || item.unitPrice || 0).toLocaleString()} ﷼</td><td style={{ fontWeight: "bold" }}>{Number(item.total || (item.quantity || 1) * (item.price || item.unitPrice || 0)).toLocaleString()} ﷼</td></tr>
+                  <tr key={i}><td>{i + 1}</td><td>{item.name || item.description || "-"}</td><td>{item.quantity || 1}</td><td>{formatCurrency(Number(item.price || item.unitPrice || 0))}</td><td style={{ fontWeight: "bold" }}>{formatCurrency(Number(item.total || (item.quantity || 1) * (item.price || item.unitPrice || 0)))}</td></tr>
                 ))}
               </tbody>
             </table>
           )}
           <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
             <tbody>
-              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ الإجمالي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{Number(order.totalAmount || 0).toLocaleString()} ﷼</td></tr>
+              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ الإجمالي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(order.totalAmount || 0))}</td></tr>
             </tbody>
           </table>
         </PrintDocument>

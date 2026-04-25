@@ -1,4 +1,5 @@
 import { useApiQuery, asList } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { BookOpen } from "lucide-react";
@@ -23,7 +24,7 @@ const columns: DataTableColumn<KBArticle>[] = [
   { key: "views", header: "المشاهدات", sortable: true },
   { key: "helpful", header: "مفيد 👍" },
   { key: "notHelpful", header: "غير مفيد 👎" },
-  { key: "createdAt", header: "تاريخ الإنشاء", render: (r) => r.createdAt ? new Date(r.createdAt).toLocaleDateString("ar-SA") : "-" },
+  { key: "createdAt", header: "تاريخ الإنشاء", render: (r) => formatDateAr(r.createdAt) },
 ];
 
 export default function KnowledgeBase() {

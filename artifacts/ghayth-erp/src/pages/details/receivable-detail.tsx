@@ -8,6 +8,7 @@ import { AttachmentPreview, type PreviewableAttachment } from "@/components/shar
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, ArrowDownCircle, AlertTriangle, Calendar, Receipt } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -353,6 +354,8 @@ export default function ReceivableDetail() {
           </Card>
         )}
       </div>
+
+      {id && <ApprovalTimeline entityType="receivable" entityId={id} />}
 
       {id && <EntityComments entityType="receivable" entityId={id} />}
       {id && <EntityTags entityType="receivable" entityId={id} />}

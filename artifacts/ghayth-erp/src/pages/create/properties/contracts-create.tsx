@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Users2, FileText, Calendar, Banknote, Shield, ScrollText, Zap } from "lucide-react";
-import { formatCurrency, getCurrencySymbol } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, getCurrencySymbol } from "@/lib/formatters";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 import { fieldErrorClass, TextField, NumberField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
@@ -492,7 +492,7 @@ export default function ContractsCreate() {
                     {schedulePreview.map(item => (
                       <tr key={item.num} className="border-t">
                         <td className="p-2 font-mono">{item.num}</td>
-                        <td className="p-2">{item.date}</td>
+                        <td className="p-2">{formatDateAr(item.date)}</td>
                         <td className="p-2 font-bold text-emerald-600">{formatCurrency(item.amount)}</td>
                       </tr>
                     ))}

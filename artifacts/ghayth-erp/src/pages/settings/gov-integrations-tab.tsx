@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -148,7 +149,7 @@ export function GovIntegrationsTab() {
                           </span>
                           {item.lastCheckedAt && (
                             <span className="text-xs text-muted-foreground">
-                              آخر فحص: {new Date(item.lastCheckedAt).toLocaleDateString("ar-SA")} {new Date(item.lastCheckedAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
+                              آخر فحص: {formatDateAr(item.lastCheckedAt)}
                             </span>
                           )}
                         </div>

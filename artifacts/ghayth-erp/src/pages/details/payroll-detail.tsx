@@ -7,6 +7,7 @@ import { EntityPrintButton, type PrintSection } from "@/components/shared/entity
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
@@ -292,6 +293,8 @@ export default function PayrollDetail() {
           </Card>
         )}
       </div>
+
+      {id && <ApprovalTimeline entityType="payroll" entityId={id} />}
 
       {id && <EntityComments entityType="payroll" entityId={id} />}
       {id && <EntityTags entityType="payroll" entityId={id} />}

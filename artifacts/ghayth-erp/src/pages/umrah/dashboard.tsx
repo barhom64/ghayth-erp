@@ -1,5 +1,6 @@
 import React from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -145,7 +146,7 @@ export default function UmrahDashboard() {
                 { key: "fullName", header: "الاسم", render: (r) => <span className="font-medium">{r.fullName}</span> },
                 { key: "passportNumber", header: "الجواز" },
                 { key: "nationality", header: "الجنسية" },
-                { key: "actualArrival", header: "تاريخ الوصول", render: (r) => r.actualArrival ? new Date(r.actualArrival).toLocaleDateString("ar-SA") : "-" },
+                { key: "actualArrival", header: "تاريخ الوصول", render: (r) => formatDateAr(r.actualArrival) },
                 { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} /> },
               ] as DataTableColumn<any>[]}
               data={dash?.recentArrivals || []}
