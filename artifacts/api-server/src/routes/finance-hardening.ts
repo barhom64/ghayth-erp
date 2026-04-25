@@ -10,7 +10,6 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
-  createJournalEntry,
   createAuditLog,
   emitEvent,
   createNotification,
@@ -240,12 +239,16 @@ financeHardeningRouter.post("/journal-manual", requirePermission("finance:create
     }
 
     const ref = `MJE-${Date.now()}`;
-    const journalId = await createJournalEntry({
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const { journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
       ref,
       description: description ?? "قيد يدوي",
+      sourceType: "manual_journal",
+      sourceId: 0,
+      sourceKey: `finance:manual:${Date.now()}`,
       lines,
     });
 
@@ -880,13 +883,17 @@ financeHardeningRouter.post("/intercompany", requirePermission("finance:create")
     const txDate = transactionDate ?? new Date().toISOString().split("T")[0];
 
     // Journal entry for the FROM company (debit AR, credit Revenue)
-    const fromJournalId = await createJournalEntry({
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const { journalId: fromJournalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
       ref,
       description: description ?? `معاملة بين الشركات ${ref}`,
       type: "intercompany",
+      sourceType: "intercompany",
+      sourceId: 0,
+      sourceKey: `finance:intercompany:from:${Date.now()}`,
       lines: [
         { accountCode: arAccountCode, debit: Number(amount), credit: 0, description: "ذمم مدينة شركة شقيقة" },
         { accountCode: revenueAccountCode, debit: 0, credit: Number(amount), description: "إيراد شركة شقيقة" },
@@ -894,13 +901,16 @@ financeHardeningRouter.post("/intercompany", requirePermission("finance:create")
     });
 
     // Journal entry for the TO company (debit Expense, credit AP)
-    const toJournalId = await createJournalEntry({
+    const { journalId: toJournalId } = await financialEngine.postJournalEntry({
       companyId: Number(toCompanyId),
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
       ref,
       description: description ?? `معاملة بين الشركات ${ref}`,
       type: "intercompany",
+      sourceType: "intercompany",
+      sourceId: 0,
+      sourceKey: `finance:intercompany:to:${Date.now()}`,
       lines: [
         { accountCode: expenseAccountCode, debit: Number(amount), credit: 0, description: "مصروف شركة شقيقة" },
         { accountCode: apAccountCode, debit: 0, credit: Number(amount), description: "ذمم دائنة شركة شقيقة" },

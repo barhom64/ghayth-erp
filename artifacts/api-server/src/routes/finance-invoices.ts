@@ -15,10 +15,7 @@ import {
   createNotification,
   emitEvent,
   createAuditLog,
-  createJournalEntry,
-  createGuardedJournalEntry,
   initiateApprovalChain,
-  getAccountCodeFromMapping,
   checkFinancialPeriodOpen,
   reverseAccountBalances,
   computeVat,
@@ -332,10 +329,11 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
       );
     }
 
+    const { financialEngine } = await import("../lib/engines/index.js");
     const [invArCode, invRevenueCode, invVatPayableCode] = await Promise.all([
-      getAccountCodeFromMapping(effectiveCompanyId, "invoice_ar", "debit", "1200"),
-      getAccountCodeFromMapping(effectiveCompanyId, "invoice_revenue", "credit", "4000"),
-      getAccountCodeFromMapping(effectiveCompanyId, "invoice_vat_payable", "credit", "2300"),
+      financialEngine.resolveAccountCode(effectiveCompanyId, "invoice_ar", "debit", "1200"),
+      financialEngine.resolveAccountCode(effectiveCompanyId, "invoice_revenue", "credit", "4000"),
+      financialEngine.resolveAccountCode(effectiveCompanyId, "invoice_vat_payable", "credit", "2300"),
     ]);
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('invoice_number_seq') AS seq`);
@@ -515,12 +513,13 @@ invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"
     });
 
     // GL entry created ONLY upon approval — BLOCKING (financial integrity guard)
+    const { financialEngine } = await import("../lib/engines/index.js");
     const [invArCode, invRevenueCode, invVatPayableCode] = await Promise.all([
-      getAccountCodeFromMapping(scope.companyId, "invoice_ar", "debit", "1200"),
-      getAccountCodeFromMapping(scope.companyId, "invoice_revenue", "credit", "4000"),
-      getAccountCodeFromMapping(scope.companyId, "invoice_vat_payable", "credit", "2300"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1200"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4000"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2300"),
     ]);
-    await createGuardedJournalEntry({
+    const { journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId || 0,
       createdBy: scope.activeAssignmentId,
@@ -529,12 +528,15 @@ invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"
       type: "invoice",
       sourceType: "invoice",
       sourceId: id,
+      sourceKey: `finance:invoice_approval:${id}`,
       lines: [
         { accountCode: invArCode, debit: Number(invoice.total), credit: 0 },
         { accountCode: invRevenueCode, debit: 0, credit: Number(invoice.total) - Number(invoice.vatAmount || 0) },
         { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0) },
       ],
-    }, { table: "invoices", id });
+      guardTable: "invoices",
+      guardId: id,
+    });
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.approved", entity: "invoices", entityId: id, details: JSON.stringify({ ref: invoice.ref, total: invoice.total }) }).catch(console.error);
 
@@ -596,9 +598,10 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
     if (!parsedPayment.success) throw new ValidationError(parsedPayment.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { amount, method = "bank_transfer" } = parsedPayment.data;
 
+    const { financialEngine } = await import("../lib/engines/index.js");
     const [cashAccountCode, arAccountCode] = await Promise.all([
-      getAccountCodeFromMapping(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
-      getAccountCodeFromMapping(scope.companyId, "invoice_payment_ar", "credit", "1200"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_payment_ar", "credit", "1200"),
     ]);
 
     let invoiceRef!: string;
@@ -652,7 +655,7 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
     // balance validation, rounding-difference auto-correction,
     // updateAccountBalances, and event bus emission).
     const paymentAmount = Number(amount);
-    await createJournalEntry({
+    const { journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
@@ -661,6 +664,7 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
       type: "payment",
       sourceType: "invoice",
       sourceId: Number(id),
+      sourceKey: `finance:payment:${id}:${Date.now()}`,
       lines: [
         { accountCode: cashAccountCode, debit: paymentAmount, credit: 0 },
         { accountCode: arAccountCode, debit: 0, credit: paymentAmount },
@@ -1000,10 +1004,11 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
       : creditAmount;
     const vat = Math.round((creditAmount - net) * 100) / 100;
 
+    const { financialEngine } = await import("../lib/engines/index.js");
     const [salesReturnsCode, vatPayableCode, arCode] = await Promise.all([
-      getAccountCodeFromMapping(scope.companyId, "invoice_sales_returns", "debit", "4100"),
-      getAccountCodeFromMapping(scope.companyId, "invoice_vat_payable", "debit", "2300"),
-      getAccountCodeFromMapping(scope.companyId, "invoice_ar", "credit", "1200"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_sales_returns", "debit", "4100"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "debit", "2300"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1200"),
     ]);
 
     // Persist credit memo + reduce invoice.total (soft reduce via notes + new line)
@@ -1063,20 +1068,23 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
     });
 
     let journalId: number | null = null;
-    journalId = await createGuardedJournalEntry({
+    ({ journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: invoice.branchId,
       createdBy: scope.activeAssignmentId,
       ref: `CM-${invoice.ref}-${memoId}`,
       description: `إشعار دائن على الفاتورة ${invoice.ref}: ${reason}`,
       sourceType: "credit_memo",
-      sourceId: memoId ?? undefined,
+      sourceId: memoId ?? 0,
+      sourceKey: `finance:credit_memo:${memoId}`,
       lines: [
         { accountCode: salesReturnsCode, debit: net, credit: 0, clientId: invoice.clientId },
         ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: vat, credit: 0, clientId: invoice.clientId }] : []),
         { accountCode: arCode, debit: 0, credit: creditAmount, clientId: invoice.clientId },
       ],
-    }, { table: "credit_memos", id: memoId ?? 0 });
+      guardTable: "credit_memos",
+      guardId: memoId ?? 0,
+    }));
     if (journalId && memoId) {
       await rawExecute(`UPDATE credit_memos SET "journalId" = $1 WHERE id = $2`, [journalId, memoId]);
     }
@@ -1143,10 +1151,11 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
       : chargeAmount;
     const vat = Math.round((chargeAmount - net) * 100) / 100;
 
+    const { financialEngine } = await import("../lib/engines/index.js");
     const [arCode, revenueCode, vatPayableCode] = await Promise.all([
-      getAccountCodeFromMapping(scope.companyId, "invoice_ar", "debit", "1200"),
-      getAccountCodeFromMapping(scope.companyId, "invoice_revenue", "credit", "4000"),
-      getAccountCodeFromMapping(scope.companyId, "invoice_vat_payable", "credit", "2300"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1200"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4000"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2300"),
     ]);
 
     let memoId: number | null = null;
@@ -1196,20 +1205,23 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
     });
 
     let journalId: number | null = null;
-    journalId = await createGuardedJournalEntry({
+    ({ journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: invoice.branchId,
       createdBy: scope.activeAssignmentId,
       ref: `DM-${invoice.ref}-${memoId}`,
       description: `إشعار مدين على الفاتورة ${invoice.ref}: ${reason}`,
       sourceType: "debit_memo",
-      sourceId: memoId ?? undefined,
+      sourceId: memoId ?? 0,
+      sourceKey: `finance:debit_memo:${memoId}`,
       lines: [
         { accountCode: arCode, debit: chargeAmount, credit: 0, clientId: invoice.clientId },
         { accountCode: revenueCode, debit: 0, credit: net, clientId: invoice.clientId },
         ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: 0, credit: vat, clientId: invoice.clientId }] : []),
       ],
-    }, { table: "debit_memos", id: memoId ?? 0 });
+      guardTable: "debit_memos",
+      guardId: memoId ?? 0,
+    }));
     if (journalId && memoId) {
       await rawExecute(`UPDATE debit_memos SET "journalId" = $1 WHERE id = $2`, [journalId, memoId]);
     }
@@ -1390,24 +1402,28 @@ invoicesRouter.post("/bad-debt/post", requirePermission("finance:create"), async
       throw new ValidationError("لا يوجد مبلغ لمخصص الديون المشكوك فيها");
     }
 
+    const { financialEngine } = await import("../lib/engines/index.js");
     const [expenseCode, allowanceCode] = await Promise.all([
-      getAccountCodeFromMapping(scope.companyId, "bad_debt_expense", "debit", "5170"),
-      getAccountCodeFromMapping(scope.companyId, "bad_debt_allowance", "credit", "1210"),
+      financialEngine.resolveAccountCode(scope.companyId, "bad_debt_expense", "debit", "5170"),
+      financialEngine.resolveAccountCode(scope.companyId, "bad_debt_allowance", "credit", "1210"),
     ]);
 
     let journalId: number | null = null;
     try {
-      journalId = await createJournalEntry({
+      ({ journalId } = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
         createdBy: scope.activeAssignmentId,
         ref,
         description: `مخصص ديون مشكوك فيها ${targetPeriod}${notes ? ` — ${notes}` : ""}`,
+        sourceType: "bad_debt_allowance",
+        sourceId: 0,
+        sourceKey: `finance:bad_debt:${scope.companyId}:${targetPeriod}`,
         lines: [
           { accountCode: expenseCode, debit: total, credit: 0 },
           { accountCode: allowanceCode, debit: 0, credit: total },
         ],
-      });
+      }));
     } catch (je) {
       console.error("Bad debt JE error:", je);
       throw new IntegrationError(
@@ -1500,25 +1516,29 @@ invoicesRouter.post("/customer-advances", requirePermission("finance:create"), a
       }
     });
 
+    const { financialEngine } = await import("../lib/engines/index.js");
     const [cashCode, advLiabCode] = await Promise.all([
-      getAccountCodeFromMapping(scope.companyId, "payroll_bank_payout", "debit", "1100"),
-      getAccountCodeFromMapping(scope.companyId, "customer_advance_liability", "credit", "2400"),
+      financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "debit", "1100"),
+      financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "credit", "2400"),
     ]);
 
     let journalId: number | null = null;
-    journalId = await createGuardedJournalEntry({
+    ({ journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
       ref: advRef,
       description: `دفعة مقدمة من العميل ${clientId}: ${amt}`,
       sourceType: "customer_advance",
-      sourceId: advanceId ?? undefined,
+      sourceId: advanceId ?? 0,
+      sourceKey: `finance:customer_advance:${advanceId}`,
       lines: [
         { accountCode: cashCode, debit: amt, credit: 0, clientId: Number(clientId) },
         { accountCode: advLiabCode, debit: 0, credit: amt, clientId: Number(clientId) },
       ],
-    }, { table: "customer_advances", id: advanceId ?? 0 });
+      guardTable: "customer_advances",
+      guardId: advanceId ?? 0,
+    }));
     if (journalId && advanceId) {
       await rawExecute(`UPDATE customer_advances SET "journalId" = $1 WHERE id = $2`, [journalId, advanceId]);
     }
@@ -1572,9 +1592,10 @@ invoicesRouter.post("/customer-advances/:id/apply", requirePermission("finance:c
       throw new ValidationError(`المبلغ يتجاوز الرصيد المفتوح للفاتورة (${invoiceOpen})`);
     }
 
+    const { financialEngine } = await import("../lib/engines/index.js");
     const [advLiabCode, arCode] = await Promise.all([
-      getAccountCodeFromMapping(scope.companyId, "customer_advance_liability", "debit", "2400"),
-      getAccountCodeFromMapping(scope.companyId, "invoice_ar", "credit", "1200"),
+      financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "debit", "2400"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1200"),
     ]);
 
     await withTransaction(async (client: any) => {
@@ -1596,7 +1617,7 @@ invoicesRouter.post("/customer-advances/:id/apply", requirePermission("finance:c
     });
 
     let journalId: number | null = null;
-    journalId = await createGuardedJournalEntry({
+    ({ journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: advance.branchId,
       createdBy: scope.activeAssignmentId,
@@ -1604,11 +1625,14 @@ invoicesRouter.post("/customer-advances/:id/apply", requirePermission("finance:c
       description: `تطبيق دفعة مقدمة على الفاتورة ${invoice.ref}`,
       sourceType: "advance_application",
       sourceId: advanceId,
+      sourceKey: `finance:advance_apply:${advanceId}:${invoiceId}`,
       lines: [
         { accountCode: advLiabCode, debit: applyAmt, credit: 0, clientId: advance.clientId },
         { accountCode: arCode, debit: 0, credit: applyAmt, clientId: advance.clientId },
       ],
-    }, { table: "customer_advances", id: advanceId });
+      guardTable: "customer_advances",
+      guardId: advanceId,
+    }));
 
     res.json({ advanceId, invoiceId: Number(invoiceId), amount: applyAmt, journalId });
   } catch (err) {

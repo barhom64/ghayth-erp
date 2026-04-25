@@ -11,8 +11,9 @@ export interface GLPostingRequest {
   sourceId: number;
   sourceKey: string;
   lines: JournalEntryLine[];
-  guardTable: string;
-  guardId: number;
+  guardTable?: string;
+  guardId?: number;
+  skipPeriodCheck?: boolean;
 }
 
 export interface DomainEngine {

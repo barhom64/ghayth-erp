@@ -13,11 +13,9 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   emitEvent,
   createAuditLog,
-  createJournalEntry,
   initiateApprovalChain,
   reverseAccountBalances,
   checkFinancialPeriodOpen,
-  getAccountCodeFromMapping,
   computeVat,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -312,15 +310,16 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
     if (projectId) entityLink.projectId = Number(projectId);
     if (costCenter) entityLink.costCenter = costCenter;
 
+    const { financialEngine } = await import("../lib/engines/index.js");
     const journalLines: any[] = [{ accountCode: accountCode ?? "5000", debit: baseAmount, credit: 0, ...entityLink }];
     if (computedVat > 0) {
-      const inputVatCode = await getAccountCodeFromMapping(effectiveCompanyId, "vat_input", "debit", "1400");
+      const inputVatCode = await financialEngine.resolveAccountCode(effectiveCompanyId, "vat_input", "debit", "1400");
       journalLines.push({ accountCode: inputVatCode, debit: computedVat, credit: 0 });
     }
     journalLines.push({ accountCode: sourceAcct, debit: 0, credit: totalWithVat });
     if (subAccountCode && subAccountCode !== accountCode) { journalLines[0].accountCode = subAccountCode; }
 
-    const journalId = await createJournalEntry({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, type: "expense", sourceType: operationType || "expense", lines: journalLines });
+    const { journalId } = await financialEngine.postJournalEntry({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, type: "expense", sourceType: operationType || "expense", sourceId: 0, sourceKey: `finance:expense:${Date.now()}`, lines: journalLines });
 
     await rawExecute(
       `UPDATE journal_entries SET "costCenter" = $1, "departmentId" = $2, "relatedEntityType" = $3, "relatedEntityId" = $4, "paymentMethod" = $5, reference = $6, "isPaid" = $7, "attachmentUrl" = $8, "attachmentType" = $9, "expenseType" = $10, "operationType" = $11, "projectId" = $12, "taxCategory" = $13, "govSyncEnabled" = $14, "govIntegrationId" = $15, "govEntityType" = $16, "govEntityId" = $17 WHERE id = $18`,
@@ -560,9 +559,10 @@ journalRouter.post("/vouchers", requirePermission("finance:create"), async (req,
       finalDescription = generateAutoDescription({ operationType: operationType || type, relatedEntityName, amount: baseAmount });
     }
 
+    const { financialEngine } = await import("../lib/engines/index.js");
     const cashAcct = sourceAccountCode || "1100";
-    const outputVatCode = computedVat > 0 ? await getAccountCodeFromMapping(scope.companyId, "vat_output", "credit", "2300") : "2300";
-    const inputVatCode2 = computedVat > 0 ? await getAccountCodeFromMapping(scope.companyId, "vat_input", "debit", "1400") : "1400";
+    const outputVatCode = computedVat > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2300") : "2300";
+    const inputVatCode2 = computedVat > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1400") : "1400";
     const journalLines: { accountCode: string; debit: number; credit: number }[] = isReceipt
       ? [
           { accountCode: cashAcct, debit: totalWithVat, credit: 0 },
@@ -575,7 +575,7 @@ journalRouter.post("/vouchers", requirePermission("finance:create"), async (req,
           { accountCode: cashAcct, debit: 0, credit: totalWithVat },
         ];
 
-    const journalId = await createJournalEntry({ companyId: scope.companyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, lines: journalLines });
+    const { journalId } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, sourceType: "voucher", sourceId: 0, sourceKey: `finance:voucher:${Date.now()}`, lines: journalLines });
 
     await rawExecute(
       `UPDATE journal_entries SET "paymentMethod" = $1, reference = $2, "attachmentUrl" = $3, "attachmentType" = $4, "relatedEntityType" = $5, "relatedEntityId" = $6, "operationType" = $7, "departmentId" = $8 WHERE id = $9`,
@@ -633,7 +633,8 @@ journalRouter.post("/salary-advances", requirePermission("finance:create"), asyn
     const sourceAcct = sourceAccountCode || "1100";
     const ref = `SALARY-ADV-${Date.now()}`;
 
-    let advanceAccountCode = await getAccountCodeFromMapping(scope.companyId, "salary_advance_receivable", "debit", "1410");
+    const { financialEngine } = await import("../lib/engines/index.js");
+    let advanceAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "salary_advance_receivable", "debit", "1410");
     if (employeeId) {
       const [subAcc] = await rawQuery<any>(
         `SELECT ca.code FROM subsidiary_accounts sa JOIN chart_of_accounts ca ON ca.id = sa."accountId"
@@ -643,7 +644,7 @@ journalRouter.post("/salary-advances", requirePermission("finance:create"), asyn
       if (subAcc) advanceAccountCode = subAcc.code;
     }
 
-    const journalId = await createJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: description ?? `سلفة راتب ${employeeName} – خصم على ${deductMonths} شهر`, type: "salary_advance", sourceType: "salary_advance", lines: [{ accountCode: advanceAccountCode, debit: Number(amount), credit: 0, employeeId: employeeId ? Number(employeeId) : undefined }, { accountCode: sourceAcct, debit: 0, credit: Number(amount) }] });
+    const { journalId } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: description ?? `سلفة راتب ${employeeName} – خصم على ${deductMonths} شهر`, type: "salary_advance", sourceType: "salary_advance", sourceId: 0, sourceKey: `finance:salary_advance:${Date.now()}`, lines: [{ accountCode: advanceAccountCode, debit: Number(amount), credit: 0, employeeId: employeeId ? Number(employeeId) : undefined }, { accountCode: sourceAcct, debit: 0, credit: Number(amount) }] });
     const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "advances", refType: "salary_advance", refId: journalId, amount: Number(amount) });
     if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1`, [journalId]); }
     res.status(201).json({ id: journalId, ref, employeeName, amount, deductMonths, description, approval: approvalResult });
@@ -775,15 +776,6 @@ journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), 
       throw new ValidationError("لا يمكن عكس قيد هو أصلاً قيد عاكس");
     }
 
-    const effectiveDate = reverseDate && /^\d{4}-\d{2}-\d{2}$/.test(reverseDate)
-      ? reverseDate
-      : new Date().toISOString().slice(0, 10);
-
-    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, effectiveDate);
-    if (!periodCheck.open) {
-      throw new ConflictError(`لا يمكن عكس القيد في فترة مالية مُقفلة: ${periodCheck.periodName ?? ""}`);
-    }
-
     const originalLines = await rawQuery<any>(
       `SELECT "accountCode", debit, credit, description, "costCenter", "departmentId", "projectId", "employeeId"
        FROM journal_lines WHERE "journalId" = $1 ORDER BY id ASC`,
@@ -807,7 +799,8 @@ journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), 
     const newRef = `REV-${original.ref}`;
     const newDescription = `عكس قيد: ${original.description ?? ""} — ${reason}`.trim();
 
-    const newJournalId = await createJournalEntry({
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const { journalId: newJournalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: original.branchId ?? scope.branchId,
       createdBy: scope.activeAssignmentId,
@@ -816,6 +809,7 @@ journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), 
       type: "reversal",
       sourceType: "journal_reversal",
       sourceId: id,
+      sourceKey: `finance:reversal:${id}`,
       lines: reversedLines,
     });
 
@@ -1027,7 +1021,8 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", requirePermission("
 
     const ref = `YE-${year}`;
     const description = `قيد إقفال السنة المالية ${year} — صافي الدخل ${netIncome.toFixed(2)}`;
-    const journalId = await createJournalEntry({
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const { journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
@@ -1035,6 +1030,8 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", requirePermission("
       description,
       type: "closing",
       sourceType: "year_end_close",
+      sourceId: 0,
+      sourceKey: `finance:year_end:${scope.companyId}:${year}`,
       lines,
     });
 
@@ -1171,7 +1168,8 @@ async function createOpeningBalanceEntry(params: {
   }
 
   const description = `أرصدة افتتاحية ${periodStart}`;
-  const journalId = await createJournalEntry({
+  const { financialEngine } = await import("../lib/engines/index.js");
+  const { journalId } = await financialEngine.postJournalEntry({
     companyId: scope.companyId,
     branchId: scope.branchId,
     createdBy: scope.activeAssignmentId,
@@ -1179,6 +1177,8 @@ async function createOpeningBalanceEntry(params: {
     description,
     type: "opening_balance",
     sourceType: "opening_balance",
+    sourceId: 0,
+    sourceKey: `finance:opening_balance:${scope.companyId}:${periodStart}`,
     lines: lines.map((l) => ({
       accountCode: String(l.accountCode),
       debit: Number(l.debit || 0),

@@ -92,22 +92,23 @@ class FinancialEngineImpl implements DomainEngine {
       );
     }
 
-    const journalId = await createGuardedJournalEntry(
-      {
-        companyId: request.companyId,
-        branchId: request.branchId,
-        createdBy: request.createdBy,
-        ref: request.ref,
-        description: request.description,
-        type: request.type ?? "general",
-        sourceType: request.sourceType,
-        sourceId: request.sourceId,
-        sourceKey: request.sourceKey,
-        lines: request.lines,
-        skipPeriodCheck: true,
-      },
-      { table: request.guardTable, id: request.guardId }
-    );
+    const entryParams = {
+      companyId: request.companyId,
+      branchId: request.branchId,
+      createdBy: request.createdBy,
+      ref: request.ref,
+      description: request.description,
+      type: request.type ?? "general",
+      sourceType: request.sourceType,
+      sourceId: request.sourceId,
+      sourceKey: request.sourceKey,
+      lines: request.lines,
+      skipPeriodCheck: true,
+    };
+
+    const journalId = request.guardTable && request.guardId
+      ? await createGuardedJournalEntry(entryParams, { table: request.guardTable, id: request.guardId })
+      : await createJournalEntry(entryParams);
 
     return { journalId, sourceKey: request.sourceKey, alreadyExists: false };
   }

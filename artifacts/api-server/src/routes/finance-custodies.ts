@@ -12,9 +12,7 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 import {
   emitEvent,
   createAuditLog,
-  createJournalEntry,
   initiateApprovalChain,
-  getAccountCodeFromMapping,
 } from "../lib/businessHelpers.js";
 
 
@@ -404,7 +402,8 @@ custodiesRouter.post("/custodies", requirePermission("finance:create"), async (r
     // code passed resolvedAssignmentId to the journal line as employeeId,
     // which silently linked subsidiary balances to the wrong row.
     let custodyEmployeeId: number | null = null;
-    let custodyAccountCode = await getAccountCodeFromMapping(scope.companyId, "custody_account", "debit", "1400");
+    const { financialEngine } = await import("../lib/engines/index.js");
+    let custodyAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "custody_account", "debit", "1400");
     if (resolvedAssignmentId) {
       const [empRow] = await rawQuery<{ id: number }>(
         `SELECT e.id FROM employee_assignments ea JOIN employees e ON e.id = ea."employeeId" WHERE ea.id = $1`,
@@ -421,13 +420,15 @@ custodiesRouter.post("/custodies", requirePermission("finance:create"), async (r
       }
     }
 
-    const journalId = await createJournalEntry({
+    const { journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: custodyAssignmentId,
       ref,
       description: description ?? `عهدة ${resolvedEmployeeName}`,
-      sourceType: "custody", sourceId: undefined,
+      sourceType: "custody",
+      sourceId: 0,
+      sourceKey: `finance:custody:${ref}`,
       lines: [
         { accountCode: custodyAccountCode, debit: Number(amount), credit: 0, employeeId: custodyEmployeeId ?? undefined },
         { accountCode: sourceAcct, debit: 0, credit: Number(amount) },
@@ -561,13 +562,16 @@ custodiesRouter.post("/custodies/settle", requirePermission("finance:create"), a
 
     const sourceAcct = sourceAccountCode || "1100";
     const settleRef = `CUSTODY-SETTLE-${Date.now()}`;
-    const journalId = await createJournalEntry({
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const { journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
       ref: settleRef,
       description: custodyRef,
       sourceType: "custody_settlement",
+      sourceId: 0,
+      sourceKey: `finance:custody_settle:${settleRef}`,
       lines: [
         { accountCode: sourceAcct, debit: Number(amount), credit: 0 },
         { accountCode: custodyAccountCode, debit: 0, credit: Number(amount) },
@@ -676,15 +680,18 @@ custodiesRouter.post("/custodies/:id/settle", requirePermission("finance:create"
     }
 
     const sourceAcct = sourceAccountCode || "1100";
-    const custodyAcctCode = await getAccountCodeFromMapping(scope.companyId, "custody_account", "debit", "1400");
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const custodyAcctCode = await financialEngine.resolveAccountCode(scope.companyId, "custody_account", "debit", "1400");
     const settleRef = `CUSTODY-SETTLE-${Date.now()}`;
-    const journalId = await createJournalEntry({
+    const { journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
       ref: settleRef,
       description: custody.ref,
       sourceType: "custody_settlement",
+      sourceId: 0,
+      sourceKey: `finance:custody_settle:${settleRef}`,
       lines: [
         { accountCode: sourceAcct, debit: Number(amount), credit: 0 },
         { accountCode: custodyAcctCode, debit: 0, credit: Number(amount) },

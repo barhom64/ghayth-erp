@@ -75,12 +75,37 @@ const RULES = [
     id: "legacy-validationError-import",
     scan: [ROUTES_DIR, LIB_DIR],
     skip: (file) => file.endsWith("/lib/errorHandler.ts"),
-    // Lowercase-v `validationError` next to other named imports from errorHandler.
-    // The class `ValidationError` (capital V) is fine.
     regex: /^\s*validationError\s*,?\s*$/m,
     message:
       "Stale `validationError` named import. The lowercase-v helper was " +
       "removed in Phase 5c — only the `ValidationError` class is exported now.",
+  },
+  {
+    id: "direct-gl-import-in-domain-route",
+    scan: [ROUTES_DIR],
+    skip: (file) => {
+      const base = file.split("/").pop();
+      return base.startsWith("finance") || base === "index.ts";
+    },
+    regex: /\b(?:createJournalEntry|createGuardedJournalEntry)\b/,
+    message:
+      "Direct GL function import in non-finance route is forbidden. " +
+      "Use the domain engine's GL method (e.g. hrEngine.postPayrollRunGL) " +
+      "which routes through financialEngine.postJournalEntry() with " +
+      "period checks, sourceKey idempotency, and budget validation.",
+  },
+  {
+    id: "direct-account-mapping-in-domain-route",
+    scan: [ROUTES_DIR],
+    skip: (file) => {
+      const base = file.split("/").pop();
+      return base.startsWith("finance") || base === "index.ts";
+    },
+    regex: /\bgetAccountCodeFromMapping\b/,
+    message:
+      "Direct getAccountCodeFromMapping call in non-finance route is forbidden. " +
+      "Account code resolution should happen inside the domain engine " +
+      "(e.g. fleetEngine, propertiesEngine) via financialEngine.resolveAccountCode().",
   },
 ];
 

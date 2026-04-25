@@ -8,7 +8,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createJournalEntry, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
@@ -288,7 +288,8 @@ export async function runRecurringJournal(params: {
     const ref = `${recurring.templateRef || `REC-${recurring.id}`}-${new Date().toISOString().slice(0, 10)}`;
     const description = recurring.templateDescription || recurring.description || recurring.name;
 
-    const journalId = await createJournalEntry({
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const { journalId } = await financialEngine.postJournalEntry({
       companyId,
       branchId: branchId ?? recurring.branchId ?? 0,
       createdBy: actorAssignmentId ?? recurring.createdBy ?? 0,
@@ -297,6 +298,7 @@ export async function runRecurringJournal(params: {
       type: "recurring",
       sourceType: "recurring_journal",
       sourceId: recurring.id,
+      sourceKey: `finance:recurring:${recurring.id}:${new Date().toISOString().slice(0,10)}`,
       lines,
     });
 

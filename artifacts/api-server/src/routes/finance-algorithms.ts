@@ -10,7 +10,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createJournalEntry, getAccountCodeFromMapping, checkFinancialPeriodOpen, updateAccountBalances } from "../lib/businessHelpers.js";
+import { checkFinancialPeriodOpen, updateAccountBalances } from "../lib/businessHelpers.js";
 
 export const financeAlgorithmsRouter = Router();
 financeAlgorithmsRouter.use(authMiddleware);
@@ -756,13 +756,17 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", requirePermission("
 
     let entryId: number | undefined;
 
-    const journalId = await createJournalEntry({
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const { journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId ?? asset.branchId,
       createdBy: scope.activeAssignmentId,
       ref: `DEP-${asset.code ?? asset.id}-${targetPeriod}`,
       description: `إهلاك شهري: ${asset.name} — ${targetPeriod}`,
       type: "depreciation",
+      sourceType: "depreciation",
+      sourceId: asset.id,
+      sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
       lines: [
         { accountCode: asset.depreciationAccountCode ?? "6100", debit: depAmount, credit: 0, description: `إهلاك ${asset.name}` },
         { accountCode: asset.accDepreciationAccountCode ?? "1590", debit: 0, credit: depAmount, description: `مجمع إهلاك ${asset.name}` },
@@ -824,13 +828,17 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", requirePermission("
       const newAccumulated = Number(asset.accumulatedDepreciation) + depAmount;
       const newBookValue = Math.max(Number(asset.purchaseCost) - newAccumulated, Number(asset.salvageValue));
 
-      const journalId = await createJournalEntry({
+      const { financialEngine } = await import("../lib/engines/index.js");
+      const { journalId } = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: asset.branchId ?? scope.branchId,
         createdBy: scope.activeAssignmentId,
         ref: `DEP-${asset.code ?? asset.id}-${targetPeriod}`,
         description: `إهلاك شهري: ${asset.name} — ${targetPeriod}`,
         type: "depreciation",
+        sourceType: "depreciation",
+        sourceId: asset.id,
+        sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
         lines: [
           { accountCode: asset.depreciationAccountCode ?? "6100", debit: depAmount, credit: 0 },
           { accountCode: asset.accDepreciationAccountCode ?? "1590", debit: 0, credit: depAmount },
@@ -1359,10 +1367,11 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:
     }
 
     // Account codes (configurable via accounting_mappings)
-    const arCode = await getAccountCodeFromMapping(scope.companyId, "fx_revaluation_ar", "debit", "1200");
-    const apCode = await getAccountCodeFromMapping(scope.companyId, "fx_revaluation_ap", "credit", "2100");
-    const gainCode = await getAccountCodeFromMapping(scope.companyId, "fx_revaluation_gain", "credit", "4910");
-    const lossCode = await getAccountCodeFromMapping(scope.companyId, "fx_revaluation_loss", "debit", "5910");
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const arCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_ar", "debit", "1200");
+    const apCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_ap", "credit", "2100");
+    const gainCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_gain", "credit", "4910");
+    const lossCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_loss", "debit", "5910");
 
     // Build JE lines
     const lines: Array<{ accountCode: string; debit: number; credit: number; description: string }> = [];
@@ -1386,13 +1395,16 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:
       lines.push({ accountCode: gainCode, debit: 0, credit: v, description: `ربح صرف غير محقق — AP` });
     }
 
-    const journalEntryId = await createJournalEntry({
+    const { journalId: journalEntryId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId ?? 0,
       createdBy: scope.activeAssignmentId,
       ref: `FX-REVAL-${period}`,
       description: `إعادة تقييم العملات الأجنبية — ${period}`,
       type: "fx_revaluation",
+      sourceType: "fx_revaluation",
+      sourceId: 0,
+      sourceKey: `finance:fx_reval:${scope.companyId}:${period}`,
       lines,
     });
 

@@ -13,12 +13,9 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   emitEvent,
   createAuditLog,
-  createJournalEntry,
-  createGuardedJournalEntry,
   initiateApprovalChain,
   createNotification,
   updateBudgetUsed,
-  getAccountCodeFromMapping,
   checkFinancialPeriodOpen,
   computeVat,
 } from "../lib/businessHelpers.js";
@@ -652,14 +649,15 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
     }
 
     // Post GRN journal: DR inventory (ex-VAT) + DR VAT receivable, CR GRNI
+    const { financialEngine } = await import("../lib/engines/index.js");
     const [invAccount, vatAccount, grniAccount] = await Promise.all([
-      getAccountCodeFromMapping(scope.companyId, "inventory_receipt", "debit", "1250"),
-      getAccountCodeFromMapping(scope.companyId, "purchase_grn_vat", "debit", "1180"),
-      getAccountCodeFromMapping(scope.companyId, "purchase_grni", "credit", "2115"),
+      financialEngine.resolveAccountCode(scope.companyId, "inventory_receipt", "debit", "1250"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_grn_vat", "debit", "1180"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "credit", "2115"),
     ]);
 
     let journalId: number | null = null;
-    journalId = await createGuardedJournalEntry({
+    const grnJournalResult = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
@@ -667,12 +665,16 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
       description: `استلام بضاعة ${grnRef} - أمر ${po.ref}`,
       sourceType: "goods_receipt",
       sourceId: grnId,
+      sourceKey: `finance:grn:${grnId}`,
       lines: [
         { accountCode: invAccount, debit: subtotal, credit: 0, vendorId: po.supplierId },
         ...(vatAmount > 0 ? [{ accountCode: vatAccount, debit: vatAmount, credit: 0, vendorId: po.supplierId }] : []),
         { accountCode: grniAccount, debit: 0, credit: grnTotal, vendorId: po.supplierId },
       ],
-    }, { table: "goods_receipts", id: grnId });
+      guardTable: "goods_receipts",
+      guardId: grnId,
+    });
+    journalId = grnJournalResult.journalId;
     if (journalId) {
       await rawExecute(`UPDATE goods_receipts SET "journalId" = $1 WHERE id = $2`, [journalId, grnId]);
     }
@@ -908,9 +910,10 @@ purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"),
 
     const totalPayment = Math.round(pos.reduce((sum: number, p: any) => sum + Number(p.totalAmount), 0) * 100) / 100;
 
+    const { financialEngine } = await import("../lib/engines/index.js");
     const [apAccount, cashAccount] = await Promise.all([
-      getAccountCodeFromMapping(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
-      getAccountCodeFromMapping(scope.companyId, "payroll_bank_payout", "credit", "1100"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
+      financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1100"),
     ]);
 
     // Persist a payment_runs header row (create table if missing)
@@ -985,7 +988,7 @@ purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"),
       lines.push({ accountCode: apAccount, debit: Number(po.totalAmount), credit: 0, vendorId: po.supplierId });
     }
     lines.push({ accountCode: cashAccount, debit: 0, credit: totalPayment });
-    journalId = await createGuardedJournalEntry({
+    const paymentRunJournalResult = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
@@ -993,8 +996,12 @@ purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"),
       description: `دفعة مجمّعة ${runRef}: ${pos.length} أمر شراء بإجمالي ${totalPayment}`,
       sourceType: "payment_run",
       sourceId: runId ?? 0,
+      sourceKey: `finance:payment_run:${runId}`,
       lines,
-    }, { table: "payment_runs", id: runId ?? 0 });
+      guardTable: "payment_runs",
+      guardId: runId ?? 0,
+    });
+    journalId = paymentRunJournalResult.journalId;
     if (journalId && runId) {
       await rawExecute(`UPDATE payment_runs SET "journalId" = $1 WHERE id = $2`, [journalId, runId]);
     }
@@ -1370,9 +1377,10 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", requirePermission("
       );
     }
 
-    const schedApCode = await getAccountCodeFromMapping(scope.companyId, "purchase_vendor_ap", "debit", "2100");
-    const schedCashCode = await getAccountCodeFromMapping(scope.companyId, "payroll_bank_payout", "credit", "1100");
-    await createJournalEntry({
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const schedApCode = await financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100");
+    const schedCashCode = await financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1100");
+    await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
@@ -1380,6 +1388,7 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", requirePermission("
       description: `دفعة مجدولة لأمر الشراء ${po.ref} بتاريخ ${paymentDate}`,
       sourceType: "purchase_order_payment",
       sourceId: Number(id),
+      sourceKey: `finance:sched_payment:${id}:${paymentDate}`,
       lines: [
         { accountCode: schedApCode, debit: Number(amount), credit: 0, vendorId: po.supplierId },
         { accountCode: schedCashCode, debit: 0, credit: Number(amount), vendorId: po.supplierId },

@@ -8,7 +8,7 @@ import {
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createJournalEntry, checkFinancialPeriodOpen, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { checkFinancialPeriodOpen, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
@@ -248,12 +248,16 @@ accountsRouter.post("/journal", requirePermission("finance:create"), async (req,
         },
       );
     }
-    const journalId = await createJournalEntry({
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const { journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
       ref: ref ?? `JE-${Date.now()}`,
       description: description ?? "",
+      sourceType: "manual_journal",
+      sourceId: 0,
+      sourceKey: `finance:manual_je:${Date.now()}`,
       lines,
     });
 
