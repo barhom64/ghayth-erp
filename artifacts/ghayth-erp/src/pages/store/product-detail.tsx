@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
+import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { EntityComments } from "@/components/shared/entity-comments";
@@ -87,7 +88,7 @@ export default function ProductDetailPage() {
   const poColumns: DataTableColumn<any>[] = [
     { key: "id", header: "#", sortable: true, render: (r) => <span className="font-mono text-xs">{r.id}</span> },
     { key: "date", header: "التاريخ", sortable: true, render: (r) => formatDateAr(r.date || r.createdAt) },
-    { key: "status", header: "الحالة", sortable: true, render: (r) => <Badge variant="outline">{r.status || "-"}</Badge> },
+    { key: "status", header: "الحالة", sortable: true, render: (r) => <PageStatusBadge status={r.status} domain="purchase" /> },
     { key: "total", header: "الإجمالي", sortable: true, render: (r) => <span className="font-semibold">{formatCurrency(Number(r.total) || 0)}</span> },
   ];
 
@@ -101,7 +102,7 @@ export default function ProductDetailPage() {
           <InfoRow label="السعر" value={product?.price != null ? formatCurrency(Number(product.price)) : undefined} />
           <InfoRow label="سعر التكلفة" value={product?.costPrice != null ? formatCurrency(Number(product.costPrice)) : undefined} />
           <InfoRow label="الكمية الحالية" value={String(currentStock)} />
-          <InfoRow label="الحالة" value={product?.status} />
+          <InfoRow label="الحالة" value={resolveStatus(product?.status ?? "")?.label || product?.status} />
           <InfoRow label="تاريخ الإنشاء" value={product?.createdAt ? formatDateAr(product.createdAt) : undefined} />
         </div>
         {product?.description && (

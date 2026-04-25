@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useSearch } from "wouter";
+import { Link, useSearch, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -214,6 +214,7 @@ function OverviewTab() {
 }
 
 function ProjectListTab() {
+  const [, navigate] = useLocation();
   const { roleLevel, scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
   const { data: stats } = useApiQuery(["projects-stats", scopeQueryString], `/projects/stats/summary${scopeQueryString ? `?${scopeQueryString}` : ""}`);
@@ -350,6 +351,7 @@ function ProjectListTab() {
             page={page}
             total={total}
             onPageChange={setPage}
+            onRowClick={(row) => navigate(`/projects/${row.id}`)}
             renderRowExtras={(p) => {
               if (editingId === p.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(p.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
               if (deletingId === p.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.name} entityType="project" entityId={p.id} />;

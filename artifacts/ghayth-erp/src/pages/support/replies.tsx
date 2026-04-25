@@ -3,6 +3,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { MessageSquare, Clock, CheckCircle2, User, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -52,7 +53,7 @@ export default function SupportReplies() {
     { key: "ticketTitle", header: "عنوان التذكرة", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.ticketTitle}</span> },
     { key: "reply", header: "الرد", searchable: true, render: (r: any) => <span className="text-gray-600 max-w-xs truncate inline-block">{r.reply}</span> },
     { key: "agent", header: "الوكيل", sortable: true, searchable: true, render: (r: any) => <span className="text-gray-500">{r.agent}</span> },
-    { key: "date", header: "التاريخ", sortable: true, render: (r: any) => <span className="text-gray-500 whitespace-nowrap">{r.date}</span> },
+    { key: "date", header: "التاريخ", sortable: true, render: (r: any) => <span className="text-gray-500 whitespace-nowrap">{r.date ? formatDateAr(r.date) : "-"}</span> },
     { key: "status", header: "الحالة", sortable: true, render: (r: any) => <PageStatusBadge status={r.status} domain="ticket" /> },
   ];
 

@@ -1,3 +1,4 @@
+import { useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { formatCurrency } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function UmrahPenalties() {
+  const [, navigate] = useLocation();
   const { data: resp, isLoading, isError, error, refetch } = useApiQuery<any>(["umrah-penalties"], "/umrah/penalties");
   const [filters, setFilters] = useFilters();
   const pageSize = 20;
@@ -93,6 +95,7 @@ export default function UmrahPenalties() {
         emptyIcon={<AlertTriangle className="h-6 w-6 text-slate-400" />}
         noToolbar
         pageSize={pageSize}
+        onRowClick={(row) => navigate(`/umrah/penalties/${row.id}`)}
       />
     </div>
   );

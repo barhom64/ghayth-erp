@@ -327,6 +327,7 @@ export default function Tasks() {
         noToolbar
         emptyMessage="لا توجد مهام تطابق معايير البحث"
         emptyIcon={<CheckSquare className="h-6 w-6 text-slate-400" />}
+        onRowClick={(row) => navigate(`/tasks/${row.id}`)}
         selectable
         onSelectionChange={(ids) => {
           // Sync DataTable selection with BulkActionsBar

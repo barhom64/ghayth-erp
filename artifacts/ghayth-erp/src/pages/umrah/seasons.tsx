@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Calendar } from "lucide-react";
 
 export default function UmrahSeasons() {
+  const [, navigate] = useLocation();
   const { data: resp, isLoading, isError, error, refetch } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const items = resp?.data || [];
   const [showForm, setShowForm] = useState(false);
@@ -84,7 +86,7 @@ export default function UmrahSeasons() {
         </Card>
       )}
 
-      <DataTable columns={columns} data={items} isLoading={isLoading} isError={isError} error={error} />
+      <DataTable columns={columns} data={items} isLoading={isLoading} isError={isError} error={error} onRowClick={(row) => navigate(`/umrah/seasons/${row.id}`)} />
     </PageShell>
   );
 }

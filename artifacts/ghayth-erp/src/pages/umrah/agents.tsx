@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -33,6 +34,7 @@ const emptyForm: AgentForm = {
 };
 
 export default function UmrahAgents() {
+  const [, navigate] = useLocation();
   const { data: resp, refetch, isLoading, isError, error } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
   const items = resp?.data || [];
   const { toast } = useToast();
@@ -158,6 +160,7 @@ export default function UmrahAgents() {
         emptyIcon={<Building2 className="h-6 w-6 text-slate-400" />}
         pageSize={20}
         searchPlaceholder="بحث عن وكيل..."
+        onRowClick={(row) => navigate(`/umrah/agents/${row.id}`)}
       />
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && closeDialog()}>

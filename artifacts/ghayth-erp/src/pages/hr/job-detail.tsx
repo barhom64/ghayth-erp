@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { formatDateAr } from "@/lib/formatters";
+import { resolveStatus } from "@/components/page-status-badge";
 import {
   Briefcase,
   Building2,
@@ -100,7 +101,7 @@ export default function JobDetailPage() {
           <InfoRow label="القسم" value={job?.department} />
           <InfoRow label="الموقع" value={job?.location} />
           <InfoRow label="نوع العمل" value={job?.type} />
-          <InfoRow label="الحالة" value={job?.status} />
+          <InfoRow label="الحالة" value={resolveStatus(job?.status ?? "")?.label || job?.status} />
           <InfoRow label="تاريخ النشر" value={job?.createdAt ? formatDateAr(job.createdAt) : undefined} />
           <InfoRow label="تاريخ الإغلاق" value={job?.closingDate ? formatDateAr(job.closingDate) : undefined} />
           <InfoRow
@@ -223,7 +224,7 @@ export default function JobDetailPage() {
       overview={overview}
       actions={actions}
       extraTabs={extraTabs}
-      status={job?.status ? { label: job.status, tone: STATUS_TONE_MAP[job.status] ?? "default" } : undefined}
+      status={job?.status ? { label: resolveStatus(job.status)?.label || job.status, tone: STATUS_TONE_MAP[job.status] ?? "default" } : undefined}
       createdAt={job?.createdAt}
       updatedAt={job?.updatedAt}
     />

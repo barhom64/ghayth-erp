@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,7 @@ export default function Warehouse() {
 }
 
 function ProductsTab() {
+  const [, navigate] = useLocation();
   const { roleLevel, scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
   const { data: stats } = useApiQuery<any>(["warehouse-stats", scopeQueryString], `/warehouse/stats${scopeQueryString ? `?${scopeQueryString}` : ""}`);

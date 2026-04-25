@@ -280,6 +280,7 @@ function CasesTab() {
             emptyIcon={<Scale className="h-6 w-6 text-slate-400" />}
             noToolbar
             pageSize={20}
+            onRowClick={(row) => setLocation(`/legal/cases/${row.id}`)}
             renderRowExtras={(c) => {
               if (editingId === c.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
               if (deletingId === c.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal_case" entityId={c.id} />;

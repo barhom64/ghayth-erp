@@ -5,7 +5,7 @@ import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
 import { EntityDocuments } from "@/components/shared/entity-documents";
@@ -115,7 +115,7 @@ export default function TripDetailPage() {
           <InfoRow label="وقت البداية" value={trip?.startTime ? formatDateAr(trip.startTime) : undefined} />
           <InfoRow label="وقت النهاية" value={trip?.endTime ? formatDateAr(trip.endTime) : undefined} />
           <InfoRow label="المسافة" value={distance ? `${distance} كم` : undefined} />
-          <InfoRow label="الحالة" value={trip?.status} />
+          <InfoRow label="الحالة" value={resolveStatus(trip?.status ?? "", "trip")?.label || trip?.status} />
         </div>
         {trip?.notes && (
           <div className="pt-4 border-t">

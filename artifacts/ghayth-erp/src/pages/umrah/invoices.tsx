@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { formatCurrency } from "@/lib/formatters";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function UmrahInvoices() {
+  const [, navigate] = useLocation();
   const { data: resp, refetch, isLoading, isError, error } = useApiQuery<any>(["umrah-agent-invoices"], "/umrah/agent-invoices");
   const { data: agents } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
   const { data: seasons } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
@@ -136,6 +138,7 @@ export default function UmrahInvoices() {
         emptyIcon={<Receipt className="h-6 w-6 text-slate-400" />}
         noToolbar
         pageSize={pageSize}
+        onRowClick={(row) => navigate(`/umrah/invoices/${row.id}`)}
       />
     </div>
   );
