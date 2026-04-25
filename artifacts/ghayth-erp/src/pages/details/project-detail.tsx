@@ -460,7 +460,7 @@ export default function ProjectDetail() {
                   { key: "title", header: "المهمة", render: (t: any) => <span className="font-medium">{t.title}</span> },
                   { key: "assigneeName", header: "المسؤول", render: (t: any) => <span className="text-gray-500">{t.assigneeName || "-"}</span> },
                   { key: "priority", header: "الأولوية", render: (t: any) => <Badge className={priorityColors[t.priority] || "bg-gray-100 text-gray-700"}>{priorityLabels[t.priority] || t.priority}</Badge> },
-                  { key: "status", header: "الحالة", render: (t: any) => <Badge className={taskStatusColors[t.status] || "bg-gray-100 text-gray-700"}>{taskStatusLabels[t.status] || t.status}</Badge> },
+                  { key: "status", header: "الحالة", render: (t: any) => <PageStatusBadge status={t.status} domain="project" /> },
                   { key: "dueDate", header: "تاريخ الاستحقاق", render: (t: any) => <span className="text-gray-500">{t.dueDate ? formatDateAr(t.dueDate) : "-"}</span> },
                   { key: "action", header: "إجراء", render: (t: any) => t.status !== "done" ? (
                     <Select value={t.status} onValueChange={(v) => updateTaskStatus(t.id, v)}>
@@ -610,7 +610,7 @@ export default function ProjectDetail() {
                   { key: "direction", header: "الاتجاه", render: (l) => <Badge variant="outline">{l.direction === "outgoing" ? "صادر" : "وارد"}</Badge> },
                   { key: "type", header: "النوع", render: (l) => <span className="text-gray-500">{l.type || "-"}</span> },
                   { key: "letterDate", header: "التاريخ", render: (l) => <span className="text-gray-500">{l.letterDate ? formatDateAr(l.letterDate) : "-"}</span> },
-                  { key: "status", header: "الحالة", render: (l) => <Badge className="bg-gray-100 text-gray-700">{l.status || "مسودة"}</Badge> },
+                  { key: "status", header: "الحالة", render: (l) => <PageStatusBadge status={l.status || "draft"} /> },
                 ]}
                 data={letters}
                 noToolbar

@@ -1,6 +1,7 @@
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Archive, FileText, Calendar, FolderArchive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery, asList } from "@/lib/api";
@@ -37,7 +38,7 @@ const columns: DataTableColumn<any>[] = [
   {
     key: "status",
     header: "الحالة",
-    render: (d) => <Badge className="bg-green-100 text-green-700">{d.status || "مؤرشف"}</Badge>,
+    render: (d) => <PageStatusBadge status={d.status || "archived"} />,
   },
 ];
 

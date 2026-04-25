@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle2, Edit, IdCard, Phone, User, Car } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   available: "متاح",
@@ -245,6 +247,9 @@ export default function DriverDetail() {
           </Card>
         )}
       </div>
+
+      {id && <EntityComments entityType="driver" entityId={id} />}
+      {id && <EntityTags entityType="driver" entityId={id} />}
     </div>
   );
 

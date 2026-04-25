@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +27,7 @@ const STATUS_OPTIONS = Object.entries(TRANSFER_STATUS).map(([value, { label }]) 
 const STATUS_MAP = TRANSFER_STATUS;
 
 export default function TransfersPage() {
+  const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ employeeId: "", toBranchId: "", reason: "", effectiveDate: "" });
@@ -279,6 +281,7 @@ export default function TransfersPage() {
         noToolbar
         emptyMessage="لا توجد طلبات نقل — قدّم طلب نقل جديد للبدء"
         pageSize={20}
+        onRowClick={(row) => navigate(`/hr/transfers/${row.id}`)}
       />
     </PageShell>
   );

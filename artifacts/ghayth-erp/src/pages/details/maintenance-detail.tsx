@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Wrench, Car, User } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   scheduled: "مجدول",
@@ -224,6 +226,9 @@ export default function MaintenanceDetail() {
           </Card>
         )}
       </div>
+
+      {id && <EntityComments entityType="maintenance" entityId={id} />}
+      {id && <EntityTags entityType="maintenance" entityId={id} />}
     </div>
   );
 

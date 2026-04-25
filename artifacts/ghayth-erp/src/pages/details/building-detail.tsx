@@ -11,6 +11,8 @@ import { formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { useAppContext } from "@/contexts/app-context";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 export default function BuildingDetail() {
   const [, params] = useRoute("/properties/buildings/:id");
@@ -141,6 +143,9 @@ export default function BuildingDetail() {
           <FinancialTab entityType="property" entityId={id!} />
         </CardContent>
       </Card>
+
+      {id && <EntityComments entityType="building" entityId={id} />}
+      {id && <EntityTags entityType="building" entityId={id} />}
     </>
   );
 

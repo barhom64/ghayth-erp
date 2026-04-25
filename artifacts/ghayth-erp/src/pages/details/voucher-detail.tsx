@@ -14,6 +14,8 @@ import { Edit, Paperclip, Eye, Receipt } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { useToast } from "@/hooks/use-toast";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 /**
  * VoucherDetail — unified detail page for a single finance voucher.
@@ -273,6 +275,13 @@ export default function VoucherDetail() {
                 approveEndpoint={`/finance/vouchers/${id}/approve`}
                 rejectEndpoint={`/finance/vouchers/${id}/approve`}
                 returnEndpoint={`/finance/vouchers/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, notes })}
+                returnBody={(notes) => ({ approved: "returned", notes })}
+                pendingStatuses={["pending", "pending_approval", "draft", "returned"]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث السند" });
@@ -304,6 +313,9 @@ export default function VoucherDetail() {
       {id && (
         <ApprovalTimeline entityType="voucher" entityId={id} />
       )}
+
+      {id && <EntityComments entityType="voucher" entityId={id} />}
+      {id && <EntityTags entityType="voucher" entityId={id} />}
     </div>
   );
 

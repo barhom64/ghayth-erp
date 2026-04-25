@@ -14,6 +14,15 @@ const SEVERITY_COLORS: Record<string, string> = {
   high: "bg-orange-100 text-orange-800",
   medium: "bg-yellow-100 text-yellow-800",
   low: "bg-blue-100 text-blue-800",
+  info: "bg-blue-50 text-blue-700",
+};
+
+const SEVERITY_LABELS: Record<string, string> = {
+  critical: "حرج",
+  high: "عالي",
+  medium: "متوسط",
+  low: "منخفض",
+  info: "معلوماتي",
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -41,7 +50,7 @@ export default function AdminPolicyEngine() {
 
   const violationColumns: DataTableColumn<any>[] = [
     { key: "type", header: "النوع", searchable: true, render: (r: any) => <Badge variant="outline">{TYPE_LABELS[r.type] || r.type}</Badge> },
-    { key: "severity", header: "الخطورة", sortable: true, render: (r: any) => <Badge className={SEVERITY_COLORS[r.severity] || ""}>{r.severity}</Badge> },
+    { key: "severity", header: "الخطورة", sortable: true, render: (r: any) => <Badge className={SEVERITY_COLORS[r.severity] || ""}>{SEVERITY_LABELS[r.severity] || r.severity}</Badge> },
     { key: "details", header: "التفاصيل", searchable: true },
   ];
 

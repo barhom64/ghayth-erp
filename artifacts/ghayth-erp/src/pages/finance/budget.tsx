@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 export default function BudgetPage() {
+  const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, error, refetch } = useApiQuery<any>(["budget", scopeQueryString], `/finance/budget${scopeSuffix}`);
@@ -142,6 +143,7 @@ export default function BudgetPage() {
           emptyMessage="لا توجد بنود ميزانية"
           emptyIcon={<FileBarChart className="h-6 w-6 text-slate-400" />}
           noToolbar
+          onRowClick={(row) => navigate(`/finance/budget/${row.id}`)}
         />
       </PageStateWrapper>
     </PageShell>

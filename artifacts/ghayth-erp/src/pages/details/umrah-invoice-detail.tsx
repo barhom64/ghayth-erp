@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, FileText, Users, Package, Calendar, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
@@ -261,6 +263,9 @@ export default function UmrahInvoiceDetail() {
           </Card>
         )}
       </div>
+
+      {id && <EntityComments entityType="umrah_invoice" entityId={id} />}
+      {id && <EntityTags entityType="umrah_invoice" entityId={id} />}
     </div>
   );
 

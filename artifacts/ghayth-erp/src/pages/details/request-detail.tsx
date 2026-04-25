@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/approval-actions";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Edit, Paperclip, Eye } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
@@ -236,6 +238,16 @@ export default function RequestDetail() {
                 entityType="request"
                 entityId={id}
                 currentStatus={request.status}
+                approveEndpoint={`/requests/${id}/approve`}
+                rejectEndpoint={`/requests/${id}/approve`}
+                returnEndpoint={`/requests/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, notes })}
+                returnBody={(notes) => ({ approved: "returned", notes })}
+                pendingStatuses={["pending", "in_review", "returned"]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث الطلب" });
@@ -262,6 +274,9 @@ export default function RequestDetail() {
       {id && (
         <ApprovalTimeline entityType="request" entityId={id} />
       )}
+
+      {id && <EntityComments entityType="request" entityId={id} />}
+      {id && <EntityTags entityType="request" entityId={id} />}
     </div>
   );
 

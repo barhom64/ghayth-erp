@@ -163,6 +163,7 @@ export default function ContractsPage() {
         statusField="status"
         emptyMessage="لا توجد عقود"
         emptyIcon={<FileText className="h-6 w-6 text-slate-400" />}
+        onRowClick={(row) => navigate(`/hr/contracts/${row.id}`)}
       />
     </PageShell>
   );

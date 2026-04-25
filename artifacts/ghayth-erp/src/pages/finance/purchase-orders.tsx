@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,7 @@ import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
  */
 
 export default function PurchaseOrdersPage() {
+  const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(
@@ -255,6 +256,7 @@ export default function PurchaseOrdersPage() {
             : undefined
         }
         noToolbar
+        onRowClick={(row) => navigate(`/finance/purchase-orders/${row.id}`)}
         renderRowExtras={(po) => {
           if (expandedId !== po.id) return null;
           return (

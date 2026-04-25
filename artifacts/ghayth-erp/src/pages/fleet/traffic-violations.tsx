@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,7 @@ import { AlertTriangle, Plus, CheckCircle, DollarSign } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
@@ -29,6 +31,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function TrafficViolationsPage() {
+  const [, navigate] = useLocation();
   const [showForm, setShowForm] = useState(false);
   const [filters, setFilters] = useFilters();
   const [form, setForm] = useState({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: new Date().toISOString().split("T")[0], fineAmount: "", location: "", violationNumber: "", notes: "" });
@@ -121,11 +124,7 @@ export default function TrafficViolationsPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (v) => (
-        <Badge className={v.status === "paid" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
-          {v.status === "paid" ? "مدفوعة" : "غير مدفوعة"}
-        </Badge>
-      ),
+      render: (v) => <PageStatusBadge status={v.status === "pending" ? "unpaid" : v.status} domain="traffic_violation" />,
     },
     {
       key: "actions",
@@ -252,6 +251,7 @@ export default function TrafficViolationsPage() {
         emptyMessage="لا توجد مخالفات مسجلة"
         emptyIcon={<AlertTriangle className="w-10 h-10 text-gray-300" />}
         rowClassName={(v) => v.status === "paid" ? "opacity-60" : undefined as any}
+        onRowClick={(row) => navigate(`/fleet/traffic-violations/${row.id}`)}
       />
     </PageShell>
   );

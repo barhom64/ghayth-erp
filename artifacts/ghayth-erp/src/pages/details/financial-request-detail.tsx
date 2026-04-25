@@ -10,6 +10,8 @@ import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { Edit, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
@@ -182,6 +184,16 @@ export default function FinancialRequestDetail() {
                 entityType="financial-request"
                 entityId={id}
                 currentStatus={item.status}
+                approveEndpoint={`/finance/financial-requests/${id}/approve`}
+                rejectEndpoint={`/finance/financial-requests/${id}/approve`}
+                returnEndpoint={`/finance/financial-requests/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, notes })}
+                returnBody={(notes) => ({ approved: "returned", notes })}
+                pendingStatuses={["pending", "pending_approval", "draft", "returned"]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث الطلب" });
@@ -202,6 +214,9 @@ export default function FinancialRequestDetail() {
           </Card>
         )}
       </div>
+
+      {id && <EntityComments entityType="financial_request" entityId={id} />}
+      {id && <EntityTags entityType="financial_request" entityId={id} />}
     </div>
   );
 

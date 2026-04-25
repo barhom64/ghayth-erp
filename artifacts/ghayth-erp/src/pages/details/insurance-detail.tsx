@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle2, Edit, Shield, Car } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "ساري",
@@ -225,6 +227,9 @@ export default function InsuranceDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {id && <EntityComments entityType="insurance" entityId={id} />}
+      {id && <EntityTags entityType="insurance" entityId={id} />}
     </div>
   );
 

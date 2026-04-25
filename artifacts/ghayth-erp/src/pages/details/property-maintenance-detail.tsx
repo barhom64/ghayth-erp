@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Wrench } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   open: "مفتوح",
@@ -198,6 +200,9 @@ export default function PropertyMaintenanceDetail() {
           </Card>
         )}
       </div>
+
+      {id && <EntityComments entityType="property_maintenance" entityId={id} />}
+      {id && <EntityTags entityType="property_maintenance" entityId={id} />}
     </div>
   );
 

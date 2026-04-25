@@ -17,6 +17,8 @@ import {
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
@@ -125,6 +127,9 @@ export default function TenantDetail() {
           </CardContent>
         </Card>
       )}
+
+      {id && <EntityComments entityType="tenant" entityId={id} />}
+      {id && <EntityTags entityType="tenant" entityId={id} />}
     </div>
   ) : null;
 

@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { formatCurrency } from "@/lib/formatters";
 import { useApiQuery, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 
 export default function FuelPage() {
+  const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["fuel", scopeQueryString], `/fleet/fuel-logs${scopeSuffix}`);
@@ -56,6 +57,7 @@ export default function FuelPage() {
         onRetry={() => refetch()}
         searchPlaceholder="بحث بالمركبة..."
         emptyMessage="لا توجد سجلات وقود"
+        onRowClick={(row) => navigate(`/fleet/fuel/${row.id}`)}
       />
     </PageShell>
   );

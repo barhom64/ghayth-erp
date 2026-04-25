@@ -238,6 +238,7 @@ export default function InvoicesPage() {
           return undefined;
         }}
         noToolbar
+        onRowClick={(row) => navigate(`/finance/invoices/${row.id}`)}
         renderRowExtras={(inv) => {
           if (expandedId !== inv.id) return null;
           return (

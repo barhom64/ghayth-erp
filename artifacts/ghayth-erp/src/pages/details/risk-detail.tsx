@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, AlertTriangle } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   open: "مفتوح",
@@ -316,6 +318,9 @@ export default function RiskDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {id && <EntityComments entityType="risk" entityId={id} />}
+      {id && <EntityTags entityType="risk" entityId={id} />}
     </div>
   );
 

@@ -22,6 +22,8 @@ import { EntityFinancialProfile } from "@/components/shared/entity-financial-pro
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare, BookOpen } from "lucide-react";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const TABS = [
@@ -660,6 +662,8 @@ export default function UnitDetail() {
         </Card>
       )}
 
+      {id && <EntityComments entityType="unit" entityId={id} />}
+      {id && <EntityTags entityType="unit" entityId={id} />}
     </div>
   ) : <div />;
 

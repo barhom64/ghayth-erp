@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { formatDateAr } from "@/lib/formatters";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -93,6 +93,7 @@ export default function LeavesPage() {
   const { data: stats } = useApiQuery<any>(["leave-stats", scopeQueryString], `/hr/leave-stats${scopeSuffix}`);
   const items = asList(data);
   const qc = useQueryClient();
+  const [, navigate] = useLocation();
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
   const filtered = applyFilters(items, filters, {
@@ -268,6 +269,7 @@ export default function LeavesPage() {
         data={filtered}
         emptyMessage="لا توجد طلبات إجازة"
         noToolbar
+        onRowClick={(l) => navigate(`/hr/leaves/${l.id}`)}
         renderRowExtras={(l) =>
           expandedId === l.id ? (
             <div className="p-4 bg-gray-50/50 space-y-4">

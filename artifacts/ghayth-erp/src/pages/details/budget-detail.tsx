@@ -12,6 +12,8 @@ import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
@@ -230,6 +232,14 @@ export default function BudgetDetail() {
                 currentStatus={item.status}
                 approveEndpoint={`/finance/budgets/${id}/approve`}
                 rejectEndpoint={`/finance/budgets/${id}/reject`}
+                returnEndpoint={`/finance/budgets/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, notes })}
+                returnBody={(notes) => ({ approved: "returned", notes })}
+                pendingStatuses={["pending", "pending_approval", "draft", "returned"]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث الميزانية" });
@@ -261,6 +271,9 @@ export default function BudgetDetail() {
       {id && (
         <ApprovalTimeline entityType="budget" entityId={id} />
       )}
+
+      {id && <EntityComments entityType="budget" entityId={id} />}
+      {id && <EntityTags entityType="budget" entityId={id} />}
     </div>
   );
 

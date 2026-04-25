@@ -11,6 +11,8 @@ import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { Edit, FileSignature, Calendar, Target } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 /**
  * CommitmentDetail — unified detail page for a single financial commitment.
@@ -276,6 +278,13 @@ export default function CommitmentDetail() {
                 approveEndpoint={`/finance/commitments/${id}/approve`}
                 rejectEndpoint={`/finance/commitments/${id}/approve`}
                 returnEndpoint={`/finance/commitments/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, notes })}
+                returnBody={(notes) => ({ approved: "returned", notes })}
+                pendingStatuses={["pending", "pending_approval", "draft", "returned"]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث الالتزام" });
@@ -296,6 +305,9 @@ export default function CommitmentDetail() {
           </Card>
         )}
       </div>
+
+      {id && <EntityComments entityType="commitment" entityId={id} />}
+      {id && <EntityTags entityType="commitment" entityId={id} />}
     </div>
   );
 

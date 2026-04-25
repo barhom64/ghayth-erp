@@ -10,8 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
-import { PageStatusBadge } from "@/components/page-status-badge";
-import { STATUSES } from "@/lib/constants";
+import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -229,7 +228,7 @@ export default function LegalCaseDetail() {
     {
       successMessage: false,
       onSuccess: (_d, body) => {
-        toast({ title: `تم تحديث حالة القضية إلى: ${STATUSES[body.status] || body.status}` });
+        toast({ title: `تم تحديث حالة القضية إلى: ${resolveStatus(body.status, "legal_case")?.label || body.status}` });
       },
     }
   );
@@ -274,7 +273,7 @@ export default function LegalCaseDetail() {
             "border-blue-300 text-blue-700 hover:bg-blue-50": t === "in_progress" || t === "judgment",
           })}
         >
-          {STATUSES[t] || t}
+          {resolveStatus(t, "legal_case")?.label || t}
         </Button>
       ))}
     </div>
@@ -428,7 +427,7 @@ export default function LegalCaseDetail() {
       backPath="/legal/cases"
       backLabel="القضايا"
       status={caseData ? {
-        label: STATUSES[caseData.status] || caseData.status,
+        label: resolveStatus(caseData.status, "legal_case")?.label || caseData.status,
         tone: statusToneMap[caseData.status] || "default",
       } : undefined}
       refNumber={caseData?.caseNumber || undefined}

@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Edit, User, Phone, Mail, MapPin, Building2, Banknote, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 /**
  * OwnerDetail — unified detail page for a single property owner.
@@ -242,6 +244,9 @@ export default function OwnerDetail() {
           </Card>
         )}
       </div>
+
+      {id && <EntityComments entityType="owner" entityId={id} />}
+      {id && <EntityTags entityType="owner" entityId={id} />}
     </div>
   );
 

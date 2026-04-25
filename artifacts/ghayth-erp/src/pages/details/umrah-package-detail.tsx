@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Package, Star, Bus, Utensils, Calendar } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "متاح",
@@ -204,6 +206,9 @@ export default function UmrahPackageDetail() {
           </Card>
         )}
       </div>
+
+      {id && <EntityComments entityType="umrah_package" entityId={id} />}
+      {id && <EntityTags entityType="umrah_package" entityId={id} />}
     </div>
   );
 

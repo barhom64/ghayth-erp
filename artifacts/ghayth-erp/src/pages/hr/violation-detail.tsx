@@ -4,6 +4,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Link } from "wouter";
 import {
   AlertTriangle, Shield, DollarSign, Calendar, User,
@@ -178,7 +179,7 @@ export default function ViolationDetail() {
                 ) },
                 { key: "penaltyLabel", header: "الجزاء", sortable: true, render: (v) => <span className="text-gray-700">{v.penaltyLabel || "—"}</span> },
                 { key: "totalDeductionAmount", header: "المبلغ", sortable: true, render: (v) => <span className="font-medium text-red-600">{formatCurrency(Number(v.totalDeductionAmount || 0))}</span> },
-                { key: "status", header: "الحالة", sortable: true, render: (v) => <Badge variant="outline" className="text-xs">{v.status}</Badge> },
+                { key: "status", header: "الحالة", sortable: true, render: (v) => <PageStatusBadge status={v.status} domain="memo" /> },
                 { key: "createdAt", header: "التاريخ", sortable: true, render: (v) => <span className="text-gray-500">{v.createdAt ? formatDateAr(v.createdAt) : "—"}</span> },
               ] as DataTableColumn<any>[]}
               data={memos}

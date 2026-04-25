@@ -12,6 +12,8 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 /**
  * HrContractDetail — detail page for a single HR contract.
@@ -187,6 +189,9 @@ export default function HrContractDetail() {
 
       {id && <ApprovalTimeline entityType="employee_contract" entityId={id} />}
       {id && <EntityDocuments entityType="employee_contract" entityId={id} />}
+
+      {id && <EntityComments entityType="hr_contract" entityId={id} />}
+      {id && <EntityTags entityType="hr_contract" entityId={id} />}
     </div>
   );
 

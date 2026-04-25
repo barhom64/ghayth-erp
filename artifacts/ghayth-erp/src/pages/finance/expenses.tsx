@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,7 @@ export default function ExpensesPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const advFilters = useAdvancedFilters();
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
+  const [, navigate] = useLocation();
   const { tagsList, selectedTag, setSelectedTag, filteredIds: tagFilteredIds } = useTagFilter("expense");
 
   if (isLoading) return <LoadingSpinner />;
@@ -251,7 +252,7 @@ export default function ExpensesPage() {
         emptyMessage="لا توجد مصروفات"
         emptyIcon={<Wallet className="h-6 w-6 text-slate-400" />}
         rowClassName={(e) => selectedIds.has(e.id) ? "bg-blue-50/50" : undefined}
-        onRowClick={(e) => setExpandedId(expandedId === e.id ? null : e.id)}
+        onRowClick={(e) => navigate(`/finance/expenses/${e.id}`)}
         noToolbar
         renderRowExtras={(e) => {
           if (expandedId !== e.id) return null;
@@ -343,6 +344,14 @@ export default function ExpensesPage() {
               <EntityTags entityType="expense" entityId={e.id} />
               <EntityComments entityType="expense" entityId={e.id} />
               <ActionHistory entityType="expense" entityId={e.id} defaultOpen />
+              <div className="flex justify-end pt-2 border-t">
+                <Link href={`/finance/expenses/${e.id}`}>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    عرض الصفحة الكاملة
+                  </Button>
+                </Link>
+              </div>
             </div>
           );
         }}

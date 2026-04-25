@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Fuel, Gauge } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const FUEL_TYPES: Record<string, string> = {
   gasoline_91: "بنزين 91",
@@ -169,6 +171,9 @@ export default function FuelDetail() {
           </Card>
         )}
       </div>
+
+      {id && <EntityComments entityType="fuel" entityId={id} />}
+      {id && <EntityTags entityType="fuel" entityId={id} />}
     </div>
   );
 

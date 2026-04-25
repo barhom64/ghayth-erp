@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Headphones, User, MessageSquare, Send, Trash2, Clock } from "lucide-react";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 export default function TicketDetail() {
   const [, params] = useRoute("/support/:id");
@@ -153,6 +155,9 @@ export default function TicketDetail() {
 
         {id && <ApprovalTimeline entityType="support_ticket" entityId={id} />}
       </div>
+
+      {id && <EntityComments entityType="ticket" entityId={id} />}
+      {id && <EntityTags entityType="ticket" entityId={id} />}
     </div>
   ) : null;
 

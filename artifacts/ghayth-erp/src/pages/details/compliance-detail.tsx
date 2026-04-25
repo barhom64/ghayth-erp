@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, ShieldCheck } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   compliant: "ملتزم",
@@ -205,6 +207,9 @@ export default function ComplianceDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {id && <EntityComments entityType="compliance" entityId={id} />}
+      {id && <EntityTags entityType="compliance" entityId={id} />}
     </div>
   );
 

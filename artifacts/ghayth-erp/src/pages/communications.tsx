@@ -194,13 +194,7 @@ function MonitorTab() {
 
   const recentMsgColumns: DataTableColumn<any>[] = [
     { key: "recipient", header: "المستلم", ltr: true, render: (r: any) => <span className="max-w-[100px] truncate inline-block">{r.recipient}</span> },
-    { key: "status", header: "الحالة", render: (r: any) => (
-      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-        r.status === "sent" ? "bg-green-100 text-green-700" :
-        r.status === "failed" ? "bg-red-100 text-red-700" :
-        "bg-amber-100 text-amber-700"
-      }`}>{r.status}</span>
-    ) },
+    { key: "status", header: "الحالة", render: (r: any) => <PageStatusBadge status={r.status} /> },
     { key: "attemptCount", header: "المحاولات", align: "center", render: (r: any) => r.attemptCount ?? 0 },
     { key: "createdAt", header: "التاريخ", ltr: true, render: (r: any) => <span className="text-gray-400">{formatDateAr(r.createdAt)}</span> },
   ];

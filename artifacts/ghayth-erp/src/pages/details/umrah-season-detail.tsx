@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Calendar, Users, TrendingUp } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   upcoming: "قادم",
@@ -160,6 +162,9 @@ export default function UmrahSeasonDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {id && <EntityComments entityType="umrah_season" entityId={id} />}
+      {id && <EntityTags entityType="umrah_season" entityId={id} />}
     </div>
   );
 

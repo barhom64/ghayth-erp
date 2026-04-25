@@ -4,6 +4,7 @@ import { useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import {
   Clock, Calendar, DollarSign, FileSignature,
   CheckCircle2, XCircle, AlertCircle, ChevronLeft,
@@ -15,16 +16,6 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 
-const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
-  pending: { label: "معلق", color: "bg-yellow-100 text-yellow-700 border-yellow-200", icon: Clock },
-  in_review: { label: "قيد المراجعة", color: "bg-blue-100 text-blue-700 border-blue-200", icon: AlertCircle },
-  approved: { label: "موافق", color: "bg-green-100 text-green-700 border-green-200", icon: CheckCircle2 },
-  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700 border-red-200", icon: XCircle },
-  returned: { label: "مُعاد", color: "bg-orange-100 text-orange-700 border-orange-200", icon: RefreshCw },
-  escalated: { label: "مُصعَّد", color: "bg-purple-100 text-purple-700 border-purple-200", icon: AlertCircle },
-  draft: { label: "مسودة", color: "bg-gray-100 text-gray-600 border-gray-200", icon: ClipboardList },
-};
-
 const typeLabels: Record<string, { label: string; icon: any }> = {
   leave: { label: "إجازة", icon: Calendar },
   salary_advance: { label: "سلفة راتب", icon: DollarSign },
@@ -35,14 +26,7 @@ const typeLabels: Record<string, { label: string; icon: any }> = {
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const cfg = statusConfig[status] ?? { label: status, color: "bg-gray-100 text-gray-600 border-gray-200", icon: Clock };
-  const Icon = cfg.icon;
-  return (
-    <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border", cfg.color)}>
-      <Icon size={12} />
-      {cfg.label}
-    </span>
-  );
+  return <PageStatusBadge status={status} />;
 }
 
 export default function MyRequests() {

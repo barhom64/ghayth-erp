@@ -11,6 +11,8 @@ import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { Edit, ArrowDownCircle, AlertTriangle, Calendar, Receipt } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 /**
  * ReceivableDetail — unified detail page for a single accounts-receivable
@@ -324,6 +326,13 @@ export default function ReceivableDetail() {
                 approveEndpoint={`/finance/receivables/${id}/approve`}
                 rejectEndpoint={`/finance/receivables/${id}/approve`}
                 returnEndpoint={`/finance/receivables/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, notes })}
+                returnBody={(notes) => ({ approved: "returned", notes })}
+                pendingStatuses={["pending", "pending_approval", "draft", "returned"]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث المستحق" });
@@ -344,6 +353,9 @@ export default function ReceivableDetail() {
           </Card>
         )}
       </div>
+
+      {id && <EntityComments entityType="receivable" entityId={id} />}
+      {id && <EntityTags entityType="receivable" entityId={id} />}
     </div>
   );
 

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +42,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
  */
 
 export default function SalaryAdvancesPage() {
+  const [, navigate] = useLocation();
   const { roleLevel, scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(
@@ -199,6 +201,7 @@ export default function SalaryAdvancesPage() {
         emptyMessage="لا توجد سلف"
         emptyIcon={<Banknote className="h-6 w-6 text-slate-400" />}
         noToolbar
+        onRowClick={(row) => navigate(`/finance/salary-advances/${row.id}`)}
       />
     </PageShell>
   );

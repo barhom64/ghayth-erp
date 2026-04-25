@@ -10,6 +10,8 @@ import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { Edit, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "معلق",
@@ -186,6 +188,16 @@ export default function SalaryAdvanceDetail() {
                 entityType="salary-advance"
                 entityId={id}
                 currentStatus={item.status}
+                approveEndpoint={`/hr/salary-advances/${id}/approve`}
+                rejectEndpoint={`/hr/salary-advances/${id}/approve`}
+                returnEndpoint={`/hr/salary-advances/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, notes })}
+                returnBody={(notes) => ({ approved: "returned", notes })}
+                pendingStatuses={["pending", "returned"]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث السلفة" });
@@ -206,6 +218,9 @@ export default function SalaryAdvanceDetail() {
           </Card>
         )}
       </div>
+
+      {id && <EntityComments entityType="salary_advance" entityId={id} />}
+      {id && <EntityTags entityType="salary_advance" entityId={id} />}
     </div>
   );
 

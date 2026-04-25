@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useApiQuery, asList } from "@/lib/api";
 import { Shield, Plus, FileText, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
@@ -11,6 +11,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 
 export default function InsurancePage() {
+  const [, navigate] = useLocation();
   const { data: insuranceResp, isLoading, isError, error, refetch } = useApiQuery<any>(
     ["fleet-insurance"], "/fleet/insurance"
   );
@@ -80,6 +81,7 @@ export default function InsurancePage() {
         emptyIcon={<Shield className="h-6 w-6 text-slate-400" />}
         emptyAction={{ label: "إضافة تأمين", onClick: () => { window.location.href = "/fleet/insurance/create"; } }}
         noToolbar
+        onRowClick={(row) => navigate(`/fleet/insurance/${row.id}`)}
       />
     </PageShell>
   );

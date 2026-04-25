@@ -20,6 +20,8 @@ import { EntityFinancialProfile } from "@/components/shared/entity-financial-pro
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare } from "lucide-react";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
@@ -781,6 +783,9 @@ export default function VehicleDetail() {
       {id && (
         <EntityObligations entityType="fleet_vehicle,fleet_maintenance,fleet_insurance" entityId={id} hideWhenEmpty />
       )}
+
+      {id && <EntityComments entityType="vehicle" entityId={id} />}
+      {id && <EntityTags entityType="vehicle" entityId={id} />}
     </div>
   );
 

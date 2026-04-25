@@ -10,6 +10,8 @@ import { EntityDocuments } from "@/components/shared/entity-documents";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
@@ -238,6 +240,9 @@ export default function LegalContractDetail() {
       {id && (
         <ApprovalTimeline entityType="legal_contract" entityId={id} />
       )}
+
+      {id && <EntityComments entityType="legal_contract" entityId={id} />}
+      {id && <EntityTags entityType="legal_contract" entityId={id} />}
     </div>
   );
 

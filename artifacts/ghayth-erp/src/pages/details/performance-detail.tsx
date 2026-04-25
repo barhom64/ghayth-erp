@@ -10,6 +10,8 @@ import { ActionHistory } from "@/components/approval-actions";
 import { Edit, Star, Target, TrendingUp } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 /**
  * PerformanceDetail — unified detail page for a single performance
@@ -331,6 +333,9 @@ export default function PerformanceDetail() {
           </Card>
         )}
       </div>
+
+      {id && <EntityComments entityType="performance" entityId={id} />}
+      {id && <EntityTags entityType="performance" entityId={id} />}
     </div>
   );
 

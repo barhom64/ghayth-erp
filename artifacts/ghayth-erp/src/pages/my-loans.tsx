@@ -2,6 +2,7 @@ import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   Wallet, Clock, CheckCircle2, DollarSign, TrendingDown,
@@ -50,10 +51,7 @@ const loanColumns: DataTableColumn<any>[] = [
   { key: "createdAt", header: "تاريخ الطلب", sortable: true, render: (r) => formatDateAr(r.createdAt) },
   {
     key: "status", header: "الحالة", searchable: true,
-    render: (r) => {
-      const cfg = statusConfig[r.status] ?? { label: r.status, color: "text-gray-600 bg-gray-50" };
-      return <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", cfg.color)}>{cfg.label}</span>;
-    },
+    render: (r) => <PageStatusBadge status={r.status} />,
   },
 ];
 
