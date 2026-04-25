@@ -113,9 +113,9 @@ export default function TenantDetail() {
           <CardContent className="p-0">
             <DataTable
               columns={[
-                { key: "unitNumber", header: "الوحدة", render: (p) => p.unitNumber || "—" },
-                { key: "dueDate", header: "الاستحقاق", render: (p) => <span className="text-red-600">{formatDateAr(p.dueDate)}</span> },
-                { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
+                { key: "unitNumber", header: "الوحدة", render: (p: any) => p.unitNumber || "—" },
+                { key: "dueDate", header: "الاستحقاق", render: (p: any) => <span className="text-red-600">{formatDateAr(p.dueDate)}</span> },
+                { key: "amount", header: "المبلغ", render: (p: any) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
               ]}
               data={overduePayments.slice(0, 5)}
               noToolbar
@@ -142,19 +142,19 @@ export default function TenantDetail() {
             ) : (
               <DataTable
                 columns={[
-                  { key: "unitNumber", header: "الوحدة", render: (c) => (
+                  { key: "unitNumber", header: "الوحدة", render: (c: any) => (
                     <div>
                       <p className="font-medium">{c.unitNumber}</p>
                       {c.buildingName && <p className="text-xs text-gray-400">{c.buildingName}</p>}
                     </div>
                   ) },
-                  { key: "startDate", header: "من", render: (c) => <span className="text-gray-500">{formatDateAr(c.startDate)}</span> },
-                  { key: "endDate", header: "إلى", render: (c) => <span className="text-gray-500">{formatDateAr(c.endDate)}</span> },
-                  { key: "monthlyRent", header: "الإيجار", render: (c) => <span className="font-bold">{formatCurrency(Number(c.monthlyRent || 0))}</span> },
-                  { key: "status", header: "الحالة", render: (c) => <PageStatusBadge status={c.status} /> },
+                  { key: "startDate", header: "من", render: (c: any) => <span className="text-gray-500">{formatDateAr(c.startDate)}</span> },
+                  { key: "endDate", header: "إلى", render: (c: any) => <span className="text-gray-500">{formatDateAr(c.endDate)}</span> },
+                  { key: "monthlyRent", header: "الإيجار", render: (c: any) => <span className="font-bold">{formatCurrency(Number(c.monthlyRent || 0))}</span> },
+                  { key: "status", header: "الحالة", render: (c: any) => <PageStatusBadge status={c.status} /> },
                 ]}
                 data={contracts}
-                rowClassName={(c) => cn(c.status === "active" && "bg-blue-50/30")}
+                rowClassName={(c: any) => cn(c.status === "active" && "bg-blue-50/30")}
                 noToolbar
                 pageSize={0}
                 searchPlaceholder={null}
@@ -177,14 +177,14 @@ export default function TenantDetail() {
             ) : (
               <DataTable
                 columns={[
-                  { key: "unitNumber", header: "الوحدة", render: (p) => p.unitNumber || "—" },
-                  { key: "dueDate", header: "الاستحقاق", render: (p) => <span className="text-gray-500">{formatDateAr(p.dueDate)}</span> },
-                  { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
-                  { key: "paidAmount", header: "المدفوع", render: (p) => <span className="text-emerald-600">{formatCurrency(Number(p.paidAmount || 0))}</span> },
-                  { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
+                  { key: "unitNumber", header: "الوحدة", render: (p: any) => p.unitNumber || "—" },
+                  { key: "dueDate", header: "الاستحقاق", render: (p: any) => <span className="text-gray-500">{formatDateAr(p.dueDate)}</span> },
+                  { key: "amount", header: "المبلغ", render: (p: any) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
+                  { key: "paidAmount", header: "المدفوع", render: (p: any) => <span className="text-emerald-600">{formatCurrency(Number(p.paidAmount || 0))}</span> },
+                  { key: "status", header: "الحالة", render: (p: any) => <PageStatusBadge status={p.status} /> },
                 ]}
                 data={payments}
-                rowClassName={(p) => cn(p.status !== "paid" && new Date(p.dueDate) < new Date() ? "bg-red-50/30" : "")}
+                rowClassName={(p: any) => cn(p.status !== "paid" && new Date(p.dueDate) < new Date() ? "bg-red-50/30" : "")}
                 noToolbar
                 pageSize={0}
                 searchPlaceholder={null}

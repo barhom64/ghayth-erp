@@ -457,12 +457,12 @@ export default function ProjectDetail() {
             ) : tasks.length > 0 ? (
               <DataTable
                 columns={[
-                  { key: "title", header: "المهمة", render: (t) => <span className="font-medium">{t.title}</span> },
-                  { key: "assigneeName", header: "المسؤول", render: (t) => <span className="text-gray-500">{t.assigneeName || "-"}</span> },
-                  { key: "priority", header: "الأولوية", render: (t) => <Badge className={priorityColors[t.priority] || "bg-gray-100 text-gray-700"}>{priorityLabels[t.priority] || t.priority}</Badge> },
-                  { key: "status", header: "الحالة", render: (t) => <Badge className={taskStatusColors[t.status] || "bg-gray-100 text-gray-700"}>{taskStatusLabels[t.status] || t.status}</Badge> },
-                  { key: "dueDate", header: "تاريخ الاستحقاق", render: (t) => <span className="text-gray-500">{t.dueDate ? formatDateAr(t.dueDate) : "-"}</span> },
-                  { key: "action", header: "إجراء", render: (t) => t.status !== "done" ? (
+                  { key: "title", header: "المهمة", render: (t: any) => <span className="font-medium">{t.title}</span> },
+                  { key: "assigneeName", header: "المسؤول", render: (t: any) => <span className="text-gray-500">{t.assigneeName || "-"}</span> },
+                  { key: "priority", header: "الأولوية", render: (t: any) => <Badge className={priorityColors[t.priority] || "bg-gray-100 text-gray-700"}>{priorityLabels[t.priority] || t.priority}</Badge> },
+                  { key: "status", header: "الحالة", render: (t: any) => <Badge className={taskStatusColors[t.status] || "bg-gray-100 text-gray-700"}>{taskStatusLabels[t.status] || t.status}</Badge> },
+                  { key: "dueDate", header: "تاريخ الاستحقاق", render: (t: any) => <span className="text-gray-500">{t.dueDate ? formatDateAr(t.dueDate) : "-"}</span> },
+                  { key: "action", header: "إجراء", render: (t: any) => t.status !== "done" ? (
                     <Select value={t.status} onValueChange={(v) => updateTaskStatus(t.id, v)}>
                       <SelectTrigger className="h-8 w-[120px] text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
