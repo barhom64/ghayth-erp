@@ -216,11 +216,11 @@ export default function StoreOrderDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>{id && <EntityDocuments entityType="store_order" entityId={id} />}</div>
+        <div>{id && <EntityDocuments entityType="store-order" entityId={id} />}</div>
         <Card>
           <CardHeader><CardTitle className="text-lg">السجل الزمني</CardTitle></CardHeader>
           <CardContent>
-            {id && <EntityTimeline entityType="store_orders" entityId={id} maxItems={20} />}
+            {id && <EntityTimeline entityType="store-order" entityId={id} maxItems={20} />}
           </CardContent>
         </Card>
       </div>

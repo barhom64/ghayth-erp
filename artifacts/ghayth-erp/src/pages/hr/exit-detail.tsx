@@ -225,7 +225,7 @@ export default function ExitDetail() {
         </Card>
       )}
 
-      <ActionHistory entityType="exit_request" entityId={Number(id)} />
+      <ActionHistory entityType="exit-request" entityId={Number(id)} />
     </div>
   ) : null;
 
@@ -235,7 +235,7 @@ export default function ExitDetail() {
       subtitle={item ? `${EXIT_TYPES[item.exitType] || item.exitType} — ${item.jobTitle || ""}` : undefined}
       backPath="/hr/exit"
       status={{ label: st.label, tone: STATUS_TONE_MAP[item?.status] ?? "default" }}
-      entityType="hr_exit_request"
+      entityType="exit-request"
       entityId={Number(id)}
       isLoading={isLoading}
       error={isError ? true : undefined}

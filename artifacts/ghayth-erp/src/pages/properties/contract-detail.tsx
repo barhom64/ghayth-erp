@@ -192,7 +192,7 @@ export default function ContractDetailPage() {
       icon: FolderOpen,
       content: () => (
         <div className="space-y-4">
-          <EntityObligations entityType="rental_contract" entityId={id} hideWhenEmpty />
+          <EntityObligations entityType="rental-contract" entityId={id} hideWhenEmpty />
           <EntityDocuments entityType="contract" entityId={id} />
         </div>
       ),
@@ -201,7 +201,7 @@ export default function ContractDetailPage() {
       key: "timeline",
       label: "السجل الزمني",
       icon: History,
-      content: () => <EntityTimeline entityType="rental_contracts" entityId={id} />,
+      content: () => <EntityTimeline entityType="rental-contract" entityId={id} />,
     },
     {
       key: "comments",

@@ -134,6 +134,62 @@ router.get("/overtime", requirePermission("hr:read"), async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// GET /hr/overtime/my — طلباتي (Self-Service)
+// ═══════════════════════════════════════════════════════════════════════════════
+router.get("/overtime/my", requirePermission("hr:read"), async (req, res) => {
+  try {
+    await ensureOvertimeTable();
+    const scope = req.scope!;
+    const data = await rawQuery<any>(
+      `SELECT o.*, e.name AS "employeeName"
+       FROM hr_overtime_requests o
+       JOIN employees e ON e.id = o."employeeId"
+       WHERE o."assignmentId" = $1 AND o."companyId" = $2 AND o."deletedAt" IS NULL
+       ORDER BY o."overtimeDate" DESC`,
+      [scope.activeAssignmentId, scope.companyId]
+    );
+    res.json({ data });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في قراءة طلباتك");
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /hr/overtime/summary — ملخص شهري للربط بالرواتب
+// ═══════════════════════════════════════════════════════════════════════════════
+router.get("/overtime/summary", requirePermission("hr:read"), async (req, res) => {
+  try {
+    await ensureOvertimeTable();
+    const scope = req.scope!;
+    const period = String(req.query.period || req.query.month || "");
+    const data = await rawQuery<any>(
+      `SELECT o."assignmentId", e.name AS "employeeName", e."empNumber",
+              SUM(o.hours) AS "totalHours", SUM(o."totalAmount") AS "totalAmount",
+              COUNT(*) AS "requestCount"
+       FROM hr_overtime_requests o
+       JOIN employee_assignments ea ON ea.id = o."assignmentId"
+       JOIN employees e ON e.id = ea."employeeId"
+       WHERE o."companyId" = $1 AND o."payrollPeriod" = $2
+         AND o.status = 'approved' AND o."deletedAt" IS NULL
+       GROUP BY o."assignmentId", e.name, e."empNumber"
+       ORDER BY "totalAmount" DESC`,
+      [scope.companyId, period]
+    );
+
+    const [totals] = await rawQuery<any>(
+      `SELECT COALESCE(SUM(hours), 0) AS hours, COALESCE(SUM("totalAmount"), 0) AS amount
+       FROM hr_overtime_requests
+       WHERE "companyId" = $1 AND "payrollPeriod" = $2 AND status = 'approved' AND "deletedAt" IS NULL`,
+      [scope.companyId, period]
+    );
+
+    res.json({ data, totals: totals ?? { hours: 0, amount: 0 }, period });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في قراءة ملخص الوقت الإضافي");
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime/:id — تفاصيل الطلب
 // ═══════════════════════════════════════════════════════════════════════════════
 router.get("/overtime/:id", requirePermission("hr:read"), async (req, res) => {
@@ -436,65 +492,6 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "خطأ في رفض الطلب");
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// GET /hr/overtime/my — طلباتي (Self-Service)
-// ═══════════════════════════════════════════════════════════════════════════════
-router.get("/overtime/my", requirePermission("hr:read"), async (req, res) => {
-  try {
-    await ensureOvertimeTable();
-    const scope = req.scope!;
-    const data = await rawQuery<any>(
-      `SELECT o.*, e.name AS "employeeName"
-       FROM hr_overtime_requests o
-       JOIN employees e ON e.id = o."employeeId"
-       WHERE o."assignmentId" = $1 AND o."companyId" = $2 AND o."deletedAt" IS NULL
-       ORDER BY o."overtimeDate" DESC`,
-      [scope.activeAssignmentId, scope.companyId]
-    );
-    res.json({ data });
-  } catch (err) {
-    handleRouteError(err, res, "خطأ في قراءة طلباتك");
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// GET /hr/overtime/summary — ملخص شهري للربط بالرواتب
-// ═══════════════════════════════════════════════════════════════════════════════
-router.get("/overtime/summary", requirePermission("hr:read"), async (req, res) => {
-  try {
-    await ensureOvertimeTable();
-    const scope = req.scope!;
-    const { period } = req.query as any;
-    if (!period) throw new ValidationError("الفترة مطلوبة (YYYY-MM)");
-
-    const data = await rawQuery<any>(
-      `SELECT o."assignmentId", e.name AS "employeeName", e."empNumber",
-              SUM(o.hours) AS "totalHours",
-              SUM(o."totalAmount") AS "totalAmount",
-              COUNT(*) AS "requestCount"
-       FROM hr_overtime_requests o
-       JOIN employee_assignments ea ON ea.id = o."assignmentId"
-       JOIN employees e ON e.id = ea."employeeId"
-       WHERE o."companyId" = $1 AND o."payrollPeriod" = $2
-         AND o.status = 'approved' AND o."deletedAt" IS NULL
-       GROUP BY o."assignmentId", e.name, e."empNumber"
-       ORDER BY "totalAmount" DESC`,
-      [scope.companyId, period]
-    );
-
-    const [totals] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(hours), 0) AS hours, COALESCE(SUM("totalAmount"), 0) AS amount
-       FROM hr_overtime_requests
-       WHERE "companyId" = $1 AND "payrollPeriod" = $2 AND status = 'approved' AND "deletedAt" IS NULL`,
-      [scope.companyId, period]
-    );
-
-    res.json({ data, totals: totals ?? { hours: 0, amount: 0 }, period });
-  } catch (err) {
-    handleRouteError(err, res, "خطأ في قراءة ملخص الوقت الإضافي");
   }
 });
 

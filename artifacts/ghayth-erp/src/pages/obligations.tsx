@@ -69,7 +69,7 @@ export default function ObligationsPage() {
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["obligations-list", statusFilter],
-    `/obligations?status=${encodeURIComponent(statusFilter)}&limit=200`
+    `/obligations?${statusFilter !== "all" ? `status=${encodeURIComponent(statusFilter)}&` : ""}limit=200`
   );
   const list = asList(data?.data || data);
   const filtered = search
@@ -148,7 +148,7 @@ export default function ObligationsPage() {
             <SelectItem value="escalated_l1,escalated_l2">في تصعيد</SelectItem>
             <SelectItem value="met">ملبى</SelectItem>
             <SelectItem value="cancelled">ملغى</SelectItem>
-            <SelectItem value="">الكل</SelectItem>
+            <SelectItem value="all">الكل</SelectItem>
           </SelectContent>
         </Select>
       </div>

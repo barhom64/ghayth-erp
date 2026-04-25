@@ -37,7 +37,7 @@ export default function PropertiesMaintenance() {
       hidden: !canApprove,
       render: (r) => (
         <ApprovalActions
-          entityType="maintenance_request"
+          entityType="maintenance-request"
           entityId={r.id}
           currentStatus={r.status || "pending"}
           approveEndpoint={`/properties/maintenance-requests/${r.id}/approve`}

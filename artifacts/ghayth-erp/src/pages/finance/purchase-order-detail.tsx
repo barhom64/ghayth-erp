@@ -83,7 +83,7 @@ export default function PurchaseOrderDetailPage() {
           <CardHeader><CardTitle>إجراءات الاعتماد</CardTitle></CardHeader>
           <CardContent>
             <ApprovalActions
-              entityType="purchase_order"
+              entityType="purchase-order"
               entityId={Number(id)}
               approveEndpoint={`/finance/purchase-orders/${id}/approve`}
               rejectEndpoint={`/finance/purchase-orders/${id}/reject`}
@@ -100,7 +100,7 @@ export default function PurchaseOrderDetailPage() {
       <Card>
         <CardHeader><CardTitle>سجل الإجراءات</CardTitle></CardHeader>
         <CardContent>
-          <ActionHistory entityType="purchase_order" entityId={Number(id)} defaultOpen />
+          <ActionHistory entityType="purchase-order" entityId={Number(id)} defaultOpen />
         </CardContent>
       </Card>
 
@@ -139,7 +139,7 @@ export default function PurchaseOrderDetailPage() {
         refNumber={po?.ref || (po ? `#${po.id}` : undefined)}
         createdAt={po?.createdAt}
         updatedAt={po?.updatedAt}
-        entityType="purchase_order"
+        entityType="purchase-order"
         entityId={id || ""}
         overview={overview}
         actions={actions}

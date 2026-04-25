@@ -342,7 +342,7 @@ export default function LegalCaseDetail() {
       <div className="space-y-4">
         <StepImpactPanel caseStatus={caseData.status} />
         <RiskPanel caseData={caseData} sessions={sessions} />
-        {id && <EntityObligations entityType="legal_case" entityId={Number(id)} hideWhenEmpty />}
+        {id && <EntityObligations entityType="legal-case" entityId={Number(id)} hideWhenEmpty />}
       </div>
     </div>
   ) : null;
@@ -433,7 +433,7 @@ export default function LegalCaseDetail() {
       refNumber={caseData?.caseNumber || undefined}
       createdAt={caseData?.createdAt}
       updatedAt={caseData?.updatedAt}
-      entityType="legal_case"
+      entityType="legal-case"
       entityId={Number(id)}
       isLoading={isLoading}
       error={error}

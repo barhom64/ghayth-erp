@@ -135,7 +135,7 @@ export default function RecurringJournalDetailPage() {
       }
       createdAt={rj?.createdAt}
       updatedAt={rj?.updatedAt}
-      entityType="recurring_journal"
+      entityType="recurring-journal"
       entityId={id}
       isLoading={isLoading}
       error={isError ? true : undefined}

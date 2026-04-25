@@ -639,13 +639,13 @@ export default function UnitDetail() {
       )}
 
       {activeTab === "tasks" && id && (
-        <LinkedTasks entityType="property_unit" entityId={id} includeMaintenanceTasks />
+        <LinkedTasks entityType="property-unit" entityId={id} includeMaintenanceTasks />
       )}
 
       {activeTab === "documents" && id && (
         <div className="space-y-4">
-          <EntityObligations entityType="property_unit" entityId={id} hideWhenEmpty />
-          <EntityDocuments entityType="property_unit" entityId={id} />
+          <EntityObligations entityType="property-unit" entityId={id} hideWhenEmpty />
+          <EntityDocuments entityType="property-unit" entityId={id} />
         </div>
       )}
 
@@ -657,7 +657,7 @@ export default function UnitDetail() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {id && <EntityTimeline entityType="property_units" entityId={id} maxItems={30} />}
+            {id && <EntityTimeline entityType="property-unit" entityId={id} maxItems={30} />}
           </CardContent>
         </Card>
       )}
@@ -674,7 +674,7 @@ export default function UnitDetail() {
       backPath="/properties"
       backLabel="الوحدات"
       status={{ label: STATUS_LABELS[unit?.status] || unit?.status, tone: unit?.status === "available" ? "success" : unit?.status === "rented" ? "info" : unit?.status === "maintenance" ? "warning" : unit?.status === "defaulted" ? "destructive" : "muted" }}
-      entityType="property_unit"
+      entityType="property-unit"
       entityId={id || ""}
       isLoading={isLoading}
       error={isError ? error : undefined}

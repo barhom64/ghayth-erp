@@ -308,7 +308,7 @@ export default function CustodyDetailPage() {
       refNumber={data?.ref}
       createdAt={data?.date || data?.createdAt}
       updatedAt={data?.updatedAt}
-      entityType="finance_custody"
+      entityType="finance-custody"
       entityId={id || ""}
       isLoading={isLoading}
       error={isError ? true : undefined}

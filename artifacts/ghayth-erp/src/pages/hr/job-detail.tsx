@@ -216,7 +216,7 @@ export default function JobDetailPage() {
       subtitle={job?.department || undefined}
       backPath="/hr/jobs"
       backLabel="العودة للتوظيف"
-      entityType="hr_job"
+      entityType="hr-job"
       entityId={id}
       isLoading={isLoading}
       error={isError || notFound ? (notFound ? "لم يتم العثور على الوظيفة" : "تعذر تحميل بيانات الوظيفة") : undefined}

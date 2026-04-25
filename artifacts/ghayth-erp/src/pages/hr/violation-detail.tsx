@@ -202,7 +202,7 @@ export default function ViolationDetail() {
         label: statusLabelMap[item.status] || item.status || severity.label,
         tone: statusToneMap[item.status] || "default",
       } : undefined}
-      entityType="employee_violation"
+      entityType="violation"
       entityId={Number(id)}
       isLoading={isLoading}
       error={isError ? true : undefined}

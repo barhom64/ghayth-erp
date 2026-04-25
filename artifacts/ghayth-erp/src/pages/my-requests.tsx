@@ -25,6 +25,25 @@ const typeLabels: Record<string, { label: string; icon: any }> = {
   exit: { label: "نهاية خدمة", icon: LogOut },
 };
 
+const detailPaths: Record<string, string> = {
+  leave: "/hr/leaves",
+  salary_advance: "/finance/salary-advances",
+  official_letter: "/hr/official-letters",
+  loan: "/hr/loans",
+  overtime: "/hr/overtime",
+  exit: "/hr/exit",
+  purchase_request: "/finance/purchase-orders",
+  expense: "/finance/expenses",
+  financial_request: "/finance/financial-requests",
+};
+
+function getDetailUrl(req: any): string | null {
+  const base = detailPaths[req.requestType];
+  const id = req.refId || req.entityId;
+  if (base && id) return `${base}/${id}`;
+  return null;
+}
+
 function StatusBadge({ status }: { status: string }) {
   return <PageStatusBadge status={status} />;
 }
@@ -96,8 +115,9 @@ export default function MyRequests() {
             {workflowRequests.map((req: any) => {
               const typeInfo = typeLabels[req.requestType] ?? { label: req.requestType, icon: ClipboardList };
               const TypeIcon = typeInfo.icon;
-              return (
-                <Card key={req.id} className="hover:shadow-md transition-shadow">
+              const url = getDetailUrl(req);
+              const card = (
+                <Card key={req.id} className="hover:shadow-md transition-shadow cursor-pointer">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3 min-w-0">
@@ -124,6 +144,7 @@ export default function MyRequests() {
                   </CardContent>
                 </Card>
               );
+              return url ? <Link key={req.id} href={url}>{card}</Link> : card;
             })}
           </div>
         )

@@ -775,13 +775,13 @@ export default function VehicleDetail() {
         <Card>
           <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5 text-muted-foreground" /> السجل الزمني</CardTitle></CardHeader>
           <CardContent>
-            {id && <EntityTimeline entityType="fleet_vehicles" entityId={id} maxItems={20} />}
+            {id && <EntityTimeline entityType="fleet-vehicle" entityId={id} maxItems={20} />}
           </CardContent>
         </Card>
       )}
 
       {id && (
-        <EntityObligations entityType="fleet_vehicle,fleet_maintenance,fleet_insurance" entityId={id} hideWhenEmpty />
+        <EntityObligations entityType="fleet-vehicle,fleet-maintenance,fleet-insurance" entityId={id} hideWhenEmpty />
       )}
 
       {id && <EntityComments entityType="vehicle" entityId={id} />}
@@ -796,7 +796,7 @@ export default function VehicleDetail() {
       backPath="/fleet/vehicles"
       backLabel="المركبات"
       status={vehicle ? { label: statusLabel, tone: vehicleStatusTone(vehicle.status) } : undefined}
-      entityType="fleet_vehicle"
+      entityType="fleet-vehicle"
       entityId={id || ""}
       isLoading={isLoading}
       error={isError ? error : undefined}

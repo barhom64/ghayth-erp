@@ -163,19 +163,19 @@ export default function TripDetailPage() {
       key: "documents",
       label: "المستندات",
       icon: FolderOpen,
-      content: () => <EntityDocuments entityType="fleet_trip" entityId={id} />,
+      content: () => <EntityDocuments entityType="fleet-trip" entityId={id} />,
     },
     {
       key: "timeline",
       label: "السجل الزمني",
       icon: History,
-      content: () => <EntityTimeline entityType="fleet_trips" entityId={id} />,
+      content: () => <EntityTimeline entityType="fleet-trip" entityId={id} />,
     },
     {
       key: "comments",
       label: "التعليقات",
       icon: MessageCircle,
-      content: () => <EntityComments entityType="fleet_trip" entityId={id} />,
+      content: () => <EntityComments entityType="fleet-trip" entityId={id} />,
     },
   ];
 

@@ -191,8 +191,8 @@ export default function WarehouseSupplierDetail() {
         </Card>
       </div>
 
-      {id && <EntityComments entityType="warehouse_supplier" entityId={id} />}
-      {id && <EntityTags entityType="warehouse_supplier" entityId={id} />}
+      {id && <EntityComments entityType="warehouse-supplier" entityId={id} />}
+      {id && <EntityTags entityType="warehouse-supplier" entityId={id} />}
     </div>
   );
 

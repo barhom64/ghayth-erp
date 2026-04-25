@@ -212,7 +212,7 @@ export default function OpportunityDetail() {
         subtitle={opportunity?.clientName || opportunity?.contactName || undefined}
         backPath="/crm/opportunities"
         backLabel="العودة"
-        entityType="crm_opportunity"
+        entityType="opportunity"
         entityId={id!}
         isLoading={isLoading}
         error={isError ? error : undefined}

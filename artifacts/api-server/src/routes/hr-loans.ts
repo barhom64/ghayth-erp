@@ -157,6 +157,27 @@ router.get("/loans", requirePermission("hr:read"), async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// GET /hr/loans/my — سلف الموظف الحالي (Self-Service)
+// ═══════════════════════════════════════════════════════════════════════════════
+router.get("/loans/my", requirePermission("hr:read"), async (req, res) => {
+  try {
+    await ensureLoanTables();
+    const scope = req.scope!;
+    const data = await rawQuery<any>(
+      `SELECT l.*, e.name AS "employeeName"
+       FROM hr_employee_loans l
+       JOIN employees e ON e.id = l."employeeId"
+       WHERE l."assignmentId" = $1 AND l."companyId" = $2 AND l."deletedAt" IS NULL
+       ORDER BY l."createdAt" DESC`,
+      [scope.activeAssignmentId, scope.companyId]
+    );
+    res.json({ data });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في قراءة سلفك");
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/loans/:id — تفاصيل السلفة مع الأقساط
 // ═══════════════════════════════════════════════════════════════════════════════
 router.get("/loans/:id", requirePermission("hr:read"), async (req, res) => {
@@ -501,27 +522,6 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "خطأ في رفض السلفة");
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// GET /hr/loans/my — سلف الموظف الحالي (Self-Service)
-// ═══════════════════════════════════════════════════════════════════════════════
-router.get("/loans/my", requirePermission("hr:read"), async (req, res) => {
-  try {
-    await ensureLoanTables();
-    const scope = req.scope!;
-    const data = await rawQuery<any>(
-      `SELECT l.*, e.name AS "employeeName"
-       FROM hr_employee_loans l
-       JOIN employees e ON e.id = l."employeeId"
-       WHERE l."assignmentId" = $1 AND l."companyId" = $2 AND l."deletedAt" IS NULL
-       ORDER BY l."createdAt" DESC`,
-      [scope.activeAssignmentId, scope.companyId]
-    );
-    res.json({ data });
-  } catch (err) {
-    handleRouteError(err, res, "خطأ في قراءة سلفك");
   }
 });
 

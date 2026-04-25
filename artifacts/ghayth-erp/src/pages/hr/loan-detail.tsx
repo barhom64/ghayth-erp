@@ -194,7 +194,7 @@ export default function LoanDetail() {
       refNumber={loan?.loanNumber}
       createdAt={loan?.requestDate ?? loan?.createdAt}
       updatedAt={loan?.updatedAt}
-      entityType="hr_employee_loan"
+      entityType="loan"
       entityId={Number(id)}
       isLoading={isLoading}
       error={isError ? true : undefined}

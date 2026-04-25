@@ -168,7 +168,7 @@ function ContractsTab() {
             onPageChange={setPage}
             renderRowExtras={(c) => {
               if (editingId === c.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
-              if (deletingId === c.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal_contract" entityId={c.id} />;
+              if (deletingId === c.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal-contract" entityId={c.id} />;
               return null;
             }}
           />
@@ -283,7 +283,7 @@ function CasesTab() {
             onRowClick={(row) => setLocation(`/legal/cases/${row.id}`)}
             renderRowExtras={(c) => {
               if (editingId === c.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
-              if (deletingId === c.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal_case" entityId={c.id} />;
+              if (deletingId === c.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal-case" entityId={c.id} />;
               return null;
             }}
           />

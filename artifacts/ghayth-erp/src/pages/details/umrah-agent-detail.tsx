@@ -180,8 +180,8 @@ export default function UmrahAgentDetail() {
         </Card>
       </div>
 
-      {id && <EntityComments entityType="umrah_agent" entityId={id} />}
-      {id && <EntityTags entityType="umrah_agent" entityId={id} />}
+      {id && <EntityComments entityType="umrah-agent" entityId={id} />}
+      {id && <EntityTags entityType="umrah-agent" entityId={id} />}
     </div>
   );
 
@@ -199,7 +199,7 @@ export default function UmrahAgentDetail() {
       createdAt={agent?.createdAt}
       updatedAt={agent?.updatedAt}
       relatedEntities={relatedEntities}
-      entityType="agent"
+      entityType="umrah-agent"
       entityId={id ?? 0}
       overview={overview}
       isLoading={isLoading}

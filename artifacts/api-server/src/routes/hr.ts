@@ -961,17 +961,39 @@ router.get("/leave-requests", requirePermission("hr:read"), async (req, res) => 
 });
 
 router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
-  // Step 5 of the HR operational audit — leave request submission.
-  // The handler has 12 different validation branches, every single one
-  // of which used to be `res.status(400).json({ error: "..." })` — which
-  // meant the leave-create form never got `code` or `field` and the user
-  // saw the same generic toast for every kind of rejection (out of
-  // balance, overlapping, gender-restricted, career-limited, minimum-
-  // service, document-required, department-absent-percentage, no manager).
-  // Each branch is now a TypedError with the most specific shape the
-  // frontend can branch on, and carries `meta` fields the UI can use to
-  // explain the rejection precisely.
   try {
+    await rawExecute(`
+      CREATE TABLE IF NOT EXISTS leave_approval_stages (
+        id SERIAL PRIMARY KEY,
+        "leaveRequestId" INTEGER NOT NULL,
+        stage INTEGER NOT NULL DEFAULT 1,
+        "requiredRole" VARCHAR(50),
+        "assignedTo" INTEGER,
+        status VARCHAR(20) DEFAULT 'pending',
+        decision TEXT,
+        "decidedBy" INTEGER,
+        "decidedAt" TIMESTAMPTZ,
+        "expiresAt" TIMESTAMPTZ,
+        "reminderSentAt" TIMESTAMPTZ,
+        "warningSentAt" TIMESTAMPTZ,
+        "escalatedAt" TIMESTAMPTZ,
+        "autoApprovedAt" TIMESTAMPTZ,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {});
+    await rawExecute(`DO $$ BEGIN
+      ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "genderRestriction" VARCHAR(10);
+      ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "minServiceMonths" INTEGER DEFAULT 0;
+      ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "oncePerCareer" BOOLEAN DEFAULT false;
+      ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "requiresDocument" BOOLEAN DEFAULT false;
+      ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "maxDeptAbsentPct" NUMERIC DEFAULT 25;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END $$`).catch(() => {});
+    await rawExecute(`DO $$ BEGIN
+      ALTER TABLE hr_leave_balances ADD COLUMN IF NOT EXISTS reserved NUMERIC DEFAULT 0;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END $$`).catch(() => {});
+
     const scope = req.scope!;
     const parsed = leaveRequestSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");

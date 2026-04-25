@@ -264,8 +264,8 @@ export default function UmrahInvoiceDetail() {
         )}
       </div>
 
-      {id && <EntityComments entityType="umrah_invoice" entityId={id} />}
-      {id && <EntityTags entityType="umrah_invoice" entityId={id} />}
+      {id && <EntityComments entityType="umrah-invoice" entityId={id} />}
+      {id && <EntityTags entityType="umrah-invoice" entityId={id} />}
     </div>
   );
 

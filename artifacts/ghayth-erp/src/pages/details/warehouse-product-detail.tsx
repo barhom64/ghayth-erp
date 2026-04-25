@@ -243,8 +243,8 @@ export default function WarehouseProductDetail() {
         </Card>
       </div>
 
-      {id && <EntityComments entityType="warehouse_product" entityId={id} />}
-      {id && <EntityTags entityType="warehouse_product" entityId={id} />}
+      {id && <EntityComments entityType="warehouse-product" entityId={id} />}
+      {id && <EntityTags entityType="warehouse-product" entityId={id} />}
     </div>
   );
 

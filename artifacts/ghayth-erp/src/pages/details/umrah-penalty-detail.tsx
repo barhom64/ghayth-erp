@@ -234,8 +234,8 @@ export default function UmrahPenaltyDetail() {
         </Card>
       </div>
 
-      {id && <EntityComments entityType="umrah_penalty" entityId={id} />}
-      {id && <EntityTags entityType="umrah_penalty" entityId={id} />}
+      {id && <EntityComments entityType="umrah-penalty" entityId={id} />}
+      {id && <EntityTags entityType="umrah-penalty" entityId={id} />}
     </div>
   );
 

@@ -182,19 +182,19 @@ export default function ProductDetailPage() {
       key: "documents",
       label: "المستندات",
       icon: FolderOpen,
-      content: () => <EntityDocuments entityType="store_product" entityId={id} />,
+      content: () => <EntityDocuments entityType="store-product" entityId={id} />,
     },
     {
       key: "timeline",
       label: "السجل الزمني",
       icon: History,
-      content: () => <EntityTimeline entityType="store_products" entityId={id} />,
+      content: () => <EntityTimeline entityType="store-product" entityId={id} />,
     },
     {
       key: "comments",
       label: "التعليقات",
       icon: MessageCircle,
-      content: () => <EntityComments entityType="store_product" entityId={id} />,
+      content: () => <EntityComments entityType="store-product" entityId={id} />,
     },
   ];
 

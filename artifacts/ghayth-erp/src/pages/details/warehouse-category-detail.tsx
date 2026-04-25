@@ -129,8 +129,8 @@ export default function WarehouseCategoryDetail() {
         </Card>
       </div>
 
-      {id && <EntityComments entityType="warehouse_category" entityId={id} />}
-      {id && <EntityTags entityType="warehouse_category" entityId={id} />}
+      {id && <EntityComments entityType="warehouse-category" entityId={id} />}
+      {id && <EntityTags entityType="warehouse-category" entityId={id} />}
     </div>
   );
 
