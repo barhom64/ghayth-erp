@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Wrench, Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 
 export default function PropertiesMaintenance() {
+  const [, navigate] = useLocation();
   const { data: requestsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
     ["maintenance-requests"],
     "/properties/maintenance-requests"
@@ -100,6 +101,7 @@ export default function PropertiesMaintenance() {
             emptyMessage="لا توجد طلبات"
             emptyIcon={<Wrench className="h-6 w-6 text-slate-400" />}
             noToolbar
+            onRowClick={(row) => navigate(`/properties/maintenance/${row.id}`)}
           />
         </CardContent>
       </Card>

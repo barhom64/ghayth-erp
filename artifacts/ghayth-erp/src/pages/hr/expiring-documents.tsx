@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,7 @@ function getSeverityBadge(daysLeft: number) {
 }
 
 export default function ExpiringDocumentsPage() {
+  const [, navigate] = useLocation();
   const [days, setDays] = useState("90");
   const [filters, setFilters] = useFilters();
 
@@ -164,6 +166,7 @@ export default function ExpiringDocumentsPage() {
         noToolbar
         emptyMessage="لا توجد وثائق منتهية في هذه الفترة"
         pageSize={20}
+        onRowClick={(row) => navigate(`/employees/${row.employeeId}`)}
       />
     </PageShell>
   );

@@ -188,6 +188,7 @@ function RequestCatalog() {
 }
 
 function RequestsList() {
+  const [, navigate] = useLocation();
   const { data, refetch } = useApiQuery<any>(["requests"], "/requests");
   const createMut = useApiMutation<unknown, Record<string, any>>("/requests", "POST", [["requests"]]);
   const [showForm, setShowForm] = useState(false);
@@ -501,6 +502,7 @@ function RequestsList() {
         pageSize={20}
         emptyMessage="لا توجد طلبات"
         emptyIcon={<ClipboardCheck className="h-10 w-10 text-gray-300" />}
+        onRowClick={(r: any) => navigate(`/requests/${r.id}`)}
         rowClassName={(r: any) => selectedIds.has(r.id) ? "bg-blue-50/50" : undefined}
         renderRowExtras={renderRowExtras}
       />

@@ -50,7 +50,7 @@ export default function TrafficViolationsPage() {
   const handleSave = async () => {
     if (!form.vehicleId || !form.violationType) { toast({ title: "المركبة ونوع المخالفة مطلوبان", variant: "destructive" }); return; }
     try {
-      await apiFetch("/fleet/traffic-violations", { method: "POST", body: JSON.stringify({ ...form, vehicleId: Number(form.vehicleId), driverId: form.driverId ? Number(form.driverId) : null, fineAmount: Number(form.fineAmount || 0) }) });
+      await apiFetch("/fleet/traffic-violations", { method: "POST", body: JSON.stringify({ ...form, vehicleId: Number(form.vehicleId), driverId: form.driverId && form.driverId !== "none" ? Number(form.driverId) : null, fineAmount: Number(form.fineAmount || 0) }) });
       toast({ title: "تم تسجيل المخالفة" });
       setShowForm(false);
       setForm({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: new Date().toISOString().split("T")[0], fineAmount: "", location: "", violationNumber: "", notes: "" });
@@ -183,7 +183,7 @@ export default function TrafficViolationsPage() {
               <Select value={form.driverId} onValueChange={(v) => setForm({ ...form, driverId: v })}>
                 <SelectTrigger><SelectValue placeholder="اختر سائقاً" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">—</SelectItem>
+                  <SelectItem value="none">—</SelectItem>
                   {driverList.map((d: any) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
                 </SelectContent>
               </Select>

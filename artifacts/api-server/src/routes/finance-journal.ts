@@ -624,6 +624,26 @@ journalRouter.get("/salary-advances", requirePermission("finance:read"), async (
   }
 });
 
+journalRouter.get("/salary-advances/:id", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [item] = await rawQuery<any>(
+      `SELECT je.id, je.ref, je.description, je.status, je."createdAt", je."updatedAt",
+              je."branchId", je."companyId",
+              COALESCE(SUM(jl.debit), 0) AS amount,
+              CONCAT('SA-', je.id) AS "refDisplay"
+       FROM journal_entries je
+       JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%'
+       GROUP BY je.id, je.ref, je.description, je.status, je."createdAt", je."updatedAt", je."branchId", je."companyId"`,
+      [id, scope.companyId]
+    );
+    if (!item) throw new NotFoundError("السلفة غير موجودة");
+    res.json(item);
+  } catch (err) { handleRouteError(err, res, "Get salary advance detail error:"); }
+});
+
 journalRouter.post("/salary-advances", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;

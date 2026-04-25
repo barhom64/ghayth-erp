@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,6 +24,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { LETTER_TYPES } from "@/lib/hr-type-maps";
 
 export default function OfficialLettersPage() {
+  const [, navigate] = useLocation();
   const [showForm, setShowForm] = useState(false);
   const [previewLetter, setPreviewLetter] = useState<any>(null);
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["official-letters"], "/hr/official-letters");
@@ -166,6 +168,7 @@ export default function OfficialLettersPage() {
         noToolbar
         emptyMessage="لا توجد خطابات"
         emptyIcon={<FileText className="h-6 w-6 text-slate-400" />}
+
       />
 
       {previewLetter && (

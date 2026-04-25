@@ -1,3 +1,4 @@
+import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -40,6 +41,7 @@ const columns: DataTableColumn<Session>[] = [
 ];
 
 export default function LegalSessions() {
+  const [, navigate] = useLocation();
   const { data, isLoading, isError, error } = useApiQuery<any>(["legal-sessions"], "/legal/sessions/upcoming");
   const rows = asList(data?.data || data);
   const [filters, setFilters] = useFilters();
@@ -56,7 +58,7 @@ export default function LegalSessions() {
       loading={isLoading}
     >
       <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />
-      <DataTable columns={columns} data={filtered} isLoading={isLoading} isError={isError} error={error} />
+      <DataTable columns={columns} data={filtered} isLoading={isLoading} isError={isError} error={error} onRowClick={(s) => navigate(`/legal/sessions/${s.id}`)} />
     </PageShell>
   );
 }

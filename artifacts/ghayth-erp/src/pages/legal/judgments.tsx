@@ -1,3 +1,4 @@
+import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -40,6 +41,7 @@ const columns: DataTableColumn<Judgment>[] = [
 ];
 
 export default function LegalJudgments() {
+  const [, navigate] = useLocation();
   const { data, isLoading, isError, error } = useApiQuery<any>(["legal-judgments"], "/legal/judgments/financial-report");
   const rows = asList(data?.data || data);
   const totalAmount = data?.totalAmount || 0;
@@ -64,7 +66,7 @@ export default function LegalJudgments() {
         <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المتبقي</p><p className="text-xl font-bold text-red-600">{formatCurrency(Number(outstanding))}</p></CardContent></Card>
       </div>
       <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />
-      <DataTable columns={columns} data={filtered} isLoading={isLoading} isError={isError} error={error} />
+      <DataTable columns={columns} data={filtered} isLoading={isLoading} isError={isError} error={error} onRowClick={(j) => navigate(`/legal/judgments/${j.id}`)} />
     </PageShell>
   );
 }

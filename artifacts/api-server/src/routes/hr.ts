@@ -960,6 +960,31 @@ router.get("/leave-requests", requirePermission("hr:read"), async (req, res) => 
   }
 });
 
+router.get("/leaves/:id", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [item] = await rawQuery<any>(
+      `SELECT lr.id, lr.status, lr."startDate", lr."endDate", lr.days AS duration,
+              lr.reason, lr."createdAt", lr."updatedAt", lr."rejectedReason",
+              lr."approvedBy", lr."approvedAt", lr."documentUrl",
+              lr."leaveTypeId", lr."employeeId", lr."companyId", lr."branchId",
+              e.name AS "employeeName", lt.name AS "leaveTypeName",
+              lt.name AS "leaveType",
+              CONCAT('LV-', lr.id) AS ref,
+              approver.name AS "approvedByName"
+       FROM hr_leave_requests lr
+       JOIN employees e ON e.id = lr."employeeId"
+       JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
+       LEFT JOIN employees approver ON approver.id = lr."approvedBy"
+       WHERE lr.id = $1 AND lr."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!item) throw new NotFoundError("طلب الإجازة غير موجود");
+    res.json(item);
+  } catch (err) { handleRouteError(err, res, "Get leave detail error"); }
+});
+
 router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
   try {
     await rawExecute(`

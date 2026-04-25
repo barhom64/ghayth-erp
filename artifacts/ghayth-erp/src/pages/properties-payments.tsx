@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 
 export default function PropertiesPayments() {
+  const [, navigate] = useLocation();
   const { scopeQueryString, permissions, roleLevel } = useAppContext();
   const canManage = permissions.canManageProperty || roleLevel >= 50;
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
@@ -106,6 +107,7 @@ export default function PropertiesPayments() {
             emptyIcon={<Banknote className="h-6 w-6 text-slate-400" />}
             noToolbar
             rowClassName={(p) => p.status === 'pending' && new Date(p.dueDate) < new Date() ? "bg-rose-50" : undefined}
+            onRowClick={(row) => navigate(`/properties/payments/${row.id}`)}
           />
         </CardContent>
       </Card>

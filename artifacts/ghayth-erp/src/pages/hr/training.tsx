@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,6 +27,7 @@ const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
 ];
 
 export default function TrainingPage() {
+  const [, navigate] = useLocation();
   const { permissions } = useAppContext();
   const canManage = permissions.canManageEmployees;
   const [filters, setFilters] = useFilters();
@@ -208,6 +209,7 @@ export default function TrainingPage() {
             noToolbar
             emptyMessage="لا توجد تسجيلات"
             pageSize={20}
+            onRowClick={(row) => navigate(`/hr/training/${row.programId || row.id}`)}
             renderRowExtras={(e) => {
               if (enrollmentActions.editingId === e.id) {
                 return (

@@ -521,6 +521,22 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
   }
 });
 
+budgetRouter.get("/budget/:id", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [item] = await rawQuery<any>(
+      `SELECT b.*, coa.name AS "accountName"
+       FROM budgets b
+       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId"
+       WHERE b.id = $1 AND b."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!item) throw new NotFoundError("الميزانية غير موجودة");
+    res.json(item);
+  } catch (err) { handleRouteError(err, res, "Get budget detail error:"); }
+});
+
 budgetRouter.get("/fiscal-periods", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;

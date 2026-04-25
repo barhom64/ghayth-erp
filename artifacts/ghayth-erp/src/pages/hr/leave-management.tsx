@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery, asList } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -79,6 +80,7 @@ function LeaveApprovalCard({ request, onDone }: { request: any; onDone: () => vo
 }
 
 export default function LeaveManagementPage() {
+  const [, navigate] = useLocation();
   const { data: requestsData, refetch: refetchPending, isLoading, isError } = useApiQuery<any>(["leaves-pending"], "/hr/leave-requests?status=pending");
   const { data: balanceData } = useApiQuery<any>(["leave-balance"], "/hr/leave-balance");
   const { data: typesData } = useApiQuery<any>(["leave-types"], "/hr/leave-types");
@@ -144,6 +146,7 @@ export default function LeaveManagementPage() {
             noToolbar
             emptyMessage="لا توجد أرصدة"
             pageSize={20}
+            onRowClick={(row) => navigate(`/hr/leaves/${row.id}`)}
           />
         </TabsContent>
 

@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Crown, Plus, Pencil, Phone, Building2, Home, Trash2 } from "lucide-reac
 import { useAppContext } from "@/contexts/app-context";
 
 export default function PropertiesOwners() {
+  const [, navigate] = useLocation();
   const { scopeQueryString, permissions, roleLevel } = useAppContext();
   const canManage = permissions.canManageProperty || roleLevel >= 50;
 
@@ -158,6 +159,7 @@ export default function PropertiesOwners() {
             emptyMessage="لا يوجد ملاك مسجلون"
             emptyIcon={<Crown className="h-6 w-6 text-slate-400" />}
             noToolbar
+            onRowClick={(row) => navigate(`/properties/owners/${row.id}`)}
           />
         </CardContent>
       </Card>

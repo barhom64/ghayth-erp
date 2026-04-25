@@ -1758,6 +1758,25 @@ router.get("/maintenance-requests", requirePermission("property:read"), async (r
   } catch (err) { handleRouteError(err, res, "Maintenance requests error:"); }
 });
 
+router.get("/maintenance/:id", requirePermission("property:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [item] = await rawQuery<any>(
+      `SELECT mr.*, u."unitNumber", u."buildingName", u.id AS "unitId",
+              t.name AS "technicianName", t.name AS "assignedTo",
+              CONCAT('PMT-', mr.id) AS ref
+       FROM maintenance_requests mr
+       LEFT JOIN property_units u ON u.id = mr."unitId"
+       LEFT JOIN technicians t ON t.id = mr."assignedTo"
+       WHERE mr.id = $1 AND mr."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!item) throw new NotFoundError("طلب الصيانة غير موجود");
+    res.json(item);
+  } catch (err) { handleRouteError(err, res, "Get maintenance request detail error:"); }
+});
+
 router.post("/maintenance-requests", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
