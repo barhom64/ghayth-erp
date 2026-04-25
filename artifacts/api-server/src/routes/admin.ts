@@ -1095,7 +1095,7 @@ router.put("/role-permissions/bulk", requirePermission("admin:write"), async (re
 // ─── Governance: Policy Audit ───────────────────────────────────────────
 import { runFullPolicyAudit, ROLE_STRATEGIES, SENSITIVE_OPERATIONS, SEPARATION_OF_DUTIES } from "../lib/policyEngine.js";
 import { checkSystemGuards } from "../lib/systemGovernor.js";
-import { DOMAIN_REGISTRY, getSystemStats } from "../lib/domainRegistry.js";
+import { DOMAIN_REGISTRY, getSystemStats, getDomain } from "../lib/domainRegistry.js";
 import { STATE_MACHINES } from "../lib/lifecycleEngine.js";
 import { EVENT_CATALOG, countEventsByDomain } from "../lib/eventCatalog.js";
 import { PERMISSIONS, ROLE_PERMISSIONS } from "../lib/rbacCatalog.js";
@@ -1388,6 +1388,194 @@ router.get("/system-registry/missing", requirePermission("admin:read"), async (r
       orphanNotifications: { items: orphanNotifications || [], count: orphanNotifications?.length || 0 },
     });
   } catch (err) { handleRouteError(err, res, "Missing registry items error:"); }
+});
+
+// ─── System Health Dashboard ────────────────────────────────────────────
+
+router.get("/system-health", requirePermission("admin:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const checks: { name: string; status: "ok" | "warn" | "error"; detail?: string }[] = [];
+
+    // 1. Database connectivity
+    try {
+      const [row] = await rawQuery<{ c: number }>("SELECT 1 AS c");
+      checks.push({ name: "database", status: row?.c === 1 ? "ok" : "error", detail: row?.c === 1 ? "connected" : "query returned unexpected result" });
+    } catch (e: any) {
+      checks.push({ name: "database", status: "error", detail: e.message });
+    }
+
+    // 2. Domain tables exist in DB
+    const allTables = DOMAIN_REGISTRY.flatMap(d => d.tables);
+    const existingTables = await rawQuery<{ tablename: string }>(
+      `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`
+    );
+    const existingSet = new Set(existingTables.map(t => t.tablename));
+    const missingTables = allTables.filter(t => !existingSet.has(t));
+    checks.push({
+      name: "domain_tables",
+      status: missingTables.length === 0 ? "ok" : "warn",
+      detail: missingTables.length === 0
+        ? `all ${allTables.length} domain tables exist`
+        : `missing ${missingTables.length}: ${missingTables.slice(0, 10).join(", ")}`,
+    });
+
+    // 3. Cron jobs health
+    const staleCrons = await rawQuery<{ name: string; last_run: string }>(
+      `SELECT name, "lastRunAt"::text AS last_run FROM cron_jobs
+       WHERE enabled = true AND "lastRunAt" < NOW() - INTERVAL '25 hours'
+       ORDER BY "lastRunAt" ASC LIMIT 10`
+    ).catch(() => [] as any[]);
+    checks.push({
+      name: "cron_jobs",
+      status: staleCrons.length === 0 ? "ok" : "warn",
+      detail: staleCrons.length === 0
+        ? "all enabled cron jobs ran within 25h"
+        : `${staleCrons.length} stale: ${staleCrons.map((c: any) => c.name).join(", ")}`,
+    });
+
+    // 4. Failed cron jobs in last 24h
+    const [failedCrons] = await rawQuery<{ c: number }>(
+      `SELECT COUNT(*)::int AS c FROM cron_logs WHERE status = 'failed' AND "createdAt" > NOW() - INTERVAL '24 hours'`
+    ).catch(() => [{ c: 0 }]);
+    checks.push({
+      name: "cron_failures_24h",
+      status: (failedCrons?.c ?? 0) === 0 ? "ok" : "warn",
+      detail: `${failedCrons?.c ?? 0} failures in last 24h`,
+    });
+
+    // 5. DLQ unresolved entries
+    const [dlqCount] = await rawQuery<{ c: number }>(
+      `SELECT COUNT(*)::int AS c FROM event_dlq WHERE "resolvedAt" IS NULL AND ("companyId"=$1 OR "companyId" IS NULL)`,
+      [scope.companyId]
+    ).catch(() => [{ c: 0 }]);
+    checks.push({
+      name: "event_dlq",
+      status: (dlqCount?.c ?? 0) === 0 ? "ok" : (dlqCount?.c ?? 0) > 10 ? "error" : "warn",
+      detail: `${dlqCount?.c ?? 0} unresolved entries`,
+    });
+
+    // 6. Financial period status
+    const [activePeriod] = await rawQuery<{ status: string; endDate: string }>(
+      `SELECT status, "endDate"::text FROM financial_periods
+       WHERE "companyId" = $1 AND "deletedAt" IS NULL
+       ORDER BY "endDate" DESC LIMIT 1`,
+      [scope.companyId]
+    ).catch(() => [null]);
+    if (activePeriod) {
+      checks.push({
+        name: "financial_period",
+        status: activePeriod.status === "open" ? "ok" : "warn",
+        detail: `latest period: ${activePeriod.status}, ends ${activePeriod.endDate}`,
+      });
+    } else {
+      checks.push({ name: "financial_period", status: "warn", detail: "no financial periods found" });
+    }
+
+    // 7. GL balance drift (quick check — top 5 drifts)
+    const drifts = await rawQuery<{ code: string; drift: number }>(
+      `SELECT coa.code,
+              (coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0))::numeric(15,2) AS drift
+       FROM chart_of_accounts coa
+       LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
+         AND jl."journalId" IN (SELECT id FROM journal_entries WHERE "companyId" = $1 AND "deletedAt" IS NULL)
+       WHERE coa."companyId" = $1 AND coa."deletedAt" IS NULL AND coa."allowPosting" = true
+       GROUP BY coa.code, coa."currentBalance"
+       HAVING ABS(coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)) > 0.01
+       LIMIT 5`,
+      [scope.companyId]
+    ).catch(() => [] as any[]);
+    checks.push({
+      name: "gl_balance_drift",
+      status: drifts.length === 0 ? "ok" : "warn",
+      detail: drifts.length === 0 ? "no balance drift" : `${drifts.length} accounts with drift`,
+    });
+
+    // 8. Posting failures in last 24h
+    const [postingFails] = await rawQuery<{ c: number }>(
+      `SELECT COUNT(*)::int AS c FROM financial_posting_failures
+       WHERE "companyId" = $1 AND "createdAt" > NOW() - INTERVAL '24 hours'`,
+      [scope.companyId]
+    ).catch(() => [{ c: 0 }]);
+    checks.push({
+      name: "posting_failures_24h",
+      status: (postingFails?.c ?? 0) === 0 ? "ok" : "warn",
+      detail: `${postingFails?.c ?? 0} posting failures in last 24h`,
+    });
+
+    // 9. Domain engine coverage
+    const allDeclaredEngines = new Set(DOMAIN_REGISTRY.flatMap(d => d.engines));
+    const implementedEngines = new Set([
+      "financialEngine", "fleetEngine", "hrEngine", "propertiesEngine",
+      "storeEngine", "crmEngine", "legalEngine", "umrahEngine",
+      "projectsEngine", "warehouseEngine", "supportEngine",
+    ]);
+    const unimplemented = [...allDeclaredEngines].filter(e => !implementedEngines.has(e));
+    checks.push({
+      name: "engine_coverage",
+      status: unimplemented.length === 0 ? "ok" : "warn",
+      detail: `${implementedEngines.size}/${allDeclaredEngines.size} engines implemented` +
+        (unimplemented.length > 0 ? ` — pending: ${unimplemented.join(", ")}` : ""),
+    });
+
+    const overall = checks.every(c => c.status === "ok")
+      ? "healthy"
+      : checks.some(c => c.status === "error")
+        ? "degraded"
+        : "attention";
+
+    res.json({
+      status: overall,
+      timestamp: new Date().toISOString(),
+      checks,
+      summary: {
+        ok: checks.filter(c => c.status === "ok").length,
+        warn: checks.filter(c => c.status === "warn").length,
+        error: checks.filter(c => c.status === "error").length,
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "System health error:"); }
+});
+
+// ─── Domain Dependency Graph ────────────────────────────────────────────
+
+router.get("/system-health/dependency-graph", requirePermission("admin:read"), async (_req, res) => {
+  try {
+    const graph: { from: string; to: string; via: string }[] = [];
+
+    for (const d of DOMAIN_REGISTRY) {
+      if (d.glIntegration && d.id !== "finance") {
+        graph.push({ from: d.id, to: "finance", via: "GL posting" });
+      }
+    }
+
+    const crossDomainEvents = EVENT_CATALOG.filter((e: any) =>
+      e.consumers && e.consumers.length > 0
+    );
+    for (const evt of crossDomainEvents) {
+      const sourceDomain = evt.domain;
+      for (const consumer of evt.consumers) {
+        const targetDomain = DOMAIN_REGISTRY.find(d =>
+          d.engines.some(e => e.toLowerCase().includes(consumer.toLowerCase())) ||
+          d.id === consumer
+        );
+        if (targetDomain && targetDomain.id !== sourceDomain) {
+          graph.push({ from: sourceDomain, to: targetDomain.id, via: evt.name });
+        }
+      }
+    }
+
+    const uniqueEdges = Array.from(
+      new Map(graph.map(g => [`${g.from}->${g.to}:${g.via}`, g])).values()
+    );
+
+    const nodes = [...new Set(uniqueEdges.flatMap(e => [e.from, e.to]))].map(id => {
+      const d = getDomain(id);
+      return { id, label: d?.label ?? id, glIntegration: d?.glIntegration ?? false };
+    });
+
+    res.json({ nodes, edges: uniqueEdges, totalDependencies: uniqueEdges.length });
+  } catch (err) { handleRouteError(err, res, "Dependency graph error:"); }
 });
 
 export default router;
