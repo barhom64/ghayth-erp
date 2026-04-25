@@ -240,6 +240,7 @@ export default function BudgetDetail() {
                 rejectBody={(notes) => ({ approved: false, notes })}
                 returnBody={(notes) => ({ approved: "returned", notes })}
                 pendingStatuses={["pending", "pending_approval", "draft", "returned"]}
+                invalidateKeys={[["budget"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث الميزانية" });

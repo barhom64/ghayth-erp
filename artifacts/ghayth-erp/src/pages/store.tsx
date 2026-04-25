@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { StoreTabsNav } from "@/components/shared/store-tabs-nav";
 
 function ProductsTab() {
   const [, navigate] = useLocation();
@@ -270,6 +271,7 @@ export default function StorePage() {
 
   return (
     <div className="space-y-6">
+      <StoreTabsNav />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">

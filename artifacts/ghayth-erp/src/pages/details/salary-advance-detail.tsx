@@ -199,6 +199,7 @@ export default function SalaryAdvanceDetail() {
                 rejectBody={(notes) => ({ approved: false, notes })}
                 returnBody={(notes) => ({ approved: "returned", notes })}
                 pendingStatuses={["pending", "returned"]}
+                invalidateKeys={[["salary-advances"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث السلفة" });
@@ -220,10 +221,10 @@ export default function SalaryAdvanceDetail() {
         )}
       </div>
 
-      {id && <ApprovalTimeline entityType="salary_advance" entityId={id} />}
+      {id && <ApprovalTimeline entityType="salary-advance" entityId={id} />}
 
-      {id && <EntityComments entityType="salary_advance" entityId={id} />}
-      {id && <EntityTags entityType="salary_advance" entityId={id} />}
+      {id && <EntityComments entityType="salary-advance" entityId={id} />}
+      {id && <EntityTags entityType="salary-advance" entityId={id} />}
     </div>
   );
 

@@ -204,6 +204,7 @@ export default function LeaveDetail() {
                 rejectBody={(notes) => ({ approved: false, reason: notes })}
                 returnBody={(notes) => ({ approved: "returned", reason: notes })}
                 pendingStatuses={["pending", "returned"]}
+                invalidateKeys={[["leaves"], ["leave-requests"], ["leave-balance"], ["leave-stats"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث الإجازة" });
@@ -226,8 +227,8 @@ export default function LeaveDetail() {
         )}
       </div>
 
-      {id && <ApprovalTimeline entityType="hr_leave_request" entityId={id} />}
-      {id && <EntityDocuments entityType="hr_leave_request" entityId={id} />}
+      {id && <ApprovalTimeline entityType="leave" entityId={id} />}
+      {id && <EntityDocuments entityType="leave" entityId={id} />}
 
       {id && <EntityComments entityType="leave" entityId={id} />}
       {id && <EntityTags entityType="leave" entityId={id} />}

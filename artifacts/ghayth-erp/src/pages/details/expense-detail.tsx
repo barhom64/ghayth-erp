@@ -369,6 +369,7 @@ export default function ExpenseDetail() {
                 rejectBody={(notes) => ({ approved: false, notes })}
                 returnBody={(notes) => ({ approved: "returned", notes })}
                 pendingStatuses={["draft", "pending_approval", "returned"]}
+                invalidateKeys={[["expenses"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث المصروف" });

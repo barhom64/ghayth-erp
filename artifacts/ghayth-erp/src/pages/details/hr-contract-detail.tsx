@@ -195,6 +195,7 @@ export default function HrContractDetail() {
                 rejectBody={(notes) => ({ approved: false, notes })}
                 returnBody={(notes) => ({ approved: "returned", notes })}
                 pendingStatuses={["pending", "draft", "returned"]}
+                invalidateKeys={[["contracts"]]}
                 onDone={() => { refetch(); }}
               />
             </CardContent>
@@ -208,17 +209,17 @@ export default function HrContractDetail() {
               <CardTitle className="text-sm">سجل الإجراءات</CardTitle>
             </CardHeader>
             <CardContent>
-              <ActionHistory entityType="contract" entityId={id} defaultOpen />
+              <ActionHistory entityType="hr-contract" entityId={id} defaultOpen />
             </CardContent>
           </Card>
         )}
       </div>
 
-      {id && <ApprovalTimeline entityType="employee_contract" entityId={id} />}
-      {id && <EntityDocuments entityType="employee_contract" entityId={id} />}
+      {id && <ApprovalTimeline entityType="hr-contract" entityId={id} />}
+      {id && <EntityDocuments entityType="hr-contract" entityId={id} />}
 
-      {id && <EntityComments entityType="hr_contract" entityId={id} />}
-      {id && <EntityTags entityType="hr_contract" entityId={id} />}
+      {id && <EntityComments entityType="hr-contract" entityId={id} />}
+      {id && <EntityTags entityType="hr-contract" entityId={id} />}
     </div>
   );
 
@@ -246,7 +247,7 @@ export default function HrContractDetail() {
       updatedAt={contract?.updatedAt}
       createdByName={contract?.createdByName}
       relatedEntities={relatedEntities}
-      entityType="contract"
+      entityType="hr-contract"
       entityId={id ?? 0}
       overview={overview}
       isLoading={isLoading}

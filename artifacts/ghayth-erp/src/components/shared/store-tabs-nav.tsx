@@ -1,23 +1,22 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { Scale, Calendar, Gavel, Mail, FileText } from "lucide-react";
+import { ShoppingBag, Package, ClipboardList } from "lucide-react";
 
 const TABS = [
-  { href: "/legal/cases", label: "القضايا", icon: Scale, match: ["/legal/cases"] },
-  { href: "/legal/contracts", label: "العقود", icon: FileText, match: ["/legal/contracts"] },
-  { href: "/legal/sessions", label: "الجلسات", icon: Calendar, match: ["/legal/sessions"] },
-  { href: "/legal/judgments", label: "الأحكام", icon: Gavel, match: ["/legal/judgments"] },
-  { href: "/legal/correspondence", label: "المراسلات", icon: Mail, match: ["/legal/correspondence"] },
+  { href: "/store", label: "المتجر", icon: ShoppingBag, match: ["/store"], exact: true },
+  { href: "/store/products", label: "المنتجات", icon: Package, match: ["/store/products"] },
+  { href: "/store/orders", label: "الطلبات", icon: ClipboardList, match: ["/store/orders"] },
 ];
 
-export function LegalTabsNav() {
+export function StoreTabsNav() {
   const [location] = useLocation();
   return (
     <div className="border-b mb-4 -mt-2 overflow-x-auto">
       <nav className="flex gap-1 min-w-max" dir="rtl">
         {TABS.map((tab) => {
-          const isActive = tab.match.some((m) => location === m || location.startsWith(`${m}/`))
-            || (tab.href === "/legal/cases" && location === "/legal");
+          const isActive = tab.exact
+            ? location === tab.href
+            : tab.match.some((m) => location === m || location.startsWith(`${m}/`));
           const Icon = tab.icon;
           return (
             <Link key={tab.href} href={tab.href}>

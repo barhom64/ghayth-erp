@@ -207,8 +207,8 @@ export default function UmrahPackageDetail() {
         )}
       </div>
 
-      {id && <EntityComments entityType="umrah_package" entityId={id} />}
-      {id && <EntityTags entityType="umrah_package" entityId={id} />}
+      {id && <EntityComments entityType="umrah-package" entityId={id} />}
+      {id && <EntityTags entityType="umrah-package" entityId={id} />}
     </div>
   );
 
@@ -226,7 +226,7 @@ export default function UmrahPackageDetail() {
       createdAt={pkg?.createdAt}
       updatedAt={pkg?.updatedAt}
       relatedEntities={relatedEntities}
-      entityType="package"
+      entityType="umrah-package"
       entityId={id ?? 0}
       overview={overview}
       isLoading={isLoading}

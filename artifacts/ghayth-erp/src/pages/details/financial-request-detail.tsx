@@ -195,6 +195,7 @@ export default function FinancialRequestDetail() {
                 rejectBody={(notes) => ({ approved: false, notes })}
                 returnBody={(notes) => ({ approved: "returned", notes })}
                 pendingStatuses={["pending", "pending_approval", "draft", "returned"]}
+                invalidateKeys={[["financial-requests"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث الطلب" });
@@ -216,10 +217,10 @@ export default function FinancialRequestDetail() {
         )}
       </div>
 
-      {id && <ApprovalTimeline entityType="financial_request" entityId={id} />}
+      {id && <ApprovalTimeline entityType="financial-request" entityId={id} />}
 
-      {id && <EntityComments entityType="financial_request" entityId={id} />}
-      {id && <EntityTags entityType="financial_request" entityId={id} />}
+      {id && <EntityComments entityType="financial-request" entityId={id} />}
+      {id && <EntityTags entityType="financial-request" entityId={id} />}
     </div>
   );
 

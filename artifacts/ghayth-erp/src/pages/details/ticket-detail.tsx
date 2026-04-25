@@ -174,6 +174,7 @@ export default function TicketDetail() {
                 rejectBody={(notes) => ({ approved: false, notes })}
                 returnBody={(notes) => ({ approved: "returned", notes })}
                 pendingStatuses={["pending", "open", "returned"]}
+                invalidateKeys={[["support-tickets"], ["support-stats"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث التذكرة" });
@@ -183,7 +184,7 @@ export default function TicketDetail() {
           </Card>
         )}
 
-        {id && <ApprovalTimeline entityType="support_ticket" entityId={id} />}
+        {id && <ApprovalTimeline entityType="ticket" entityId={id} />}
       </div>
 
       {id && <EntityComments entityType="ticket" entityId={id} />}
@@ -198,7 +199,7 @@ export default function TicketDetail() {
       backPath="/support"
       backLabel="الدعم الفني"
       status={ticket ? { label: statusLabel(ticket.status), tone: statusTone(ticket.status) } : undefined}
-      entityType="support_ticket"
+      entityType="ticket"
       entityId={id || ""}
       isLoading={isLoading}
       error={isError ? error : undefined}

@@ -236,8 +236,8 @@ export default function LegalJudgmentDetail() {
         </Card>
       </div>
 
-      {id && <EntityComments entityType="legal_judgment" entityId={id} />}
-      {id && <EntityTags entityType="legal_judgment" entityId={id} />}
+      {id && <EntityComments entityType="legal-judgment" entityId={id} />}
+      {id && <EntityTags entityType="legal-judgment" entityId={id} />}
     </div>
   );
 

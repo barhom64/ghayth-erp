@@ -188,6 +188,7 @@ export default function TransferDetail() {
                 rejectBody={(notes) => ({ approved: false, reason: notes })}
                 returnBody={(notes) => ({ approved: "returned", reason: notes })}
                 pendingStatuses={["pending", "returned"]}
+                invalidateKeys={[["transfers"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث طلب النقل" });
@@ -210,8 +211,8 @@ export default function TransferDetail() {
         )}
       </div>
 
-      {id && <ApprovalTimeline entityType="employee_transfer" entityId={id} />}
-      {id && <EntityDocuments entityType="employee_transfer" entityId={id} />}
+      {id && <ApprovalTimeline entityType="transfer" entityId={id} />}
+      {id && <EntityDocuments entityType="transfer" entityId={id} />}
 
       {id && <EntityComments entityType="transfer" entityId={id} />}
       {id && <EntityTags entityType="transfer" entityId={id} />}

@@ -163,8 +163,8 @@ export default function UmrahSeasonDetail() {
         </Card>
       </div>
 
-      {id && <EntityComments entityType="umrah_season" entityId={id} />}
-      {id && <EntityTags entityType="umrah_season" entityId={id} />}
+      {id && <EntityComments entityType="umrah-season" entityId={id} />}
+      {id && <EntityTags entityType="umrah-season" entityId={id} />}
     </div>
   );
 
@@ -181,7 +181,7 @@ export default function UmrahSeasonDetail() {
       }
       createdAt={season?.createdAt}
       updatedAt={season?.updatedAt}
-      entityType="season"
+      entityType="umrah-season"
       entityId={id ?? 0}
       overview={overview}
       isLoading={isLoading}

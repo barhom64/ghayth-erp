@@ -345,6 +345,7 @@ export default function PerformanceDetail() {
                 rejectBody={(notes) => ({ approved: false, notes })}
                 returnBody={(notes) => ({ approved: "returned", notes })}
                 pendingStatuses={["pending", "draft", "returned"]}
+                invalidateKeys={[["performance"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث التقييم" });

@@ -334,6 +334,7 @@ export default function ReceivableDetail() {
                 rejectBody={(notes) => ({ approved: false, notes })}
                 returnBody={(notes) => ({ approved: "returned", notes })}
                 pendingStatuses={["pending", "pending_approval", "draft", "returned"]}
+                invalidateKeys={[["receivables"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث المستحق" });

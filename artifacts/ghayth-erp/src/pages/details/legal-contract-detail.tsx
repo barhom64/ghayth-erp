@@ -234,6 +234,7 @@ export default function LegalContractDetail() {
                 rejectBody={(notes) => ({ approved: false, notes })}
                 returnBody={(notes) => ({ approved: "returned", notes })}
                 pendingStatuses={["pending", "under_review", "returned"]}
+                invalidateKeys={[["legal-cases"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث العقد" });
@@ -267,16 +268,16 @@ export default function LegalContractDetail() {
 
       {/* Documents */}
       {id && (
-        <EntityDocuments entityType="legal_contract" entityId={id} />
+        <EntityDocuments entityType="legal-contract" entityId={id} />
       )}
 
       {/* Approval Timeline */}
       {id && (
-        <ApprovalTimeline entityType="legal_contract" entityId={id} />
+        <ApprovalTimeline entityType="legal-contract" entityId={id} />
       )}
 
-      {id && <EntityComments entityType="legal_contract" entityId={id} />}
-      {id && <EntityTags entityType="legal_contract" entityId={id} />}
+      {id && <EntityComments entityType="legal-contract" entityId={id} />}
+      {id && <EntityTags entityType="legal-contract" entityId={id} />}
     </div>
   );
 

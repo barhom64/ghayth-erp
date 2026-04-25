@@ -248,6 +248,7 @@ export default function RequestDetail() {
                 rejectBody={(notes) => ({ approved: false, notes })}
                 returnBody={(notes) => ({ approved: "returned", notes })}
                 pendingStatuses={["pending", "in_review", "returned"]}
+                invalidateKeys={[["requests"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث الطلب" });

@@ -201,8 +201,8 @@ export default function PropertyMaintenanceDetail() {
         )}
       </div>
 
-      {id && <EntityComments entityType="property_maintenance" entityId={id} />}
-      {id && <EntityTags entityType="property_maintenance" entityId={id} />}
+      {id && <EntityComments entityType="property-maintenance" entityId={id} />}
+      {id && <EntityTags entityType="property-maintenance" entityId={id} />}
     </div>
   );
 

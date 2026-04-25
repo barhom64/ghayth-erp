@@ -230,8 +230,8 @@ export default function WarehouseMovementDetail() {
         </Card>
       </div>
 
-      {id && <EntityComments entityType="warehouse_movement" entityId={id} />}
-      {id && <EntityTags entityType="warehouse_movement" entityId={id} />}
+      {id && <EntityComments entityType="warehouse-movement" entityId={id} />}
+      {id && <EntityTags entityType="warehouse-movement" entityId={id} />}
     </div>
   );
 

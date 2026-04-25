@@ -322,8 +322,8 @@ export default function PropertyPaymentDetail() {
         )}
       </div>
 
-      {id && <EntityComments entityType="property_payment" entityId={id} />}
-      {id && <EntityTags entityType="property_payment" entityId={id} />}
+      {id && <EntityComments entityType="property-payment" entityId={id} />}
+      {id && <EntityTags entityType="property-payment" entityId={id} />}
     </div>
   );
 

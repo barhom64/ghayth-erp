@@ -207,6 +207,7 @@ export default function ComplianceDetail() {
                 rejectBody={(notes) => ({ approved: false, notes })}
                 returnBody={(notes) => ({ approved: "returned", notes })}
                 pendingStatuses={["pending", "pending_review", "returned"]}
+                invalidateKeys={[["compliance"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث الامتثال" });

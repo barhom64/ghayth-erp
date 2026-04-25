@@ -257,8 +257,8 @@ export default function LegalSessionDetail() {
         </Card>
       </div>
 
-      {id && <EntityComments entityType="legal_session" entityId={id} />}
-      {id && <EntityTags entityType="legal_session" entityId={id} />}
+      {id && <EntityComments entityType="legal-session" entityId={id} />}
+      {id && <EntityTags entityType="legal-session" entityId={id} />}
     </div>
   );
 

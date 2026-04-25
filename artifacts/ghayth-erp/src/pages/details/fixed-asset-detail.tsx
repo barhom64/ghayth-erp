@@ -236,8 +236,8 @@ export default function FixedAssetDetail() {
         )}
       </div>
 
-      {id && <EntityComments entityType="fixed_asset" entityId={id} />}
-      {id && <EntityTags entityType="fixed_asset" entityId={id} />}
+      {id && <EntityComments entityType="fixed-asset" entityId={id} />}
+      {id && <EntityTags entityType="fixed-asset" entityId={id} />}
     </div>
   );
 

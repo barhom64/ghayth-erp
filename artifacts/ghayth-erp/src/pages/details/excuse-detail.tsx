@@ -184,6 +184,7 @@ export default function ExcuseDetail() {
                 rejectBody={(notes) => ({ approved: false, reason: notes })}
                 returnBody={(notes) => ({ approved: "returned", reason: notes })}
                 pendingStatuses={["pending", "returned"]}
+                invalidateKeys={[["excuse-requests"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث طلب الاستئذان" });
@@ -208,12 +209,12 @@ export default function ExcuseDetail() {
 
       {/* Documents */}
       {id && (
-        <EntityDocuments entityType="hr_excuse_request" entityId={id} />
+        <EntityDocuments entityType="excuse" entityId={id} />
       )}
 
       {/* Approval Timeline */}
       {id && (
-        <ApprovalTimeline entityType="hr_excuse_request" entityId={id} />
+        <ApprovalTimeline entityType="excuse" entityId={id} />
       )}
 
       {id && <EntityComments entityType="excuse" entityId={id} />}

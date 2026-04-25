@@ -272,6 +272,7 @@ export default function PayrollDetail() {
                 rejectBody={(notes) => ({ approved: false, notes })}
                 returnBody={(notes) => ({ approved: "returned", notes })}
                 pendingStatuses={["pending", "draft", "returned"]}
+                invalidateKeys={[["payroll"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث الراتب" });

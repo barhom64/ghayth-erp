@@ -168,8 +168,8 @@ export default function TrafficViolationDetail() {
         )}
       </div>
 
-      {id && <EntityComments entityType="traffic_violation" entityId={id} />}
-      {id && <EntityTags entityType="traffic_violation" entityId={id} />}
+      {id && <EntityComments entityType="traffic-violation" entityId={id} />}
+      {id && <EntityTags entityType="traffic-violation" entityId={id} />}
     </div>
   );
 
