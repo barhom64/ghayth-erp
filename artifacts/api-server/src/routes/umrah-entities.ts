@@ -69,6 +69,37 @@ router.post("/sub-agents", requirePermission("umrah:write"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Create sub-agent"); }
 });
 
+router.get("/sub-agents/unlinked", requirePermission("umrah:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId } = req.query as any;
+    let where = `sa."companyId" = $1 AND sa."deletedAt" IS NULL AND sa."clientId" IS NULL`;
+    const params: any[] = [scope.companyId];
+    if (seasonId) {
+      params.push(seasonId);
+      where += ` AND sa."agentId" IN (SELECT id FROM umrah_agents WHERE "seasonId" = $${params.length} OR "seasonId" IS NULL)`;
+    }
+    const rows = await rawQuery(
+      `SELECT sa.*, a.name AS "agentName",
+              (SELECT sa2."clientId" FROM umrah_sub_agents sa2
+               WHERE sa2."companyId" = sa."companyId" AND sa2.name = sa.name
+                 AND sa2."clientId" IS NOT NULL AND sa2."deletedAt" IS NULL
+               ORDER BY sa2."createdAt" DESC LIMIT 1) AS "suggestedClientId",
+              (SELECT c2.name FROM clients c2
+               JOIN umrah_sub_agents sa3 ON sa3."clientId" = c2.id
+               WHERE sa3."companyId" = sa."companyId" AND sa3.name = sa.name
+                 AND sa3."clientId" IS NOT NULL AND sa3."deletedAt" IS NULL
+               ORDER BY sa3."createdAt" DESC LIMIT 1) AS "suggestedClientName"
+       FROM umrah_sub_agents sa
+       LEFT JOIN umrah_agents a ON sa."agentId" = a.id
+       WHERE ${where}
+       ORDER BY sa.name`,
+      params
+    );
+    res.json({ data: rows });
+  } catch (err) { handleRouteError(err, res, "List unlinked sub-agents"); }
+});
+
 router.patch("/sub-agents/:id", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -101,37 +132,6 @@ router.delete("/sub-agents/:id", requirePermission("umrah:write"), async (req, r
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.deleted", entity: "umrah_sub_agents", entityId: Number(req.params.id), details: "{}" }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete sub-agent"); }
-});
-
-router.get("/sub-agents/unlinked", requirePermission("umrah:read"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { seasonId } = req.query as any;
-    let where = `sa."companyId" = $1 AND sa."deletedAt" IS NULL AND sa."clientId" IS NULL`;
-    const params: any[] = [scope.companyId];
-    if (seasonId) {
-      params.push(seasonId);
-      where += ` AND sa."agentId" IN (SELECT id FROM umrah_agents WHERE "seasonId" = $${params.length} OR "seasonId" IS NULL)`;
-    }
-    const rows = await rawQuery(
-      `SELECT sa.*, a.name AS "agentName",
-              (SELECT sa2."clientId" FROM umrah_sub_agents sa2
-               WHERE sa2."companyId" = sa."companyId" AND sa2.name = sa.name
-                 AND sa2."clientId" IS NOT NULL AND sa2."deletedAt" IS NULL
-               ORDER BY sa2."createdAt" DESC LIMIT 1) AS "suggestedClientId",
-              (SELECT c2.name FROM clients c2
-               JOIN umrah_sub_agents sa3 ON sa3."clientId" = c2.id
-               WHERE sa3."companyId" = sa."companyId" AND sa3.name = sa.name
-                 AND sa3."clientId" IS NOT NULL AND sa3."deletedAt" IS NULL
-               ORDER BY sa3."createdAt" DESC LIMIT 1) AS "suggestedClientName"
-       FROM umrah_sub_agents sa
-       LEFT JOIN umrah_agents a ON sa."agentId" = a.id
-       WHERE ${where}
-       ORDER BY sa.name`,
-      params
-    );
-    res.json({ data: rows });
-  } catch (err) { handleRouteError(err, res, "List unlinked sub-agents"); }
 });
 
 router.put("/sub-agents/:id/link", requirePermission("umrah:write"), async (req, res) => {
@@ -177,6 +177,22 @@ router.put("/sub-agents/:id/link", requirePermission("umrah:write"), async (req,
   } catch (err) { handleRouteError(err, res, "Link sub-agent"); }
 });
 
+router.post("/sub-agents/link-by-nusk", requirePermission("umrah:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { nuskCode, clientId } = req.body;
+    if (!nuskCode || !clientId) throw new ValidationError("رمز نسك ومعرف العميل مطلوبان");
+    await rawExecute(
+      `UPDATE umrah_sub_agents SET "clientId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
+       WHERE "companyId"=$3 AND "nuskCode"=$4 AND "deletedAt" IS NULL`,
+      [clientId, scope.userId, scope.companyId, nuskCode]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: 0, after: { nuskCode, clientId } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.linked_by_nusk", entity: "umrah_sub_agents", entityId: 0, details: JSON.stringify({ nuskCode, clientId }) }).catch(console.error);
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Link sub-agent by nusk"); }
+});
+
 router.post("/sub-agents/:id/link-client", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -192,22 +208,6 @@ router.post("/sub-agents/:id/link-client", requirePermission("umrah:write"), asy
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.client_linked", entity: "umrah_sub_agents", entityId: Number(req.params.id), details: JSON.stringify({ clientId }) }).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Link sub-agent client"); }
-});
-
-router.post("/sub-agents/link-by-nusk", requirePermission("umrah:write"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { nuskCode, clientId } = req.body;
-    if (!nuskCode || !clientId) throw new ValidationError("رمز نسك ومعرف العميل مطلوبان");
-    await rawExecute(
-      `UPDATE umrah_sub_agents SET "clientId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
-       WHERE "companyId"=$3 AND "nuskCode"=$4 AND "deletedAt" IS NULL`,
-      [clientId, scope.userId, scope.companyId, nuskCode]
-    );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: 0, after: { nuskCode, clientId } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.linked_by_nusk", entity: "umrah_sub_agents", entityId: 0, details: JSON.stringify({ nuskCode, clientId }) }).catch(console.error);
-    res.json({ success: true });
-  } catch (err) { handleRouteError(err, res, "Link sub-agent by nusk"); }
 });
 
 // ============================================================================
@@ -768,6 +768,23 @@ router.get("/invoices", requirePermission("umrah:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List umrah invoices"); }
 });
 
+router.post("/invoices/generate", requirePermission("umrah:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { subAgentId, groupIds, seasonId } = req.body;
+    if (!subAgentId || !Array.isArray(groupIds) || !seasonId) {
+      throw new ValidationError("الوكيل الفرعي والمجموعات والموسم مطلوبة");
+    }
+    const result = await generateSalesInvoice(
+      { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      { subAgentId, groupIds, seasonId }
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sales_invoices", entityId: result.invoiceId, after: { subAgentId, groupIds, seasonId } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.invoice.generated", entity: "umrah_sales_invoices", entityId: result.invoiceId, after: { ref: result.ref, total: result.total } }).catch(console.error);
+    res.status(201).json(result);
+  } catch (err) { handleRouteError(err, res, "Generate umrah invoice"); }
+});
+
 router.get("/invoices/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
@@ -794,23 +811,6 @@ router.get("/invoices/:id", requirePermission("umrah:read"), async (req, res): P
     );
     res.json({ ...invoice, items, allocations });
   } catch (err) { handleRouteError(err, res, "Get umrah invoice"); }
-});
-
-router.post("/invoices/generate", requirePermission("umrah:write"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { subAgentId, groupIds, seasonId } = req.body;
-    if (!subAgentId || !Array.isArray(groupIds) || !seasonId) {
-      throw new ValidationError("الوكيل الفرعي والمجموعات والموسم مطلوبة");
-    }
-    const result = await generateSalesInvoice(
-      { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
-      { subAgentId, groupIds, seasonId }
-    );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sales_invoices", entityId: result.invoiceId, after: { subAgentId, groupIds, seasonId } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.invoice.generated", entity: "umrah_sales_invoices", entityId: result.invoiceId, after: { ref: result.ref, total: result.total } }).catch(console.error);
-    res.status(201).json(result);
-  } catch (err) { handleRouteError(err, res, "Generate umrah invoice"); }
 });
 
 router.patch("/invoices/:id", requirePermission("umrah:write"), async (req, res) => {

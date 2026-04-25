@@ -336,6 +336,33 @@ router.patch("/regulation/:id", requirePermission("hr:update"), async (req, res)
   }
 });
 
+// إعادة استنساخ اللائحة الافتراضية (للشركات التي لم تُبذر)
+router.post("/regulation/reseed", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [row] = await rawQuery<{ count: string }>(
+      `SELECT hr_clone_default_regulation($1) AS count`,
+      [scope.companyId]
+    );
+    const inserted = Number(row?.count ?? 0);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "discipline_regulations", entityId: 0,
+      after: { inserted },
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "discipline_regulations.reseeded", entity: "discipline_regulations", entityId: 0,
+    }).catch(console.error);
+
+    res.json({ ok: true, inserted });
+  } catch (err) {
+    handleRouteError(err, res, "Reseed regulation error:");
+  }
+});
+
 router.delete("/regulation/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -363,33 +390,6 @@ router.delete("/regulation/:id", requirePermission("hr:delete"), async (req, res
     res.json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "Delete regulation article error:");
-  }
-});
-
-// إعادة استنساخ اللائحة الافتراضية (للشركات التي لم تُبذر)
-router.post("/regulation/reseed", requirePermission("hr:create"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const [row] = await rawQuery<{ count: string }>(
-      `SELECT hr_clone_default_regulation($1) AS count`,
-      [scope.companyId]
-    );
-    const inserted = Number(row?.count ?? 0);
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "create", entity: "discipline_regulations", entityId: 0,
-      after: { inserted },
-    }).catch(console.error);
-
-    emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "discipline_regulations.reseeded", entity: "discipline_regulations", entityId: 0,
-    }).catch(console.error);
-
-    res.json({ ok: true, inserted });
-  } catch (err) {
-    handleRouteError(err, res, "Reseed regulation error:");
   }
 });
 

@@ -1312,6 +1312,74 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
   } catch (err) { handleRouteError(err, res, "Terminate contract error:"); }
 });
 
+router.get("/tenants/list", requirePermission("property:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { search } = req.query as any;
+
+    const tConditions = [`t."companyId" = $1`];
+    const tParams: any[] = [scope.companyId];
+    if (search) {
+      tParams.push(`%${search}%`);
+      tConditions.push(`(t.name ILIKE $${tParams.length} OR t.phone ILIKE $${tParams.length} OR t."nationalId" ILIKE $${tParams.length})`);
+    }
+    const standaloneRows = await rawQuery<any>(
+      `SELECT
+        t.id,
+        t.name,
+        t.phone,
+        t.email,
+        t."nationalId",
+        t.nationality,
+        COUNT(DISTINCT c.id) AS "totalContracts",
+        COUNT(DISTINCT c.id) FILTER (WHERE c.status='active') AS "activeContracts",
+        MAX(CASE WHEN c.status='active' THEN u."unitNumber" END) AS "currentUnit",
+        COALESCE(SUM(rp."paidAmount"),0) AS "totalPaid",
+        COALESCE(SUM(CASE WHEN rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE THEN rp.amount - rp."paidAmount" ELSE 0 END),0) AS "overdueAmount",
+        t."createdAt"
+       FROM tenants t
+       LEFT JOIN rental_contracts c ON (c."tenantId"=t.id OR c."tenantName"=t.name) AND c."companyId"=$1
+       LEFT JOIN property_units u ON u.id=c."unitId"
+       LEFT JOIN rent_payments rp ON rp."contractId"=c.id
+       WHERE ${tConditions.join(" AND ")}
+       GROUP BY t.id, t.name, t.phone, t.email, t."nationalId", t.nationality, t."createdAt"
+       ORDER BY t.name`,
+      tParams
+    );
+
+    const conditions = [`c."companyId" = $1`];
+    const cParams: any[] = [scope.companyId];
+    if (search) { cParams.push(`%${search}%`); conditions.push(`(c."tenantName" ILIKE $${cParams.length} OR c."tenantPhone" ILIKE $${cParams.length} OR c."tenantIdNumber" ILIKE $${cParams.length})`); }
+    const contractRows = await rawQuery<any>(
+      `SELECT
+        CONCAT('c-', ROW_NUMBER() OVER (ORDER BY c."tenantName")) AS id,
+        c."tenantName" AS name,
+        c."tenantPhone" AS phone,
+        c."tenantEmail" AS email,
+        c."tenantIdNumber" AS "nationalId",
+        NULL AS nationality,
+        COUNT(DISTINCT c.id) AS "totalContracts",
+        COUNT(DISTINCT c.id) FILTER (WHERE c.status='active') AS "activeContracts",
+        MAX(CASE WHEN c.status='active' THEN u."unitNumber" END) AS "currentUnit",
+        COALESCE(SUM(rp."paidAmount"),0) AS "totalPaid",
+        COALESCE(SUM(CASE WHEN rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE THEN rp.amount - rp."paidAmount" ELSE 0 END),0) AS "overdueAmount",
+        TRUE AS "contractOnly"
+       FROM rental_contracts c
+       LEFT JOIN property_units u ON u.id=c."unitId"
+       LEFT JOIN rent_payments rp ON rp."contractId"=c.id
+       WHERE ${conditions.join(" AND ")}
+         AND c."tenantName" NOT IN (SELECT name FROM tenants WHERE "companyId"=$1)
+         AND (c."tenantId" IS NULL OR c."tenantId" NOT IN (SELECT id FROM tenants WHERE "companyId"=$1))
+       GROUP BY c."tenantName", c."tenantPhone", c."tenantEmail", c."tenantIdNumber"
+       ORDER BY c."tenantName"`,
+      cParams
+    );
+
+    const allRows = [...standaloneRows, ...contractRows];
+    res.json({ data: allRows, total: allRows.length });
+  } catch (err) { handleRouteError(err, res, "Tenants list error:"); }
+});
+
 router.patch("/tenants/:id", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -2185,74 +2253,6 @@ router.post("/tenants", requirePermission("property:create"), async (req, res) =
     }).catch(console.error);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create tenant error:"); }
-});
-
-router.get("/tenants/list", requirePermission("property:read"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { search } = req.query as any;
-
-    const tConditions = [`t."companyId" = $1`];
-    const tParams: any[] = [scope.companyId];
-    if (search) {
-      tParams.push(`%${search}%`);
-      tConditions.push(`(t.name ILIKE $${tParams.length} OR t.phone ILIKE $${tParams.length} OR t."nationalId" ILIKE $${tParams.length})`);
-    }
-    const standaloneRows = await rawQuery<any>(
-      `SELECT
-        t.id,
-        t.name,
-        t.phone,
-        t.email,
-        t."nationalId",
-        t.nationality,
-        COUNT(DISTINCT c.id) AS "totalContracts",
-        COUNT(DISTINCT c.id) FILTER (WHERE c.status='active') AS "activeContracts",
-        MAX(CASE WHEN c.status='active' THEN u."unitNumber" END) AS "currentUnit",
-        COALESCE(SUM(rp."paidAmount"),0) AS "totalPaid",
-        COALESCE(SUM(CASE WHEN rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE THEN rp.amount - rp."paidAmount" ELSE 0 END),0) AS "overdueAmount",
-        t."createdAt"
-       FROM tenants t
-       LEFT JOIN rental_contracts c ON (c."tenantId"=t.id OR c."tenantName"=t.name) AND c."companyId"=$1
-       LEFT JOIN property_units u ON u.id=c."unitId"
-       LEFT JOIN rent_payments rp ON rp."contractId"=c.id
-       WHERE ${tConditions.join(" AND ")}
-       GROUP BY t.id, t.name, t.phone, t.email, t."nationalId", t.nationality, t."createdAt"
-       ORDER BY t.name`,
-      tParams
-    );
-
-    const conditions = [`c."companyId" = $1`];
-    const cParams: any[] = [scope.companyId];
-    if (search) { cParams.push(`%${search}%`); conditions.push(`(c."tenantName" ILIKE $${cParams.length} OR c."tenantPhone" ILIKE $${cParams.length} OR c."tenantIdNumber" ILIKE $${cParams.length})`); }
-    const contractRows = await rawQuery<any>(
-      `SELECT
-        CONCAT('c-', ROW_NUMBER() OVER (ORDER BY c."tenantName")) AS id,
-        c."tenantName" AS name,
-        c."tenantPhone" AS phone,
-        c."tenantEmail" AS email,
-        c."tenantIdNumber" AS "nationalId",
-        NULL AS nationality,
-        COUNT(DISTINCT c.id) AS "totalContracts",
-        COUNT(DISTINCT c.id) FILTER (WHERE c.status='active') AS "activeContracts",
-        MAX(CASE WHEN c.status='active' THEN u."unitNumber" END) AS "currentUnit",
-        COALESCE(SUM(rp."paidAmount"),0) AS "totalPaid",
-        COALESCE(SUM(CASE WHEN rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE THEN rp.amount - rp."paidAmount" ELSE 0 END),0) AS "overdueAmount",
-        TRUE AS "contractOnly"
-       FROM rental_contracts c
-       LEFT JOIN property_units u ON u.id=c."unitId"
-       LEFT JOIN rent_payments rp ON rp."contractId"=c.id
-       WHERE ${conditions.join(" AND ")}
-         AND c."tenantName" NOT IN (SELECT name FROM tenants WHERE "companyId"=$1)
-         AND (c."tenantId" IS NULL OR c."tenantId" NOT IN (SELECT id FROM tenants WHERE "companyId"=$1))
-       GROUP BY c."tenantName", c."tenantPhone", c."tenantEmail", c."tenantIdNumber"
-       ORDER BY c."tenantName"`,
-      cParams
-    );
-
-    const allRows = [...standaloneRows, ...contractRows];
-    res.json({ data: allRows, total: allRows.length });
-  } catch (err) { handleRouteError(err, res, "Tenants list error:"); }
 });
 
 router.get("/tenants/:id", requirePermission("property:read"), async (req, res) => {

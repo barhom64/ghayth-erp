@@ -143,6 +143,43 @@ router.get("/accounting-mappings", requirePermission("finance:read"), async (req
   }
 });
 
+router.post("/accounting-mappings/batch", requirePermission("finance:write"), async (req, res) => {
+  try {
+    const parsed_batchAccountingMappingsSchema = batchAccountingMappingsSchema.safeParse(req.body);
+    if (!parsed_batchAccountingMappingsSchema.success) throw new ValidationError(parsed_batchAccountingMappingsSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsedBody = parsed_batchAccountingMappingsSchema.data;
+    const scope = req.scope!;
+    requireFinance(scope);
+    const { mappings } = parsedBody;
+
+    for (const m of mappings) {
+      await rawExecute(
+        `INSERT INTO accounting_mappings
+          ("companyId","operationType","operationLabel","debitAccountId","creditAccountId","debitAccountCode","creditAccountCode","isActive")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT ("companyId","operationType") DO UPDATE SET
+          "debitAccountId" = EXCLUDED."debitAccountId",
+          "creditAccountId" = EXCLUDED."creditAccountId",
+          "debitAccountCode" = EXCLUDED."debitAccountCode",
+          "creditAccountCode" = EXCLUDED."creditAccountCode",
+          "updatedAt" = NOW()`,
+        [
+          scope.companyId, m.operationType, m.operationLabel ?? m.operationType,
+          m.debitAccountId ?? null, m.creditAccountId ?? null,
+          m.debitAccountCode ?? null, m.creditAccountCode ?? null,
+          m.isActive ?? true,
+        ]
+      );
+    }
+
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "accounting_mappings", entityId: scope.companyId, after: { batch: true, count: mappings.length, operationTypes: mappings.map((m: any) => m.operationType) } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.mappings.batch_updated", entity: "accounting_mappings", entityId: scope.companyId, details: JSON.stringify({ count: mappings.length, operationTypes: mappings.map((m: any) => m.operationType) }) }).catch(console.error);
+    res.json({ message: "تم حفظ التوجيهات بنجاح", count: mappings.length });
+  } catch (err) {
+    handleRouteError(err, res, "Batch update accounting mappings error:");
+  }
+});
+
 router.get("/accounting-mappings/:operationType", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -227,43 +264,6 @@ router.put("/accounting-mappings/:operationType", requirePermission("finance:wri
     res.json(updated);
   } catch (err) {
     handleRouteError(err, res, "Update accounting mapping error:");
-  }
-});
-
-router.post("/accounting-mappings/batch", requirePermission("finance:write"), async (req, res) => {
-  try {
-    const parsed_batchAccountingMappingsSchema = batchAccountingMappingsSchema.safeParse(req.body);
-    if (!parsed_batchAccountingMappingsSchema.success) throw new ValidationError(parsed_batchAccountingMappingsSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const parsedBody = parsed_batchAccountingMappingsSchema.data;
-    const scope = req.scope!;
-    requireFinance(scope);
-    const { mappings } = parsedBody;
-
-    for (const m of mappings) {
-      await rawExecute(
-        `INSERT INTO accounting_mappings
-          ("companyId","operationType","operationLabel","debitAccountId","creditAccountId","debitAccountCode","creditAccountCode","isActive")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-         ON CONFLICT ("companyId","operationType") DO UPDATE SET
-          "debitAccountId" = EXCLUDED."debitAccountId",
-          "creditAccountId" = EXCLUDED."creditAccountId",
-          "debitAccountCode" = EXCLUDED."debitAccountCode",
-          "creditAccountCode" = EXCLUDED."creditAccountCode",
-          "updatedAt" = NOW()`,
-        [
-          scope.companyId, m.operationType, m.operationLabel ?? m.operationType,
-          m.debitAccountId ?? null, m.creditAccountId ?? null,
-          m.debitAccountCode ?? null, m.creditAccountCode ?? null,
-          m.isActive ?? true,
-        ]
-      );
-    }
-
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "accounting_mappings", entityId: scope.companyId, after: { batch: true, count: mappings.length, operationTypes: mappings.map((m: any) => m.operationType) } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.mappings.batch_updated", entity: "accounting_mappings", entityId: scope.companyId, details: JSON.stringify({ count: mappings.length, operationTypes: mappings.map((m: any) => m.operationType) }) }).catch(console.error);
-    res.json({ message: "تم حفظ التوجيهات بنجاح", count: mappings.length });
-  } catch (err) {
-    handleRouteError(err, res, "Batch update accounting mappings error:");
   }
 });
 

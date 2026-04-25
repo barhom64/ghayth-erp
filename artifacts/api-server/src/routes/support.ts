@@ -228,6 +228,46 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Create ticket error:"); }
 });
 
+router.post("/tickets/check-sla", requirePermission("support:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const breached = await rawQuery<any>(
+      `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" WHERE t."companyId"=$1 AND t.status IN ('open','in_progress','field_visit') AND t."slaDeadline" < NOW() AND t."deletedAt" IS NULL`,
+      [scope.companyId]
+    );
+    for (const ticket of breached) {
+      console.log(`[SLA BREACH] Ticket ${ticket.ref} — escalating to critical priority`);
+      try {
+        await rawExecute(
+          `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND priority != 'critical'`,
+          [ticket.id]
+        );
+        await createNotification({
+          companyId: scope.companyId,
+          assignmentId: scope.activeAssignmentId,
+          type: "alert",
+          title: `SLA خرق: ${ticket.ref}`,
+          body: `التذكرة "${ticket.title}" تجاوزت SLA — تم تصعيد الأولوية إلى حرجة`,
+          priority: "high",
+          refType: "support_tickets",
+          refId: ticket.id,
+        });
+      } catch (e) { console.error("SLA breach notification error:", e); }
+    }
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "support.sla.checked", entity: "support_tickets", entityId: 0,
+      details: JSON.stringify({ breachedCount: breached.length }),
+    }).catch(console.error);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "preview", entity: "support_tickets", entityId: 0,
+      after: { breachedCount: breached.length },
+    }).catch(console.error);
+    res.json({ breached: breached.length, tickets: breached });
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
 router.get("/tickets/:id", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -544,46 +584,6 @@ router.delete("/tickets/:id", requirePermission("support:delete"), async (req, r
 
     res.json({ message: "تم حذف التذكرة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete ticket error:"); }
-});
-
-router.post("/tickets/check-sla", requirePermission("support:read"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const breached = await rawQuery<any>(
-      `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" WHERE t."companyId"=$1 AND t.status IN ('open','in_progress','field_visit') AND t."slaDeadline" < NOW() AND t."deletedAt" IS NULL`,
-      [scope.companyId]
-    );
-    for (const ticket of breached) {
-      console.log(`[SLA BREACH] Ticket ${ticket.ref} — escalating to critical priority`);
-      try {
-        await rawExecute(
-          `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND priority != 'critical'`,
-          [ticket.id]
-        );
-        await createNotification({
-          companyId: scope.companyId,
-          assignmentId: scope.activeAssignmentId,
-          type: "alert",
-          title: `SLA خرق: ${ticket.ref}`,
-          body: `التذكرة "${ticket.title}" تجاوزت SLA — تم تصعيد الأولوية إلى حرجة`,
-          priority: "high",
-          refType: "support_tickets",
-          refId: ticket.id,
-        });
-      } catch (e) { console.error("SLA breach notification error:", e); }
-    }
-    emitEvent({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "support.sla.checked", entity: "support_tickets", entityId: 0,
-      details: JSON.stringify({ breachedCount: breached.length }),
-    }).catch(console.error);
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "preview", entity: "support_tickets", entityId: 0,
-      after: { breachedCount: breached.length },
-    }).catch(console.error);
-    res.json({ breached: breached.length, tickets: breached });
-  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
 router.get("/replies", requirePermission("support:read"), async (req, res) => {

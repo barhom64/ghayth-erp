@@ -5440,6 +5440,20 @@ router.patch("/public-holidays/:id", requirePermission("hr:update"), async (req,
   } catch (err) { handleRouteError(err, res, "Update holiday error:"); }
 });
 
+// Check if a date is a public holiday
+router.get("/public-holidays/check", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { date } = req.query as any;
+    if (!date) throw new ValidationError("التاريخ مطلوب", { field: "date" });
+    const [holiday] = await rawQuery<any>(
+      `SELECT * FROM public_holidays WHERE "companyId"=$1 AND $2::date BETWEEN "startDate"::date AND "endDate"::date`,
+      [scope.companyId, date]
+    );
+    res.json({ isHoliday: !!holiday, holiday: holiday || null });
+  } catch (err) { handleRouteError(err, res, "Check holiday error:"); }
+});
+
 router.delete("/public-holidays/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -5457,20 +5471,6 @@ router.delete("/public-holidays/:id", requirePermission("hr:delete"), async (req
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "holiday.deleted", entity: "hr_public_holidays", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
     res.json({ message: "تم حذف العطلة" });
   } catch (err) { handleRouteError(err, res, "Delete holiday error:"); }
-});
-
-// Check if a date is a public holiday
-router.get("/public-holidays/check", requirePermission("hr:read"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { date } = req.query as any;
-    if (!date) throw new ValidationError("التاريخ مطلوب", { field: "date" });
-    const [holiday] = await rawQuery<any>(
-      `SELECT * FROM public_holidays WHERE "companyId"=$1 AND $2::date BETWEEN "startDate"::date AND "endDate"::date`,
-      [scope.companyId, date]
-    );
-    res.json({ isHoliday: !!holiday, holiday: holiday || null });
-  } catch (err) { handleRouteError(err, res, "Check holiday error:"); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

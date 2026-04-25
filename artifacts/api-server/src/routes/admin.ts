@@ -1025,32 +1025,6 @@ router.post("/role-permissions", requirePermission("admin:write"), async (req, r
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.delete("/role-permissions/:id", requirePermission("admin:write"), async (req, res) => {
-  try {
-    await assertAdmin(req);
-    const scope = req.scope!;
-    const id = Number(req.params.id);
-    const result = await rawExecute(
-      `DELETE FROM role_permissions WHERE id=$1 AND "companyId"=$2`,
-      [id, scope.companyId]
-    );
-    if (result.affectedRows === 0) { throw new NotFoundError("الصلاحية غير موجودة أو غير مصرح بحذفها"); }
-    invalidatePermissionCache(undefined, scope.companyId);
-    createAuditLog({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "delete", entity: "role_permissions", entityId: id,
-    }).catch(console.error);
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "admin.role_permission.deleted",
-      entity: "role_permissions",
-      entityId: id,
-    }).catch(console.error);
-    res.json({ message: "تم حذف الصلاحية" });
-  } catch (err) { handleRouteError(err, res, "admin"); }
-});
-
 router.put("/role-permissions/bulk", requirePermission("admin:write"), async (req, res) => {
   try {
     await assertAdmin(req);
@@ -1091,6 +1065,33 @@ router.put("/role-permissions/bulk", requirePermission("admin:write"), async (re
     res.json({ success: true, role, count: permissions.length });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
+
+router.delete("/role-permissions/:id", requirePermission("admin:write"), async (req, res) => {
+  try {
+    await assertAdmin(req);
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const result = await rawExecute(
+      `DELETE FROM role_permissions WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    if (result.affectedRows === 0) { throw new NotFoundError("الصلاحية غير موجودة أو غير مصرح بحذفها"); }
+    invalidatePermissionCache(undefined, scope.companyId);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "role_permissions", entityId: id,
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.role_permission.deleted",
+      entity: "role_permissions",
+      entityId: id,
+    }).catch(console.error);
+    res.json({ message: "تم حذف الصلاحية" });
+  } catch (err) { handleRouteError(err, res, "admin"); }
+});
+
 
 // ─── Governance: Policy Audit ───────────────────────────────────────────
 import { runFullPolicyAudit, ROLE_STRATEGIES, SENSITIVE_OPERATIONS, SEPARATION_OF_DUTIES } from "../lib/policyEngine.js";
