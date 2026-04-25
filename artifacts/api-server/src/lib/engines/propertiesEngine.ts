@@ -200,6 +200,70 @@ class PropertiesEngineImpl implements DomainEngine {
     });
   }
 
+  async postBuildingAssetGL(
+    ctx: PropertyGLContext,
+    building: { id: number; purchasePrice: number; name: string }
+  ) {
+    const [assetCode, cashCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "debit", "1520"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "credit", "1100"),
+    ]);
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `BLDG-${building.id}`,
+      description: `إثبات أصل عقاري — ${building.name}`,
+      type: "general",
+      sourceType: "property_building",
+      sourceId: building.id,
+      sourceKey: `property:building_asset:${building.id}`,
+      guardTable: "property_buildings",
+      guardId: building.id,
+      lines: [
+        { accountCode: assetCode, debit: building.purchasePrice, credit: 0, propertyId: building.id },
+        { accountCode: cashCode, debit: 0, credit: building.purchasePrice },
+      ],
+    });
+  }
+
+  async postInstallmentPaymentGL(
+    ctx: PropertyGLContext,
+    payment: {
+      installmentId: number;
+      contractId: number;
+      unitId?: number;
+      amount: number;
+      method?: string;
+      description?: string;
+    }
+  ) {
+    const cashDefault = payment.method === "cash" ? "1100" : "1110";
+    const [cashCode, revenueCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "rental_cash_receipt", "debit", cashDefault),
+      financialEngine.resolveAccountCode(ctx.companyId, "rental_revenue", "credit", "4100"),
+    ]);
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `RENT-SCH-${payment.installmentId}`,
+      description: payment.description ?? `تحصيل قسط إيجار #${payment.installmentId}`,
+      type: "general",
+      sourceType: "rent_payment",
+      sourceId: payment.installmentId,
+      sourceKey: `property:installment:${payment.installmentId}`,
+      guardTable: "property_contracts",
+      guardId: payment.contractId,
+      lines: [
+        { accountCode: cashCode, debit: payment.amount, credit: 0, propertyId: payment.unitId, contractId: payment.contractId },
+        { accountCode: revenueCode, debit: 0, credit: payment.amount, propertyId: payment.unitId, contractId: payment.contractId },
+      ],
+    });
+  }
+
   /**
    * Request invoice creation from the Finance domain.
    * Instead of writing directly to the finance-owned invoices table,
