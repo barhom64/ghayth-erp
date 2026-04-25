@@ -20564,6 +20564,32 @@ CREATE INDEX IF NOT EXISTS event_logs_company_action_idx ON public.event_logs US
 CREATE INDEX IF NOT EXISTS event_logs_created_idx ON public.event_logs USING btree ("createdAt" DESC);
 
 --
+-- Cross-domain event Dead Letter Queue. Captures events whose handlers
+-- failed so they can be inspected and replayed without losing the
+-- cross-domain effect (e.g. fixed asset registration after vehicle creation).
+--
+CREATE TABLE IF NOT EXISTS public.event_dlq (
+    id integer NOT NULL,
+    type text NOT NULL,
+    "eventName" text,
+    payload jsonb NOT NULL,
+    error text NOT NULL,
+    "companyId" integer,
+    "retryCount" integer DEFAULT 0,
+    "resolvedAt" timestamp without time zone,
+    "createdAt" timestamp without time zone DEFAULT now()
+);
+
+CREATE SEQUENCE IF NOT EXISTS public.event_dlq_id_seq AS integer;
+ALTER TABLE ONLY public.event_dlq ALTER COLUMN id SET DEFAULT nextval('public.event_dlq_id_seq'::regclass);
+ALTER SEQUENCE public.event_dlq_id_seq OWNED BY public.event_dlq.id;
+ALTER TABLE ONLY public.event_dlq ADD CONSTRAINT event_dlq_pkey PRIMARY KEY (id);
+
+CREATE INDEX IF NOT EXISTS event_dlq_unresolved_idx ON public.event_dlq USING btree ("createdAt" DESC) WHERE ("resolvedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS event_dlq_company_idx ON public.event_dlq USING btree ("companyId", "createdAt" DESC);
+CREATE INDEX IF NOT EXISTS event_dlq_event_idx ON public.event_dlq USING btree ("eventName") WHERE ("resolvedAt" IS NULL);
+
+--
 -- PostgreSQL database dump complete
 --
 

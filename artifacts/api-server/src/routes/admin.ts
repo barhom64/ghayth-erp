@@ -1154,6 +1154,58 @@ router.get("/governance/lifecycle-machines", requirePermission("admin:read"), as
   res.json({ machines: STATE_MACHINES, total: STATE_MACHINES.length });
 });
 
+router.get("/governance/event-dlq", requirePermission("admin:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const onlyUnresolved = req.query.unresolved !== "false";
+    const rows = await rawQuery<any>(
+      `SELECT id, type, "eventName", "companyId", error, "retryCount", "resolvedAt", "createdAt"
+       FROM event_dlq
+       WHERE ("companyId"=$1 OR "companyId" IS NULL)
+         ${onlyUnresolved ? `AND "resolvedAt" IS NULL` : ""}
+       ORDER BY "createdAt" DESC LIMIT 200`,
+      [scope.companyId]
+    );
+    const summary = await rawQuery<any>(
+      `SELECT "eventName", COUNT(*)::int AS count
+       FROM event_dlq
+       WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "resolvedAt" IS NULL
+       GROUP BY "eventName" ORDER BY count DESC`,
+      [scope.companyId]
+    );
+    res.json({ entries: rows, total: rows.length, summary });
+  } catch (err) { handleRouteError(err, res, "DLQ list error:"); }
+});
+
+router.post("/governance/event-dlq/:id/replay", requirePermission("admin:write"), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const [entry] = await rawQuery<any>(
+      `SELECT id, "eventName", payload, "retryCount" FROM event_dlq WHERE id=$1 AND "resolvedAt" IS NULL`,
+      [id]
+    );
+    if (!entry) throw new NotFoundError("لم يتم العثور على عنصر في قائمة الفشل");
+    if (!entry.eventName) throw new ValidationError("الحدث الأصلي غير معروف، لا يمكن إعادة المحاولة");
+
+    const { eventBus } = await import("../lib/eventBus.js");
+    const payload = typeof entry.payload === "string" ? JSON.parse(entry.payload) : entry.payload;
+    eventBus.emit(entry.eventName, payload);
+    await rawExecute(
+      `UPDATE event_dlq SET "retryCount"="retryCount"+1, "resolvedAt"=NOW() WHERE id=$1`,
+      [id]
+    );
+    res.json({ replayed: true, eventName: entry.eventName });
+  } catch (err) { handleRouteError(err, res, "DLQ replay error:"); }
+});
+
+router.delete("/governance/event-dlq/:id", requirePermission("admin:write"), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    await rawExecute(`UPDATE event_dlq SET "resolvedAt"=NOW() WHERE id=$1`, [id]);
+    res.json({ resolved: true });
+  } catch (err) { handleRouteError(err, res, "DLQ resolve error:"); }
+});
+
 router.get("/governance/event-catalog", requirePermission("admin:read"), async (req, res) => {
   const scope = req.scope!;
   const byDomain = countEventsByDomain();
