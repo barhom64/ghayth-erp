@@ -11,7 +11,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, createGuardedJournalEntry, emitEvent, getLegalResponsible, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, getLegalResponsible, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { eventBus } from "../lib/eventBus.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
@@ -1281,20 +1281,14 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
 
     let journalEntryId: number | null = null;
     if (earlyFee > 0) {
-      const receivableCode = await getAccountCodeFromMapping(scope.companyId, "rental_receivable", "debit", "1200");
-      const revenueCode = await getAccountCodeFromMapping(scope.companyId, "rental_revenue", "credit", "4100");
-      journalEntryId = await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId ?? scope.userId,
-        ref: `TERM-${id}-${Date.now()}`,
-        description: `رسوم إنهاء مبكر لعقد ${contract.contractNumber} — ${b.reason}`,
-        type: "rental", sourceType: "rental_contract", sourceId: Number(id),
-        lines: [
-          { accountCode: receivableCode, debit: earlyFee, credit: 0, contractId: Number(id), propertyId: contract.unitId },
-          { accountCode: revenueCode, debit: 0, credit: earlyFee, contractId: Number(id), propertyId: contract.unitId },
-        ],
-      }, { table: "property_contracts", id: Number(id) }).catch(() => null);
+      try {
+        const { propertiesEngine } = await import("../lib/engines/index.js");
+        const glResult = await propertiesEngine.postEarlyTerminationGL(
+          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+          { contractId: Number(id), propertyId: contract.unitId, penaltyAmount: earlyFee }
+        );
+        journalEntryId = glResult.journalId;
+      } catch { journalEntryId = null; }
     }
 
     await emitEvent({
@@ -1510,24 +1504,14 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
     const tenantLabel = existing.tenantName ? ` / ${existing.tenantName}` : "";
     const unitLabel = existing.unitNumber ? ` / وحدة ${existing.unitNumber}` : "";
     const buildingLabel = existing.buildingName ? ` / ${existing.buildingName}` : "";
-    const cashDefault = b.method === 'cash' ? '1100' : '1110';
-    const cashAccountCode = await getAccountCodeFromMapping(scope.companyId, "rental_cash_receipt", "debit", cashDefault);
-    const rentalRevenueCode = await getAccountCodeFromMapping(scope.companyId, "rental_revenue", "credit", "4100");
     let journalEntryId: number | null = null;
     try {
-      journalEntryId = await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId ?? scope.userId,
-        ref: `RENT-${id}`,
-        description: `تحصيل إيجار${tenantLabel}${unitLabel}${buildingLabel}`,
-        sourceType: "rent_payment",
-        sourceId: Number(id),
-        lines: [
-          { accountCode: cashAccountCode, debit: paidAmount, credit: 0, contractId: existing.contractId, propertyId: existing.unitId },
-          { accountCode: rentalRevenueCode, debit: 0, credit: paidAmount, contractId: existing.contractId, propertyId: existing.unitId },
-        ],
-      }, { table: "rent_payments", id: Number(id) });
+      const { propertiesEngine } = await import("../lib/engines/index.js");
+      const glResult = await propertiesEngine.postRentRevenueGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+        { id: Number(id), contractId: existing.contractId, propertyId: existing.unitId, amount: paidAmount, tenantId: existing.tenantId }
+      );
+      journalEntryId = glResult.journalId;
     } catch (jErr) {
       console.error("Rent payment journal entry failed:", jErr);
       throw new IntegrationError(
@@ -1614,16 +1598,18 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
           const responsible = await getLegalResponsible(cid);
           const lawyerName = responsible?.employeeName ?? null;
 
-          const { insertId: caseId } = await rawExecute(
-            `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty","lawyerName",status,priority,description) VALUES ($1,$2,$3,'property_rent',$4,$5,'open','high',$6)`,
-            [cid, `RENT-${payment.id}-${Date.now()}`, `تحصيل إيجار - ${payment.unitNumber} - ${payment.tenantName}`, payment.tenantName, lawyerName, `إيجار متأخر ${lateDays} يوم - وحدة ${payment.unitNumber} - مبلغ ${payment.amount} ريال`]
+          propertiesEngine.requestLegalCaseCreation(
+            { companyId: cid, branchId: scope.branchId, createdBy: scope.userId },
+            {
+              caseNumber: `RENT-${payment.id}-${Date.now()}`,
+              title: `تحصيل إيجار - ${payment.unitNumber} - ${payment.tenantName}`,
+              caseType: "property_rent",
+              opposingParty: payment.tenantName,
+              lawyerName,
+              description: `إيجار متأخر ${lateDays} يوم - وحدة ${payment.unitNumber} - مبلغ ${payment.amount} ريال`,
+              priority: "high",
+            }
           );
-
-          emitEvent({
-            companyId: cid, userId: scope.userId,
-            action: "legal.case.created", entity: "legal_cases", entityId: Number(caseId),
-            details: `قضية إيجار متأخر — ${payment.tenantName}`,
-          }).catch(console.error);
 
           if (responsible) {
             createNotification({
@@ -1634,7 +1620,7 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
               body: `تم إنشاء قضية تحصيل إيجار متأخر للمستأجر ${payment.tenantName} — وحدة ${payment.unitNumber}`,
               priority: "high",
               refType: "legal_case",
-              refId: Number(caseId),
+              refId: payment.id,
               actionUrl: `/legal/cases/${caseId}`,
             }).catch(console.error);
           }
@@ -2005,25 +1991,33 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
       completeParams
     );
 
-    let invoiceId: number | null = null;
     if (cost > 0 && !b.coveredByContract) {
       const monthNum = String(new Date().getMonth() + 1).padStart(2, "0");
       const yearShort = String(new Date().getFullYear()).slice(2);
       const ref = `INV-MAINT-${yearShort}${monthNum}-${id}`;
       const vatAmount = cost * 0.15;
-      const { insertId: iId } = await rawExecute(
-        `INSERT INTO invoices ("companyId","clientId",ref,description,subtotal,total,"vatAmount","vatRate","paidAmount",status,"dueDate","createdBy") VALUES ($1,NULL,$2,$3,$4,$5,$6,15,0,'draft',$7,$8)`,
-        [scope.companyId, ref, `صيانة - ${mr.category} - ${mr.tenantName}`, cost, cost + vatAmount, vatAmount, new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0], scope.userId]
-      );
-      invoiceId = iId;
+      const { propertiesEngine } = await import("../lib/engines/index.js");
+      propertiesEngine.requestInvoiceCreation(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+        {
+          ref,
+          description: `صيانة - ${mr.category} - ${mr.tenantName}`,
+          subtotal: cost,
+          vatAmount,
+          total: cost + vatAmount,
+          dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+          sourceType: "maintenance_requests",
+          sourceId: id,
+        }
+      ).catch(console.error);
       try {
         await createAuditLog({
           companyId: scope.companyId,
           userId: scope.userId,
-          action: "auto_invoice_created",
+          action: "auto_invoice_requested",
           entity: "maintenance_requests",
           entityId: id,
-          after: { message: `تم إنشاء فاتورة مسودة تلقائياً بقيمة ${cost.toFixed(2)} ريال`, invoiceId: iId, ref },
+          after: { message: `تم طلب إنشاء فاتورة مسودة تلقائياً بقيمة ${cost.toFixed(2)} ريال`, ref },
         });
       } catch (aErr) { console.error("Auto-invoice audit log failed:", aErr); }
     }
@@ -2043,22 +2037,14 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
 
     let journalEntryId: number | null = null;
     if (cost > 0) {
-      const maintExpCode = await getAccountCodeFromMapping(scope.companyId, "property_maintenance_expense", "debit", "5400");
-      const cashCode = await getAccountCodeFromMapping(scope.companyId, "property_cash_source", "credit", "1100");
-      journalEntryId = await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.userId,
-        ref: `JE-MAINT-${id}-${Date.now()}`,
-        description: `صيانة أملاك — بلاغ #${id} — ${mr.category} — ${cost.toFixed(2)} ريال`,
-        type: "property",
-        sourceType: "maintenance_request",
-        sourceId: id,
-        lines: [
-          { accountCode: maintExpCode, debit: cost, credit: 0, propertyId: mr.unitId ? Number(mr.unitId) : undefined },
-          { accountCode: cashCode, debit: 0, credit: cost },
-        ],
-      }, { table: "property_maintenance_requests", id: Number(id) }).catch(() => null);
+      try {
+        const { propertiesEngine } = await import("../lib/engines/index.js");
+        const glResult = await propertiesEngine.postMaintenanceExpenseGL(
+          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+          { id, propertyId: mr.unitId ? Number(mr.unitId) : 0, totalCost: cost, type: mr.category }
+        );
+        journalEntryId = glResult.journalId;
+      } catch { journalEntryId = null; }
     }
 
     await createAuditLog({
@@ -2420,33 +2406,31 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
     if (b.purchasePrice && Number(b.purchasePrice) > 0) {
       (async () => {
         try {
+          const { propertiesEngine } = await import("../lib/engines/index.js");
+          await propertiesEngine.postBuildingAssetGL(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+            { id: insertId, purchasePrice: Number(b.purchasePrice), name: b.name }
+          );
           const assetCode = await getAccountCodeFromMapping(scope.companyId, "property_building_asset", "debit", "1520");
           const depExpCode = await getAccountCodeFromMapping(scope.companyId, "property_depreciation", "debit", "6100");
           const accDepCode = await getAccountCodeFromMapping(scope.companyId, "property_acc_depreciation", "credit", "1590");
-          const cashCode = await getAccountCodeFromMapping(scope.companyId, "property_building_asset", "credit", "1100");
           const usefulYears = Number(b.usefulLifeYears) || 20;
           const salvage = Number(b.salvageValue) || 0;
-          await createGuardedJournalEntry({
-            companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId,
-            ref: `BLDG-${insertId}`,
-            description: `إثبات أصل عقاري — ${b.name}`,
-            type: "property", sourceType: "property_building", sourceId: insertId,
-            lines: [
-              { accountCode: assetCode, debit: Number(b.purchasePrice), credit: 0, propertyId: insertId },
-              { accountCode: cashCode, debit: 0, credit: Number(b.purchasePrice) },
-            ],
-          }, { table: "property_buildings", id: insertId });
-          await rawExecute(
-            `INSERT INTO fixed_assets ("companyId","branchId",code,name,description,category,
-              "purchaseDate","purchaseCost","salvageValue","usefulLifeYears",
-              "depreciationMethod","currentBookValue","accumulatedDepreciation",
-              "assetAccountCode","depreciationAccountCode","accDepreciationAccountCode",status)
-             VALUES ($1,$2,$3,$4,$5,'عقارات',$6,$7,$8,$9,'straight_line',$7,0,$10,$11,$12,'active')`,
-            [scope.companyId, scope.branchId, `BLDG-${insertId}`, b.name,
-             `أصل ثابت — مبنى ${b.name}${b.city ? ` — ${b.city}` : ""}`,
-             b.purchaseDate || new Date().toISOString().slice(0, 10),
-             Number(b.purchasePrice), salvage, usefulYears,
-             assetCode, depExpCode, accDepCode]
+          propertiesEngine.requestFixedAssetRegistration(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+            {
+              buildingId: insertId,
+              code: `BLDG-${insertId}`,
+              name: b.name,
+              description: `أصل ثابت — مبنى ${b.name}${b.city ? ` — ${b.city}` : ""}`,
+              purchaseDate: b.purchaseDate || new Date().toISOString().slice(0, 10),
+              purchaseCost: Number(b.purchasePrice),
+              salvageValue: salvage,
+              usefulLifeYears: usefulYears,
+              assetAccountCode: assetCode,
+              depreciationAccountCode: depExpCode,
+              accDepreciationAccountCode: accDepCode,
+            }
           );
           createNotification({
             companyId: scope.companyId, assignmentId: scope.activeAssignmentId,
@@ -2796,33 +2780,34 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
           const yearShort = String(new Date().getFullYear()).slice(2);
           const ref = `INV-MAINT-${yearShort}${monthNum}-${id}`;
           const vatAmount = updatedCost * 0.15;
-          const { insertId: iId } = await rawExecute(
-            `INSERT INTO invoices ("companyId","clientId",ref,description,subtotal,total,"vatAmount","vatRate","paidAmount",status,"dueDate","createdBy") VALUES ($1,NULL,$2,$3,$4,$5,$6,15,0,'draft',$7,$8)`,
-            [scope.companyId, ref, `صيانة - ${existing.category} - ${existing.tenantName}`, updatedCost, updatedCost + vatAmount, vatAmount, new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0], scope.userId]
-          );
+          const { propertiesEngine } = await import("../lib/engines/index.js");
+          propertiesEngine.requestInvoiceCreation(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+            {
+              ref,
+              description: `صيانة - ${existing.category} - ${existing.tenantName}`,
+              subtotal: updatedCost,
+              vatAmount,
+              total: updatedCost + vatAmount,
+              dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+              sourceType: "maintenance_requests",
+              sourceId: id,
+            }
+          ).catch(console.error);
           await createAuditLog({
             userId: scope.userId, entity: "maintenance_requests", entityId: id,
-            action: "auto_invoice", companyId: scope.companyId,
-            before: null, after: { invoiceId: iId, ref, amount: updatedCost + vatAmount },
+            action: "auto_invoice_requested", companyId: scope.companyId,
+            before: null, after: { ref, amount: updatedCost + vatAmount },
           });
         } catch (invErr) { console.error("PATCH completion invoice error:", invErr); }
 
-        const maintExpCode = await getAccountCodeFromMapping(scope.companyId, "property_maintenance_expense", "debit", "5400");
-        const cashCode = await getAccountCodeFromMapping(scope.companyId, "property_cash_source", "credit", "1100");
-        await createGuardedJournalEntry({
-          companyId: scope.companyId,
-          branchId: scope.branchId,
-          createdBy: scope.activeAssignmentId ?? scope.userId,
-          ref: `PROP-MAINT-${id}`,
-          description: `مصروف صيانة عقار — ${existing.category || ""} / ${existing.tenantName || ""}`,
-          type: "property",
-          sourceType: "maintenance_request",
-          sourceId: id,
-          lines: [
-            { accountCode: maintExpCode, debit: updatedCost, credit: 0, propertyId: existing.unitId ? Number(existing.unitId) : undefined },
-            { accountCode: cashCode, debit: 0, credit: updatedCost },
-          ],
-        }, { table: "property_maintenance", id: Number(id) }).catch(() => {});
+        try {
+          const { propertiesEngine } = await import("../lib/engines/index.js");
+          await propertiesEngine.postMaintenanceExpenseGL(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+            { id, propertyId: existing.unitId ? Number(existing.unitId) : 0, totalCost: updatedCost, type: existing.category }
+          );
+        } catch (jeErr) { console.error("PATCH maintenance GL posting via engine failed:", jeErr); }
       }
       try {
         await rawQuery<any>(
@@ -3118,20 +3103,18 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
       [newPaid, b.paidDate || new Date().toISOString().split('T')[0], b.method || 'bank_transfer', newStatus, receiptNumber, installmentId]
     );
     if (paidAmount > 0) {
-      const schCashCode = await getAccountCodeFromMapping(scope.companyId, "rental_cash_receipt", "debit", b.method === 'cash' ? '1100' : '1110');
-      const schRevenueCode = await getAccountCodeFromMapping(scope.companyId, "rental_revenue", "credit", "4100");
-      await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId ?? scope.userId,
-        ref: `RENT-SCH-${installmentId}`,
-        description: `تحصيل قسط إيجار #${existing.installmentNumber} / ${existing.tenantName || ''} / ${existing.unitNumber || ''}`,
-        sourceType: "rent_payment", sourceId: installmentId,
-        lines: [
-          { accountCode: schCashCode, debit: paidAmount, credit: 0, propertyId: existing.unitId, contractId: existing.contractId },
-          { accountCode: schRevenueCode, debit: 0, credit: paidAmount, propertyId: existing.unitId, contractId: existing.contractId },
-        ],
-      }, { table: "property_contracts", id: contractId }).catch(() => {});
+      const { propertiesEngine } = await import("../lib/engines/index.js");
+      await propertiesEngine.postInstallmentPaymentGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+        {
+          installmentId,
+          contractId,
+          unitId: existing.unitId,
+          amount: paidAmount,
+          method: b.method,
+          description: `تحصيل قسط إيجار #${existing.installmentNumber} / ${existing.tenantName || ''} / ${existing.unitNumber || ''}`,
+        }
+      ).catch(() => {});
     }
     const [row] = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE id=$1`, [installmentId]);
     emitEvent({
@@ -3360,21 +3343,11 @@ router.post("/deposits", requirePermission("property:create"), async (req, res) 
     // have a 'held' deposit without a corresponding cash/liability posting,
     // otherwise trial balance is permanently wrong.
     try {
-      const depCashCode = await getAccountCodeFromMapping(scope.companyId, "deposit_cash", "debit", "1100");
-      const depLiabilityCode = await getAccountCodeFromMapping(scope.companyId, "deposit_liability", "credit", "2300");
-      await createGuardedJournalEntry({
-        companyId: scope.companyId, branchId: scope.branchId ?? 0,
-        createdBy: scope.activeAssignmentId ?? scope.userId,
-        ref: `DEP-${insertId}`,
-        description: `استلام وديعة ضمان — عقد #${b.contractId}`,
-        type: "property",
-        sourceType: "security_deposit",
-        sourceId: insertId,
-        lines: [
-          { accountCode: depCashCode, debit: Number(b.amount), credit: 0, contractId: Number(b.contractId) },
-          { accountCode: depLiabilityCode, debit: 0, credit: Number(b.amount) },
-        ],
-      }, { table: "property_security_deposits", id: insertId });
+      const { propertiesEngine } = await import("../lib/engines/index.js");
+      await propertiesEngine.postSecurityDepositGL(
+        { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.activeAssignmentId ?? scope.userId },
+        { id: insertId, contractId: Number(b.contractId), propertyId: 0, amount: Number(b.amount), type: "received" }
+      );
     } catch (jErr) {
       console.error("Deposit journal entry failed:", jErr);
       await rawExecute(`DELETE FROM property_security_deposits WHERE id=$1`, [insertId]).catch(() => {});
@@ -3433,21 +3406,11 @@ router.patch("/deposits/:id/refund", requirePermission("property:update"), async
     // still flipped the status to 'refunded', leaving cash + deposit liability
     // permanently out of sync.
     try {
-      const refLiabilityCode = await getAccountCodeFromMapping(scope.companyId, "deposit_liability", "credit", "2300");
-      const refCashCode = await getAccountCodeFromMapping(scope.companyId, "deposit_cash", "debit", "1100");
-      await createGuardedJournalEntry({
-        companyId: scope.companyId, branchId: scope.branchId ?? 0,
-        createdBy: scope.activeAssignmentId ?? scope.userId,
-        ref: `DEP-REF-${id}`,
-        description: `إرجاع وديعة ضمان — عقد #${deposit.contractId} / السبب: ${b.refundReason || 'إنهاء العقد'}`,
-        type: "property",
-        sourceType: "security_deposit_refund",
-        sourceId: id,
-        lines: [
-          { accountCode: refLiabilityCode, debit: refundAmount, credit: 0, contractId: deposit.contractId ? Number(deposit.contractId) : undefined },
-          { accountCode: refCashCode, debit: 0, credit: refundAmount },
-        ],
-      }, { table: "property_security_deposits", id: Number(id) });
+      const { propertiesEngine } = await import("../lib/engines/index.js");
+      await propertiesEngine.postSecurityDepositGL(
+        { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.activeAssignmentId ?? scope.userId },
+        { id: Number(id), contractId: deposit.contractId ? Number(deposit.contractId) : 0, propertyId: 0, amount: refundAmount, type: "refunded" }
+      );
     } catch (jErr) {
       console.error("Deposit refund journal entry failed:", jErr);
       throw new IntegrationError(

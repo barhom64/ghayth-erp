@@ -5,9 +5,6 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
 import {
-  createJournalEntry,
-  createGuardedJournalEntry,
-  getAccountCodeFromMapping,
   emitEvent,
   createAuditLog,
 } from "../lib/businessHelpers.js";
@@ -735,34 +732,11 @@ router.post("/agent-invoices/generate", requirePermission("umrah:write"), async 
     }
 
     try {
-      const arCode = await getAccountCodeFromMapping(scope.companyId, "umrah_agent_receivable", "debit", "1210");
-      const revenueCode = await getAccountCodeFromMapping(scope.companyId, "umrah_revenue", "credit", "4200");
-      const penaltyCode = await getAccountCodeFromMapping(scope.companyId, "umrah_penalty_revenue", "credit", "4210");
-      const commissionCode = await getAccountCodeFromMapping(scope.companyId, "umrah_commission", "debit", "5200");
-
-      const glLines: any[] = [
-        { accountCode: arCode, debit: total, credit: 0, description: `ذمم وكيل عمرة — ${agent.name}`, vendorId: agentId },
-      ];
-      if (servicesTotal > 0) {
-        glLines.push({ accountCode: revenueCode, debit: 0, credit: servicesTotal, description: `إيراد خدمات عمرة — ${agent.name}` });
-      }
-      if (penaltiesTotal > 0) {
-        glLines.push({ accountCode: penaltyCode, debit: 0, credit: penaltiesTotal, description: `إيراد غرامات تأخر — ${agent.name}` });
-      }
-      if (commission > 0) {
-        glLines.push({ accountCode: commissionCode, debit: commission, credit: 0, description: `عمولة وكيل — ${agent.name}` });
-      }
-
-      const journalId = await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId || 0,
-        createdBy: scope.userId,
-        ref: `UMRAH-GL-${ref}`,
-        description: `قيد فاتورة وكيل عمرة — ${agent.name}`,
-        sourceType: "umrah_agent_invoice",
-        sourceId: rows[0].id,
-        lines: glLines,
-      }, { table: "umrah_agent_invoices", id: rows[0].id });
+      const { umrahEngine } = await import("../lib/engines/index.js");
+      const journalId = await umrahEngine.postAgentInvoiceGL(
+        { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+        { id: rows[0].id, ref, agentName: agent.name, agentId, total, servicesTotal, penaltiesTotal, commission }
+      );
 
       await rawExecute(
         `UPDATE umrah_agent_invoices SET "journalEntryId"=$1 WHERE id=$2`,
@@ -827,21 +801,11 @@ router.post("/transport", requirePermission("umrah:write"), async (req, res) => 
 
     const tripCost = Number(b.cost || 0);
     if (tripCost > 0) {
-      const transportExpenseCode = await getAccountCodeFromMapping(scope.companyId, "umrah_transport_expense", "debit", "5300");
-      const cashCode = await getAccountCodeFromMapping(scope.companyId, "umrah_transport_payable", "credit", "2100");
-      await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId || 0,
-        createdBy: scope.userId,
-        ref: `UMRAH-TRN-${rows[0].id}`,
-        description: `مصروف نقل عمرة — ${b.fromLocation} → ${b.toLocation}`,
-        sourceType: "umrah_transport",
-        sourceId: rows[0].id,
-        lines: [
-          { accountCode: transportExpenseCode, debit: tripCost, credit: 0, description: `مصروف نقل — ${b.fromLocation} → ${b.toLocation}`, vehicleId: b.vehicleId || undefined, driverId: b.driverId || undefined },
-          { accountCode: cashCode, debit: 0, credit: tripCost, description: `مستحقات نقل عمرة` },
-        ],
-      }, { table: "umrah_transport", id: rows[0].id });
+      const { umrahEngine } = await import("../lib/engines/index.js");
+      await umrahEngine.postTransportExpenseGL(
+        { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+        { id: rows[0].id, cost: tripCost, fromLocation: b.fromLocation, toLocation: b.toLocation, vehicleId: b.vehicleId || undefined, driverId: b.driverId || undefined }
+      );
     }
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_transport", entityId: rows[0]?.id, after: { fromLocation: b.fromLocation, toLocation: b.toLocation } }).catch(console.error);

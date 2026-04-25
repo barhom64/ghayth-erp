@@ -9,7 +9,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, createGuardedJournalEntry, emitEvent, getLegalResponsible, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { z } from "zod";
@@ -891,37 +891,31 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
       const monthNum = String(new Date().getMonth() + 1).padStart(2, "0");
       const yearShort = String(new Date().getFullYear()).slice(2);
       const ref = `INV-LEGAL-${yearShort}${monthNum}-${insertId}`;
+      const { legalEngine } = await import("../lib/engines/index.js");
       try {
-        const { insertId: iId } = await rawExecute(
-          `INSERT INTO invoices ("companyId","clientId",ref,description,subtotal,total,"vatAmount","vatRate","paidAmount",status,"dueDate","createdBy") VALUES ($1,NULL,$2,$3,$4,$5,$6,15,0,'draft',$7,$8)`,
-          [scope.companyId, ref, `أتعاب قانونية - جلسة ${b.sessionDate} - ${legalCase.title}`, billingAmount, billingAmount + vatAmount, vatAmount, new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0], scope.userId]
+        legalEngine.requestInvoiceCreation(
+          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+          {
+            ref,
+            description: `أتعاب قانونية - جلسة ${b.sessionDate} - ${legalCase.title}`,
+            subtotal: billingAmount,
+            vatAmount,
+            total: billingAmount + vatAmount,
+            dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+            sourceType: "legal_sessions",
+            sourceId: insertId,
+          }
         );
-        invoiceId = iId;
+        invoiceId = insertId;
       } catch (invoiceErr) {
-        console.error("Failed to create legal session invoice:", invoiceErr);
+        console.error("Failed to request legal session invoice:", invoiceErr);
         invoiceError = "فشل إنشاء فاتورة الأتعاب";
       }
 
-      // Auto journal entry for legal fees. Pull account codes from
-      // accounting_mappings so orgs with non-default CoA don't silently post
-      // to phantom accounts. Falls back to the historical default codes if
-      // no mapping exists so existing deployments keep working.
-      const totalWithVat = billingAmount + vatAmount;
-      const feeExpenseCode = await getAccountCodeFromMapping(scope.companyId, "legal_fee", "debit", "5400");
-      const vatReceivableCode = await getAccountCodeFromMapping(scope.companyId, "legal_fee", "credit", "1400");
-      const apCode = await getAccountCodeFromMapping(scope.companyId, "legal_fee_payable", "credit", "2100");
-      journalEntryId = await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId ?? scope.userId,
-        ref: `LEGAL-FEE-${insertId}`,
-        description: `أتعاب قانونية / ${legalCase.title} / جلسة ${b.sessionDate} / ${billingAmount.toLocaleString()} ريال`,
-        lines: [
-          { accountCode: feeExpenseCode, debit: billingAmount, credit: 0 },
-          { accountCode: vatReceivableCode, debit: vatAmount, credit: 0 },
-          { accountCode: apCode, debit: 0, credit: totalWithVat },
-        ],
-      }, { table: "legal_sessions", id: insertId });
+      journalEntryId = await legalEngine.postLegalSessionFeeGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+        { id: insertId, caseTitle: legalCase.title, sessionDate: b.sessionDate, billingAmount, vatAmount }
+      );
     }
 
     createAuditLog({

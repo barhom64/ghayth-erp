@@ -10,7 +10,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createAuditLog, createNotification, createJournalEntry, createGuardedJournalEntry, emitEvent, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { eventBus } from "../lib/eventBus.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
@@ -178,34 +178,32 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
     if (b.purchasePrice && Number(b.purchasePrice) > 0) {
       (async () => {
         try {
-          const assetCode = await getAccountCodeFromMapping(scope.companyId, "fleet_vehicle_asset", "debit", "1510");
-          const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_vehicle_asset", "credit", "1100");
+          const { fleetEngine } = await import("../lib/engines/index.js");
+          await fleetEngine.postVehicleAssetGL(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+            { id: insertId, purchasePrice: Number(b.purchasePrice), plateNumber, make: b.make, model: b.model }
+          );
           const depExpCode = await getAccountCodeFromMapping(scope.companyId, "fleet_depreciation", "debit", "6100");
           const accDepCode = await getAccountCodeFromMapping(scope.companyId, "fleet_acc_depreciation", "credit", "1590");
-          await createGuardedJournalEntry({
-            companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId,
-            ref: `VEHICLE-${insertId}`,
-            description: `إثبات أصل مركبة ${plateNumber} ${b.make || ""} ${b.model || ""}`.trim(),
-            type: "fleet", sourceType: "fleet_vehicle", sourceId: insertId,
-            lines: [
-              { accountCode: assetCode, debit: Number(b.purchasePrice), credit: 0, vehicleId: insertId },
-              { accountCode: cashCode, debit: 0, credit: Number(b.purchasePrice) },
-            ],
-          }, { table: "fleet_vehicles", id: insertId });
+          const assetCode = await getAccountCodeFromMapping(scope.companyId, "fleet_vehicle_asset", "debit", "1510");
           const vName = `${plateNumber} ${b.make || ""} ${b.model || ""}`.trim();
           const usefulYears = Number(b.usefulLifeYears) || 5;
           const salvage = Number(b.salvageValue) || 0;
-          await rawExecute(
-            `INSERT INTO fixed_assets ("companyId","branchId",code,name,description,category,
-              "purchaseDate","purchaseCost","salvageValue","usefulLifeYears",
-              "depreciationMethod","currentBookValue","accumulatedDepreciation",
-              "assetAccountCode","depreciationAccountCode","accDepreciationAccountCode",status)
-             VALUES ($1,$2,$3,$4,$5,'مركبات',$6,$7,$8,$9,'straight_line',$7,0,$10,$11,$12,'active')`,
-            [scope.companyId, scope.branchId, `VEH-${insertId}`, vName,
-             `أصل ثابت — مركبة ${vName}`,
-             b.purchaseDate || new Date().toISOString().slice(0, 10),
-             Number(b.purchasePrice), salvage, usefulYears,
-             assetCode, depExpCode, accDepCode]
+          fleetEngine.requestFixedAssetRegistration(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+            {
+              vehicleId: insertId,
+              code: `VEH-${insertId}`,
+              name: vName,
+              description: `أصل ثابت — مركبة ${vName}`,
+              purchaseDate: b.purchaseDate || new Date().toISOString().slice(0, 10),
+              purchaseCost: Number(b.purchasePrice),
+              salvageValue: salvage,
+              usefulLifeYears: usefulYears,
+              assetAccountCode: assetCode,
+              depreciationAccountCode: depExpCode,
+              accDepreciationAccountCode: accDepCode,
+            }
           );
           createNotification({
             companyId: scope.companyId, assignmentId: scope.activeAssignmentId,
@@ -971,26 +969,12 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
       );
     }
 
-    const [fuelCode, fareCode, depCode, cashCode] = await Promise.all([
-      getAccountCodeFromMapping(scope.companyId, "fleet_fuel_expense", "debit", "5200"),
-      getAccountCodeFromMapping(scope.companyId, "fleet_driver_fare", "debit", "5210"),
-      getAccountCodeFromMapping(scope.companyId, "fleet_depreciation", "debit", "5220"),
-      getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100"),
-    ]);
-    const journalEntryId = await createGuardedJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      createdBy: scope.userId,
-      ref: `JE-FLEET-${tripId}-${Date.now()}`,
-      description: `تكلفة رحلة #${tripId} — وقود: ${actualFuelCost.toFixed(2)} + أجرة: ${driverFare.toFixed(2)} + استهلاك: ${depreciation.toFixed(2)} = ${totalCost.toFixed(2)} ريال`,
-      type: "fleet", sourceType: "fleet_trip", sourceId: tripId,
-      lines: [
-        { accountCode: fuelCode, debit: actualFuelCost, credit: 0, vehicleId: trip.vehicleId },
-        { accountCode: fareCode, debit: driverFare, credit: 0, vehicleId: trip.vehicleId },
-        { accountCode: depCode, debit: depreciation, credit: 0, vehicleId: trip.vehicleId },
-        { accountCode: cashCode, debit: 0, credit: totalCost },
-      ],
-    }, { table: "fleet_trips", id: tripId });
+    const { fleetEngine } = await import("../lib/engines/index.js");
+    const tripGLResult = await fleetEngine.postTripCompletionGL(
+      { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+      { id: tripId, vehicleId: trip.vehicleId, fuelCost: actualFuelCost, driverFare, depreciation, totalCost }
+    );
+    const journalEntryId = tripGLResult?.journalId ?? null;
 
     // Persist audit + event via the shared helpers so they land in audit_logs
     // and event_logs with consistent shape. Swallowing this behind a raw
@@ -1182,17 +1166,10 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
     }
 
     if (b.partsUsed && Array.isArray(b.partsUsed)) {
-      for (const part of b.partsUsed) {
-        try {
-          await rawExecute(`UPDATE warehouse_products SET "currentStock"="currentStock"-$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`, [part.quantity, part.productId, scope.companyId]);
-          await rawExecute(
-            `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy") VALUES ($1,$2,'out',$3,$4,$5,$6,$7)`,
-            [scope.companyId, part.productId, part.quantity, part.unitCost || 0, `MAINT-${insertId}`, `صيانة مركبة - طلب #${insertId}`, scope.userId]
-          );
-        } catch (partErr) {
-          console.error(`Failed to deduct part ${part.productId} for maintenance ${insertId}:`, partErr);
-        }
-      }
+      fleetEngine.requestWarehouseDeduction(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+        { maintenanceId: insertId, parts: b.partsUsed }
+      );
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1`, [insertId]);
@@ -1282,22 +1259,11 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
     if (finalCost > 0) {
       const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [m.vehicleId]);
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
-      const maintExpCode = await getAccountCodeFromMapping(scope.companyId, "fleet_maintenance_expense", "debit", "5300");
-      const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100");
-      await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId ?? scope.userId,
-        ref: `MAINT-${id}`,
-        description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}`,
-        type: "fleet",
-        sourceType: "fleet_maintenance",
-        sourceId: id,
-        lines: [
-          { accountCode: maintExpCode, debit: finalCost, credit: 0, vehicleId: m.vehicleId },
-          { accountCode: cashCode, debit: 0, credit: finalCost },
-        ],
-      }, { table: "fleet_maintenance", id });
+      const { fleetEngine } = await import("../lib/engines/index.js");
+      await fleetEngine.postMaintenanceGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+        { id, vehicleId: m.vehicleId, totalCost: finalCost, type: m.type, description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}` }
+      );
     }
 
     // Mark the scheduled obligation as met and register the next one
@@ -1621,22 +1587,11 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
     if (totalCost > 0) {
       const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [resolvedVehicleId]);
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
-      const fuelExpCode = await getAccountCodeFromMapping(scope.companyId, "fleet_fuel_expense", "debit", "5200");
-      const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100");
-      await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId ?? scope.userId,
-        ref: `FUEL-${insertId}`,
-        description: `مصروف وقود${plateLabel} / ${liters} لتر / ${stationName ?? ""}`,
-        type: "fleet",
-        sourceType: "fleet_fuel_log",
-        sourceId: insertId,
-        lines: [
-          { accountCode: fuelExpCode, debit: totalCost, credit: 0, vehicleId: resolvedVehicleId },
-          { accountCode: cashCode, debit: 0, credit: totalCost },
-        ],
-      }, { table: "fleet_fuel_logs", id: insertId });
+      const { fleetEngine } = await import("../lib/engines/index.js");
+      await fleetEngine.postFuelExpenseGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+        { id: insertId, vehicleId: resolvedVehicleId, amount: totalCost, description: `مصروف وقود${plateLabel} / ${liters} لتر / ${stationName ?? ""}` }
+      );
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_fuel_logs WHERE id=$1`, [insertId]);
@@ -1712,22 +1667,11 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
       const insuranceType = b.type || b.insuranceType || 'comprehensive';
       const insuranceTypeLabel = insuranceType === 'comprehensive' ? 'شامل' : insuranceType === 'third_party' ? 'طرف ثالث' : insuranceType;
-      const prepaidInsCode = await getAccountCodeFromMapping(scope.companyId, "fleet_prepaid_insurance", "debit", "1350");
-      const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100");
-      await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId ?? scope.userId,
-        ref: `INS-${insertId}`,
-        description: `مصروف تأمين${plateLabel} / ${insuranceTypeLabel} / ${b.provider ?? ""}`,
-        type: "fleet",
-        sourceType: "fleet_insurance",
-        sourceId: insertId,
-        lines: [
-          { accountCode: prepaidInsCode, debit: premium, credit: 0, vehicleId: Number(b.vehicleId) },
-          { accountCode: cashCode, debit: 0, credit: premium },
-        ],
-      }, { table: "fleet_insurance", id: insertId });
+      const { fleetEngine } = await import("../lib/engines/index.js");
+      await fleetEngine.postInsuranceGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+        { id: insertId, vehicleId: Number(b.vehicleId), premium, description: `مصروف تأمين${plateLabel} / ${insuranceTypeLabel} / ${b.provider ?? ""}` }
+      );
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_insurance WHERE id=$1`, [insertId]);
@@ -2408,22 +2352,11 @@ router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (
     );
     if (!rows[0]) throw new NotFoundError("الخطة غير موجودة");
 
-    // If parts were consumed during this service, deduct from warehouse inventory
     if (b.partsUsed && Array.isArray(b.partsUsed) && b.partsUsed.length > 0) {
-      for (const part of b.partsUsed) {
-        try {
-          await rawExecute(
-            `UPDATE warehouse_products SET "currentStock"="currentStock"-$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
-            [part.quantity, part.productId, scope.companyId]
-          );
-          await rawExecute(
-            `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy") VALUES ($1,$2,'out',$3,$4,$5,$6,$7)`,
-            [scope.companyId, part.productId, part.quantity, part.unitCost || 0, `PM-PLAN-${id}`, `صيانة وقائية - خطة #${id} (${existing.serviceType})`, scope.userId]
-          );
-        } catch (partErr) {
-          console.error(`Failed to deduct spare part ${part.productId} for preventive plan ${id}:`, partErr);
-        }
-      }
+      fleetEngine.requestWarehouseDeduction(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+        { maintenanceId: id, parts: b.partsUsed }
+      );
     }
 
     emitEvent({
@@ -2523,22 +2456,18 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
     let journalEntryId: number | null = null;
     if (fineAmount > 0 && liability === 'company') {
       try {
-        const finesExpCode = await getAccountCodeFromMapping(scope.companyId, "fleet_fines_expense", "debit", "5290");
-        const payableCode = await getAccountCodeFromMapping(scope.companyId, "fleet_fines_payable", "credit", "2100");
-        journalEntryId = await createGuardedJournalEntry({
-          companyId: scope.companyId,
-          branchId: scope.branchId,
-          createdBy: scope.userId,
-          ref: `TV-${insertId}`,
-          description: `مخالفة مرورية — ${b.violationType}${b.violationNumber ? ` #${b.violationNumber}` : ''}`,
-          type: "fleet",
-          sourceType: "fleet_traffic_violation",
-          sourceId: insertId,
-          lines: [
-            { accountCode: finesExpCode, debit: fineAmount, credit: 0, vehicleId: b.vehicleId ? Number(b.vehicleId) : undefined },
-            { accountCode: payableCode, debit: 0, credit: fineAmount },
-          ],
-        }, { table: "fleet_traffic_violations", id: insertId });
+        const { fleetEngine } = await import("../lib/engines/index.js");
+        const glResult = await fleetEngine.postTrafficViolationGL(
+          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+          {
+            id: insertId,
+            vehicleId: b.vehicleId ? Number(b.vehicleId) : 0,
+            driverId: b.driverId ? Number(b.driverId) : undefined,
+            amount: fineAmount,
+            description: `مخالفة مرورية — ${b.violationType}${b.violationNumber ? ` #${b.violationNumber}` : ''}`,
+          }
+        );
+        journalEntryId = glResult.journalId;
       } catch (jeErr) {
         console.error("Traffic violation journal entry failed:", jeErr);
         await rawExecute(`DELETE FROM fleet_traffic_violations WHERE id=$1`, [insertId]).catch(() => {});
@@ -2546,9 +2475,8 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
       }
     }
 
-    // Driver-liability: create a payroll deduction + notify the driver so
-    // they see the deduction before it lands on their payslip.
-    let deductionId: number | null = null;
+    // Driver-liability: request a payroll deduction via Fleet Engine →
+    // HR Engine event boundary (no direct write to HR-owned table).
     let driverAssignmentId: number | null = null;
     if (fineAmount > 0 && liability === 'driver' && b.driverId) {
       try {
@@ -2560,16 +2488,20 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
           [b.driverId, scope.companyId]
         );
         if (driver?.employeeId) {
-          const { insertId: pdId } = await rawExecute(
-            `INSERT INTO payroll_deductions ("companyId","employeeId",type,amount,reason,date,"createdAt")
-             VALUES ($1,$2,'traffic_violation',$3,$4,CURRENT_DATE,NOW())`,
-            [scope.companyId, driver.employeeId, fineAmount, `مخالفة مرورية: ${b.violationType}`]
+          const { fleetEngine } = await import("../lib/engines/index.js");
+          await fleetEngine.requestPayrollDeduction(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+            {
+              employeeId: driver.employeeId,
+              violationId: insertId,
+              amount: fineAmount,
+              reason: `مخالفة مرورية: ${b.violationType}`,
+            }
           );
-          deductionId = pdId;
           driverAssignmentId = driver.assignmentId ?? null;
         }
       } catch (pdErr) {
-        console.error("Traffic violation payroll deduction failed:", pdErr);
+        console.error("Traffic violation payroll deduction request failed:", pdErr);
       }
       if (driverAssignmentId) {
         createNotification({
@@ -2592,7 +2524,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
       after: {
         vehicleId: b.vehicleId, driverId: b.driverId ?? null,
         violationType: b.violationType, fineAmount, liability,
-        journalEntryId, deductionId,
+        journalEntryId, deductionRequested: liability === 'driver',
       },
     }).catch(console.error);
     emitEvent({
@@ -2602,7 +2534,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
     }).catch(console.error);
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1`, [insertId]);
-    res.status(201).json({ ...row, journalEntryId, deductionId, liability });
+    res.status(201).json({ ...row, journalEntryId, liability });
   } catch (err) { handleRouteError(err, res, "Create traffic violation error:"); }
 });
 
@@ -2634,22 +2566,11 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
     const fineAmount = Number(existing.fineAmount || 0);
     if (fineAmount > 0) {
       try {
-        const payableCode = await getAccountCodeFromMapping(scope.companyId, "fleet_fines_payable", "credit", "2100");
-        const cashCode = await getAccountCodeFromMapping(scope.companyId, "fleet_cash_source", "credit", "1100");
-        await createGuardedJournalEntry({
-          companyId: scope.companyId,
-          branchId: scope.branchId,
-          createdBy: scope.userId,
-          ref: `TV-${id}-PAY`,
-          description: `سداد مخالفة مرورية #${existing.violationNumber ?? id}`,
-          type: "fleet",
-          sourceType: "fleet_traffic_violation_payment",
-          sourceId: id,
-          lines: [
-            { accountCode: payableCode, debit: fineAmount, credit: 0, vehicleId: existing.vehicleId ? Number(existing.vehicleId) : undefined },
-            { accountCode: cashCode, debit: 0, credit: fineAmount },
-          ],
-        }, { table: "fleet_traffic_violations", id });
+        const { fleetEngine } = await import("../lib/engines/index.js");
+        await fleetEngine.postViolationPaymentGL(
+          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+          { id, vehicleId: existing.vehicleId ? Number(existing.vehicleId) : undefined, amount: fineAmount }
+        );
       } catch (jeErr) {
         console.error("Traffic violation payment JE failed:", jeErr);
         throw new IntegrationError("فشل قيد السداد — لم يتم تسجيل العملية", { field: "journalEntry", fix: "راجع إعدادات الحسابات المالية (2100 / 1100) ثم أعد المحاولة" });

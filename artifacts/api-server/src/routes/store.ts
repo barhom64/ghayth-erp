@@ -5,8 +5,6 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import {
-  createGuardedJournalEntry,
-  getAccountCodeFromMapping,
   emitEvent,
   createAuditLog,
 } from "../lib/businessHelpers.js";
@@ -297,44 +295,24 @@ async function postStoreOrderGl(scope: any, order: any) {
     [order.id]
   );
 
-  const revenueCode = await getAccountCodeFromMapping(scope.companyId, "store_revenue", "credit", "4100");
-  const cashCode = await getAccountCodeFromMapping(scope.companyId, "store_cash", "debit", "1100");
-  const cogsCode = await getAccountCodeFromMapping(scope.companyId, "store_cogs", "debit", "5100");
-  const inventoryCode = await getAccountCodeFromMapping(scope.companyId, "store_inventory", "credit", "1300");
-
-  const lines: any[] = [
-    { accountCode: cashCode, debit: totalAmount, credit: 0, description: `مبيعات طلب ${order.orderNumber}` },
-    { accountCode: revenueCode, debit: 0, credit: totalAmount, description: `إيراد طلب ${order.orderNumber}` },
-  ];
-
   let totalCogs = 0;
   for (const item of orderItems) {
     const cost = Number(item.costPrice || 0) * Number(item.quantity || 0);
     if (cost > 0) totalCogs += cost;
   }
 
-  if (totalCogs > 0) {
-    lines.push(
-      { accountCode: cogsCode, debit: totalCogs, credit: 0, description: `تكلفة مبيعات طلب ${order.orderNumber}` },
-      { accountCode: inventoryCode, debit: 0, credit: totalCogs, description: `خصم مخزون طلب ${order.orderNumber}` },
-    );
+  const { storeEngine } = await import("../lib/engines/index.js");
+  const result = await storeEngine.postOrderGL(
+    { companyId: scope.companyId, branchId: order.branchId || scope.branchId || 0, createdBy: scope.userId },
+    { id: order.id, subtotal: totalAmount, vatAmount: 0, total: totalAmount, cogsAmount: totalCogs }
+  );
+
+  if (result) {
+    await rawExecute(
+      `UPDATE store_orders SET "journalEntryId"=$1 WHERE id=$2`,
+      [result.journalId, order.id]
+    ).catch(() => {});
   }
-
-  const journalId = await createGuardedJournalEntry({
-    companyId: scope.companyId,
-    branchId: order.branchId || scope.branchId || 0,
-    createdBy: scope.userId,
-    ref: `STORE-${order.orderNumber}`,
-    description: `قيد مبيعات متجر — طلب ${order.orderNumber}`,
-    sourceType: "store_order",
-    sourceId: order.id,
-    lines,
-  }, { table: "store_orders", id: order.id });
-
-  await rawExecute(
-    `UPDATE store_orders SET "journalEntryId"=$1 WHERE id=$2`,
-    [journalId, order.id]
-  ).catch(() => {});
 
   emitEvent({
     companyId: scope.companyId,
@@ -343,7 +321,7 @@ async function postStoreOrderGl(scope: any, order: any) {
     action: "store.order.gl_posted",
     entity: "store_orders",
     entityId: order.id,
-    details: JSON.stringify({ journalId, totalAmount, totalCogs }),
+    details: JSON.stringify({ journalId: result?.journalId, totalAmount, totalCogs }),
   }).catch(console.error);
 }
 

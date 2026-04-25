@@ -14,9 +14,7 @@ import { movingAverage } from "../lib/algorithms.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { eventBus } from "../lib/eventBus.js";
 import {
-  createGuardedJournalEntry,
   checkFinancialPeriodOpen,
-  getAccountCodeFromMapping,
   createAuditLog,
   emitEvent,
 } from "../lib/businessHelpers.js";
@@ -168,112 +166,13 @@ async function postInventoryMovementGl(params: {
       params.reference && params.reference.length > 0
         ? `${params.reference}-JE-${params.movementId}`
         : `INV-MV-${params.movementId}`;
-    const productLabel = params.productName ? ` — ${params.productName}` : "";
 
-    let lines: {
-      accountCode: string;
-      debit: number;
-      credit: number;
-      description?: string;
-    }[] = [];
-    let description = "";
-    let operationType: string | undefined;
-
-    if (params.trigger === "receipt") {
-      // DR Inventory 1300 / CR GRNI 2115 (was 2110 in spec but 2110 is taken)
-      const drCode = await getAccountCodeFromMapping(
-        params.companyId,
-        "inventory_receipt",
-        "debit",
-        "1300"
-      );
-      const crCode = await getAccountCodeFromMapping(
-        params.companyId,
-        "inventory_receipt",
-        "credit",
-        "2115"
-      );
-      description = `استلام مخزون${productLabel} — ${totalValue.toFixed(2)} ريال`;
-      lines = [
-        { accountCode: drCode, debit: totalValue, credit: 0 },
-        { accountCode: crCode, debit: 0, credit: totalValue },
-      ];
-      operationType = "inventory_receipt";
-    } else if (params.trigger === "issue") {
-      // DR COGS 5110 / CR Inventory 1300
-      const drCode = await getAccountCodeFromMapping(
-        params.companyId,
-        "inventory_issue_cogs",
-        "debit",
-        "5110"
-      );
-      const crCode = await getAccountCodeFromMapping(
-        params.companyId,
-        "inventory_issue_cogs",
-        "credit",
-        "1300"
-      );
-      description = `صرف مخزون${productLabel} — تكلفة ${totalValue.toFixed(2)} ريال`;
-      lines = [
-        { accountCode: drCode, debit: totalValue, credit: 0 },
-        { accountCode: crCode, debit: 0, credit: totalValue },
-      ];
-      operationType = "inventory_issue_cogs";
-    } else if (params.trigger === "variance_in") {
-      // Variance surplus: DR Inventory / CR Variance (gain side)
-      const drCode = await getAccountCodeFromMapping(
-        params.companyId,
-        "inventory_variance",
-        "debit",
-        "1300"
-      );
-      const crCode = await getAccountCodeFromMapping(
-        params.companyId,
-        "inventory_variance",
-        "credit",
-        "5150"
-      );
-      description = `فائض جرد${productLabel} — ${totalValue.toFixed(2)} ريال`;
-      lines = [
-        { accountCode: drCode, debit: totalValue, credit: 0 },
-        { accountCode: crCode, debit: 0, credit: totalValue },
-      ];
-      operationType = "inventory_variance";
-    } else if (params.trigger === "variance_out") {
-      // Variance shortage: DR Variance (expense) / CR Inventory
-      const drCode = await getAccountCodeFromMapping(
-        params.companyId,
-        "inventory_variance",
-        "debit",
-        "5150"
-      );
-      const crCode = await getAccountCodeFromMapping(
-        params.companyId,
-        "inventory_variance",
-        "credit",
-        "1300"
-      );
-      description = `عجز جرد${productLabel} — ${totalValue.toFixed(2)} ريال`;
-      lines = [
-        { accountCode: drCode, debit: totalValue, credit: 0 },
-        { accountCode: crCode, debit: 0, credit: totalValue },
-      ];
-      operationType = "inventory_variance";
-    }
-
-    if (lines.length === 0) return null;
-
-    const journalId = await createGuardedJournalEntry({
-      companyId: params.companyId,
-      branchId: params.branchId,
-      createdBy: params.createdBy,
-      ref,
-      description,
-      sourceType: "warehouse_movement",
-      sourceId: params.movementId,
-      operationType,
-      lines,
-    }, { table: "warehouse_movements", id: params.movementId });
+    const trigger = params.trigger as "receipt" | "issue" | "variance_in" | "variance_out";
+    const { warehouseEngine } = await import("../lib/engines/index.js");
+    const journalId = await warehouseEngine.postMovementGL(
+      { companyId: params.companyId, branchId: params.branchId, createdBy: params.createdBy },
+      { id: params.movementId, trigger, totalValue, productName: params.productName, ref }
+    );
     return journalId;
   } catch (glErr) {
     console.error(
