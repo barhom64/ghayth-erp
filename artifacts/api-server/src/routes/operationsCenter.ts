@@ -177,7 +177,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
         [companies]
       );
       const [violations] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM hr_violations WHERE "companyId" = ANY($1::int[]) AND status='pending'`,
+        `SELECT COUNT(*) AS total FROM employee_violations WHERE "companyId" = ANY($1::int[]) AND status='pending'`,
         [companies]
       ).catch(() => [{ total: 0 }]);
       const absentVal = Math.max(0, Number(absent?.total ?? 0));

@@ -218,7 +218,7 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
     const productNameById = new Map<number, string>();
     if (productIds.length > 0) {
       const productRows = await rawQuery<{ id: number; name: string }>(
-        `SELECT id, name FROM products WHERE id = ANY($1) AND "companyId" = $2`,
+        `SELECT id, name FROM store_products WHERE id = ANY($1) AND "companyId" = $2`,
         [productIds, scope.companyId]
       ).catch(() => [] as { id: number; name: string }[]);
       for (const p of productRows) productNameById.set(Number(p.id), p.name);

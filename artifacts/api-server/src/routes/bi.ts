@@ -1163,11 +1163,11 @@ router.get("/reports/training-roi", requirePermission("bi:read"), async (req, re
          t.title AS "programName",
          t.type,
          COUNT(tp."employeeId") AS participants,
-         COALESCE(SUM(tp.hours), 0) AS "totalHours",
+         COALESCE(t.duration, 0) AS "totalHours",
          COALESCE(t.cost, 0) AS cost,
          ROUND(AVG(tp.score), 1) AS "avgScore",
          ROUND(COALESCE(t.cost, 0) / NULLIF(COUNT(tp."employeeId"), 0), 0) AS "costPerParticipant"
-       FROM trainings t
+       FROM training_programs t
        LEFT JOIN training_participants tp ON tp."trainingId" = t.id
        WHERE t."companyId" = $1 AND DATE(t."startDate") BETWEEN $2::date AND $3::date
        GROUP BY t.id, t.title, t.type, t.cost
