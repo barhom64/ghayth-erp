@@ -18,6 +18,12 @@ const createProgramSchema = z.object({
   trainer: z.string().optional(),
   capacity: z.coerce.number().optional(),
   status: z.string().optional(),
+  type: z.string().optional(),
+  provider: z.string().optional(),
+  duration: z.coerce.number().optional(),
+  durationUnit: z.string().optional(),
+  cost: z.coerce.number().optional(),
+  maxParticipants: z.coerce.number().optional(),
 });
 
 const patchProgramSchema = z.object({

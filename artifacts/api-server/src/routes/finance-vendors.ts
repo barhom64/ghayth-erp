@@ -222,6 +222,7 @@ vendorsRouter.get("/receivables", requirePermission("finance:read"), async (req,
     const scope = req.scope!;
     const rows = await rawQuery<any>(
       `SELECT i.id, i.ref, i.total, i."paidAmount", i."dueDate", i.status,
+              (i.total - COALESCE(i."paidAmount", 0)) AS "remainingAmount",
               c.name AS "clientName"
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId"
@@ -277,8 +278,9 @@ vendorsRouter.get("/commitments", requirePermission("finance:read"), async (req,
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT po.id, po.ref, po."totalAmount", po.status, po."createdAt",
-              s.name AS "supplierName"
+      `SELECT po.id, po.ref, po."totalAmount", po."totalAmount" AS amount,
+              po.status, po."createdAt", po."expectedDelivery" AS "dueDate",
+              s.name AS "supplierName", s.name AS "vendorName"
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id = po."supplierId"
        WHERE po."companyId" = $1 AND po.status NOT IN ('cancelled','closed','received')

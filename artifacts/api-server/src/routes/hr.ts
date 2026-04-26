@@ -55,7 +55,7 @@ const violationSchema = z.object({
   assignmentId: z.coerce.number({ required_error: "يرجى اختيار الموظف" }),
   type: z.string().min(1, "نوع المخالفة مطلوب"),
   description: z.string().min(1, "وصف المخالفة مطلوب"),
-  severity: z.enum(["minor", "major", "critical"]).optional(),
+  severity: z.enum(["low", "medium", "high", "minor", "major", "critical"]).optional(),
   deduction: z.coerce.number().optional(),
   period: z.string().optional(),
   incidentDate: z.string().optional(),
@@ -2828,9 +2828,12 @@ router.get("/performance/:id", requirePermission("hr:read"), async (req, res) =>
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [row] = await rawQuery<any>(
-      `SELECT pr.*, e.name AS "employeeName", e."empNumber"
+      `SELECT pr.*, pr."overallScore" AS "overallRating", pr.period AS "reviewPeriod",
+              e.name AS "employeeName", e."empNumber",
+              rv.name AS "reviewerName"
        FROM performance_reviews pr
        JOIN employees e ON e.id = pr."employeeId"
+       LEFT JOIN employees rv ON rv.id = pr."reviewerId"
        WHERE pr.id = $1 AND pr."companyId" = $2`,
       [id, scope.companyId]
     );
@@ -5629,9 +5632,12 @@ router.get("/transfers/:id", requirePermission("hr:read"), async (req, res) => {
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [row] = await rawQuery<any>(
-      `SELECT t.*, e.name AS "employeeName", e."empNumber",
-              b1.name AS "fromBranchName", b2.name AS "toBranchName",
-              d1.name AS "fromDeptName", d2.name AS "toDeptName"
+      `SELECT t.*, t."effectiveDate" AS "transferDate",
+              e.name AS "employeeName", e."empNumber",
+              b1.name AS "fromBranchName", b1.name AS "fromBranch",
+              b2.name AS "toBranchName", b2.name AS "toBranch",
+              d1.name AS "fromDeptName", d1.name AS "fromDepartment",
+              d2.name AS "toDeptName", d2.name AS "toDepartment"
        FROM employee_transfers t
        JOIN employees e ON e.id=t."employeeId"
        LEFT JOIN branches b1 ON b1.id=t."fromBranchId"
@@ -6776,11 +6782,12 @@ router.get("/excuse-requests/:id", requirePermission("hr:read"), async (req, res
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [row] = await rawQuery<any>(
-      `SELECT e.*, emp.name AS "employeeName", emp."empNumber"
+      `SELECT e.*, e."excuseDate" AS date, e."estimatedMinutes" AS duration,
+              emp.name AS "employeeName", emp."empNumber"
        FROM hr_excuse_requests e
        JOIN employee_assignments ea ON ea.id = e."assignmentId"
        JOIN employees emp ON emp.id = ea."employeeId"
-       WHERE e.id = $1 AND emp."companyId" = $2`,
+       WHERE e.id = $1 AND ea."companyId" = $2`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("طلب الاستئذان غير موجود");

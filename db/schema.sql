@@ -1879,7 +1879,8 @@ CREATE TABLE public.approval_chains (
     "minAmount" numeric DEFAULT 0,
     "maxAmount" numeric DEFAULT 999999999,
     "isActive" boolean DEFAULT true,
-    "createdAt" timestamp without time zone DEFAULT now()
+    "createdAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -2667,7 +2668,8 @@ CREATE TABLE public.business_rules (
     "isActive" boolean DEFAULT true,
     "createdBy" integer,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "updatedAt" timestamp without time zone DEFAULT now()
+    "updatedAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -4017,7 +4019,8 @@ CREATE TABLE public.employee_contracts (
     "updatedAt" timestamp without time zone DEFAULT now(),
     "deletedAt" timestamp without time zone,
     "approvedBy" integer,
-    "approvedAt" timestamp without time zone
+    "approvedAt" timestamp without time zone,
+    "renewalDate" date
 );
 
 
@@ -4060,7 +4063,8 @@ CREATE TABLE public.employee_development_plans (
     "updatedAt" timestamp with time zone DEFAULT now(),
     "trainingIds" jsonb DEFAULT '[]'::jsonb,
     "reviewDate" date,
-    progress integer DEFAULT 0
+    progress integer DEFAULT 0,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -5421,7 +5425,8 @@ CREATE TABLE public.governance_audits (
     "endDate" date,
     findings text,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "companyId" integer
+    "companyId" integer,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -5500,7 +5505,8 @@ CREATE TABLE public.governance_compliance (
     "responsiblePerson" character varying(255),
     notes text,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "companyId" integer
+    "companyId" integer,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -5540,7 +5546,8 @@ CREATE TABLE public.governance_policies (
     "companyId" integer,
     version integer DEFAULT 1,
     "expiryDate" date,
-    "parentId" integer
+    "parentId" integer,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -5583,7 +5590,8 @@ CREATE TABLE public.governance_risks (
     "treatmentPlan" text,
     "treatmentOwner" text,
     "treatmentDueDate" date,
-    "treatmentStatus" text
+    "treatmentStatus" text,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -6642,6 +6650,7 @@ CREATE TABLE public.kb_articles (
     "createdBy" integer,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
     CONSTRAINT kb_articles_status_check CHECK ((status = ANY (ARRAY['published'::text, 'draft'::text, 'archived'::text])))
 );
 
@@ -7150,7 +7159,8 @@ CREATE TABLE public.marketing_campaigns (
     "companyId" integer,
     "createdBy" integer,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    revenue numeric(15,2) DEFAULT 0
+    revenue numeric(15,2) DEFAULT 0,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -7529,10 +7539,15 @@ CREATE INDEX idx_auto_detection_company ON public.auto_detection_log USING btree
 CREATE TABLE public.credit_memos (
     id integer NOT NULL,
     "companyId" integer NOT NULL,
+    "branchId" integer,
     "invoiceId" integer NOT NULL,
+    "clientId" integer,
     ref character varying(40),
     amount numeric(14,2) NOT NULL,
+    "netAmount" numeric(18,2),
+    "vatAmount" numeric(18,2),
     reason text,
+    "memoDate" date,
     status character varying(20) DEFAULT 'posted'::character varying,
     "journalEntryId" integer,
     "createdBy" integer,
@@ -7803,7 +7818,10 @@ CREATE TABLE public.official_letters (
     "dispatchedVia" character varying(32),
     "approvedAt" timestamp with time zone,
     "approvedBy" integer,
-    "createdByAssignmentId" integer
+    "createdByAssignmentId" integer,
+    "deletedAt" timestamp with time zone,
+    ref character varying(50),
+    "branchId" integer
 );
 
 
@@ -8122,6 +8140,7 @@ CREATE TABLE public.performance_reviews (
     comments text,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
     CONSTRAINT performance_reviews_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('in_progress'::character varying)::text, ('completed'::character varying)::text, ('acknowledged'::character varying)::text])))
 );
 
@@ -8212,6 +8231,7 @@ CREATE TABLE public.policy_compliance_actions (
     "createdBy" integer,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
     CONSTRAINT policy_compliance_actions_status_check CHECK ((status = ANY (ARRAY['open'::text, 'in_progress'::text, 'done'::text, 'overdue'::text])))
 );
 
@@ -8683,6 +8703,8 @@ ALTER SEQUENCE public.project_tasks_id_seq OWNED BY public.project_tasks.id;
 CREATE TABLE public.projects (
     id integer NOT NULL,
     "companyId" integer NOT NULL,
+    "branchId" integer,
+    ref character varying(100),
     name character varying(300) NOT NULL,
     description text,
     "clientId" integer,
@@ -9016,7 +9038,8 @@ CREATE TABLE public.public_holidays (
     description text,
     "isRecurring" boolean DEFAULT false,
     "createdAt" timestamp with time zone DEFAULT now(),
-    "updatedAt" timestamp with time zone DEFAULT now()
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -9097,6 +9120,7 @@ CREATE TABLE public.purchase_orders (
     "branchId" integer,
     "journalEntryId" integer,
     "glStatus" character varying(20) DEFAULT 'pending',
+    "paidAt" timestamp with time zone,
     "deletedAt" timestamp with time zone,
     CONSTRAINT purchase_orders_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('received'::character varying)::text, ('cancelled'::character varying)::text, ('completed'::character varying)::text, ('paid'::character varying)::text, ('confirmed'::character varying)::text, ('ordered'::character varying)::text, ('delivered'::character varying)::text])))
 );
@@ -9571,7 +9595,16 @@ CREATE TABLE public.requests (
     "reviewedBy" integer,
     "reviewedAt" timestamp without time zone,
     "returnReason" text,
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    ref character varying(50),
+    "requestDate" date,
+    "branchId" integer,
+    "approvedAt" timestamp without time zone,
+    "approvedBy" integer,
+    "convertedTo" integer,
+    "convertedType" character varying(50),
+    "closedAt" timestamp without time zone,
+    "closedBy" integer
 );
 
 
@@ -9905,7 +9938,8 @@ CREATE TABLE public.shifts (
     "splitBreakStart" time without time zone,
     "splitBreakEnd" time without time zone,
     "flexStartEarliest" time without time zone,
-    "flexStartLatest" time without time zone
+    "flexStartLatest" time without time zone,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10512,7 +10546,8 @@ CREATE TABLE public.tasks (
     "assignmentId" integer,
     "linkedEntityType" character varying(50),
     "linkedEntityId" integer,
-    "autoGenerated" boolean DEFAULT false
+    "autoGenerated" boolean DEFAULT false,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -11081,6 +11116,7 @@ CREATE TABLE public.umrah_pilgrims (
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
     CONSTRAINT umrah_pilgrims_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('arrived'::character varying)::text, ('active'::character varying)::text, ('overstayed'::character varying)::text, ('departed'::character varying)::text, ('violated'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
@@ -20473,10 +20509,14 @@ CREATE TABLE IF NOT EXISTS public.debit_memos (
     "invoiceId" integer,
     "clientId" integer,
     amount numeric(15,2) NOT NULL DEFAULT 0,
+    "netAmount" numeric(18,2),
+    "vatAmount" numeric(18,2),
     reason text,
+    "memoDate" date,
     status varchar(50) DEFAULT 'draft',
     "approvedBy" integer,
     "approvedAt" timestamptz,
+    "createdBy" integer,
     "deletedAt" timestamptz,
     "createdAt" timestamptz DEFAULT now(),
     "updatedAt" timestamptz DEFAULT now()

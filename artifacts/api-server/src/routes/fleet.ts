@@ -27,6 +27,19 @@ const createVehicleSchema = z.object({
   model: z.string().min(1),
   year: z.coerce.number().optional(),
   fuelType: z.enum(["gasoline", "diesel", "electric", "hybrid", "lpg"]).optional(),
+  color: z.string().optional(),
+  vinNumber: z.string().optional(),
+  currentMileage: z.coerce.number().optional(),
+  fuelCapacity: z.coerce.number().optional(),
+  status: z.string().optional(),
+  insuranceExpiry: z.string().optional(),
+  registrationExpiry: z.string().optional(),
+  notes: z.string().optional(),
+  registrationNumber: z.string().optional(),
+  plateType: z.string().optional(),
+  sequenceNumber: z.string().optional(),
+  inspectionDate: z.string().optional(),
+  nextInspectionDate: z.string().optional(),
 });
 
 const createDriverSchema = z.object({
@@ -34,6 +47,9 @@ const createDriverSchema = z.object({
   phone: z.string().min(1),
   licenseNumber: z.string().min(1),
   licenseExpiry: z.string().optional(),
+  licenseType: z.string().optional(),
+  employeeId: z.coerce.number().optional(),
+  status: z.string().optional(),
 });
 
 const createMaintenanceSchema = z.object({
@@ -41,12 +57,22 @@ const createMaintenanceSchema = z.object({
   type: z.string().min(1, "نوع الصيانة مطلوب"),
   description: z.string().min(1, "وصف الصيانة مطلوب"),
   cost: z.coerce.number().min(0).optional(),
+  mileageAtService: z.coerce.number().optional(),
+  serviceDate: z.string().optional(),
+  performedBy: z.string().optional(),
+  status: z.string().optional(),
 });
 
 const createFuelLogSchema = z.object({
   vehicleId: z.coerce.number().optional(),
   vehiclePlate: z.string().optional(),
   liters: z.coerce.number().positive("كمية الوقود يجب أن تكون أكبر من صفر"),
+  driverId: z.coerce.number().optional(),
+  costPerLiter: z.coerce.number().optional(),
+  fuelDate: z.string().optional(),
+  mileageAtFuel: z.coerce.number().optional(),
+  stationName: z.string().optional(),
+  fuelType: z.string().optional(),
 });
 
 const createInsuranceSchema = z.object({
@@ -54,6 +80,11 @@ const createInsuranceSchema = z.object({
   provider: z.string().min(1, "شركة التأمين مطلوبة"),
   startDate: z.string().min(1, "تاريخ بداية الوثيقة مطلوب"),
   endDate: z.string().min(1, "تاريخ انتهاء الوثيقة مطلوب"),
+  type: z.string().optional(),
+  policyNumber: z.string().optional(),
+  premium: z.coerce.number().optional(),
+  coverageAmount: z.coerce.number().optional(),
+  notes: z.string().optional(),
 });
 
 const router = Router();
@@ -686,7 +717,9 @@ router.get("/trips", requirePermission("fleet:read"), async (req, res) => {
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT t.*, v."plateNumber", d.name AS "driverName" FROM fleet_trips t LEFT JOIN fleet_vehicles v ON v.id=t."vehicleId" AND v."deletedAt" IS NULL LEFT JOIN fleet_drivers d ON d.id=t."driverId" AND d."deletedAt" IS NULL WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC`,
+      `SELECT t.*, t."fromLocation" AS origin, t."toLocation" AS destination, t."startDate" AS "tripDate",
+              v."plateNumber", v."plateNumber" AS "vehiclePlate", d.name AS "driverName"
+       FROM fleet_trips t LEFT JOIN fleet_vehicles v ON v.id=t."vehicleId" AND v."deletedAt" IS NULL LEFT JOIN fleet_drivers d ON d.id=t."driverId" AND d."deletedAt" IS NULL WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -698,7 +731,8 @@ router.get("/trips/:id", requirePermission("fleet:read"), async (req, res) => {
     const scope = req.scope!;
     const tripId = Number(req.params.id);
     const [row] = await rawQuery<any>(
-      `SELECT t.*, v."plateNumber", d.name AS "driverName"
+      `SELECT t.*, t."fromLocation" AS origin, t."toLocation" AS destination, t."startDate" AS "tripDate",
+              v."plateNumber", v."plateNumber" AS "vehiclePlate", d.name AS "driverName"
        FROM fleet_trips t
        LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId"
        LEFT JOIN fleet_drivers d ON d.id = t."driverId"
@@ -1120,7 +1154,7 @@ router.get("/maintenance", requirePermission("fleet:read"), async (req, res) => 
               m."serviceDate" AS "scheduledDate", m."serviceDate" AS date,
               m."mileageAtService" AS mileage, m."nextServiceKm" AS "nextServiceMileage",
               m."performedBy" AS workshop,
-              v."plateNumber", v."plateNumber" AS "vehiclePlateNumber",
+              v."plateNumber", v."plateNumber" AS "vehiclePlateNumber", v."plateNumber" AS "vehiclePlate",
               v.make AS "vehicleMake", v.model AS "vehicleModel"
        FROM fleet_maintenance m LEFT JOIN fleet_vehicles v ON v.id=m."vehicleId" WHERE ${where} AND m."deletedAt" IS NULL ORDER BY m.id DESC`,
       params
@@ -1528,7 +1562,7 @@ router.get("/fuel-logs", requirePermission("fleet:read"), async (req, res) => {
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND f."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId)); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT f.*, f.liters AS quantity, f."totalCost" AS cost, f."mileageAtFuel" AS mileage, f."stationName" AS station, f."fuelDate" AS date, v."plateNumber" FROM fleet_fuel_logs f LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId" WHERE ${where} AND f."deletedAt" IS NULL ORDER BY f.id DESC`,
+      `SELECT f.*, f.liters AS quantity, f."totalCost" AS cost, f."mileageAtFuel" AS mileage, f."stationName" AS station, f."fuelDate" AS date, v."plateNumber", v."plateNumber" AS "vehiclePlate" FROM fleet_fuel_logs f LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId" WHERE ${where} AND f."deletedAt" IS NULL ORDER BY f.id DESC`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });

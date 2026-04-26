@@ -317,6 +317,28 @@ financeHardeningRouter.get("/journal-manual", requirePermission("finance:read"),
   }
 });
 
+financeHardeningRouter.get("/journal-manual/:id", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT je.*, json_agg(jl.*) FILTER (WHERE jl.id IS NOT NULL) AS lines,
+              e_cre.name AS "createdByName"
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId"=je.id
+       LEFT JOIN employee_assignments ea_cre ON ea_cre.id=je."createdBy"
+       LEFT JOIN employees e_cre ON e_cre.id=ea_cre."employeeId"
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id, e_cre.name`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("القيد اليدوي غير موجود");
+    res.json(row);
+  } catch (err) {
+    handleRouteError(err, res, "Journal manual detail error:");
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // JOURNAL MANUAL APPROVAL WORKFLOW — fully wired to lifecycleEngine
 //
@@ -1062,6 +1084,23 @@ financeHardeningRouter.post("/projects", requirePermission("finance:create"), as
     res.status(201).json(row);
   } catch (err) {
     handleRouteError(err, res, "Create project error:");
+  }
+});
+
+financeHardeningRouter.get("/projects/:id", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT p.*, COALESCE(p.budget - p."spentAmount", 0) AS "budgetRemaining"
+       FROM projects p
+       WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("المشروع غير موجود");
+    res.json(row);
+  } catch (err) {
+    handleRouteError(err, res, "Project detail error:");
   }
 });
 

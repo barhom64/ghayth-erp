@@ -764,7 +764,8 @@ journalRouter.get("/journal", requirePermission("finance:read"), async (req, res
       `SELECT je.id, je.ref, je.description, je.status, je."createdAt",
               je."reversalOfId", je."reversedById", je."operationType",
               COALESCE(SUM(jl.debit), 0) AS "totalDebit",
-              COALESCE(SUM(jl.credit), 0) AS "totalCredit"
+              COALESCE(SUM(jl.credit), 0) AS "totalCredit",
+              COALESCE(json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) FILTER (WHERE jl.id IS NOT NULL), '[]') AS lines
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl."journalId" = je.id
        WHERE ${where} AND je."deletedAt" IS NULL

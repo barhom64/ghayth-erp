@@ -218,7 +218,8 @@ invoicesRouter.get("/invoices", requirePermission("finance:read"), async (req, r
 
     const invoices = await rawQuery<any>(
       `SELECT i.id, i.ref, i.status, i."createdAt" AS "issueDate", i."dueDate",
-              i.total, i."paidAmount", i."vatAmount",
+              i.total, i."paidAmount", i."vatAmount", i.subtotal, i."vatRate",
+              i."clientId", i.description, i."paymentTerms", i.notes,
               i."isTaxLinked", i."zatcaStatus",
               c.name AS "clientName"
        FROM invoices i
@@ -1088,7 +1089,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
       guardId: memoId ?? 0,
     }));
     if (journalId && memoId) {
-      await rawExecute(`UPDATE credit_memos SET "journalId" = $1 WHERE id = $2`, [journalId, memoId]);
+      await rawExecute(`UPDATE credit_memos SET "journalEntryId" = $1 WHERE id = $2`, [journalId, memoId]);
     }
 
     emitEvent({
@@ -1877,13 +1878,9 @@ invoicesRouter.post("/dunning/send", requirePermission("finance:create"), async 
 
       const [row] = await rawQuery<any>(
         `INSERT INTO dunning_letters
-         ("companyId","invoiceId","clientId",stage,"daysPastDue","outstandingAmount","letterContent","sentBy","sentVia")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-        [scope.companyId, inv.id, inv.clientId, stg.stage, days, outstanding, letter, scope.activeAssignmentId, sentVia]
-      );
-      await rawExecute(
-        `UPDATE invoices SET "lastDunningStage"=$1, "lastDunningAt"=NOW() WHERE id=$2`,
-        [stg.stage, inv.id]
+         ("companyId","invoiceId","clientId","level",subject,body,"sentAt",status)
+         VALUES ($1,$2,$3,$4,$5,$6,NOW(),'sent') RETURNING id`,
+        [scope.companyId, inv.id, inv.clientId, stg.stage, `تذكير سداد - مرحلة ${stg.stage}`, letter]
       );
       results.push({ invoiceId: inv.id, letterId: row.id, stage: stg.stage, daysPastDue: days, outstanding, status: "sent" });
     }
