@@ -152,15 +152,20 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
     );
 
     const [countResult] = await rawQuery<any>(
-      `SELECT
-        (SELECT COUNT(*) FROM audit_logs WHERE "companyId" = $1) +
-        (SELECT COUNT(*) FROM journal_entries WHERE "companyId" = $1 AND "deletedAt" IS NULL) +
-        (SELECT COUNT(*) FROM requests WHERE "companyId" = $1 OR "companyId" IS NULL) +
-        (SELECT COUNT(*) FROM communications_log WHERE "companyId" = $1) +
-        (SELECT COUNT(*) FROM hr_leave_requests WHERE "companyId" = $1) +
-        (SELECT COUNT(*) FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL)
-        AS total`,
-      [cid]
+      `SELECT COUNT(*) AS total FROM (
+        SELECT al.id FROM audit_logs al WHERE al."companyId" = $1${moduleFilter}
+        UNION ALL
+        SELECT je.id FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL ${module ? `AND 'finance' = $${params.indexOf(module) + 1}` : ""}
+        UNION ALL
+        SELECT r.id FROM requests r WHERE (r."companyId" = $1 OR r."companyId" IS NULL) ${module ? `AND 'requests' = $${params.indexOf(module) + 1}` : ""}
+        UNION ALL
+        SELECT cl.id FROM communications_log cl WHERE cl."companyId" = $1 ${module ? `AND 'communications' = $${params.indexOf(module) + 1}` : ""}
+        UNION ALL
+        SELECT lr.id FROM hr_leave_requests lr WHERE lr."companyId" = $1 ${module ? `AND 'hr' = $${params.indexOf(module) + 1}` : ""}
+        UNION ALL
+        SELECT i.id FROM invoices i WHERE i."companyId" = $1 AND i."deletedAt" IS NULL ${module ? `AND 'finance' = $${params.indexOf(module) + 1}` : ""}
+      ) AS combined`,
+      params
     );
 
     res.json({
