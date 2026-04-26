@@ -2581,7 +2581,8 @@ CREATE TABLE public.budgets (
     notes text,
     "approvedBy" integer,
     "createdBy" integer,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -2926,7 +2927,8 @@ CREATE TABLE public.communications_log (
     status character varying(20) DEFAULT 'sent'::character varying,
     "relatedType" character varying(50),
     "relatedId" integer,
-    "createdAt" timestamp without time zone DEFAULT now()
+    "createdAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -5338,6 +5340,7 @@ CREATE TABLE public.gov_integration_links (
     "lastSyncAt" timestamp with time zone,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
     CONSTRAINT "gov_integration_links_syncStatus_check" CHECK ((("syncStatus")::text = ANY (ARRAY[('pending'::character varying)::text, ('synced'::character varying)::text, ('failed'::character varying)::text, ('skipped'::character varying)::text])))
 );
 
@@ -6307,7 +6310,8 @@ CREATE TABLE public.job_applications (
     "interviewDate" timestamp without time zone,
     "createdAt" timestamp without time zone DEFAULT now(),
     "applicantAccountId" integer,
-    "coverLetter" text
+    "coverLetter" text,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -6352,7 +6356,8 @@ CREATE TABLE public.job_postings (
     "isPublic" boolean DEFAULT true,
     "closedAt" timestamp with time zone,
     "closedReason" text,
-    "reopenedAt" timestamp with time zone
+    "reopenedAt" timestamp with time zone,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -6548,7 +6553,8 @@ CREATE TABLE public.journal_entry_templates (
     "activityType" character varying(100),
     "isActive" boolean DEFAULT true NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -6593,7 +6599,8 @@ CREATE TABLE public.journal_lines (
     "propertyId" integer,
     "contractId" integer,
     "activityType" character varying(100),
-    "templateId" integer
+    "templateId" integer,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -7005,7 +7012,8 @@ CREATE TABLE public.legal_sessions (
     result text,
     "nextSessionDate" timestamp without time zone,
     notes text,
-    "createdAt" timestamp without time zone DEFAULT now()
+    "createdAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -8643,7 +8651,8 @@ CREATE TABLE public.project_tasks (
     "completedAt" timestamp without time zone,
     "estimatedHours" numeric(8,2),
     "actualHours" numeric(8,2),
-    "createdAt" timestamp without time zone DEFAULT now()
+    "createdAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -9398,7 +9407,8 @@ CREATE TABLE public.rent_payments (
     "receiptNumber" character varying(50),
     notes text,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "updatedAt" timestamp without time zone DEFAULT now()
+    "updatedAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -9560,7 +9570,8 @@ CREATE TABLE public.requests (
     notes text,
     "reviewedBy" integer,
     "reviewedAt" timestamp without time zone,
-    "returnReason" text
+    "returnReason" text,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10168,7 +10179,8 @@ CREATE TABLE public.store_orders (
     "companyId" integer,
     "branchId" integer,
     "paidAt" timestamp with time zone,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10210,7 +10222,8 @@ CREATE TABLE public.store_products (
     "createdAt" timestamp without time zone DEFAULT now(),
     "companyId" integer,
     "isActive" boolean DEFAULT true NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10742,7 +10755,8 @@ CREATE TABLE public.training_enrollments (
     score numeric(5,2),
     "completedAt" timestamp without time zone,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "certificateUrl" text
+    "certificateUrl" text,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10791,7 +10805,8 @@ CREATE TABLE public.training_programs (
     "durationUnit" character varying(20) DEFAULT 'hours'::character varying,
     cost numeric(12,2) DEFAULT 0 NOT NULL,
     "maxParticipants" integer,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10885,6 +10900,7 @@ CREATE TABLE public.umrah_agents (
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
     CONSTRAINT umrah_agents_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('inactive'::character varying)::text, ('suspended'::character varying)::text, ('blocked'::character varying)::text])))
 );
 

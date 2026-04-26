@@ -747,7 +747,7 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
     const [userCount] = await rawQuery<any>(`SELECT COUNT(*) as count FROM users`).catch(() => [{ count: 0 }]);
     const [companyCount] = await rawQuery<any>(`SELECT COUNT(*) as count FROM companies`).catch(() => [{ count: 0 }]);
     const [employeeCount] = await rawQuery<any>(
-      `SELECT COUNT(*) as count FROM employees WHERE "companyId"=$1`,
+      `SELECT COUNT(DISTINCT e.id) as count FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE ea."companyId"=$1`,
       [cid]
     ).catch(() => [{ count: 0 }]);
 
