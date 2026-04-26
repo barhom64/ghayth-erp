@@ -2846,6 +2846,7 @@ CREATE TABLE public.clients (
     "lastPaymentAt" timestamp without time zone,
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
     notes text,
+    attachments jsonb DEFAULT '[]'::jsonb,
     "deletedAt" timestamp with time zone
 );
 
@@ -4379,7 +4380,8 @@ CREATE TABLE public.employees (
     "sponsorNumber" character varying(50),
     "workPermitNumber" character varying(50),
     "workPermitExpiry" date,
-    "iqamaStatus" character varying(30) DEFAULT 'active'::character varying
+    "iqamaStatus" character varying(30) DEFAULT 'active'::character varying,
+    attachments jsonb DEFAULT '[]'::jsonb
 );
 
 
@@ -6255,6 +6257,7 @@ CREATE TABLE public.invoices (
     "taxCategoryCode" character varying(10) DEFAULT 'S'::character varying,
     "exemptionReason" text,
     "projectId" integer,
+    "costCenter" character varying(100),
     "approvedBy" integer,
     "approvedAt" timestamp with time zone,
     "postedBy" integer,

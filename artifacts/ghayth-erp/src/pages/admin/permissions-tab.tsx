@@ -50,7 +50,7 @@ export function PermissionsTab() {
   const loadRolePerms = async (role: string) => {
     setLoading(true);
     try {
-      const data = await apiFetch(`/admin/role-permissions?role=${encodeURIComponent(role)}`);
+      const data = await apiFetch(`/permissions/role-permissions?role=${encodeURIComponent(role)}`);
       const perms = (data.data || []).map((p: any) => p.permission);
       setRolePerms(new Set(perms));
     } catch {
@@ -82,14 +82,13 @@ export function PermissionsTab() {
     setSaving(key);
     try {
       if (hasPerm && rolePerms.has(perm)) {
-        const rows = await apiFetch(`/admin/role-permissions?role=${encodeURIComponent(selectedRole)}`);
-        const match = (rows.data || []).find((r: any) => r.permission === perm);
-        if (match) {
-          await apiFetch(`/admin/role-permissions/${match.id}`, { method: "DELETE" });
-          setRolePerms(prev => { const s = new Set(prev); s.delete(perm); return s; });
-        }
+        await apiFetch("/permissions/role-permissions", {
+          method: "DELETE",
+          body: JSON.stringify({ role: selectedRole, permission: perm }),
+        });
+        setRolePerms(prev => { const s = new Set(prev); s.delete(perm); return s; });
       } else if (!hasPerm) {
-        await apiFetch("/admin/role-permissions", {
+        await apiFetch("/permissions/role-permissions", {
           method: "POST",
           body: JSON.stringify({ role: selectedRole, permission: perm }),
         });

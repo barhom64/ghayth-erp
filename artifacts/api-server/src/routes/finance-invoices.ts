@@ -49,6 +49,7 @@ const createInvoiceSchema = z.object({
   invoiceTypeCode: z.string().optional(),
   taxCategoryCode: z.string().optional(),
   exemptionReason: z.string().optional(),
+  costCenter: z.string().optional(),
 });
 
 const createPaymentSchema = z.object({
@@ -359,11 +360,12 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
       const invResult = await client.query(
         `INSERT INTO invoices ("companyId","branchId","clientId",ref,description,
                 subtotal,"vatRate","vatAmount",total,"paidAmount",status,"dueDate","createdBy",notes,
-                "isTaxLinked","invoiceTypeCode","taxCategoryCode","exemptionReason")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
+                "isTaxLinked","invoiceTypeCode","taxCategoryCode","exemptionReason","costCenter")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
         [effectiveCompanyId, branchId ?? scope.branchId, clientId ?? null, ref, description ?? null,
           baseAmount, Number(vatRate), vatAmount, total, finalDueDate, scope.activeAssignmentId, notes ?? null,
-          isTaxLinked ? true : false, invoiceTypeCode ?? "388", taxCategoryCode ?? "S", exemptionReason ?? null]
+          isTaxLinked ? true : false, invoiceTypeCode ?? "388", taxCategoryCode ?? "S", exemptionReason ?? null,
+          (req.body as any).costCenter ?? null]
       );
       insertId = invResult.rows[0].id;
 

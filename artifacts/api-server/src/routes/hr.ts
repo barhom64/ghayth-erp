@@ -842,6 +842,28 @@ router.get("/attendance", requirePermission("hr:read"), async (req, res) => {
   }
 });
 
+router.get("/attendance/today-summary", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const today = new Date().toISOString().split("T")[0];
+    const rows = await rawQuery<any>(
+      `SELECT ea.id AS "assignmentId", e.id AS "employeeId", e.name,
+              a.status, a."checkIn", a."checkOut", COALESCE(a."lateMinutes", 0) AS "lateMinutes"
+       FROM employee_assignments ea
+       JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN attendance a ON a."assignmentId" = ea.id AND a.date = $2
+       WHERE ea."companyId" = $1 AND ea.status = 'active'
+       ORDER BY e.name`,
+      [scope.companyId, today]
+    );
+    const data = rows.map((r: any) => ({
+      ...r,
+      status: r.status || (r.checkIn ? "present" : "absent"),
+    }));
+    res.json({ data, total: data.length });
+  } catch (err) { handleRouteError(err, res, "Today summary error:"); }
+});
+
 router.get("/attendance/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;

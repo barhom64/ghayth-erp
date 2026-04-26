@@ -315,6 +315,7 @@ router.post("/apply", careersAuth, async (req: Request, res: Response) => {
       [applicantId]
     );
     const applicant = account[0];
+    if (!applicant) throw new NotFoundError("حساب المتقدم غير موجود");
 
     const result = await rawExecute(
       `INSERT INTO job_applications ("postingId", "applicantName", email, phone, "resumeUrl", "coverLetter", "applicantAccountId", status)
