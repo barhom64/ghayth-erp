@@ -678,7 +678,7 @@ router.patch("/cases/:id", requirePermission("legal:write"), async (req, res) =>
       }
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ ...row, allowedTransitions: VALID_CASE_TRANSITIONS[row.status] || [] });
   } catch (err) { handleRouteError(err, res, "Update case error:"); }
 });
@@ -764,7 +764,7 @@ router.post("/cases/:id/close", requirePermission("legal:write"), async (req, re
       after: { status: "closed", reason: b.closureReason, outcome: b.outcome },
     }).catch(console.error);
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
+    const [updated] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ ...updated, event: "legal.case.closed" });
   } catch (err) { handleRouteError(err, res, "Close case error:"); }
 });
@@ -1188,10 +1188,10 @@ router.patch("/cases/:id/financial-risk", requirePermission("legal:write"), asyn
     }
 
     await rawExecute(
-      `UPDATE legal_cases SET "financialRisk"=$1, "riskLevel"=$2, "updatedAt"=NOW() WHERE id=$3`,
-      [financialRisk || 0, riskLevel || 'medium', id]
+      `UPDATE legal_cases SET "financialRisk"=$1, "riskLevel"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
+      [financialRisk || 0, riskLevel || 'medium', id, scope.companyId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,

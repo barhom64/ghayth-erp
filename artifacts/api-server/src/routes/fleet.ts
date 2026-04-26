@@ -1674,7 +1674,7 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
       );
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_fuel_logs WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_fuel_logs WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.fuel_log.created", entity: "fleet_fuel_logs", entityId: insertId,
@@ -1770,7 +1770,7 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
       );
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_insurance WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_insurance WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.insurance.created", entity: "fleet_insurance", entityId: insertId,
@@ -2384,7 +2384,7 @@ router.post("/preventive-plans", requirePermission("fleet:create"), async (req, 
        nextServiceDate, nextServiceMileage,
        b.estimatedCost || 0, b.notes || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_preventive_plans WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_preventive_plans WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.preventive.created", entity: "fleet_preventive_plans", entityId: insertId,
@@ -2651,7 +2651,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
       details: `${b.violationType} — ${fineAmount} ﷼ — ${liability === 'driver' ? 'على السائق' : 'على الشركة'}`,
     }).catch(console.error);
 
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json({ ...row, journalEntryId, liability });
   } catch (err) { handleRouteError(err, res, "Create traffic violation error:"); }
 });
@@ -2711,7 +2711,7 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
       details: `سداد مخالفة ${existing.violationNumber ?? id} بقيمة ${fineAmount}`,
     }).catch(console.error);
 
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Pay violation error:"); }
 });

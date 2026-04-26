@@ -320,8 +320,8 @@ router.post("/pbx/completed", async (req, res): Promise<void> => {
     const companyId = call.companyId;
 
     await rawExecute(
-      `UPDATE pbx_calls SET status=$1, duration=$2, "recordingUrl"=$3 WHERE id=$4`,
-      [status, duration, recordingUrl, call.id]
+      `UPDATE pbx_calls SET status=$1, duration=$2, "recordingUrl"=$3 WHERE id=$4 AND "companyId"=$5`,
+      [status, duration, recordingUrl, call.id, companyId]
     );
 
     if (status === "no_answer" || duration === 0) {
@@ -584,8 +584,8 @@ router.post("/log/:id/convert", requirePermission("communications:write"), async
 
     try {
       await rawExecute(
-        `UPDATE communications_log SET "relatedType"=$1, "relatedId"=$2 WHERE id=$3`,
-        [targetType, createdId, logId]
+        `UPDATE communications_log SET "relatedType"=$1, "relatedId"=$2 WHERE id=$3 AND "companyId"=$4`,
+        [targetType, createdId, logId, scope.companyId]
       );
     } catch {
       // relatedType/relatedId columns may not exist yet — conversion still succeeded

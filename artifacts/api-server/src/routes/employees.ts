@@ -981,13 +981,13 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
 
     if (status === "active" && before.status !== "active") {
       await rawExecute(
-        `UPDATE employee_assignments SET status = 'active' WHERE id = $1`,
-        [employee.assignmentId]
+        `UPDATE employee_assignments SET status = 'active' WHERE id = $1 AND "companyId" = $2`,
+        [employee.assignmentId, scope.companyId]
       );
     } else if (status === "suspended" && before.status !== "suspended") {
       await rawExecute(
-        `UPDATE employee_assignments SET status = 'suspended' WHERE id = $1`,
-        [employee.assignmentId]
+        `UPDATE employee_assignments SET status = 'suspended' WHERE id = $1 AND "companyId" = $2`,
+        [employee.assignmentId, scope.companyId]
       );
     }
 
@@ -1143,8 +1143,8 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
     // them manually after the fact.
     await withTransaction(async (tx) => {
       await tx.query(
-        `UPDATE employee_assignments SET status = 'terminated' WHERE id = $1`,
-        [employee.assignmentId]
+        `UPDATE employee_assignments SET status = 'terminated' WHERE id = $1 AND "companyId" = $2`,
+        [employee.assignmentId, scope.companyId]
       );
       await tx.query(
         `UPDATE employees SET status = 'terminated' WHERE id = $1`,

@@ -249,8 +249,8 @@ correspondenceRouter.post("/:id/respond", requirePermission("communications:writ
     );
 
     await rawExecute(
-      `UPDATE correspondence SET "respondedAt" = NOW(), "responseRef" = $2, "updatedAt" = NOW() WHERE id = $1`,
-      [id, responseRef]
+      `UPDATE correspondence SET "respondedAt" = NOW(), "responseRef" = $2, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $3`,
+      [id, responseRef, scope.companyId]
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "correspondence_response", entity: "correspondence", entityId: response.id, after: {

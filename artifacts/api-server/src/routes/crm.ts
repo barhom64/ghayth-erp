@@ -707,7 +707,7 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
 
     if (clientId) {
       try {
-        await rawExecute(`UPDATE clients SET "totalRevenue"=COALESCE("totalRevenue",0)+$1 WHERE id=$2`, [dealValue, clientId]);
+        await rawExecute(`UPDATE clients SET "totalRevenue"=COALESCE("totalRevenue",0)+$1 WHERE id=$2 AND "companyId"=$3`, [dealValue, clientId, scope.companyId]);
       } catch (revenueErr) {
         console.error("Failed to update client totalRevenue:", revenueErr);
       }

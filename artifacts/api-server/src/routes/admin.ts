@@ -900,8 +900,8 @@ router.patch("/violations/:id/resolve", requirePermission("admin:write"), async 
     if (existing.status === "resolved") { throw new ValidationError("المخالفة تم حلها مسبقاً"); }
 
     await rawExecute(
-      `UPDATE audit_violations SET status='resolved', "resolvedBy"=$1, "resolvedAt"=NOW() WHERE id=$2`,
-      [scope.activeAssignmentId || scope.userId, id]
+      `UPDATE audit_violations SET status='resolved', "resolvedBy"=$1, "resolvedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+      [scope.activeAssignmentId || scope.userId, id, scope.companyId]
     );
 
     const [updated] = await rawQuery(`SELECT * FROM audit_violations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
