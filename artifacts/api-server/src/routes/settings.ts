@@ -488,8 +488,9 @@ router.delete("/departments/:id", requirePermission("settings:write"), async (re
       throw new ValidationError("لا يمكن حذف القسم لأن هناك موظفين مرتبطين به");
     }
     const scope = req.scope!;
-    const [beforeDept] = await rawQuery(`SELECT * FROM departments WHERE id=$1`, [id]);
-    await rawExecute(`DELETE FROM departments WHERE id=$1`, [id]);
+    const [beforeDept] = await rawQuery(`SELECT * FROM departments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!beforeDept) throw new NotFoundError("القسم غير موجود");
+    await rawExecute(`DELETE FROM departments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_department",
       entity: "departments", entityId: Number(id),
@@ -726,8 +727,9 @@ router.post("/approval-config", requirePermission("settings:write"), async (req,
 router.delete("/approval-config/:id", requirePermission("settings:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [beforeChain] = await rawQuery(`SELECT * FROM approval_chains WHERE id=$1`, [Number(req.params.id)]);
-    await rawExecute(`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id=$1`, [Number(req.params.id)]);
+    const [beforeChain] = await rawQuery(`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    if (!beforeChain) throw new NotFoundError("سلسلة الاعتماد غير موجودة");
+    await rawExecute(`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_approval_config",
       entity: "approval_chains", entityId: Number(req.params.id),

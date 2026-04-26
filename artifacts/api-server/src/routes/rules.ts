@@ -192,7 +192,7 @@ router.delete("/:id", requirePermission("admin:write"), async (req, res) => {
     if (!existing) {
       throw new NotFoundError("القاعدة غير موجودة أو لا يمكن حذف القواعد الافتراضية");
     }
-    await rawExecute(`UPDATE business_rules SET "deletedAt" = NOW() WHERE id = $1 AND "deletedAt" IS NULL`, [id]);
+    await rawExecute(`UPDATE business_rules SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_business_rule",

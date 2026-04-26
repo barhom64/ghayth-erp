@@ -1869,6 +1869,7 @@ router.patch("/trips/:id", requirePermission("fleet:update"), async (req, res) =
       `UPDATE fleet_trips SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
+    if (!row) throw new NotFoundError("الرحلة غير موجودة");
 
     createAuditLog({
       companyId: scope.companyId,
@@ -2004,6 +2005,7 @@ router.patch("/maintenance/:id", requirePermission("fleet:update"), async (req, 
       `UPDATE fleet_maintenance SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
+    if (!row) throw new NotFoundError("سجل الصيانة غير موجود");
 
     createAuditLog({
       companyId: scope.companyId,
@@ -2120,6 +2122,7 @@ router.patch("/fuel-logs/:id", requirePermission("fleet:update"), async (req, re
       `UPDATE fleet_fuel_logs SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
+    if (!row) throw new NotFoundError("سجل الوقود غير موجود");
 
     createAuditLog({
       companyId: scope.companyId,
@@ -2229,6 +2232,7 @@ router.patch("/insurance/:id", requirePermission("fleet:update"), async (req, re
       `UPDATE fleet_insurance SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
+    if (!row) throw new NotFoundError("سجل التأمين غير موجود");
 
     createAuditLog({
       companyId: scope.companyId,
@@ -2584,7 +2588,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
         journalEntryId = glResult.journalId;
       } catch (jeErr) {
         console.error("Traffic violation journal entry failed:", jeErr);
-        await rawExecute(`UPDATE fleet_traffic_violations SET "deletedAt" = NOW() WHERE id=$1`, [insertId]).catch(console.error);
+        await rawExecute(`UPDATE fleet_traffic_violations SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]).catch(console.error);
         throw new IntegrationError("تعذّر إنشاء القيد المحاسبي للمخالفة — لم يتم تسجيل المخالفة", { field: "journalEntry", fix: "تحقق من إعدادات ربط الحسابات (fleet_fines_expense / fleet_fines_payable) ثم أعد المحاولة" });
       }
     }

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
@@ -14,7 +15,7 @@ interface ImpactItem {
   detail: string;
 }
 
-router.post("/", async (req, res): Promise<void> => {
+router.post("/", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, action } = req.body;

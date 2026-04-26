@@ -1793,8 +1793,8 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
     for (const asn of allAssignments) {
       await rawExecute(
         `DELETE FROM attendance
-         WHERE "assignmentId" = $1 AND date BETWEEN $2 AND $3 AND status = 'absent'`,
-        [asn.id, request.startDate, request.endDate]
+         WHERE "assignmentId" = $1 AND date BETWEEN $2 AND $3 AND status = 'absent' AND "companyId" = $4`,
+        [asn.id, request.startDate, request.endDate, asn.companyId]
       ).catch((e) => console.error("Failed to clear absent days for leave approval:", e));
       // Also drop any stale absence-based payroll_deductions queued for those
       // days so an already-generated deduction row doesn't still withhold pay.
