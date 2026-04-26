@@ -219,7 +219,7 @@ router.post("/upload", requirePermission("documents:create"), async (req: Reques
       }
     }
 
-    const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [docId, scope.companyId]);
+    const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [docId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "documents", entityId: docId,
@@ -241,7 +241,7 @@ router.get("/:id/download", requirePermission("documents:download"), async (req:
   try {
     const scope = req.scope!;
     const [doc] = await rawQuery<any>(
-      `SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      `SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [Number(req.params.id), scope.companyId]
     );
     if (!doc) throw new NotFoundError("المستند غير موجود");
@@ -279,7 +279,7 @@ router.get("/:id/preview", requirePermission("documents:download"), async (req: 
   try {
     const scope = req.scope!;
     const [doc] = await rawQuery<any>(
-      `SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      `SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [Number(req.params.id), scope.companyId]
     );
     if (!doc) throw new NotFoundError("المستند غير موجود");
@@ -327,7 +327,7 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
     const { fileName, fileSize, mimeType, storageKey, notes } = body;
 
     const [doc] = await rawQuery<any>(
-      `SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`,
+      `SELECT * FROM documents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [docId, scope.companyId]
     );
     if (!doc) throw new NotFoundError("المستند غير موجود");
@@ -345,7 +345,7 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
       [newVersion, fileName, fileSize, mimeType, storageKey, docId, scope.companyId]
     );
 
-    const [updated] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`, [docId, scope.companyId]);
+    const [updated] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [docId, scope.companyId]);
     if (!updated) throw new NotFoundError("فشل في استرجاع المستند");
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -369,7 +369,7 @@ router.get("/:id/versions", requirePermission("documents:read"), async (req: Req
     const scope = req.scope!;
     const docId = Number(req.params.id);
     const [doc] = await rawQuery<any>(
-      `SELECT id FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      `SELECT id FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [docId, scope.companyId]
     );
     if (!doc) throw new NotFoundError("المستند غير موجود");
@@ -395,7 +395,7 @@ router.patch("/:id/status", requirePermission("documents:update"), async (req: R
       throw new ForbiddenError("ليس لديك صلاحية اعتماد المستندات");
     }
 
-    const [beforeDoc] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [docId, scope.companyId]);
+    const [beforeDoc] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [docId, scope.companyId]);
     if (!beforeDoc) throw new NotFoundError("المستند غير موجود");
 
     const result = await rawExecute(
@@ -429,7 +429,7 @@ router.patch("/:id/status", requirePermission("documents:update"), async (req: R
       details: JSON.stringify({ from: beforeDoc.status, to: status }),
     }).catch(console.error);
 
-    const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [docId, scope.companyId]);
+    const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [docId, scope.companyId]);
     res.json({ ...(doc as any), impact });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -444,7 +444,7 @@ router.post("/:id/entity-links", requirePermission("documents:update"), async (r
     const docId = Number(req.params.id);
 
     const [doc] = await rawQuery<any>(
-      `SELECT id FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      `SELECT id FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [docId, scope.companyId]
     );
     if (!doc) throw new NotFoundError("المستند غير موجود");
@@ -477,7 +477,7 @@ router.get("/:id/entity-links", requirePermission("documents:read"), async (req:
     const docId = Number(req.params.id);
 
     const [doc] = await rawQuery<any>(
-      `SELECT id FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      `SELECT id FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [docId, scope.companyId]
     );
     if (!doc) throw new NotFoundError("المستند غير موجود");
@@ -879,7 +879,7 @@ router.get("/stats", requirePermission("documents:read"), async (req, res) => {
 router.get("/:id", requirePermission("documents:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     if (!row) throw new NotFoundError("المستند غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "documents"); }
@@ -905,7 +905,7 @@ router.patch("/:id", requirePermission("documents:update"), async (req, res) => 
     params.push(id); params.push(scope.companyId);
     const result = await rawExecute(`UPDATE documents SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (result.affectedRows === 0) throw new NotFoundError("المستند غير موجود");
-    const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "documents", entityId: id,
