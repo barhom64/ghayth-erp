@@ -11036,7 +11036,8 @@ CREATE TABLE public.umrah_packages (
     duration integer DEFAULT 7,
     description text,
     status character varying(20) DEFAULT 'active'::character varying,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone
 );
 
 
@@ -11132,6 +11133,8 @@ CREATE TABLE public.umrah_pilgrims (
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
     "deletedAt" timestamp with time zone,
+    "branchId" integer,
+    "createdBy" integer,
     CONSTRAINT umrah_pilgrims_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('arrived'::character varying)::text, ('active'::character varying)::text, ('overstayed'::character varying)::text, ('departed'::character varying)::text, ('violated'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
