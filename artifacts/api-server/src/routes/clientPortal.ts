@@ -271,7 +271,7 @@ protectedRouter.get("/dashboard", withPortalScope(async (req, res) => {
          COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgressCount",
          COUNT(*) FILTER (WHERE status = 'closed') AS "closedCount"
        FROM support_tickets
-       WHERE ${where}`,
+       WHERE ${where} AND "deletedAt" IS NULL`,
       params
     );
     const recentInvoices = await portalScopedQuery<any>(scope,
@@ -284,7 +284,7 @@ protectedRouter.get("/dashboard", withPortalScope(async (req, res) => {
     const recentTickets = await portalScopedQuery<any>(scope,
       `SELECT id, ref, title, status, priority, category, "createdAt"
        FROM support_tickets
-       WHERE ${where}
+       WHERE ${where} AND "deletedAt" IS NULL
        ORDER BY "createdAt" DESC LIMIT 5`,
       params
     );
@@ -379,14 +379,14 @@ protectedRouter.get("/tickets", withPortalScope(async (req, res) => {
     const tickets = await portalScopedQuery<any>(scope,
       `SELECT id, ref, title, status, priority, category, "createdAt", "updatedAt"
        FROM support_tickets
-       WHERE ${where}
+       WHERE ${where} AND "deletedAt" IS NULL
        ORDER BY "createdAt" DESC
        LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
     );
     const countParams = params.slice(0, params.length - 2);
     const [countRow] = await portalScopedQuery<any>(scope,
-      `SELECT COUNT(*) AS total FROM support_tickets WHERE ${where}`,
+      `SELECT COUNT(*) AS total FROM support_tickets WHERE ${where} AND "deletedAt" IS NULL`,
       countParams
     );
     res.json({ data: tickets, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
@@ -666,7 +666,7 @@ protectedRouter.get("/kb/:id", withPortalScope(async (req, res) => {
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المقالة غير موجودة");
-    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1`, [id]).catch(() => {});
+    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1`, [id]).catch(console.error);
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "Portal KB article error:");

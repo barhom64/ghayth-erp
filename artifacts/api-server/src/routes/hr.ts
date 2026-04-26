@@ -1055,7 +1055,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         "autoApprovedAt" TIMESTAMPTZ,
         "createdAt" TIMESTAMPTZ DEFAULT NOW()
       )
-    `).catch(() => {});
+    `).catch(console.error);
     await rawExecute(`DO $$ BEGIN
       ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "genderRestriction" VARCHAR(10);
       ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "minServiceMonths" INTEGER DEFAULT 0;
@@ -1063,11 +1063,11 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "requiresDocument" BOOLEAN DEFAULT false;
       ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "maxDeptAbsentPct" NUMERIC DEFAULT 25;
     EXCEPTION WHEN OTHERS THEN NULL;
-    END $$`).catch(() => {});
+    END $$`).catch(console.error);
     await rawExecute(`DO $$ BEGIN
       ALTER TABLE hr_leave_balances ADD COLUMN IF NOT EXISTS reserved NUMERIC DEFAULT 0;
     EXCEPTION WHEN OTHERS THEN NULL;
-    END $$`).catch(() => {});
+    END $$`).catch(console.error);
 
     const scope = req.scope!;
     const parsed = leaveRequestSchema.safeParse(req.body);
@@ -1812,7 +1812,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
            VALUES ($1,$2,$3,$4,'on_leave',$5)
            ON CONFLICT DO NOTHING`,
           [asn.id, asn.companyId, asn.branchId, dateStr, `إجازة معتمدة - طلب رقم ${id}`]
-        ).catch(() => {});
+        ).catch(console.error);
       }
     }
 
@@ -3814,7 +3814,7 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
          WHERE "companyId" = $1 AND status = 'on_leave' AND notes LIKE $2
            AND date >= CURRENT_DATE AND date BETWEEN $3 AND $4`,
         [scope.companyId, `%طلب رقم ${id}%`, request.startDate, request.endDate]
-      ).catch(() => {});
+      ).catch(console.error);
     } else if (request.status === "pending") {
       // Release reserved balance
       const year = new Date(request.startDate).getFullYear();

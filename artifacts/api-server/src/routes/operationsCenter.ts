@@ -566,7 +566,7 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
          "createdAt" TIMESTAMPTZ DEFAULT NOW(),
          UNIQUE("companyId", "closeDate")
        )`
-    ).catch(() => {});
+    ).catch(console.error);
 
     const [existing] = await rawQuery<any>(
       `SELECT id FROM daily_close_log WHERE "companyId"=$1 AND "closeDate"=$2`,

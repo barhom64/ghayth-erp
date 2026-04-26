@@ -63,7 +63,7 @@ async function ensureExitTables(): Promise<void> {
       "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
       "deletedAt" TIMESTAMPTZ
     )
-  `).catch(() => {});
+  `).catch(console.error);
 
   await rawExecute(`
     CREATE TABLE IF NOT EXISTS hr_exit_clearance (
@@ -78,7 +78,7 @@ async function ensureExitTables(): Promise<void> {
       notes TEXT,
       "createdAt" TIMESTAMPTZ DEFAULT NOW()
     )
-  `).catch(() => {});
+  `).catch(console.error);
 }
 
 // ─── رقم متسلسل (يستخدم الأداة الموحّدة من hrHelpers) ───────────────────
@@ -509,7 +509,7 @@ router.patch("/exit/:id/complete", requirePermission("hr:update"), async (req, r
       `UPDATE employee_assignments SET status = 'terminated', "endDate" = CURRENT_DATE, "updatedAt" = NOW()
        WHERE id = $1 AND "companyId" = $2`,
       [item.assignmentId, scope.companyId]
-    ).catch(() => {});
+    ).catch(console.error);
 
     await createAuditLog({
       companyId: scope.companyId, userId: scope.userId,

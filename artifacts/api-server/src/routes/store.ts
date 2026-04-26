@@ -315,7 +315,7 @@ async function postStoreOrderGl(scope: any, order: any) {
     await rawExecute(
       `UPDATE store_orders SET "journalEntryId"=$1 WHERE id=$2`,
       [result.journalId, order.id]
-    ).catch(() => {});
+    ).catch(console.error);
   }
 
   emitEvent({

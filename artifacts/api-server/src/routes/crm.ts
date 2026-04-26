@@ -791,8 +791,8 @@ router.post("/opportunities/:id/convert", requirePermission("crm:update"), async
     // Re-read the opportunity to pick up the clientId that handleDealWon may
     // have just populated, so we can mirror it into convertedClientId.
     const [afterDealWon] = await rawQuery<any>(
-      `SELECT "clientId" FROM crm_opportunities WHERE id=$1`,
-      [id]
+      `SELECT "clientId" FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
     );
     const convertedClientId = afterDealWon?.clientId ?? null;
 
@@ -970,7 +970,7 @@ router.get("/pipeline", requirePermission("crm:read"), async (req, res) => {
     const scope = req.scope!;
     const result: any[] = [];
     for (const stage of STAGE_ORDER) {
-      const [row] = await rawQuery<any>(`SELECT COUNT(*) as count, COALESCE(SUM(value),0) as value FROM crm_opportunities WHERE "companyId"=$1 AND stage=$2`, [scope.companyId, stage]);
+      const [row] = await rawQuery<any>(`SELECT COUNT(*) as count, COALESCE(SUM(value),0) as value FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage=$2`, [scope.companyId, stage]);
       result.push({ stage, count: Number(row.count), value: Number(row.value), autoAction: STAGE_AUTO_ACTIONS[stage]?.description });
     }
     res.json({ data: result, total: result.length, page: 1, pageSize: result.length });
@@ -1040,7 +1040,7 @@ router.get("/analytics", requirePermission("crm:read"), async (req, res) => {
     const conversionRates: any[] = [];
     let prevCount: number | null = null;
     for (const stage of STAGE_ORDER) {
-      const [row] = await rawQuery<any>(`SELECT COUNT(*) as count FROM crm_opportunities WHERE "companyId"=$1 AND stage=$2`, [cid, stage]);
+      const [row] = await rawQuery<any>(`SELECT COUNT(*) as count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage=$2`, [cid, stage]);
       const count = Number(row.count);
       const rate = prevCount !== null && prevCount > 0 ? ((count / prevCount) * 100).toFixed(1) : null;
       conversionRates.push({ stage, count, conversionFromPrev: rate });
@@ -1048,15 +1048,15 @@ router.get("/analytics", requirePermission("crm:read"), async (req, res) => {
     }
 
     const [avgDeal] = await rawQuery<any>(
-      `SELECT AVG(EXTRACT(EPOCH FROM ("updatedAt"::timestamp - "createdAt"::timestamp))/86400) AS "avgDays" FROM crm_opportunities WHERE "companyId"=$1 AND stage='closed_won'`,
+      `SELECT AVG(EXTRACT(EPOCH FROM ("updatedAt"::timestamp - "createdAt"::timestamp))/86400) AS "avgDays" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage='closed_won'`,
       [cid]
     );
     const [revenue] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonRevenue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) AS "forecast" FROM crm_opportunities WHERE "companyId"=$1`,
+      `SELECT COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonRevenue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) AS "forecast" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
       [cid]
     );
     const [lostAnalysis] = await rawQuery<any>(
-      `SELECT COUNT(*) as "lostCount", COALESCE(SUM(value),0) as "lostValue" FROM crm_opportunities WHERE "companyId"=$1 AND stage='closed_lost'`,
+      `SELECT COUNT(*) as "lostCount", COALESCE(SUM(value),0) as "lostValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage='closed_lost'`,
       [cid]
     );
 
@@ -1075,7 +1075,7 @@ router.get("/stats", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [opp] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) as "wonValue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) as "pipelineValue" FROM crm_opportunities WHERE "companyId"=$1`, [cid]);
+    const [opp] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) as "wonValue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) as "pipelineValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [overdue] = await rawQuery<any>(
       `SELECT COUNT(*) as count FROM crm_activities ca JOIN crm_opportunities co ON co.id=ca."opportunityId" WHERE co."companyId"=$1 AND ca."completedAt" IS NULL AND ca."scheduledAt" < NOW()`,
       [cid]

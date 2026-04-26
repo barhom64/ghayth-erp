@@ -1,5 +1,6 @@
 import {
   handleRouteError,
+  ValidationError,
   NotFoundError,
   ForbiddenError,
   IntegrationError,
@@ -362,13 +363,15 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", requirePermission(
       sections = { orders: { label: "أوامر الشراء", amount: totalOrdered, count: poRows.length } };
 
     } else if (entityType === "vehicle" || entityType === "property" || entityType === "project" || entityType === "product") {
-      const columnMap: Record<string, string> = { vehicle: "vehicleId", property: "propertyId", project: "projectId", product: "productId" };
-      const col = columnMap[entityType]!;
+      const colFilterMap: Record<string, string> = {
+        vehicle: 'jl."vehicleId"',
+        property: 'jl."propertyId"',
+        project: 'jl."projectId"',
+        product: 'jl."productId"',
+      };
+      const colFilter = colFilterMap[entityType];
+      if (!colFilter) throw new ValidationError("نوع الكيان غير مدعوم");
       const { filter: dateFilter, extraParams: dateDates } = buildDateFilter(2, startDate, endDate);
-      const colFilter = col === "vehicleId" ? 'jl."vehicleId"'
-        : col === "propertyId" ? 'jl."propertyId"'
-        : col === "projectId" ? 'jl."projectId"'
-        : 'jl."productId"';
       const journalRows = await rawQuery<any>(
         `SELECT je.id, je.ref, je.description, je."createdAt" AS date, je.type AS "movementType",
                 COALESCE(SUM(jl.debit), 0) AS debit, COALESCE(SUM(jl.credit), 0) AS credit

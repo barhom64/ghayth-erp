@@ -165,7 +165,7 @@ router.get("/stats", requirePermission("marketing:read"), async (req, res) => {
     const totalRevenue = Number(revenue?.total || 0);
     const roas = totalSpent > 0 ? (totalRevenue / totalSpent).toFixed(2) : null;
     const sourceCounts = await rawQuery<any>(
-      `SELECT source, COUNT(*) AS count FROM crm_opportunities WHERE "companyId"=$1 AND source IS NOT NULL GROUP BY source ORDER BY count DESC`,
+      `SELECT source, COUNT(*) AS count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND source IS NOT NULL GROUP BY source ORDER BY count DESC`,
       [cid]
     ).catch(() => []);
     res.json({
@@ -190,7 +190,7 @@ router.get("/campaigns/:id/roas", requirePermission("marketing:read"), async (re
     const revenue = Number(campaign.revenue || 0);
     const roas = spent > 0 ? revenue / spent : null;
     const leads = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM crm_opportunities WHERE "companyId"=$1 AND source=$2`,
+      `SELECT COUNT(*) AS count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND source=$2`,
       [scope.companyId, campaign.name]
     ).catch(() => [{ count: 0 }]);
     res.json({
@@ -211,12 +211,12 @@ router.get("/funnel", requirePermission("marketing:read"), async (req, res) => {
     const STAGES = ['lead', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost'];
     const stageData: any[] = [];
     for (const stage of STAGES) {
-      const [row] = await rawQuery<any>(`SELECT COUNT(*) AS count, COALESCE(SUM(value),0) AS value FROM crm_opportunities WHERE "companyId"=$1 AND stage=$2`, [cid, stage]);
+      const [row] = await rawQuery<any>(`SELECT COUNT(*) AS count, COALESCE(SUM(value),0) AS value FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage=$2`, [cid, stage]);
       stageData.push({ stage, count: Number(row.count), value: Number(row.value) });
     }
     const sourceFunnel = await rawQuery<any>(
       `SELECT source, COUNT(*) AS total, COUNT(*) FILTER (WHERE stage='closed_won') AS won, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonValue"
-       FROM crm_opportunities WHERE "companyId"=$1 AND source IS NOT NULL GROUP BY source ORDER BY total DESC`,
+       FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND source IS NOT NULL GROUP BY source ORDER BY total DESC`,
       [cid]
     ).catch(() => []);
     const conversionRates = stageData.map((s, i) => {

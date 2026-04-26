@@ -145,14 +145,14 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
       rawQuery<any>(
         `SELECT id, title, stage, value, probability, "expectedCloseDate", status
          FROM crm_opportunities
-         WHERE "clientId" = $1 AND "companyId" = $2
+         WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
         [Number(id), scope.companyId]
       ),
       rawQuery<any>(
         `SELECT id, ref, title, status, priority, category, "createdAt"
          FROM support_tickets
-         WHERE "clientId" = $1 AND "companyId" = $2
+         WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
         [Number(id), scope.companyId]
       ),
@@ -191,10 +191,10 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
           FROM invoices WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)
          UNION ALL
          (SELECT 'opportunity' AS type, title AS ref, stage AS status, value::text AS detail, "createdAt"
-          FROM crm_opportunities WHERE "clientId" = $1 AND "companyId" = $2)
+          FROM crm_opportunities WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)
          UNION ALL
          (SELECT 'ticket' AS type, ref, status, priority AS detail, "createdAt"
-          FROM support_tickets WHERE "clientId" = $1 AND "companyId" = $2)
+          FROM support_tickets WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)
          UNION ALL
          (SELECT 'project' AS type, name AS ref, status, progress::text AS detail, "createdAt"
           FROM projects WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)
@@ -254,9 +254,10 @@ router.patch("/:id", requirePermission("crm:write"), async (req, res) => {
     if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes = $${params.length}`); }
     if (b.isBlacklisted !== undefined) { params.push(b.isBlacklisted); sets.push(`"isBlacklisted" = $${params.length}`); }
     if (sets.length === 0) { res.json(existing); return; }
-    params.push(Number(id));
-    await rawExecute(`UPDATE clients SET ${sets.join(",")} WHERE id = $${params.length}`, params);
-    const [updated] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "deletedAt" IS NULL`, [Number(id)]);
+    params.push(Number(id), scope.companyId);
+    await rawExecute(`UPDATE clients SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length}`, params);
+    const [updated] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
+    if (!updated) throw new NotFoundError("العميل غير موجود");
 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.updated", entity: "clients", entityId: Number(id), details: JSON.stringify({ name: b.name, phone: b.phone, email: b.email, classification: b.classification }) }).catch(console.error);
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "clients", entityId: Number(id), after: { name: b.name, phone: b.phone, email: b.email, classification: b.classification } }).catch(console.error);
