@@ -46,11 +46,11 @@ const companyActiveGuard: GuardFn = async (companyId) => {
 // ─── Guard: Trial Limits ──────────────────────────────────────────────────
 
 const trialLimitsGuard: GuardFn = async (companyId, context) => {
-  const [company] = await rawQuery<{ plan: string }>(
-    `SELECT plan FROM companies WHERE id = $1`,
+  const [company] = await rawQuery<{ status: string }>(
+    `SELECT status FROM companies WHERE id = $1`,
     [companyId]
   );
-  if (!company || company.plan !== "trial") return { allowed: true, guardName: "trial_limits" };
+  if (!company || company.status !== "trial") return { allowed: true, guardName: "trial_limits" };
 
   if (context?.entity === "employees") {
     const [count] = await rawQuery<{ cnt: number }>(
@@ -123,7 +123,9 @@ export async function checkSystemGuards(
   );
 
   const results = await Promise.all(
-    applicableGuards.map((g) => g.guard(companyId, context))
+    applicableGuards.map((g) =>
+      g.guard(companyId, context).catch((): GuardResult => ({ allowed: true, guardName: "error" }))
+    )
   );
 
   const violations = results.filter((r) => !r.allowed);
