@@ -80,10 +80,10 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
 
     const [employee] = await rawQuery<any>(
       `SELECT e.id, e.name, e."nameEn", e."nationalId", e.phone, e.email, e."dateOfBirth",
-              e.nationality, e.gender, e."maritalStatus", e."hireDate",
-              e."profileImageUrl"
+              e.nationality, e.gender, e."photoUrl" AS "profileImageUrl"
        FROM employees e
-       WHERE e.id = $1 AND e."companyId" = $2 AND e."deletedAt" IS NULL`,
+       JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $2
+       WHERE e.id = $1 AND e."deletedAt" IS NULL`,
       [employeeId, scope.companyId]
     );
 

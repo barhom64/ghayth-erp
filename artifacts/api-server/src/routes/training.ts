@@ -50,7 +50,6 @@ const createEnrollmentSchema = z.object({
 const patchEnrollmentSchema = z.object({
   status: z.string().optional(),
   score: z.coerce.number().optional(),
-  feedback: z.string().optional(),
 });
 
 const router = Router();
@@ -275,7 +274,6 @@ router.patch("/enrollments/:id", requirePermission("hr:update"), async (req, res
     const params: any[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     if (b.score !== undefined) { params.push(b.score); sets.push(`score=$${params.length}`); }
-    if (b.feedback !== undefined) { params.push(b.feedback); sets.push(`feedback=$${params.length}`); }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id);
     await rawExecute(`UPDATE training_enrollments SET ${sets.join(",")} WHERE id=$${params.length}`, params);

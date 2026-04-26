@@ -1971,7 +1971,9 @@ CREATE TABLE public.attendance (
     method character varying(20) DEFAULT 'gps'::character varying,
     notes text,
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
-    "deviceId" character varying(100)
+    "deviceId" character varying(100),
+    "workType" character varying(20) DEFAULT 'office'::character varying,
+    "contractId" integer
 );
 
 
@@ -4381,7 +4383,8 @@ CREATE TABLE public.employees (
     "workPermitNumber" character varying(50),
     "workPermitExpiry" date,
     "iqamaStatus" character varying(30) DEFAULT 'active'::character varying,
-    attachments jsonb DEFAULT '[]'::jsonb
+    attachments jsonb DEFAULT '[]'::jsonb,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -5069,7 +5072,8 @@ CREATE TABLE public.fleet_traffic_violations (
     "paidAt" timestamp with time zone,
     "paidBy" integer,
     notes text,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 

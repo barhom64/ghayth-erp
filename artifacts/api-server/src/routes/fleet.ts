@@ -1116,7 +1116,13 @@ router.get("/maintenance", requirePermission("fleet:read"), async (req, res) => 
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND m."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId)); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT m.*, v."plateNumber" FROM fleet_maintenance m LEFT JOIN fleet_vehicles v ON v.id=m."vehicleId" WHERE ${where} AND m."deletedAt" IS NULL ORDER BY m.id DESC`,
+      `SELECT m.*, m.type AS "maintenanceType", m.cost AS amount,
+              m."serviceDate" AS "scheduledDate", m."serviceDate" AS date,
+              m."mileageAtService" AS mileage, m."nextServiceKm" AS "nextServiceMileage",
+              m."performedBy" AS workshop,
+              v."plateNumber", v."plateNumber" AS "vehiclePlateNumber",
+              v.make AS "vehicleMake", v.model AS "vehicleModel"
+       FROM fleet_maintenance m LEFT JOIN fleet_vehicles v ON v.id=m."vehicleId" WHERE ${where} AND m."deletedAt" IS NULL ORDER BY m.id DESC`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -1129,7 +1135,12 @@ router.get("/maintenance/:id", requirePermission("fleet:read"), async (req, res)
     const id = Number(req.params.id);
     if (req.path.includes("/complete") || req.path.includes("/cancel")) return;
     const [row] = await rawQuery<any>(
-      `SELECT m.*, v."plateNumber", v.make AS "vehicleMake", v.model AS "vehicleModel"
+      `SELECT m.*, m.type AS "maintenanceType", m.cost AS amount,
+              m."serviceDate" AS "scheduledDate", m."serviceDate" AS date,
+              m."mileageAtService" AS mileage, m."nextServiceKm" AS "nextServiceMileage",
+              m."performedBy" AS workshop,
+              v."plateNumber", v."plateNumber" AS "vehiclePlateNumber",
+              v.make AS "vehicleMake", v.model AS "vehicleModel"
        FROM fleet_maintenance m
        LEFT JOIN fleet_vehicles v ON v.id=m."vehicleId"
        WHERE m.id = $1 AND m."companyId" = $2 AND m."deletedAt" IS NULL`,

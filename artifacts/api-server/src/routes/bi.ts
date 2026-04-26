@@ -882,15 +882,15 @@ router.get("/reports/branch-performance", requirePermission("bi:read"), async (r
 
       const [ticketsRow] = await rawQuery<any>(
         `SELECT COUNT(*) AS cnt FROM support_tickets
-         WHERE "companyId" = $1 AND "branchId" = $2 AND status = 'open'`,
-        [cid, branch.id]
+         WHERE "companyId" = $1 AND status = 'open'`,
+        [cid]
       ).catch(() => [{}]);
 
       const [satisfactionRow] = await rawQuery<any>(
         `SELECT COALESCE(AVG(rating), 0) AS avg FROM support_tickets
-         WHERE "companyId" = $1 AND "branchId" = $2 AND rating IS NOT NULL
-           AND DATE("createdAt") BETWEEN $3::date AND $4::date`,
-        [cid, branch.id, dateFrom, dateTo]
+         WHERE "companyId" = $1 AND rating IS NOT NULL
+           AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
+        [cid, dateFrom, dateTo]
       ).catch(() => [{}]);
 
       const rev = Number(revenue?.revenue ?? 0);
