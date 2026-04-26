@@ -460,8 +460,9 @@ export async function confirmMutamersImport(
               changes.push(`"updatedBy"=$${vals.length}`);
               changes.push(`"updatedAt"=NOW()`);
               vals.push(ex.id);
+              vals.push(scope.companyId);
               await client.query(
-                `UPDATE umrah_pilgrims SET ${changes.join(",")} WHERE id=$${vals.length}`,
+                `UPDATE umrah_pilgrims SET ${changes.join(",")} WHERE id=$${vals.length - 1} AND "companyId"=$${vals.length}`,
                 vals
               );
               updatedCount++;
@@ -494,8 +495,8 @@ export async function confirmMutamersImport(
 
     await client.query(
       `UPDATE umrah_import_batches SET "newCount"=$1,"updatedCount"=$2,"skippedCount"=$3,
-       "errorCount"=$4,"financialImpactCount"=$5,"updatedAt"=NOW() WHERE id=$6`,
-      [newCount, updatedCount, skippedCount, errorCount, financialImpactCount, batchId]
+       "errorCount"=$4,"financialImpactCount"=$5,"updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7`,
+      [newCount, updatedCount, skippedCount, errorCount, financialImpactCount, batchId, scope.companyId]
     );
 
     emitEvent({
@@ -585,8 +586,8 @@ export async function confirmVouchersImport(
               });
               if (jeId) {
                 await client.query(
-                  `UPDATE umrah_nusk_invoices SET "purchaseInvoiceId"=$1 WHERE id=$2`,
-                  [jeId, nuskId]
+                  `UPDATE umrah_nusk_invoices SET "purchaseInvoiceId"=$1 WHERE id=$2 AND "companyId"=$3`,
+                  [jeId, nuskId, scope.companyId]
                 );
               }
             } catch (jeErr) {
@@ -621,8 +622,9 @@ export async function confirmVouchersImport(
             changes.push(`"updatedBy"=$${vals.length}`);
             changes.push(`"updatedAt"=NOW()`);
             vals.push(ex.id);
+            vals.push(scope.companyId);
             await client.query(
-              `UPDATE umrah_nusk_invoices SET ${changes.join(",")} WHERE id=$${vals.length}`,
+              `UPDATE umrah_nusk_invoices SET ${changes.join(",")} WHERE id=$${vals.length - 1} AND "companyId"=$${vals.length}`,
               vals
             );
             updatedCount++;
@@ -648,8 +650,8 @@ export async function confirmVouchersImport(
 
     await client.query(
       `UPDATE umrah_import_batches SET "newCount"=$1,"updatedCount"=$2,"skippedCount"=$3,
-       "errorCount"=$4,"financialImpactCount"=$5,"updatedAt"=NOW() WHERE id=$6`,
-      [newCount, updatedCount, skippedCount, errorCount, financialImpactCount, batchId]
+       "errorCount"=$4,"financialImpactCount"=$5,"updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7`,
+      [newCount, updatedCount, skippedCount, errorCount, financialImpactCount, batchId, scope.companyId]
     );
 
     emitEvent({
