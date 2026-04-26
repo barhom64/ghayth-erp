@@ -346,6 +346,7 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
     );
 
     const [updated] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`, [docId, scope.companyId]);
+    if (!updated) throw new NotFoundError("فشل في استرجاع المستند");
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "document_versions", entityId: docId,

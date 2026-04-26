@@ -177,7 +177,7 @@ router.get("/summary", async (req, res) => {
     let tickets = { open: 0, breached: 0 };
     try {
       const [t] = await rawQuery<any>(
-        `SELECT COUNT(*) FILTER (WHERE status='open') AS open, COUNT(*) FILTER (WHERE status='open' AND "slaDeadline" < NOW()) AS breached FROM support_tickets WHERE ${noBranchWhere}`,
+        `SELECT COUNT(*) FILTER (WHERE status='open') AS open, COUNT(*) FILTER (WHERE status='open' AND "slaDeadline" < NOW()) AS breached FROM support_tickets WHERE ${noBranchWhere} AND "deletedAt" IS NULL`,
         [...noBranchParams]
       );
       tickets = { open: Number(t?.open ?? 0), breached: Number(t?.breached ?? 0) };
@@ -195,7 +195,7 @@ router.get("/summary", async (req, res) => {
     let contracts = { active: 0, expiringSoon: 0 };
     try {
       const [c] = await rawQuery<any>(
-        `SELECT COUNT(*) FILTER (WHERE status='active') AS active, COUNT(*) FILTER (WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 30) AS "expiringSoon" FROM legal_contracts WHERE ${noBranchWhere}`,
+        `SELECT COUNT(*) FILTER (WHERE status='active') AS active, COUNT(*) FILTER (WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 30) AS "expiringSoon" FROM legal_contracts WHERE ${noBranchWhere} AND "deletedAt" IS NULL`,
         [...noBranchParams]
       );
       contracts = { active: Number(c?.active ?? 0), expiringSoon: Number(c?.expiringSoon ?? 0) };
@@ -204,7 +204,7 @@ router.get("/summary", async (req, res) => {
     let opportunities = { total: 0, value: 0 };
     try {
       const [o] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total, COALESCE(SUM(value),0) AS value FROM crm_opportunities WHERE ${noBranchWhere} AND stage NOT IN ('lost','won')`,
+        `SELECT COUNT(*) AS total, COALESCE(SUM(value),0) AS value FROM crm_opportunities WHERE ${noBranchWhere} AND "deletedAt" IS NULL AND stage NOT IN ('lost','won')`,
         [...noBranchParams]
       );
       opportunities = { total: Number(o?.total ?? 0), value: Number(o?.value ?? 0) };

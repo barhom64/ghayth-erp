@@ -63,8 +63,9 @@ router.post("/sub-agents", requirePermission("umrah:write"), async (req, res) =>
        b.phone || null, b.email || null, b.country || null, b.isActive ?? true,
        b.notes || null, scope.userId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sub_agents", entityId: rows[0]?.id, after: { name: b.name } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.created", entity: "umrah_sub_agents", entityId: rows[0]?.id, details: JSON.stringify({ name: b.name, nuskCode: b.nuskCode }) }).catch(console.error);
+    if (!rows[0]) throw new NotFoundError("فشل في إنشاء الوكيل الفرعي");
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sub_agents", entityId: rows[0].id, after: { name: b.name } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.created", entity: "umrah_sub_agents", entityId: rows[0].id, details: JSON.stringify({ name: b.name, nuskCode: b.nuskCode }) }).catch(console.error);
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create sub-agent"); }
 });
@@ -114,6 +115,7 @@ router.patch("/sub-agents/:id", requirePermission("umrah:write"), async (req, re
     params.push(req.params.id); params.push(scope.companyId);
     await rawExecute(`UPDATE umrah_sub_agents SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery(`SELECT * FROM umrah_sub_agents WHERE id=$1 AND "companyId"=$2`, [req.params.id, scope.companyId]);
+    if (!row) throw new NotFoundError("الوكيل الفرعي غير موجود");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: Number(req.params.id), after: b }).catch(console.error);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.updated", entity: "umrah_sub_agents", entityId: Number(req.params.id), details: JSON.stringify(b) }).catch(console.error);
     res.json(row);

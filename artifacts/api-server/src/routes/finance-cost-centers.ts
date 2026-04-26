@@ -60,6 +60,7 @@ router.post("/cost-centers", requirePermission("finance:create"), async (req, re
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
       [scope.companyId, code || null, name, type || "general", parentId || null, relatedEntityType || null, relatedEntityId || null, allocatedAmount || 0]
     );
+    if (!row) throw new NotFoundError("فشل في إنشاء مركز التكلفة");
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "cost_center.created", entity: "cost_centers", entityId: row.id, after: row });
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "cost_center.created", entity: "cost_centers", entityId: row.id, details: JSON.stringify({ name, code, type: type || "general" }) }).catch(console.error);
@@ -97,6 +98,7 @@ router.patch("/cost-centers/:id", requirePermission("finance:update"), async (re
       `UPDATE cost_centers SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
+    if (!row) throw new NotFoundError("مركز التكلفة غير موجود");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "cost_center.updated", entity: "cost_centers", entityId: row.id, after: row });
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "cost_center.updated", entity: "cost_centers", entityId: row.id, details: JSON.stringify({ name: row.name, code: row.code }) }).catch(console.error);
     res.json(row);

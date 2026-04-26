@@ -543,7 +543,8 @@ invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.approved", entity: "invoices", entityId: id, details: JSON.stringify({ ref: invoice.ref, total: invoice.total }) }).catch(console.error);
 
-    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1 AND i."companyId" = $2`, [id, scope.companyId]);
+    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!updated) throw new NotFoundError("الفاتورة غير موجودة");
     res.json(updated);
   } catch (err) {
     if (typeof lifecycleErrorResponse === 'function') {
@@ -572,7 +573,7 @@ invoicesRouter.post("/invoices/:id/post", requirePermission("finance:approve"), 
 
     // Verify GL entry exists
     const [glEntry] = await rawQuery<any>(
-      `SELECT id FROM journal_entries WHERE "sourceType"='invoice' AND "sourceId"=$1 AND "companyId"=$2 LIMIT 1`,
+      `SELECT id FROM journal_entries WHERE "sourceType"='invoice' AND "sourceId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [id, scope.companyId]
     );
     if (!glEntry) {
@@ -581,7 +582,8 @@ invoicesRouter.post("/invoices/:id/post", requirePermission("finance:approve"), 
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.posted", entity: "invoices", entityId: id }).catch(console.error);
 
-    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1 AND i."companyId" = $2`, [id, scope.companyId]);
+    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!updated) throw new NotFoundError("الفاتورة غير موجودة");
     res.json(updated);
   } catch (err) {
     if (typeof lifecycleErrorResponse === 'function') {
@@ -770,6 +772,7 @@ invoicesRouter.patch("/invoices/:id", requirePermission("finance:update"), async
     }
     params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(`UPDATE invoices SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`, params);
+    if (!row) throw new NotFoundError("الفاتورة غير موجودة");
 
     createAuditLog({
       companyId: scope.companyId,

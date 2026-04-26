@@ -191,11 +191,11 @@ router.get("/summary", requirePermission("admin:read"), async (req, res) => {
     const [overdueInvoices] = await rawQuery<any>(
       `SELECT COUNT(*) AS count FROM invoices WHERE status='overdue' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [openTickets] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM support_tickets WHERE status='open' AND "companyId"=$1`, [cid]);
+      `SELECT COUNT(*) AS count FROM support_tickets WHERE status='open' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [todayAttendance] = await rawQuery<any>(
       `SELECT COUNT(*) AS count FROM attendance WHERE date=CURRENT_DATE AND "companyId"=$1`, [cid]);
     const [expiringContracts] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM legal_contracts WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 30 AND "companyId"=$1`, [cid]);
+      `SELECT COUNT(*) AS count FROM legal_contracts WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 30 AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [lowStock] = await rawQuery<any>(
       `SELECT COUNT(*) AS count FROM warehouse_products WHERE "currentStock" <= "minStock" AND status='active' AND "companyId"=$1`, [cid]);
     const [unreadNotifications] = await rawQuery<any>(

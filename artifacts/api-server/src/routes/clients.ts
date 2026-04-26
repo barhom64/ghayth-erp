@@ -98,6 +98,7 @@ router.post("/", requirePermission("crm:create"), async (req, res) => {
       `SELECT * FROM clients WHERE id = $1 AND "deletedAt" IS NULL`,
       [insertId]
     );
+    if (!client) throw new NotFoundError("فشل في استرجاع العميل");
 
     createAuditLog({
       companyId: scope.companyId,
@@ -294,6 +295,7 @@ router.post("/auto-create", requirePermission("crm:create"), async (req, res) =>
     );
 
     const [newClient] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "deletedAt" IS NULL`, [insertId]);
+    if (!newClient) throw new NotFoundError("فشل في استرجاع العميل");
 
     createAuditLog({
       companyId: scope.companyId,

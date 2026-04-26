@@ -251,7 +251,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
       } catch (e) { console.error("CRM notification error:", e); }
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -307,7 +307,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
     const oppId = Number(req.params.id);
     const b = req.body;
 
-    const [existing] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2`, [oppId, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [oppId, scope.companyId]);
     if (!existing) throw new NotFoundError("الفرصة غير موجودة");
 
     // Phase C domain 2 — stage transition guard. Mirrors the Support
@@ -578,7 +578,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
       }).catch(console.error);
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2`, [oppId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [oppId, scope.companyId]);
 
     // Build a tracked-field diff so the audit log reflects what
     // actually changed instead of just `{ stage, status }`. Same
@@ -741,7 +741,7 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
 router.get("/opportunities/:id", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" LEFT JOIN employees e ON e.id=o."assignedTo" WHERE o.id=$1 AND o."companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" LEFT JOIN employees e ON e.id=o."assignedTo" WHERE o.id=$1 AND o."companyId"=$2 AND o."deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     if (!row) throw new NotFoundError("الفرصة غير موجودة");
 
     const activities = await rawQuery<any>(
