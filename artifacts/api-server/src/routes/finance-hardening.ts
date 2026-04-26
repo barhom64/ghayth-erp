@@ -61,7 +61,7 @@ financeHardeningRouter.post("/fiscal-periods-v2", requirePermission("finance:cre
        VALUES ($1,$2,$3,$4,'open',$5)`,
       [scope.companyId, name, startDate, endDate, notes ?? null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM financial_periods WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM financial_periods WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     emitEvent({
       companyId: scope.companyId,
@@ -609,7 +609,7 @@ financeHardeningRouter.post("/bank-guarantees", requirePermission("finance:creat
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [scope.companyId, branchId ?? scope.branchId, ref, bank, beneficiary, Number(amount), issueDate, expiryDate, guaranteeType ?? "performance", notes ?? null, attachmentUrl ?? null, scope.activeAssignmentId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM bank_guarantees WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM bank_guarantees WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     emitEvent({
       companyId: scope.companyId,
@@ -1061,7 +1061,7 @@ financeHardeningRouter.post("/projects", requirePermission("finance:create"), as
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [scope.companyId, branchId ?? scope.branchId, projectRef, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     emitEvent({
       companyId: scope.companyId,

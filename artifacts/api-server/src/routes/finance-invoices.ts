@@ -420,7 +420,7 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
     createNotification({ companyId: scope.companyId, assignmentId: scope.activeAssignmentId, type: "invoice_created", title: "تم إنشاء فاتورة جديدة", body: `فاتورة ${ref} بمبلغ ${total.toLocaleString()} ﷼`, priority: "normal", refType: "invoices", refId: insertId }).catch(console.error);
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "invoices", entityId: insertId, after: { ref, total, vatAmount, clientId: clientId ?? null } }).catch(console.error);
 
-    const [invoice] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1 AND i."deletedAt" IS NULL`, [insertId]);
+    const [invoice] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [insertId, scope.companyId]);
     res.status(201).json({ ...invoice, lines: validatedLines });
   } catch (err) {
     handleRouteError(err, res, "Create invoice error:");
@@ -543,7 +543,7 @@ invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.approved", entity: "invoices", entityId: id, details: JSON.stringify({ ref: invoice.ref, total: invoice.total }) }).catch(console.error);
 
-    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1`, [id]);
+    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1 AND i."companyId" = $2`, [id, scope.companyId]);
     res.json(updated);
   } catch (err) {
     if (typeof lifecycleErrorResponse === 'function') {
@@ -581,7 +581,7 @@ invoicesRouter.post("/invoices/:id/post", requirePermission("finance:approve"), 
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.posted", entity: "invoices", entityId: id }).catch(console.error);
 
-    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1`, [id]);
+    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1 AND i."companyId" = $2`, [id, scope.companyId]);
     res.json(updated);
   } catch (err) {
     if (typeof lifecycleErrorResponse === 'function') {

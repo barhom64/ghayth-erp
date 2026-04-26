@@ -219,7 +219,7 @@ router.post("/upload", requirePermission("documents:create"), async (req: Reques
       }
     }
 
-    const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1`, [docId]);
+    const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [docId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "documents", entityId: docId,
@@ -428,7 +428,7 @@ router.patch("/:id/status", requirePermission("documents:update"), async (req: R
       details: JSON.stringify({ from: beforeDoc.status, to: status }),
     }).catch(console.error);
 
-    const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1`, [docId]);
+    const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [docId, scope.companyId]);
     res.json({ ...(doc as any), impact });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });

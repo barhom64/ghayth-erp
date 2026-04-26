@@ -349,7 +349,7 @@ router.post("/journal-templates", requirePermission("finance:write"), async (req
     });
 
     const [template] = await rawQuery<any>(
-      `SELECT * FROM journal_entry_templates WHERE id = $1`, [result]
+      `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`, [result, scope.companyId]
     );
     template.lines = await rawQuery<any>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
@@ -405,7 +405,7 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
       }
     }
 
-    const [template] = await rawQuery<any>(`SELECT * FROM journal_entry_templates WHERE id = $1`, [Number(id)]);
+    const [template] = await rawQuery<any>(`SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`, [Number(id), scope.companyId]);
     template.lines = await rawQuery<any>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl

@@ -65,7 +65,6 @@ const createDepartmentSchema = z.object({
 
 const updateDepartmentSchema = z.object({
   name: z.string().min(1),
-  nameEn: z.string().optional(),
   manager: z.string().optional(),
 });
 
@@ -465,13 +464,13 @@ router.put("/departments/:id", requirePermission("settings:write"), async (req, 
     if (!parsed_updateDepartmentSchema.success) throw new ValidationError(parsed_updateDepartmentSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_updateDepartmentSchema.data;
     const { id } = req.params;
-    const { name, nameEn, manager } = body;
+    const { name, manager } = body;
     const scope = req.scope!;
     await rawExecute(`UPDATE departments SET name=$1, "managerId"=$2 WHERE id=$3 RETURNING id`, [name, manager || null, id]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_department",
       entity: "departments", entityId: Number(id),
-      after: { name, nameEn, manager },
+      after: { name, manager },
     }).catch(console.error);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "department" }) }).catch(console.error);
     res.json({ success: true });

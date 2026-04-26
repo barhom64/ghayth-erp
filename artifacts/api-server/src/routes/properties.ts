@@ -455,10 +455,10 @@ router.patch("/units/:id", requirePermission("property:update"), async (req, res
     }
 
     const trackedFields = [
-      "unitNumber","buildingName","type","area","monthlyRent","status","address",
+      "name","unitNumber","buildingName","type","area","monthlyRent","status","address",
       "electricityMeter","waterMeter","usageType","ownerId","parkingSpaces","acType",
       "hasKitchen","yearlyRent","insurancePolicy","insuranceExpiry","amenities","notes",
-      "buildingId","floor","bedrooms","bathrooms","direction","finishing",
+      "buildingId","floor","bedrooms","bathrooms","direction","finishing","branchId",
     ] as const;
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];

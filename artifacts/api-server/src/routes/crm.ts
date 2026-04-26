@@ -251,7 +251,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
       } catch (e) { console.error("CRM notification error:", e); }
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -578,7 +578,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
       }).catch(console.error);
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1`, [oppId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2`, [oppId, scope.companyId]);
 
     // Build a tracked-field diff so the audit log reflects what
     // actually changed instead of just `{ stage, status }`. Same
