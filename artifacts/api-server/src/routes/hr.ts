@@ -68,6 +68,7 @@ const shiftSchema = z.object({
   endTime: z.string().optional(),
   days: z.any().optional(),
   isDefault: z.boolean().optional(),
+  branchId: z.coerce.number().optional().nullable(),
   shiftType: z.enum(["fixed", "flexible", "remote", "split"]).optional(),
   remoteAllowed: z.boolean().optional(),
   splitBreakStart: z.string().optional(),
@@ -136,6 +137,12 @@ const publicHolidaySchema = z.object({
 const transferSchema = z.object({
   employeeId: z.coerce.number({ required_error: "الموظف مطلوب" }),
   toBranchId: z.coerce.number({ required_error: "الفرع المستقبل مطلوب" }),
+  reason: z.string().optional(),
+  effectiveDate: z.string().optional(),
+  notes: z.string().optional(),
+  toDeptId: z.coerce.number().optional().nullable(),
+  toJobTitle: z.string().optional(),
+  toSalary: z.coerce.number().optional().nullable(),
 });
 
 const idpSchema = z.object({
@@ -2763,11 +2770,12 @@ router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
     const parsed = shiftSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const {
-      name, startTime, endTime, days, isDefault,
+      name, startTime, endTime, days, isDefault, branchId,
       shiftType, remoteAllowed,
       splitBreakStart, splitBreakEnd,
       flexStartEarliest, flexStartLatest,
     } = parsed.data;
+    const effectiveBranchId = branchId ?? scope.branchId;
     // shiftType: 'fixed' (default) | 'flexible' | 'remote' | 'split'
     const effectiveShiftType = shiftType ?? 'fixed';
     const validShiftTypes = ["fixed", "flexible", "remote", "split"];
@@ -2793,7 +2801,7 @@ router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
     const { insertId } = await rawExecute(
       `INSERT INTO shifts ("companyId","branchId",name,"startTime","endTime",days,"isDefault",status,"shiftType","remoteAllowed","splitBreakStart","splitBreakEnd","flexStartEarliest","flexStartLatest")
        VALUES ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,$10,$11,$12,$13)`,
-      [scope.companyId, scope.branchId, String(name).trim(), startTime ?? null, endTime ?? null, days ?? "0,1,2,3,4", isDefault ?? false,
+      [scope.companyId, effectiveBranchId, String(name).trim(), startTime ?? null, endTime ?? null, days ?? "0,1,2,3,4", isDefault ?? false,
        effectiveShiftType, effectiveRemote,
        splitBreakStart || null, splitBreakEnd || null,
        flexStartEarliest || null, flexStartLatest || null]

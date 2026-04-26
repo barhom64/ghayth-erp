@@ -47,6 +47,8 @@ const createPurchaseOrderSchema = z.object({
   vatAmount: z.coerce.number().optional(),
   notes: z.string().optional(),
   expectedDelivery: z.string().optional(),
+  branchId: z.coerce.number().optional().nullable(),
+  companyId: z.coerce.number().optional().nullable(),
   items: z.array(z.any()).optional(),
 });
 
@@ -463,9 +465,11 @@ purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), asy
 
     const parsed = createPurchaseOrderSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { supplierId, totalAmount, vatAmount, notes, expectedDelivery, items } = parsed.data as any;
+    const { supplierId, totalAmount, vatAmount, notes, expectedDelivery, branchId, companyId: bodyCompanyId, items } = parsed.data as any;
 
     if (!totalAmount || Number(totalAmount) <= 0) { throw new ValidationError("المبلغ الإجمالي مطلوب"); return; }
+    const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies?.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
+    const effectiveBranchId = branchId ?? scope.branchId;
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
     const ref = `PO-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
@@ -473,7 +477,7 @@ purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), asy
     const { insertId } = await rawExecute(
       `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"expectedDelivery","createdBy")
        VALUES ($1,$2,$3,'pending',$4,$5,$6,$7,$8)`,
-      [scope.companyId, scope.branchId, ref, Number(totalAmount), supplierId, notes ?? null, expectedDelivery ?? null, scope.userId]
+      [effectiveCompanyId, effectiveBranchId, ref, Number(totalAmount), supplierId, notes ?? null, expectedDelivery ?? null, scope.userId]
     );
 
     if (Array.isArray(items) && items.length > 0) {

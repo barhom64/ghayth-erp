@@ -59,6 +59,8 @@ const createMaintenanceSchema = z.object({
   cost: z.coerce.number().min(0).optional(),
   mileageAtService: z.coerce.number().optional(),
   serviceDate: z.string().optional(),
+  nextServiceDate: z.string().optional(),
+  nextServiceKm: z.coerce.number().optional(),
   performedBy: z.string().optional(),
   status: z.string().optional(),
 });
@@ -1210,12 +1212,13 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
     );
     const assignedMechanic = b.performedBy || (mechanics[0]?.name ?? null);
 
-    const nextServiceDate = new Date();
-    nextServiceDate.setMonth(nextServiceDate.getMonth() + 3);
+    const defaultNextDate = new Date();
+    defaultNextDate.setMonth(defaultNextDate.getMonth() + 3);
+    const effectiveNextServiceDate = b.nextServiceDate || defaultNextDate.toISOString().split('T')[0];
 
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_maintenance ("companyId","vehicleId",type,description,cost,"mileageAtService","serviceDate","performedBy",status,"nextServiceDate") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [scope.companyId, b.vehicleId, b.type, b.description, b.cost || 0, b.mileageAtService, b.serviceDate || new Date().toISOString().split('T')[0], assignedMechanic, b.status || 'in_progress', nextServiceDate.toISOString().split('T')[0]]
+      `INSERT INTO fleet_maintenance ("companyId","vehicleId",type,description,cost,"mileageAtService","serviceDate","performedBy",status,"nextServiceDate","nextServiceKm") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [scope.companyId, b.vehicleId, b.type, b.description, b.cost || 0, b.mileageAtService, b.serviceDate || new Date().toISOString().split('T')[0], assignedMechanic, b.status || 'in_progress', effectiveNextServiceDate, b.nextServiceKm ?? null]
     );
 
     if (b.vehicleId) {

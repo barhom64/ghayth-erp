@@ -34,7 +34,7 @@ vendorsRouter.get("/vendors", requirePermission("finance:read"), async (req, res
 vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { name, contactPerson, phone, email, taxNumber, address, paymentTerms } = req.body as any;
+    const { name, contactPerson, phone, email, taxNumber, address, paymentTerms, category } = req.body as any;
     if (!name) {
       throw new ValidationError("اسم المورد مطلوب", {
         field: "name",
@@ -42,9 +42,9 @@ vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, 
       });
     }
     const { insertId } = await rawExecute(
-      `INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null, address || null, paymentTerms || null]
+      `INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms", category)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null, address || null, paymentTerms || null, category || null]
     );
 
     emitEvent({
