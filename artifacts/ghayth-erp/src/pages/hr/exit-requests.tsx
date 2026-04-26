@@ -33,7 +33,7 @@ export default function ExitRequestsPage() {
   const items = data?.data || [];
   const stats = data?.stats || {};
 
-  const approveMut = useApiMutation(null as any, "PATCH", [["hr-exit"]], {
+  const approveMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-exit"]], {
     successMessage: "تم اعتماد الطلب",
   });
 

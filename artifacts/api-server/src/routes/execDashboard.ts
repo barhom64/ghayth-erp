@@ -195,9 +195,9 @@ execDashboardRouter.get("/overview", async (req, res) => {
     // ─── 10. FLEET MAINTENANCE DUE (30 days) ──────────────────────────────
     const fleetMaintenance = await safe(async () => {
       const [r] = await rawQuery<any>(
-        `SELECT COUNT(*)::int AS n FROM vehicles
+        `SELECT COUNT(*)::int AS n FROM fleet_vehicles
          WHERE "companyId"=$1
-           AND ("nextMaintenanceDate"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+           AND ("nextServiceDate"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
                 OR "registrationExpiry"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days')`,
         [companyId]
       );
@@ -209,8 +209,8 @@ execDashboardRouter.get("/overview", async (req, res) => {
       const [r] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM employees
          WHERE "companyId"=$1 AND status='active'
-           AND ("residencyExpiry"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
-                OR "contractEndDate"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days')`,
+           AND ("iqamaExpiry"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+                OR "passportExpiry"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days')`,
         [companyId]
       );
       return Number(r?.n ?? 0);
