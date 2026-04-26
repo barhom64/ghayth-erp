@@ -39,8 +39,23 @@ jobs:
           # inside Actions but we skip it explicitly to keep the log clean.
           HUSKY: '0'
 
-      - name: typecheck
-        run: pnpm -s run typecheck
+      - name: Debug info
+        if: always()
+        run: |
+          echo "Node: $(node -v)  pnpm: $(pnpm -v)  tsc: $(pnpm exec tsc --version)"
+          echo "--- ls lib/db/dist (first 10) ---"
+          ls lib/db/dist/ 2>&1 | head -10
+          echo "--- ls lib/api-zod/dist (first 10) ---"
+          ls lib/api-zod/dist/ 2>&1 | head -10
+
+      - name: typecheck:libs (tsc --build)
+        run: pnpm -s run typecheck:libs
+
+      - name: typecheck:api-server
+        run: pnpm -s --filter @workspace/api-server run typecheck
+
+      - name: typecheck:remaining
+        run: pnpm -r --filter "./artifacts/**" --filter "./scripts" --if-present run typecheck
 
       - name: lint:patterns
         run: pnpm -s run lint:patterns
