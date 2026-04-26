@@ -966,9 +966,9 @@ router.get("/leaves/:id", requirePermission("hr:read"), async (req, res) => {
     const id = Number(req.params.id);
     const [item] = await rawQuery<any>(
       `SELECT lr.id, lr.status, lr."startDate", lr."endDate", lr.days AS duration,
-              lr.reason, lr."createdAt", lr."updatedAt", lr."rejectedReason",
-              lr."approvedBy", lr."approvedAt", lr."documentUrl",
-              lr."leaveTypeId", lr."employeeId", lr."companyId", lr."branchId",
+              lr.reason, lr."createdAt", lr."rejectedReason",
+              lr."approvedBy", lr."approvedAt",
+              lr."leaveTypeId", lr."employeeId", lr."companyId",
               e.name AS "employeeName", lt.name AS "leaveTypeName",
               lt.name AS "leaveType",
               CONCAT('LV-', lr.id) AS ref,
@@ -1751,7 +1751,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
       await rawExecute(
         `DELETE FROM payroll_deductions
          WHERE "companyId" = $1 AND "employeeId" = $2 AND type = 'absence'
-           AND date BETWEEN $3 AND $4
+           AND "effectiveDate" BETWEEN $3 AND $4
            AND (status IS NULL OR status <> 'deducted_in_payroll')`,
         [asn.companyId, request.employeeId, request.startDate, request.endDate]
       ).catch((e) => console.error("Failed to clear pending absence deductions:", e));
@@ -2900,9 +2900,9 @@ router.post("/salary-components", requirePermission("hr:create"), async (req, re
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { name, type, category, value, taxable } = parsed.data;
     const { insertId } = await rawExecute(
-      `INSERT INTO salary_components ("companyId",name,type,category,value,taxable,status)
-       VALUES ($1,$2,$3,$4,$5,$6,'active')`,
-      [scope.companyId, String(name).trim(), type ?? "fixed", category ?? "allowance", Number(value ?? 0), taxable ?? true]
+      `INSERT INTO salary_components ("companyId",name,type,"calculationType",value,"isTaxable","isActive")
+       VALUES ($1,$2,$3,$4,$5,$6,true)`,
+      [scope.companyId, String(name).trim(), type ?? "earning", category ?? "fixed", Number(value ?? 0), taxable ?? true]
     );
     await createAuditLog({
       companyId: scope.companyId,
@@ -3722,7 +3722,7 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
     }
 
     await rawExecute(
-      `UPDATE hr_leave_requests SET status = 'cancelled', notes = COALESCE(notes,'') || ' | إلغاء: ' || $1 WHERE id = $2`,
+      `UPDATE hr_leave_requests SET status = 'cancelled', "rejectedReason" = COALESCE("rejectedReason",'') || ' | إلغاء: ' || $1 WHERE id = $2`,
       [b.reason, id]
     );
 
@@ -3833,7 +3833,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
       const totalNet = Number(existing.totalNet ?? 0);
 
       const lines = await rawQuery<any>(
-        `SELECT pl."employeeId", pl."gosiEmployee", pl."gosiEmployer", pl.basic, pl."grossSalary", pl."netSalary"
+        `SELECT pl."employeeId", pl.gosi AS "gosiEmployee", pl."gosiEmployer", pl.basic, pl."grossSalary", pl."netSalary"
          FROM payroll_lines pl WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL`,
         [Number(req.params.id)]
       );
@@ -4560,7 +4560,7 @@ async function computeSystemEvaluation(companyId: number, employeeId: number): P
   // Document quality score: count of documents with description in last 90 days
   const [docRow] = await rawQuery<any>(
     `SELECT COUNT(*) AS total,
-            COUNT(*) FILTER (WHERE description IS NOT NULL AND description != '') AS documented
+            COUNT(*) FILTER (WHERE notes IS NOT NULL AND notes != '') AS documented
      FROM employee_documents
      WHERE "companyId" = $1 AND "employeeId" = $2
        AND "createdAt" >= CURRENT_DATE - INTERVAL '90 days'`,
@@ -4785,9 +4785,10 @@ router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, r
     const cycleId = Number(req.params.id);
 
     const [cycle] = await rawQuery<any>(
-      `SELECT ec.*, e.name AS "employeeName", e."empNumber", e."jobTitle"
+      `SELECT ec.*, e.name AS "employeeName", e."empNumber", ea."jobTitle"
        FROM evaluation_cycles ec
        JOIN employees e ON e.id = ec."employeeId"
+       LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
        WHERE ec.id = $1 AND ec."companyId" = $2`,
       [cycleId, scope.companyId]
     );
@@ -4832,9 +4833,10 @@ router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, r
     );
 
     const peerEvals = await rawQuery<any>(
-      `SELECT pe.*, e.name AS "evaluatorName", e."jobTitle" AS "evaluatorTitle"
+      `SELECT pe.*, e.name AS "evaluatorName", ea."jobTitle" AS "evaluatorTitle"
        FROM peer_evaluations pe
        JOIN employees e ON e.id = pe."evaluatorId"
+       LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
        WHERE pe."cycleId" = $1`,
       [cycleId]
     );
@@ -5135,9 +5137,10 @@ router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async
     const cycleId = Number(req.params.id);
 
     const [cycle] = await rawQuery<any>(
-      `SELECT ec.*, e.name AS "employeeName", e."jobTitle"
+      `SELECT ec.*, e.name AS "employeeName", ea."jobTitle"
        FROM evaluation_cycles ec
        JOIN employees e ON e.id = ec."employeeId"
+       LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
        WHERE ec.id = $1 AND ec."companyId" = $2`,
       [cycleId, scope.companyId]
     );
@@ -5312,11 +5315,11 @@ router.get("/delegations", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT d.id, d."delegatorId", d."delegateId", d.scope, d.reason, d.status, d."startDate", d."endDate", d."createdAt",
+      `SELECT d.id, d."fromUserId" AS "delegatorId", d."toUserId" AS "delegateId", d.scope, d.reason, d.status, d."startDate", d."endDate", d."createdAt",
               e1.name AS "delegatorName", e2.name AS "delegateName"
        FROM delegations d
-       LEFT JOIN employees e1 ON e1.id = d."delegatorId"
-       LEFT JOIN employees e2 ON e2.id = d."delegateId"
+       LEFT JOIN employees e1 ON e1.id = d."fromUserId"
+       LEFT JOIN employees e2 ON e2.id = d."toUserId"
        WHERE d."companyId" = $1
        ORDER BY d."createdAt" DESC
        LIMIT 50`,
@@ -5370,7 +5373,7 @@ router.post("/delegations", requirePermission("hr:approve"), async (req, res) =>
     // { success: true, id: null } — a lie to the caller. Drop the catch so
     // real DB errors surface through handleRouteError (with requestId).
     const r = await rawExecute(
-      `INSERT INTO delegations ("delegatorId","delegateId","companyId",scope,reason,status,"startDate","endDate") VALUES ($1,$2,$3,$4,$5,'active',$6,$7)`,
+      `INSERT INTO delegations ("fromUserId","toUserId","companyId",scope,reason,status,"startDate","endDate") VALUES ($1,$2,$3,$4,$5,'active',$6,$7)`,
       [emp.id, Number(delegateId), scope.companyId, delegationScope || "عام", String(reason).trim(), startDate || new Date(), endDate || null]
     );
     await createAuditLog({
@@ -6281,17 +6284,17 @@ router.get("/turnover-report", requirePermission("hr:read"), async (req, res) =>
     );
 
     const terminated = await rawQuery<any>(
-      `SELECT ec."terminationType", ec."terminationDate",
+      `SELECT ec."terminationReason" AS "terminationType", ec."terminatedAt" AS "terminationDate",
               e.name AS "employeeName", ea."departmentId", ea."branchId",
               d.name AS "deptName", b.name AS "branchName",
-              EXTRACT(MONTH FROM ec."terminationDate") AS month
+              EXTRACT(MONTH FROM ec."terminatedAt") AS month
        FROM employee_contracts ec
        JOIN employees e ON e.id=ec."employeeId"
        LEFT JOIN employee_assignments ea ON ea."employeeId"=ec."employeeId" AND ea."companyId"=$1
        LEFT JOIN departments d ON d.id=ea."departmentId"
        LEFT JOIN branches b ON b.id=ea."branchId"
-       WHERE ec."companyId"=$1 AND ec."terminationDate" IS NOT NULL
-         AND EXTRACT(YEAR FROM ec."terminationDate")=$2`,
+       WHERE ec."companyId"=$1 AND ec."terminatedAt" IS NOT NULL
+         AND EXTRACT(YEAR FROM ec."terminatedAt")=$2`,
       [scope.companyId, targetYear]
     );
 
@@ -6465,12 +6468,12 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
     // Employee documents (iqama, work permit, driving license, etc.) from employee_documents table
     const employeeDocs = await rawQuery<any>(
       `SELECT ed."employeeId" AS "entityId", e.name AS "entityName", ed."expiryDate",
-              ed."documentType" AS "docType", ed."documentType" AS "docLabel",
+              ed.type AS "docType", ed.name AS "docLabel",
               (ed."expiryDate"::date - CURRENT_DATE) AS "daysLeft",
               'employee' AS "entityType"
        FROM employee_documents ed
        JOIN employees e ON e.id=ed."employeeId"
-       WHERE ed."companyId"=$1 AND ed.status='active'
+       WHERE ed."companyId"=$1 AND ed.status='valid'
          AND ed."expiryDate" IS NOT NULL
          AND ed."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
@@ -6478,8 +6481,8 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
 
     // Company documents (commercial registration, chamber of commerce, etc.)
     const companyDocs = await rawQuery<any>(
-      `SELECT cd.id AS "entityId", cd."documentType" AS "entityName", cd."expiryDate",
-              cd."documentType" AS "docType", cd."documentType" AS "docLabel",
+      `SELECT cd.id AS "entityId", cd.title AS "entityName", cd."expiryDate",
+              cd.type AS "docType", cd.title AS "docLabel",
               (cd."expiryDate"::date - CURRENT_DATE) AS "daysLeft",
               'company' AS "entityType"
        FROM company_documents cd
@@ -6536,10 +6539,10 @@ router.post("/company-documents", requirePermission("hr:create"), async (req, re
     const b = parsed.data as any;
 
     const { insertId } = await rawExecute(
-      `INSERT INTO company_documents ("companyId","documentType","documentNumber","issueDate","expiryDate","issuingAuthority","reminderDays",notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [scope.companyId, b.documentType, b.documentNumber || null, b.issueDate || null,
-       b.expiryDate || null, b.issuingAuthority || null, b.reminderDays || 30, b.notes || null]
+      `INSERT INTO company_documents ("companyId",title,type,"expiryDate",notes)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [scope.companyId, b.documentType || b.title, b.documentNumber || b.type || null,
+       b.expiryDate || null, b.notes || null]
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "company_document.created", entity: "hr_company_documents", entityId: insertId, details: JSON.stringify({ documentType: b.documentType }) }).catch(console.error);
 
@@ -6605,11 +6608,11 @@ router.post("/employee-documents", requirePermission("hr:create"), async (req, r
     const b = parsed.data as any;
 
     const { insertId } = await rawExecute(
-      `INSERT INTO employee_documents ("companyId","employeeId","documentType","documentNumber","issueDate","expiryDate","issuingAuthority","reminderDays",notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, Number(b.employeeId), b.documentType, b.documentNumber || null,
-       b.issueDate || null, b.expiryDate || null, b.issuingAuthority || null,
-       b.reminderDays || 30, b.notes || null]
+      `INSERT INTO employee_documents ("companyId","employeeId",type,name,number,"issueDate","expiryDate",notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [scope.companyId, Number(b.employeeId), b.documentType || b.type, b.documentType || b.name || '',
+       b.documentNumber || b.number || null, b.issueDate || null,
+       b.expiryDate || null, b.notes || null]
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "employee_document.created", entity: "hr_employee_documents", entityId: insertId, details: JSON.stringify({ employeeId: Number(b.employeeId), documentType: b.documentType }) }).catch(console.error);
 

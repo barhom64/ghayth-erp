@@ -50,13 +50,13 @@ export default function TrainingDetailPage() {
 
   const { data: program, isLoading, isError } = useApiQuery<any>(
     ["training-program", id ?? ""],
-    `/training/programs/${id ?? 0}`,
+    `/hr/training/programs/${id ?? 0}`,
     { enabled: !!id },
   );
 
   const { data: enrollmentsData } = useApiQuery<any>(
     ["training-enrollments", id ?? ""],
-    `/training/enrollments?programId=${id ?? 0}`,
+    `/hr/training/enrollments?programId=${id ?? 0}`,
     { enabled: !!id },
   );
   const enrollments = enrollmentsData?.data || [];

@@ -870,8 +870,9 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
               ea."jobTitle", ea."jobTitleId", ea.role, ea.salary,
               ea."branchId", ea."departmentId", ea."managerId"
          FROM employees e
-         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-        WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL`,
+         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status IN ('active','suspended','terminated')
+        WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL
+        ORDER BY ea.status = 'active' DESC, ea.id DESC LIMIT 1`,
       [Number(id), scope.companyId]
     );
 
@@ -977,6 +978,18 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       await rawExecute(`UPDATE employees SET ${empFields.join(",")} WHERE id = $${empVals.length}`, empVals);
     }
 
+    if (status === "active" && before.status !== "active") {
+      await rawExecute(
+        `UPDATE employee_assignments SET status = 'active' WHERE id = $1`,
+        [employee.assignmentId]
+      );
+    } else if (status === "suspended" && before.status !== "suspended") {
+      await rawExecute(
+        `UPDATE employee_assignments SET status = 'suspended' WHERE id = $1`,
+        [employee.assignmentId]
+      );
+    }
+
     // If any expiry field was changed, refresh obligations. Old obligations with
     // different dedupeKey remain until scanner marks them met/breached; the new
     // dedupeKey (which includes the date) ensures no duplicates.
@@ -1045,10 +1058,10 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
               COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
               ea.role, ea.salary, ea."branchId", ea."departmentId", ea."managerId"
          FROM employees e
-         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+         JOIN employee_assignments ea ON ea.id = $2
          LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
         WHERE e.id = $1 AND e."deletedAt" IS NULL`,
-      [Number(id)]
+      [Number(id), employee.assignmentId]
     );
 
     // Build a field-level diff for the audit log so operators can see what

@@ -31,9 +31,9 @@ export default function TrainingPage() {
   const { permissions } = useAppContext();
   const canManage = permissions.canManageEmployees;
   const [filters, setFilters] = useFilters();
-  const { data, isLoading, isError, refetch: refetchPrograms } = useApiQuery<any>(["training-programs"], "/training/programs");
-  const { data: statsData } = useApiQuery<any>(["training-stats"], "/training/stats");
-  const { data: enrollmentsData, refetch: refetchEnrollments } = useApiQuery<any>(["training-enrollments"], "/training/enrollments");
+  const { data, isLoading, isError, refetch: refetchPrograms } = useApiQuery<any>(["training-programs"], "/hr/training/programs");
+  const { data: statsData } = useApiQuery<any>(["training-stats"], "/hr/training/stats");
+  const { data: enrollmentsData, refetch: refetchEnrollments } = useApiQuery<any>(["training-enrollments"], "/hr/training/enrollments");
   const items = data?.data || [];
   const enrollments = enrollmentsData?.data || [];
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
@@ -50,7 +50,7 @@ export default function TrainingPage() {
   ];
 
   const programActions = useInlineActions({
-    endpoint: "/training/programs",
+    endpoint: "/hr/training/programs",
     queryKeys: [["training-programs"], ["training-stats"]],
     onSuccess: () => refetchPrograms(),
   });
@@ -64,7 +64,7 @@ export default function TrainingPage() {
   ];
 
   const enrollmentActions = useInlineActions({
-    endpoint: "/training/enrollments",
+    endpoint: "/hr/training/enrollments",
     queryKeys: [["training-enrollments"], ["training-stats"]],
     onSuccess: () => refetchEnrollments(),
   });
