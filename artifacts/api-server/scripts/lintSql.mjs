@@ -67,6 +67,9 @@ const SAFE_NAMES = new Set([
   // `seq` in correspondence.ts is a ternary between two hardcoded sequence
   // names ('correspondence_outgoing_seq' / 'correspondence_incoming_seq').
   "seq",
+  // `onlyUnresolved` in admin.ts is a boolean derived from req.query —
+  // the ternary only picks between a hardcoded SQL fragment and empty string.
+  "onlyUnresolved",
 ]);
 
 // Member expressions like `params.length` or `sets.join(...)` are allowed
