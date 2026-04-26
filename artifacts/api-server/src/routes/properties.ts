@@ -899,7 +899,7 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
       });
     } catch (obErr) { console.error("Contract obligation registration failed:", obErr); }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     const schedule = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber"`, [insertId]);
 
     // Lifecycle event: lease.created
@@ -1218,7 +1218,7 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
       after: { endDate: newEndDate.toISOString().split("T")[0], totalContractValue: newTotal },
     }).catch(console.error);
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ ...updated, event: "property.contract.renewed", renewalMonths });
   } catch (err) { handleRouteError(err, res, "Renew contract error:"); }
 });
@@ -1307,7 +1307,7 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
       after: { status: "terminated", reason: b.reason, earlyFee, journalEntryId },
     }).catch(console.error);
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ ...updated, event: "property.contract.terminated", earlyFee, journalEntryId });
   } catch (err) { handleRouteError(err, res, "Terminate contract error:"); }
 });
@@ -3108,7 +3108,7 @@ router.get("/contracts/:id/schedule", requirePermission("property:read"), async 
   try {
     const scope = req.scope!;
     const contractId = Number(req.params.id);
-    const [contract] = await rawQuery<any>(`SELECT id FROM rental_contracts WHERE id=$1 AND "companyId"=$2`, [contractId, scope.companyId]);
+    const [contract] = await rawQuery<any>(`SELECT id FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [contractId, scope.companyId]);
     if (!contract) throw new NotFoundError("العقد غير موجود");
     const schedule = await rawQuery<any>(
       `SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber"`,
