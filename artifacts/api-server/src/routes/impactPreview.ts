@@ -160,7 +160,7 @@ router.post("/", requirePermission("admin:read"), async (req, res): Promise<void
 
     if (entityType === "expense") {
       const [expense] = await rawQuery<any>(
-        `SELECT je.*, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je LEFT JOIN journal_lines jl ON jl."journalId" = je.id WHERE je.id = $1 AND je."companyId" = $2 AND je.ref LIKE 'EXP%' GROUP BY je.id`,
+        `SELECT je.*, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je LEFT JOIN journal_lines jl ON jl."journalId" = je.id WHERE je.id = $1 AND je."companyId" = $2 AND je.ref LIKE 'EXP%' AND je."deletedAt" IS NULL GROUP BY je.id`,
         [entityId, scope.companyId]
       );
       if (expense) {

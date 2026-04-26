@@ -253,8 +253,8 @@ financeHardeningRouter.post("/journal-manual", requirePermission("finance:create
     });
 
     await rawExecute(
-      `UPDATE journal_entries SET "approvalStatus"='draft', "isManual"=TRUE, "costCenter"=$1 WHERE id=$2`,
-      [costCenter ?? null, journalId]
+      `UPDATE journal_entries SET "approvalStatus"='draft', "isManual"=TRUE, "costCenter"=$1 WHERE id=$2 AND "companyId"=$3`,
+      [costCenter ?? null, journalId, scope.companyId]
     );
 
     emitEvent({

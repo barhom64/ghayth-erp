@@ -417,7 +417,7 @@ protectedRouter.get("/tickets/:id/replies", withPortalScope(async (req, res) => 
     const scope = req.portalScope;
     const { id } = req.params;
     const [ticket] = await portalScopedQuery<any>(scope,
-      `SELECT id FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
+      `SELECT id FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [scope.clientId, scope.companyId, Number(id)]
     );
     if (!ticket) throw new NotFoundError("الطلب غير موجود");
@@ -446,7 +446,7 @@ protectedRouter.post("/tickets/:id/replies", withPortalScope(async (req, res) =>
       throw new ValidationError("نص الرد مطلوب");
     }
     const [ticket] = await portalScopedQuery<any>(scope,
-      `SELECT id, status FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
+      `SELECT id, status FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [scope.clientId, scope.companyId, Number(id)]
     );
     if (!ticket) throw new NotFoundError("الطلب غير موجود");
@@ -499,7 +499,7 @@ protectedRouter.post("/tickets", withPortalScope(async (req, res) => {
       contractId: contractId || null,
     });
     const [ticket] = await portalScopedQuery<any>(scope,
-      `SELECT id, ref, title, status, priority, category, "invoiceId", "contractId", "createdAt" FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
+      `SELECT id, ref, title, status, priority, category, "invoiceId", "contractId", "createdAt" FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [clientId, companyId, insertId]
     );
     createAuditLog({
@@ -615,7 +615,7 @@ protectedRouter.post("/invoices/:id/csat", withPortalScope(async (req, res) => {
     const body = parsed_portalCsatSchema.data;
     const { score, comment } = body;
     const [ticket] = await portalScopedQuery<any>(scope,
-      `SELECT id, "assigneeId", status FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
+      `SELECT id, "assigneeId", status FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [scope.clientId, scope.companyId, Number(id)]
     );
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");

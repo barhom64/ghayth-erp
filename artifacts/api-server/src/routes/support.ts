@@ -239,8 +239,8 @@ router.post("/tickets/check-sla", requirePermission("support:read"), async (req,
       console.log(`[SLA BREACH] Ticket ${ticket.ref} — escalating to critical priority`);
       try {
         await rawExecute(
-          `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND priority != 'critical'`,
-          [ticket.id]
+          `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND priority != 'critical'`,
+          [ticket.id, scope.companyId]
         );
         await createNotification({
           companyId: scope.companyId,
@@ -305,14 +305,14 @@ router.post("/tickets/:id/replies", requirePermission("support:create"), async (
       [ticketId, scope.userId, b.authorName, b.message, b.isInternal || false]
     );
     if (!b.isInternal && !ticket.firstResponseAt) {
-      await rawExecute(`UPDATE support_tickets SET "firstResponseAt"=NOW(), "updatedAt"=NOW() WHERE id=$1`, [ticketId]);
+      await rawExecute(`UPDATE support_tickets SET "firstResponseAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [ticketId, scope.companyId]);
     }
 
     if (ticket.slaDeadline && new Date() > new Date(ticket.slaDeadline)) {
       try {
         await rawExecute(
-          `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND priority != 'critical'`,
-          [ticketId]
+          `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND priority != 'critical'`,
+          [ticketId, scope.companyId]
         );
         await createNotification({
           companyId: scope.companyId,
@@ -356,8 +356,8 @@ router.post("/tickets/:id/field-visit", requirePermission("support:write"), asyn
     }
 
     await rawExecute(
-      `UPDATE support_tickets SET status='field_visit', "updatedAt"=NOW() WHERE id=$1`,
-      [ticketId]
+      `UPDATE support_tickets SET status='field_visit', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
+      [ticketId, scope.companyId]
     );
 
     if (ticket.assigneeId) {
@@ -455,7 +455,8 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
     if (b.assigneeId !== undefined) { params.push(b.assigneeId); sets.push(`"assigneeId"=$${params.length}`); }
     if (b.priority !== undefined) { params.push(b.priority); sets.push(`priority=$${params.length}`); }
     params.push(ticketId);
-    await rawExecute(`UPDATE support_tickets SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    params.push(scope.companyId);
+    await rawExecute(`UPDATE support_tickets SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
 
     // Emit a specific event per lifecycle transition so audit_logs +
     // downstream listeners (notification engine, rules engine, BI) see

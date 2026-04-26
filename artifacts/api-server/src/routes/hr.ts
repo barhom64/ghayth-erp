@@ -696,11 +696,11 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
 
     // ── Update attendance record ──
     await rawExecute(
-      `UPDATE attendance SET "checkOut" = $1, notes = COALESCE($2, notes), "checkOutLat" = $4, "checkOutLon" = $5, "overtimeMinutes" = $6 WHERE id = $3`,
+      `UPDATE attendance SET "checkOut" = $1, notes = COALESCE($2, notes), "checkOutLat" = $4, "checkOutLon" = $5, "overtimeMinutes" = $6 WHERE id = $3 AND "companyId" = $7`,
       [now.toISOString(), notes ?? null, existing.id,
         lat !== undefined && lat !== null ? Number(lat) : null,
         lon !== undefined && lon !== null ? Number(lon) : null,
-        overtimeMinutes]
+        overtimeMinutes, scope.companyId]
     );
 
     // ── Update monthly stats ──
@@ -724,8 +724,8 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
       if (approvedExcuse) {
         excusedEarlyLeave = true;
         await rawExecute(
-          `UPDATE hr_excuse_requests SET "updatedAt" = NOW() WHERE id = $1`,
-          [approvedExcuse.id]
+          `UPDATE hr_excuse_requests SET "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
+          [approvedExcuse.id, scope.companyId]
         );
       }
     }
@@ -3208,8 +3208,8 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       const target = entityUpdateMap[request.refType];
       if (target) {
         await rawExecute(
-          `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1`,
-          [request.refId]
+          `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1 AND "companyId" = $2`,
+          [request.refId, scope.companyId]
         );
       }
       const journalRefTypes = ["expense", "salary_advance", "custody"];
@@ -3225,8 +3225,8 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       const target = entityUpdateMap[request.refType];
       if (target) {
         await rawExecute(
-          `UPDATE ${target.table} SET ${target.column} = 'rejected' WHERE id = $1`,
-          [request.refId]
+          `UPDATE ${target.table} SET ${target.column} = 'rejected' WHERE id = $1 AND "companyId" = $2`,
+          [request.refId, scope.companyId]
         );
       }
       const journalRefTypes = ["expense", "salary_advance", "custody"];
@@ -3645,8 +3645,8 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
 
     if (approvalResult.requiresApproval) {
       await rawExecute(
-        `UPDATE official_letters SET status = 'pending_approval' WHERE id = $1`,
-        [insertId]
+        `UPDATE official_letters SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2`,
+        [insertId, scope.companyId]
       );
     }
 
@@ -3827,8 +3827,8 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
     }
 
     await rawExecute(
-      `UPDATE hr_leave_requests SET status = 'cancelled', "rejectedReason" = COALESCE("rejectedReason",'') || ' | إلغاء: ' || $1 WHERE id = $2`,
-      [b.reason, id]
+      `UPDATE hr_leave_requests SET status = 'cancelled', "rejectedReason" = COALESCE("rejectedReason",'') || ' | إلغاء: ' || $1 WHERE id = $2 AND "companyId" = $3`,
+      [b.reason, id, scope.companyId]
     );
 
     // Cancel return-to-work obligation
@@ -4290,8 +4290,8 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
       );
     } else {
       await rawExecute(
-        `UPDATE official_letters SET status = $1 WHERE id = $2`,
-        [newStatus, Number(id)]
+        `UPDATE official_letters SET status = $1 WHERE id = $2 AND "companyId" = $3`,
+        [newStatus, Number(id), scope.companyId]
       );
     }
 

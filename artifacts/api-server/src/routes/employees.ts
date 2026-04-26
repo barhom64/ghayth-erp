@@ -1043,7 +1043,8 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       if (departmentId) { vals.push(departmentId); fields.push(`"departmentId" = $${vals.length}`); }
       if (fields.length) {
         vals.push(employee.assignmentId);
-        await rawExecute(`UPDATE employee_assignments SET ${fields.join(",")} WHERE id = $${vals.length}`, vals);
+        vals.push(scope.companyId);
+        await rawExecute(`UPDATE employee_assignments SET ${fields.join(",")} WHERE id = $${vals.length - 1} AND "companyId" = $${vals.length}`, vals);
       }
     }
 
@@ -1147,8 +1148,8 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
         [employee.assignmentId, scope.companyId]
       );
       await tx.query(
-        `UPDATE employees SET status = 'terminated' WHERE id = $1`,
-        [Number(id)]
+        `UPDATE employees SET status = 'terminated' WHERE id = $1 AND "companyId" = $2`,
+        [Number(id), scope.companyId]
       );
 
       // 1. Deactivate contracts tied to this employee / assignment so
