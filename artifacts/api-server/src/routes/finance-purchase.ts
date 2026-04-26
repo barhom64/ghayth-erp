@@ -1114,8 +1114,8 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
 
     if (pr.supplierId) {
       const [supplier] = await rawQuery<any>(
-        `SELECT name, email, phone FROM suppliers WHERE id = $1`,
-        [pr.supplierId]
+        `SELECT name, email, phone FROM suppliers WHERE id = $1 AND "companyId" = $2`,
+        [pr.supplierId, scope.companyId]
       );
       if (supplier?.email) {
         console.log(`[P2P] Supplier email → ${supplier.email} for PO ${poRef}`);
@@ -1265,8 +1265,8 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", requirePermission("fin
     let prTotal = poTotal;
     if (po.requestId) {
       const [prRow] = await rawQuery<any>(
-        `SELECT "totalAmount" FROM purchase_requests WHERE id = $1`,
-        [po.requestId]
+        `SELECT "totalAmount" FROM purchase_requests WHERE id = $1 AND "companyId" = $2`,
+        [po.requestId, scope.companyId]
       );
       if (prRow) prTotal = Number(prRow.totalAmount);
     }

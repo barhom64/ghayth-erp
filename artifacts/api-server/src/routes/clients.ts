@@ -400,8 +400,8 @@ router.post("/:id/portal-account", requirePermission("crm:write"), async (req, r
       [Number(id), scope.companyId, email, passwordHash]
     );
     const [account] = await rawQuery<any>(
-      `SELECT id, email, "isActive", "mustChangePassword", "createdAt" FROM client_portal_accounts WHERE id = $1`,
-      [insertId]
+      `SELECT id, email, "isActive", "mustChangePassword", "createdAt" FROM client_portal_accounts WHERE id = $1 AND "companyId" = $2`,
+      [insertId, scope.companyId]
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "client_portal_accounts", entityId: insertId, details: JSON.stringify({ clientId: Number(id), email }) }).catch(console.error);
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "client_portal_accounts", entityId: insertId, after: { clientId: Number(id), email } }).catch(console.error);
@@ -452,8 +452,8 @@ router.patch("/:id/portal-account", requirePermission("crm:write"), async (req, 
       params
     );
     const [updated] = await rawQuery<any>(
-      `SELECT id, email, "isActive", "mustChangePassword", "lastLoginAt", "createdAt" FROM client_portal_accounts WHERE id = $1`,
-      [account.id]
+      `SELECT id, email, "isActive", "mustChangePassword", "lastLoginAt", "createdAt" FROM client_portal_accounts WHERE id = $1 AND "companyId" = $2`,
+      [account.id, scope.companyId]
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.updated", entity: "client_portal_accounts", entityId: account.id, details: JSON.stringify({ clientId: Number(id), isActive }) }).catch(console.error);
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "client_portal_accounts", entityId: account.id, after: { clientId: Number(id), isActive, passwordChanged: !!password } }).catch(console.error);

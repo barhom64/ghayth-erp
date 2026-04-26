@@ -803,7 +803,7 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
     let branchData = null;
     const branchId = template.branchId || scope.branchId;
     if (branchId) {
-      const [branch] = await rawQuery<any>(`SELECT * FROM branches WHERE id=$1`, [branchId]);
+      const [branch] = await rawQuery<any>(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [branchId, scope.companyId]);
       if (branch) {
         branchData = {
           name: branch.name,
