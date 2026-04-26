@@ -3532,8 +3532,8 @@ router.get("/tenants/:id/letters", requirePermission("property:read"), async (re
     const scope = req.scope!;
     const tenantId = Number(req.params.id);
     const rows = await rawQuery<any>(
-      `SELECT l.id, l.subject, l.type, l.type AS direction, l.status, l."sentAt" AS "letterDate",
-              l.sender AS "fromEntity", l.recipient AS "toEntity", l."createdAt"
+      `SELECT l.id, l.subject, l.direction, l.direction AS type, l.status, l."sentAt" AS "letterDate",
+              l."senderName" AS "fromEntity", l."recipientName" AS "toEntity", l."createdAt"
        FROM correspondence l
        WHERE l."companyId" = $1
          AND l."relatedEntity" = 'tenant'

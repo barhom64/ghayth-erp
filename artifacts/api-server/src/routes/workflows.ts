@@ -74,6 +74,7 @@ const createDefinitionSchema = z.object({
 });
 
 const updateDefinitionSchema = z.object({
+  requestType: z.string().min(1).optional(),
   requestTypeLabel: z.string().min(1).optional(),
   description: z.string().optional(),
   isReturnable: z.boolean().optional(),

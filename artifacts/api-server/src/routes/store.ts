@@ -100,7 +100,11 @@ router.post("/products", requirePermission("store:write"), async (req, res) => {
 router.get("/products/:id", requirePermission("store:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT sp.*,
+      COALESCE((SELECT SUM(soi.quantity) FROM store_order_items soi
+        JOIN store_orders so ON so.id = soi."orderId"
+        WHERE soi."productId" = sp.id AND so.status IN ('pending','processing')), 0) AS "reservedQuantity"
+      FROM store_products sp WHERE sp.id=$1 AND sp."companyId"=$2 AND sp."deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     if (!row) throw new NotFoundError("المنتج غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get store product"); }

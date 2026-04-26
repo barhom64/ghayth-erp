@@ -120,7 +120,7 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
         [cid, now.slice(0, 10), cutoff.slice(0, 10)]
       ), []),
       safe(() => rawQuery<any>(
-        `SELECT a.id, a."interviewDate" as "date", a.name as "candidateName",
+        `SELECT a.id, a."interviewDate" as "date", a."applicantName" as "candidateName",
                 a.status, jp.title as "jobTitle", a."postingId"
          FROM job_applications a
          LEFT JOIN job_postings jp ON jp.id = a."postingId"

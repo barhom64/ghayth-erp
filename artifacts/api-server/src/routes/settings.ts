@@ -54,6 +54,7 @@ const updateBranchSchema = z.object({
   email: z.string().optional(),
   website: z.string().optional(),
   footerText: z.string().optional(),
+  companyId: z.coerce.number().optional(),
 });
 
 const createDepartmentSchema = z.object({
@@ -727,7 +728,7 @@ router.delete("/approval-config/:id", requirePermission("settings:write"), async
   try {
     const scope = req.scope!;
     const [beforeChain] = await rawQuery(`SELECT * FROM approval_chains WHERE id=$1`, [Number(req.params.id)]);
-    await rawExecute(`DELETE FROM approval_chains WHERE id=$1`, [Number(req.params.id)]);
+    await rawExecute(`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id=$1`, [Number(req.params.id)]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_approval_config",
       entity: "approval_chains", entityId: Number(req.params.id),

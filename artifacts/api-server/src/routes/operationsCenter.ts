@@ -339,7 +339,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
     try {
       liveFeed = await rawQuery<any>(
         `SELECT a.id, a.action, a.entity, a."entityId",
-                COALESCE(e.name, u.username, 'نظام') AS "userName",
+                COALESCE(e.name, u.email, 'نظام') AS "userName",
                 a."createdAt", a.reason
          FROM audit_logs a
          LEFT JOIN users u ON u.id = a."userId"

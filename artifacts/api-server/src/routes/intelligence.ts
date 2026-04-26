@@ -295,14 +295,12 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
 
     const costlyVehicles = await rawQuery<any>(
       `SELECT fv.id, fv."plateNumber",
-              COALESCE(SUM(fm.cost), 0)::float AS "maintenanceCost",
-              COALESCE(fv.value, 0)::float AS "vehicleValue"
+              COALESCE(SUM(fm.cost), 0)::float AS "maintenanceCost"
        FROM fleet_maintenance fm
        JOIN fleet_vehicles fv ON fv.id = fm."vehicleId"
        WHERE fm."companyId" = $1
          AND fm."createdAt" >= NOW() - INTERVAL '12 months'
-       GROUP BY fv.id, fv."plateNumber", fv.value
-       HAVING COALESCE(fv.value, 0) > 0 AND COALESCE(SUM(fm.cost), 0) > COALESCE(fv.value, 0) * 0.5
+       GROUP BY fv.id, fv."plateNumber"
        ORDER BY "maintenanceCost" DESC LIMIT 3`,
       [cid]
     ).catch(() => []);
