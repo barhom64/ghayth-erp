@@ -1,16 +1,15 @@
 name: guard
 
-# Runs the same scripts/guard.sh stack that fires on every local commit
-# via the .githooks/pre-commit hook. This is the last line of defence:
-# even if a developer bypasses the local hook with --no-verify, this
-# workflow will refuse to merge the PR if any guard is red.
-
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   guard:
@@ -35,42 +34,29 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
         env:
-          # The root postinstall would try to set git hooks; harmless
-          # inside Actions but we skip it explicitly to keep the log clean.
           HUSKY: '0'
 
-      - name: Debug info
-        if: always()
+      - name: Run guard suite
+        id: guard
         run: |
-          echo "Node: $(node -v)  pnpm: $(pnpm -v)  tsc: $(pnpm exec tsc --version)"
-          echo "--- ls lib/db/dist (first 10) ---"
-          ls lib/db/dist/ 2>&1 | head -10
-          echo "--- ls lib/api-zod/dist (first 10) ---"
-          ls lib/api-zod/dist/ 2>&1 | head -10
+          bash scripts/guard.sh 2>&1 | tee /tmp/guard-output.txt
+        continue-on-error: true
 
-      - name: typecheck:libs (tsc --build)
-        run: pnpm -s run typecheck:libs
+      - name: Post failure details to PR
+        if: steps.guard.outcome == 'failure' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('/tmp/guard-output.txt', 'utf8');
+            const last200 = output.split('\n').slice(-200).join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `### CI guard failure\n\n<details><summary>Last 200 lines of guard output</summary>\n\n\`\`\`\n${last200}\n\`\`\`\n\n</details>`
+            });
 
-      - name: typecheck:api-server
-        run: pnpm -s --filter @workspace/api-server run typecheck
-
-      - name: typecheck:remaining
-        run: pnpm -r --filter "./artifacts/**" --filter "./scripts" --if-present run typecheck
-
-      - name: lint:patterns
-        run: pnpm -s run lint:patterns
-
-      - name: audit:routes
-        run: node scripts/src/audit-routes.mjs
-
-      - name: audit:schema-drift
-        run: node scripts/src/audit-schema-drift.mjs
-
-      - name: audit:boundaries
-        run: node scripts/src/audit-domain-boundaries.mjs
-
-      - name: audit:domain-routes
-        run: node scripts/src/audit-domain-routes.mjs
-
-      - name: test
-        run: pnpm -s --filter @workspace/api-server run test
+      - name: Fail if guard failed
+        if: steps.guard.outcome == 'failure'
+        run: exit 1
