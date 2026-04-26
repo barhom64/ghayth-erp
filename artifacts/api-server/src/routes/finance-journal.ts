@@ -324,7 +324,7 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
     await rawExecute(
       `UPDATE journal_entries SET "costCenter" = $1, "departmentId" = $2, "relatedEntityType" = $3, "relatedEntityId" = $4, "paymentMethod" = $5, reference = $6, "isPaid" = $7, "attachmentUrl" = $8, "attachmentType" = $9, "expenseType" = $10, "operationType" = $11, "projectId" = $12, "taxCategory" = $13, "govSyncEnabled" = $14, "govIntegrationId" = $15, "govEntityType" = $16, "govEntityId" = $17 WHERE id = $18`,
       [costCenter ?? null, departmentId ?? null, relatedEntityType ?? null, relatedEntityId ?? null, paymentMethod ?? "cash", reference ?? null, isPaid != null ? !!isPaid : true, attachmentUrl ?? null, attachmentType ?? null, expenseType ?? null, operationType ?? "expense", projectId ?? null, taxCategory ?? null, govSyncEnabled ? true : false, govIntegrationId ? Number(govIntegrationId) : null, govEntityType ?? null, govEntityId ? Number(govEntityId) : null, journalId]
-    ).catch(() => {});
+    ).catch((err) => console.error("Failed to update expense metadata:", err));
 
     if (govSyncEnabled && govIntegrationId && govEntityType && govEntityId) {
       const [validIntegration] = await rawQuery<any>(
@@ -602,7 +602,7 @@ journalRouter.post("/vouchers", requirePermission("finance:create"), async (req,
     await rawExecute(
       `UPDATE journal_entries SET "paymentMethod" = $1, reference = $2, "attachmentUrl" = $3, "attachmentType" = $4, "relatedEntityType" = $5, "relatedEntityId" = $6, "operationType" = $7, "departmentId" = $8 WHERE id = $9`,
       [method ?? "cash", reference ?? null, attachmentUrl ?? null, attachmentType ?? null, relatedEntityType ?? null, relatedEntityId ?? null, operationType ?? type, departmentId ?? null, journalId]
-    ).catch(() => {});
+    ).catch((err) => console.error("Failed to update voucher metadata:", err));
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `voucher.${type}`, entity: "vouchers", entityId: journalId, details: JSON.stringify({ ref, type, amount: baseAmount, vatAmount: computedVat, totalWithVat, accountCode, payee, method }) }).catch(console.error);
 
@@ -929,7 +929,7 @@ journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), 
       entityId: id,
       reason,
       after: { newJournalId, newRef, reverseDate },
-    }).catch(() => {});
+    }).catch((err) => console.error("Failed to create reversal audit log:", err));
 
     emitEvent({
       companyId: scope.companyId,

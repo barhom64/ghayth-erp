@@ -399,7 +399,7 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
       await client.query(
         `UPDATE budgets SET used = used + $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4`,
         [baseAmount, effectiveCompanyId, invRevenueCode, new Date().toISOString().slice(0, 7)]
-      ).catch(() => {});
+      ).catch(console.error);
 
       if (finalDueDate) {
         const collectionDate = new Date(finalDueDate);

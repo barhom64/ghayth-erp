@@ -1809,7 +1809,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
               ` [GL skipped: الفترة المالية "${period.periodName ?? ""}" مغلقة]`,
               insertId,
             ]
-          ).catch(() => {});
+          ).catch(console.error);
         } else {
           const { projectsEngine } = await import("../lib/engines/index.js");
           const glResult = await projectsEngine.postProjectCostGL(
@@ -1956,7 +1956,7 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
         [projectId, scope.companyId]
       );
       for (const m of msRows) {
-        await cancelObligation(scope.companyId, "project_milestone", m.id).catch(() => {});
+        await cancelObligation(scope.companyId, "project_milestone", m.id).catch(console.error);
       }
     } catch (obErr) {
       console.error(`[projects] cancel obligations on close failed for project ${projectId}:`, obErr);

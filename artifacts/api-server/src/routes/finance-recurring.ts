@@ -325,7 +325,7 @@ export async function runRecurringJournal(params: {
          ("companyId","recurringJournalId","runDate",status,error,"triggeredBy")
        VALUES ($1,$2,$3,'failed',$4,$5)`,
       [companyId, recurring.id, new Date().toISOString().slice(0, 10), msg, triggeredBy]
-    ).catch(() => {});
+    ).catch(console.error);
     return { success: false, error: msg };
   }
 }

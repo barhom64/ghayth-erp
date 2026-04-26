@@ -553,7 +553,7 @@ router.post("/import", requirePermission("umrah:write"), async (req, res): Promi
       await rawExecute(
         `UPDATE umrah_import_logs SET "newRecords"=$1,"updatedRecords"=$2,"duplicateRecords"=$3,"errorRecords"=$4,errors=$5,"processedRows"=$6 WHERE id=$7`,
         [newCount, updateCount, dupCount, errCount, JSON.stringify(errors), processed, logId]
-      ).catch(() => {});
+      ).catch(console.error);
     }
 
     await rawExecute(
@@ -773,7 +773,7 @@ router.post("/agent-invoices/generate", requirePermission("umrah:write"), async 
       await rawExecute(
         `UPDATE umrah_agent_invoices SET "journalEntryId"=$1 WHERE id=$2`,
         [journalId, rows[0].id]
-      ).catch(() => {});
+      ).catch(console.error);
 
       emitEvent({
         companyId: scope.companyId,

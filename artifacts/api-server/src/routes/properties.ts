@@ -907,7 +907,7 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
       companyId: scope.companyId, userId: scope.userId,
       action: "lease.created", entity: "rental_contracts", entityId: insertId,
       details: `عقد إيجار جديد — ${b.tenantName || ''} — ${b.startDate} → ${b.endDate}`,
-    }).catch(() => {});
+    }).catch(console.error);
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -1627,7 +1627,7 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
       companyId: scope.companyId, userId: scope.userId,
       action: "rent_payment.received", entity: "rent_payments", entityId: Number(id),
       details: `تحصيل ${paidAmount} — JE ${journalEntryId ?? '-'}`,
-    }).catch(() => {});
+    }).catch(console.error);
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -3147,7 +3147,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
           method: b.method,
           description: `تحصيل قسط إيجار #${existing.installmentNumber} / ${existing.tenantName || ''} / ${existing.unitNumber || ''}`,
         }
-      ).catch(() => {});
+      ).catch(console.error);
     }
     const [row] = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE id=$1`, [installmentId]);
     emitEvent({
@@ -3383,7 +3383,7 @@ router.post("/deposits", requirePermission("property:create"), async (req, res) 
       );
     } catch (jErr) {
       console.error("Deposit journal entry failed:", jErr);
-      await rawExecute(`DELETE FROM property_security_deposits WHERE id=$1`, [insertId]).catch(() => {});
+      await rawExecute(`DELETE FROM property_security_deposits WHERE id=$1`, [insertId]).catch(console.error);
       throw new IntegrationError(
         "تعذّر إنشاء القيد المحاسبي للوديعة — لم يتم تسجيل الوديعة",
         { field: "journalEntry", fix: "راجع إعدادات شجرة الحسابات (1100/2300) ثم أعد المحاولة" }

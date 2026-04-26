@@ -2584,7 +2584,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
         journalEntryId = glResult.journalId;
       } catch (jeErr) {
         console.error("Traffic violation journal entry failed:", jeErr);
-        await rawExecute(`UPDATE fleet_traffic_violations SET "deletedAt" = NOW() WHERE id=$1`, [insertId]).catch(() => {});
+        await rawExecute(`UPDATE fleet_traffic_violations SET "deletedAt" = NOW() WHERE id=$1`, [insertId]).catch(console.error);
         throw new IntegrationError("تعذّر إنشاء القيد المحاسبي للمخالفة — لم يتم تسجيل المخالفة", { field: "journalEntry", fix: "تحقق من إعدادات ربط الحسابات (fleet_fines_expense / fleet_fines_payable) ثم أعد المحاولة" });
       }
     }

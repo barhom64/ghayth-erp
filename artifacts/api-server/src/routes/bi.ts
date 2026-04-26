@@ -128,7 +128,7 @@ router.get("/overview", requirePermission("bi:read"), async (req, res) => {
          (SELECT COUNT(*) FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS invoices,
          (SELECT COUNT(*) FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS projects,
          (SELECT COUNT(*) FROM fleet_vehicles WHERE "companyId" = $1) AS vehicles,
-         (SELECT COUNT(*) FROM support_tickets WHERE "companyId" = $1 AND status = 'open') AS "openTickets",
+         (SELECT COUNT(*) FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status = 'open') AS "openTickets",
          (SELECT COALESCE(SUM("paidAmount"), 0) FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "paidAmount" > 0) AS "totalRevenue"`,
       [cid]
     );
@@ -454,7 +454,7 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
          COUNT(*) FILTER (WHERE DATE("createdAt") = $2::date) AS opened,
          COUNT(*) FILTER (WHERE DATE("resolvedAt") = $2::date) AS resolved
        FROM support_tickets
-       WHERE "companyId" = $1`,
+       WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid, date]
     ).catch(() => [{ opened: 0, resolved: 0 }]);
 
@@ -524,7 +524,7 @@ router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, re
            COUNT(*) FILTER (WHERE DATE("createdAt") BETWEEN $2::date AND $3::date) AS opened,
            COUNT(*) FILTER (WHERE DATE("resolvedAt") BETWEEN $2::date AND $3::date) AS resolved
          FROM support_tickets
-         WHERE "companyId" = $1`,
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
         [cid, startDate, endDate]
       ).catch(() => [{ opened: 0, resolved: 0 }]);
 
@@ -646,7 +646,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
            COUNT(*) FILTER (WHERE DATE("resolvedAt") BETWEEN $2::date AND $3::date) AS resolved,
            ROUND(AVG(CASE WHEN "resolvedAt" IS NOT NULL
              THEN EXTRACT(EPOCH FROM ("resolvedAt" - "createdAt")) / 3600 END), 1) AS "avgResolutionHours"
-         FROM support_tickets WHERE "companyId" = $1`,
+         FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
         [cid, startDate, endDate]
       ).catch(() => [{ opened: 0, resolved: 0, avgResolutionHours: 0 }]);
 
@@ -767,7 +767,7 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
     ).catch(() => [{}]);
 
     const [tickets] = await rawQuery<any>(
-      `SELECT COUNT(*) FILTER (WHERE status = 'open') AS "openTickets" FROM support_tickets WHERE "companyId" = $1`,
+      `SELECT COUNT(*) FILTER (WHERE status = 'open') AS "openTickets" FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid]
     ).catch(() => [{}]);
 

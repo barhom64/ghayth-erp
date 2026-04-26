@@ -699,7 +699,7 @@ router.get("/kb/:id", requirePermission("support:read"), async (req, res) => {
     const id = Number(req.params.id);
     const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المقالة غير موجودة");
-    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1`, [id]).catch(() => {});
+    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1`, [id]).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "KB article error:"); }
 });

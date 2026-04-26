@@ -59,7 +59,7 @@ async function ensureLoanTables(): Promise<void> {
       "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
       "deletedAt" TIMESTAMPTZ
     )
-  `).catch(() => {});
+  `).catch(console.error);
 
   await rawExecute(`
     CREATE TABLE IF NOT EXISTS hr_loan_installments (
@@ -75,7 +75,7 @@ async function ensureLoanTables(): Promise<void> {
       "payrollLineId" INTEGER,
       "createdAt" TIMESTAMPTZ DEFAULT NOW()
     )
-  `).catch(() => {});
+  `).catch(console.error);
 }
 
 // ─── رقم السلفة المتسلسل (يستخدم الأداة الموحّدة من hrHelpers) ──────────

@@ -515,7 +515,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
            VALUES ${valuesSql.join(",")}
            ON CONFLICT DO NOTHING`,
           params
-        ).catch(() => {});
+        ).catch(console.error);
       }
 
       return { empId, assignmentId, finalEmpNumber, userId, tempPassword };

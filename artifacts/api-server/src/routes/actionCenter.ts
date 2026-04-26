@@ -145,7 +145,7 @@ router.get("/", async (req, res) => {
       slaBreached = await rawQuery<any>(
         `SELECT id, title, "createdAt", "slaDeadline"
          FROM support_tickets
-         WHERE "companyId" = ANY($1::int[]) AND status = 'open' AND "slaDeadline" < NOW()
+         WHERE "companyId" = ANY($1::int[]) AND "deletedAt" IS NULL AND status = 'open' AND "slaDeadline" < NOW()
          ORDER BY "slaDeadline" ASC LIMIT 10`,
         [scope.allowedCompanies]
       );

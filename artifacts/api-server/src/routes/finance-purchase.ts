@@ -385,7 +385,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
         `INSERT INTO purchase_order_items ("orderId","itemName",quantity,"unitPrice","lineTotal")
          VALUES ${valuesSql.join(",")}`,
         params
-      ).catch(() => {});
+      ).catch(console.error);
     }
 
     await rawExecute(`UPDATE purchase_requests SET status = 'converted' WHERE id = $1`, [Number(id)]);
@@ -491,7 +491,7 @@ purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), asy
       await rawExecute(
         `INSERT INTO purchase_order_items ("orderId","itemName",quantity,"unitPrice","lineTotal") VALUES ${valuesSql.join(",")}`,
         params
-      ).catch(() => {});
+      ).catch(console.error);
     }
 
     const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "procurement", refType: "purchase_order", refId: insertId, amount: Number(totalAmount) });

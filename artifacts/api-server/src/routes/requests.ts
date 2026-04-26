@@ -817,7 +817,7 @@ router.post("/:id/convert", requirePermission("requests:write"), async (req, res
     await rawExecute(
       `INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('request',$1,'converted',$2,$3,$4)`,
       [id, `تحويل إلى: ${targetType} (معرف: ${createdId})`, scope.userId, scope.companyId]
-    ).catch(() => {});
+    ).catch(console.error);
 
     await logCommunication(
       scope.companyId, 'outbound',

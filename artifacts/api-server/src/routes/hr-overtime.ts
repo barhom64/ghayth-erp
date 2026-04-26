@@ -59,7 +59,7 @@ async function ensureOvertimeTable(): Promise<void> {
       "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
       "deletedAt" TIMESTAMPTZ
     )
-  `).catch(() => {});
+  `).catch(console.error);
 }
 
 // ─── رقم متسلسل (يستخدم الأداة الموحّدة من hrHelpers) ───────────────────
