@@ -904,7 +904,7 @@ router.patch("/violations/:id/resolve", requirePermission("admin:write"), async 
       [scope.activeAssignmentId || scope.userId, id]
     );
 
-    const [updated] = await rawQuery(`SELECT * FROM audit_violations WHERE id=$1`, [id]);
+    const [updated] = await rawQuery(`SELECT * FROM audit_violations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "resolve", entity: "audit_violations", entityId: id,

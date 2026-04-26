@@ -164,7 +164,7 @@ router.put("/:id", requirePermission("admin:write"), async (req, res) => {
     }).catch(console.error);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.integration.updated", entity: "gov_integrations", entityId: id, details: JSON.stringify({ enabled, status, configUpdated: config !== undefined }) }).catch(console.error);
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM gov_integrations WHERE id=$1`, [id]);
+    const [updated] = await rawQuery<any>(`SELECT * FROM gov_integrations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(updated);
   } catch (err) { handleRouteError(err, res, "Gov integration update error:"); }
 });
@@ -203,8 +203,8 @@ router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
         checkStatus = "error";
         checkMessage = "رابط الخدمة غير صالح — يجب أن يبدأ بـ https://";
         await rawExecute(
-          `UPDATE gov_integrations SET "lastCheckedAt"=NOW(), "lastCheckStatus"=$2, "lastCheckMessage"=$3, "updatedAt"=NOW() WHERE id=$1`,
-          [id, checkStatus, checkMessage]
+          `UPDATE gov_integrations SET "lastCheckedAt"=NOW(), "lastCheckStatus"=$2, "lastCheckMessage"=$3, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$4`,
+          [id, checkStatus, checkMessage, scope.companyId]
         );
         res.json({ success: false, status: checkStatus, message: checkMessage, checkedAt: new Date().toISOString() });
         return;
@@ -384,7 +384,7 @@ router.post("/links", requirePermission("admin:write"), async (req, res) => {
       }).catch(console.error);
       emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.link.created", entity: "gov_integration_links", entityId: insertId, details: JSON.stringify({ integrationId, entityType, entityId: Number(entityId) }) }).catch(console.error);
 
-      const [row] = await rawQuery<any>(`SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl.id=$1`, [insertId]);
+      const [row] = await rawQuery<any>(`SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl.id=$1 AND gl."companyId"=$2`, [insertId, scope.companyId]);
       res.status(201).json(row);
     } else {
       const [existing] = await rawQuery<any>(
@@ -428,7 +428,7 @@ router.patch("/links/:id", requirePermission("admin:write"), async (req, res) =>
     }).catch(console.error);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.link.updated", entity: "gov_integration_links", entityId: id, details: JSON.stringify({ enabled, externalRef, syncStatus }) }).catch(console.error);
 
-    const [row] = await rawQuery<any>(`SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl.id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl.id=$1 AND gl."companyId"=$2`, [id, scope.companyId]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Gov link update error:"); }
 });
