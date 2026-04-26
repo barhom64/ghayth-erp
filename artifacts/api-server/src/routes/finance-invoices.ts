@@ -644,13 +644,13 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
 
       if (paidAt) {
         await client.query(
-          `UPDATE invoices SET "paidAmount" = $1, status = $2, "paidAt" = $3 WHERE id = $4`,
-          [newPaid, newStatus, paidAt, Number(id)]
+          `UPDATE invoices SET "paidAmount" = $1, status = $2, "paidAt" = $3 WHERE id = $4 AND "companyId" = $5`,
+          [newPaid, newStatus, paidAt, Number(id), scope.companyId]
         );
       } else {
         await client.query(
-          `UPDATE invoices SET "paidAmount" = $1, status = $2 WHERE id = $3`,
-          [newPaid, newStatus, Number(id)]
+          `UPDATE invoices SET "paidAmount" = $1, status = $2 WHERE id = $3 AND "companyId" = $4`,
+          [newPaid, newStatus, Number(id), scope.companyId]
         );
       }
 
@@ -894,8 +894,8 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
         try {
           await reverseAccountBalances(scope.companyId, Number(je.id));
           await rawExecute(
-            `UPDATE journal_entries SET status = 'reversed' WHERE id = $1`,
-            [Number(je.id)]
+            `UPDATE journal_entries SET status = 'reversed' WHERE id = $1 AND "companyId" = $2`,
+            [Number(je.id), scope.companyId]
           );
         } catch (e) { console.error("Failed to reverse invoice GL on rejection:", e); }
       }
@@ -1092,7 +1092,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
       guardId: memoId ?? 0,
     }));
     if (journalId && memoId) {
-      await rawExecute(`UPDATE credit_memos SET "journalEntryId" = $1 WHERE id = $2`, [journalId, memoId]);
+      await rawExecute(`UPDATE credit_memos SET "journalEntryId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
     }
 
     emitEvent({
@@ -1205,8 +1205,8 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
 
       // Increase invoice total to reflect additional charge
       await client.query(
-        `UPDATE invoices SET total = total + $1, "vatAmount" = "vatAmount" + $2 WHERE id = $3`,
-        [chargeAmount, vat, id]
+        `UPDATE invoices SET total = total + $1, "vatAmount" = "vatAmount" + $2 WHERE id = $3 AND "companyId" = $4`,
+        [chargeAmount, vat, id, scope.companyId]
       );
     });
 

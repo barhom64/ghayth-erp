@@ -4871,7 +4871,7 @@ router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, re
     await recomputeSummary(cycleId, scope.companyId, employeeId);
 
     // Update cycle status
-    await rawExecute(`UPDATE evaluation_cycles SET status='in_progress' WHERE id=$1`, [cycleId]);
+    await rawExecute(`UPDATE evaluation_cycles SET status='in_progress' WHERE id=$1 AND "companyId"=$2`, [cycleId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -5790,8 +5790,8 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
     if (approved) {
       // HR approved — move to pending_receiving_manager for the destination branch manager to confirm
       await rawExecute(
-        `UPDATE employee_transfers SET status='pending_receiving_manager',"approvedBy"=$1,"approvedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3`,
-        [scope.employeeId, notes || null, id]
+        `UPDATE employee_transfers SET status='pending_receiving_manager',"approvedBy"=$1,"approvedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3 AND "companyId"=$4`,
+        [scope.employeeId, notes || null, id, scope.companyId]
       );
 
       // Notify the receiving branch manager
@@ -5824,8 +5824,8 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
       }).catch(console.error);
     } else {
       await rawExecute(
-        `UPDATE employee_transfers SET status='rejected',"approvedBy"=$1,"approvedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3`,
-        [scope.employeeId, notes || null, id]
+        `UPDATE employee_transfers SET status='rejected',"approvedBy"=$1,"approvedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3 AND "companyId"=$4`,
+        [scope.employeeId, notes || null, id, scope.companyId]
       );
       // Notify employee of rejection
       const [empAssign] = await rawQuery<any>(
@@ -5930,8 +5930,8 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
         [newBranchId, newDeptId, newJobTitle, newSalary, transfer.employeeId, scope.companyId]
       );
       await rawExecute(
-        `UPDATE employee_transfers SET status='approved',"receivedBy"=$1,"receivedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3`,
-        [scope.employeeId, notes || null, id]
+        `UPDATE employee_transfers SET status='approved',"receivedBy"=$1,"receivedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3 AND "companyId"=$4`,
+        [scope.employeeId, notes || null, id, scope.companyId]
       );
 
       // Notify employee of final approval
@@ -5973,8 +5973,8 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
       }).catch(console.error);
     } else {
       await rawExecute(
-        `UPDATE employee_transfers SET status='rejected_by_receiver',"receivedBy"=$1,"receivedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3`,
-        [scope.employeeId, notes || null, id]
+        `UPDATE employee_transfers SET status='rejected_by_receiver',"receivedBy"=$1,"receivedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3 AND "companyId"=$4`,
+        [scope.employeeId, notes || null, id, scope.companyId]
       );
 
       // Notify employee — previously silent if receiver declined, which

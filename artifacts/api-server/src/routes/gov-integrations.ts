@@ -418,8 +418,8 @@ router.patch("/links/:id", requirePermission("admin:write"), async (req, res) =>
     if (syncStatus !== undefined) { params.push(syncStatus); sets.push(`"syncStatus"=$${params.length}`); }
     if (notes !== undefined) { params.push(notes); sets.push(`notes=$${params.length}`); }
 
-    params.push(id);
-    await rawExecute(`UPDATE gov_integration_links SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    params.push(id); params.push(scope.companyId);
+    await rawExecute(`UPDATE gov_integration_links SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_gov_link",

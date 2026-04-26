@@ -264,7 +264,7 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
     }
 
     const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "procurement", refType: "purchase_request", refId: insertId, amount: totalAmount });
-    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE purchase_requests SET status = 'pending' WHERE id = $1`, [insertId]); }
+    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE purchase_requests SET status = 'pending' WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]); }
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "purchase_request.created", entity: "purchase_requests", entityId: insertId, details: JSON.stringify({ ref, totalAmount, supplierId }) }).catch(console.error);
 
@@ -388,7 +388,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
       ).catch(console.error);
     }
 
-    await rawExecute(`UPDATE purchase_requests SET status = 'converted' WHERE id = $1`, [Number(id)]);
+    await rawExecute(`UPDATE purchase_requests SET status = 'converted' WHERE id = $1 AND "companyId" = $2`, [Number(id), scope.companyId]);
 
     // Record the PR→PO conversion explicitly so the chain audit/events
     // can follow "who turned which PR into which PO" without having to
@@ -495,7 +495,7 @@ purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), asy
     }
 
     const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "procurement", refType: "purchase_order", refId: insertId, amount: Number(totalAmount) });
-    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE purchase_orders SET status = 'pending_approval' WHERE id = $1`, [insertId]); }
+    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE purchase_orders SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]); }
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "purchase_order.created", entity: "purchase_orders", entityId: insertId, details: JSON.stringify({ ref, totalAmount, supplierId }) }).catch(console.error);
     res.status(201).json({ id: insertId, ref, totalAmount, vatAmount, supplierId, notes, expectedDelivery, approval: approvalResult });
@@ -521,7 +521,7 @@ async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rej
       );
     }
 
-    await rawExecute(`UPDATE purchase_orders SET status = $1, notes = COALESCE($2, notes) WHERE id = $3`, [newStatus, notes ?? null, Number(id)]);
+    await rawExecute(`UPDATE purchase_orders SET status = $1, notes = COALESCE($2, notes) WHERE id = $3 AND "companyId" = $4`, [newStatus, notes ?? null, Number(id), scope.companyId]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_order',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
 
     emitEvent({
@@ -693,8 +693,8 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
     const totalRemaining = Number(remainingItems[0]?.remaining ?? 0);
     const newStatus = totalRemaining <= 0.0001 ? "received" : "partially_received";
     await rawExecute(
-      `UPDATE purchase_orders SET status = $1, "deliveredAt" = $2 WHERE id = $3`,
-      [newStatus, receiptDate, Number(id)]
+      `UPDATE purchase_orders SET status = $1, "deliveredAt" = $2 WHERE id = $3 AND "companyId" = $4`,
+      [newStatus, receiptDate, Number(id), scope.companyId]
     );
 
     emitEvent({
@@ -976,11 +976,11 @@ purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"),
           [runId, po.id, po.supplierId, Number(po.totalAmount)]
         );
         await client.query(
-          `UPDATE purchase_orders SET status = 'paid', "paidAt" = $1 WHERE id = $2`,
-          [payDate, po.id]
+          `UPDATE purchase_orders SET status = 'paid', "paidAt" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [payDate, po.id, scope.companyId]
         ).catch(async () => {
           // paidAt column may not exist — fall back to status only
-          await client.query(`UPDATE purchase_orders SET status = 'paid' WHERE id = $1`, [po.id]);
+          await client.query(`UPDATE purchase_orders SET status = 'paid' WHERE id = $1 AND "companyId" = $2`, [po.id, scope.companyId]);
         });
       }
     });
@@ -1095,8 +1095,8 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
     );
 
     await rawExecute(
-      `UPDATE purchase_requests SET status = 'converted' WHERE id = $1`,
-      [Number(id)]
+      `UPDATE purchase_requests SET status = 'converted' WHERE id = $1 AND "companyId" = $2`,
+      [Number(id), scope.companyId]
     );
 
     const approvalResult = await initiateApprovalChain({
@@ -1107,8 +1107,8 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
 
     if (approvalResult.requiresApproval) {
       await rawExecute(
-        `UPDATE purchase_orders SET status = 'pending_approval' WHERE id = $1`,
-        [poId]
+        `UPDATE purchase_orders SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2`,
+        [poId, scope.companyId]
       );
     }
 
@@ -1290,11 +1290,12 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", requirePermission("fin
     const isMatched = poVariancePct <= 5 && prVariancePct <= 5 && grVariancePct <= 5;
 
     await rawExecute(
-      `UPDATE purchase_orders SET status = $1, notes = CONCAT(COALESCE(notes,''), $2) WHERE id = $3`,
+      `UPDATE purchase_orders SET status = $1, notes = CONCAT(COALESCE(notes,''), $2) WHERE id = $3 AND "companyId" = $4`,
       [
         isMatched ? "invoice_matched" : "invoice_mismatch",
         ` | مطابقة ثلاثية: فاتورة=${invAmount} طلب=${prTotal} أمر=${poTotal} استلام=${receivedTotal}`,
         Number(id),
+        scope.companyId,
       ]
     );
 

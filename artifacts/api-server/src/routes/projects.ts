@@ -649,8 +649,8 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
       after[f] = b[f];
     }
     if (Object.keys(after).length === 0) { res.json(existing); return; }
-    params.push(id);
-    await rawExecute(`UPDATE projects SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    params.push(id); params.push(scope.companyId);
+    await rawExecute(`UPDATE projects SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
@@ -848,7 +848,7 @@ router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update
     const tasks = await rawQuery<any>(`SELECT * FROM project_tasks WHERE "projectId"=$1`, [projectId]);
     const doneTasks = tasks.filter((t: any) => t.status === 'done').length;
     const progressPct = tasks.length > 0 ? Math.round((doneTasks / tasks.length) * 100) : 0;
-    await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "deletedAt" IS NULL`, [progressPct, projectId]);
+    await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [progressPct, projectId, scope.companyId]);
 
     res.json({ message: 'تم إكمال المرحلة', phase, milestoneInvoiceCreated, progressPct });
   } catch (err) { handleRouteError(err, res, "Complete phase error:"); }
@@ -1121,7 +1121,7 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
       const allTasks = await rawQuery<any>(`SELECT * FROM project_tasks WHERE "projectId"=$1`, [task.projectId]);
       const doneTasks = allTasks.filter((t: any) => t.status === 'done').length;
       const progressPct = allTasks.length > 0 ? Math.round((doneTasks / allTasks.length) * 100) : 0;
-      await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "deletedAt" IS NULL`, [progressPct, task.projectId]);
+      await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [progressPct, task.projectId, scope.companyId]);
 
       const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "deletedAt" IS NULL`, [task.projectId]);
 
