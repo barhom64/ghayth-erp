@@ -236,6 +236,22 @@ vendorsRouter.get("/receivables", requirePermission("finance:read"), async (req,
   }
 });
 
+vendorsRouter.get("/receivables/:id", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT i.*, c.name AS "clientName"
+       FROM invoices i
+       LEFT JOIN clients c ON c.id = i."clientId"
+       WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("المستحق غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Receivable detail error:"); }
+});
+
 vendorsRouter.get("/payments", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -273,6 +289,39 @@ vendorsRouter.get("/commitments", requirePermission("finance:read"), async (req,
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
+});
+
+vendorsRouter.get("/commitments/:id", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT po.*, s.name AS "supplierName"
+       FROM purchase_orders po
+       LEFT JOIN suppliers s ON s.id = po."supplierId"
+       WHERE po.id = $1 AND po."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الالتزام غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Commitment detail error:"); }
+});
+
+vendorsRouter.get("/financial-requests/:id", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT wr.*, e.name AS "submittedByName"
+       FROM workflow_requests wr
+       LEFT JOIN employee_assignments ea ON ea.id = wr."submittedBy"
+       LEFT JOIN employees e ON e.id = ea."employeeId"
+       WHERE wr.id = $1 AND wr."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الطلب المالي غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Financial request detail error:"); }
 });
 
 vendorsRouter.get("/financial-requests", requirePermission("finance:read"), async (req, res) => {

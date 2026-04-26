@@ -842,6 +842,27 @@ router.get("/attendance", requirePermission("hr:read"), async (req, res) => {
   }
 });
 
+router.get("/attendance/:id", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT a.*, e.name AS "employeeName", e."empNumber",
+              CASE WHEN a."checkIn" IS NOT NULL AND a."checkOut" IS NOT NULL
+                THEN ROUND(EXTRACT(EPOCH FROM (a."checkOut" - a."checkIn")) / 3600.0, 2)
+                ELSE NULL
+              END AS "totalHours"
+       FROM attendance a
+       JOIN employee_assignments ea ON ea.id = a."assignmentId"
+       JOIN employees e ON e.id = ea."employeeId"
+       WHERE a.id = $1 AND a."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("سجل الحضور غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get attendance detail error:"); }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // LEAVE TYPES & BALANCES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2025,6 +2046,25 @@ router.get("/payroll", requirePermission("hr:read"), async (req, res) => {
   }
 });
 
+router.get("/payroll/:id", requirePermission("hr:read"), async (req, res): Promise<any> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    if (req.path.endsWith("/lines")) return; // let next handler handle it
+    const [row] = await rawQuery<any>(
+      `SELECT pr.*, e.name AS "runByName",
+              (SELECT COUNT(*) FROM payroll_lines pl WHERE pl."runId" = pr.id AND pl."deletedAt" IS NULL)::int AS "employeeCount"
+       FROM payroll_runs pr
+       LEFT JOIN employee_assignments ea ON ea.id = pr."runBy"
+       LEFT JOIN employees e ON e.id = ea."employeeId"
+       WHERE pr.id = $1 AND pr."companyId" = $2 AND pr."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("مسير الرواتب غير موجود");
+    res.json({ ...row, month: row.period, totalAmount: Number(row.totalNet) });
+  } catch (err) { handleRouteError(err, res, "Get payroll detail error:"); }
+});
+
 router.get("/payroll/:id/lines", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -2743,6 +2783,22 @@ router.get("/performance", requirePermission("hr:read"), async (req, res) => {
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { console.error("Get performance error:", err); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+});
+
+router.get("/performance/:id", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT pr.*, e.name AS "employeeName", e."empNumber"
+       FROM performance_reviews pr
+       JOIN employees e ON e.id = pr."employeeId"
+       WHERE pr.id = $1 AND pr."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("تقييم الأداء غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get performance detail error:"); }
 });
 
 router.post("/performance", requirePermission("hr:create"), async (req, res) => {
@@ -5530,6 +5586,28 @@ router.get("/transfers", requirePermission("hr:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Transfers error:"); }
 });
 
+router.get("/transfers/:id", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT t.*, e.name AS "employeeName", e."empNumber",
+              b1.name AS "fromBranchName", b2.name AS "toBranchName",
+              d1.name AS "fromDeptName", d2.name AS "toDeptName"
+       FROM employee_transfers t
+       JOIN employees e ON e.id=t."employeeId"
+       LEFT JOIN branches b1 ON b1.id=t."fromBranchId"
+       LEFT JOIN branches b2 ON b2.id=t."toBranchId"
+       LEFT JOIN departments d1 ON d1.id=t."fromDeptId"
+       LEFT JOIN departments d2 ON d2.id=t."toDeptId"
+       WHERE t.id = $1 AND t."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("طلب النقل غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Transfer detail error:"); }
+});
+
 router.post("/transfers", requirePermission("hr:create"), async (req, res) => {
   // Step 3 of the HR operational audit — transfer request creation.
   // Converts the 2 raw res.status(...) error sites to typed throws and
@@ -6653,6 +6731,23 @@ router.get("/excuse-requests", requirePermission("hr:read"), async (req, res) =>
     const pending = rows.filter((r: any) => r.status === "pending").length;
     res.json({ data: rows, total: rows.length, pending });
   } catch (err) { handleRouteError(err, res, "List excuse requests error:"); }
+});
+
+router.get("/excuse-requests/:id", requirePermission("hr:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT e.*, emp.name AS "employeeName", emp."empNumber"
+       FROM hr_excuse_requests e
+       JOIN employee_assignments ea ON ea.id = e."assignmentId"
+       JOIN employees emp ON emp.id = ea."employeeId"
+       WHERE e.id = $1 AND emp."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("طلب الاستئذان غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get excuse request detail error:"); }
 });
 
 router.post("/excuse-requests", requirePermission("hr:create"), async (req, res) => {

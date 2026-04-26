@@ -1123,6 +1123,23 @@ router.get("/maintenance", requirePermission("fleet:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Fleet maintenance error:"); }
 });
 
+router.get("/maintenance/:id", requirePermission("fleet:read"), async (req, res): Promise<any> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    if (req.path.includes("/complete") || req.path.includes("/cancel")) return;
+    const [row] = await rawQuery<any>(
+      `SELECT m.*, v."plateNumber", v.make AS "vehicleMake", v.model AS "vehicleModel"
+       FROM fleet_maintenance m
+       LEFT JOIN fleet_vehicles v ON v.id=m."vehicleId"
+       WHERE m.id = $1 AND m."companyId" = $2 AND m."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("سجل الصيانة غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Fleet maintenance detail error:"); }
+});
+
 router.post("/maintenance", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1507,6 +1524,22 @@ router.get("/fuel-logs", requirePermission("fleet:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet fuel error:"); }
 });
 
+router.get("/fuel-logs/:id", requirePermission("fleet:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT f.*, v."plateNumber", v.make AS "vehicleMake", v.model AS "vehicleModel"
+       FROM fleet_fuel_logs f
+       LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId"
+       WHERE f.id = $1 AND f."companyId" = $2 AND f."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("سجل الوقود غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Fleet fuel detail error:"); }
+});
+
 router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1621,6 +1654,22 @@ router.get("/insurance", requirePermission("fleet:read"), async (req, res) => {
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Fleet insurance error:"); }
+});
+
+router.get("/insurance/:id", requirePermission("fleet:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT i.*, v."plateNumber", v.make AS "vehicleMake", v.model AS "vehicleModel"
+       FROM fleet_insurance i
+       LEFT JOIN fleet_vehicles v ON v.id=i."vehicleId"
+       WHERE i.id = $1 AND i."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("سجل التأمين غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Fleet insurance detail error:"); }
 });
 
 router.post("/insurance", requirePermission("fleet:create"), async (req, res) => {
@@ -2393,6 +2442,24 @@ router.get("/traffic-violations", requirePermission("fleet:read"), async (req, r
     );
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "Traffic violations error:"); }
+});
+
+router.get("/traffic-violations/:id", requirePermission("fleet:read"), async (req, res): Promise<any> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    if (req.path.includes("/pay")) return;
+    const [row] = await rawQuery<any>(
+      `SELECT tv.*, v."plateNumber", d.name AS "driverName"
+       FROM fleet_traffic_violations tv
+       LEFT JOIN fleet_vehicles v ON v.id=tv."vehicleId" AND v."deletedAt" IS NULL
+       LEFT JOIN fleet_drivers d ON d.id=tv."driverId" AND d."deletedAt" IS NULL
+       WHERE tv.id = $1 AND tv."companyId" = $2 AND tv."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("المخالفة المرورية غير موجودة");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Traffic violation detail error:"); }
 });
 
 router.post("/traffic-violations", requirePermission("fleet:create"), async (req, res) => {

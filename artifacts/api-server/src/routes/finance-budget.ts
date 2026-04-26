@@ -45,6 +45,41 @@ budgetRouter.get("/budget", requirePermission("finance:read"), async (req, res) 
   }
 });
 
+budgetRouter.get("/budget-vs-actual", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { period } = req.query as { period?: string };
+    const now = new Date();
+    let startDate: string, endDate: string;
+    if (period === "year") {
+      startDate = `${now.getFullYear()}-01-01`;
+      endDate = `${now.getFullYear()}-12-31`;
+    } else if (period === "quarter") {
+      const q = Math.floor(now.getMonth() / 3);
+      startDate = `${now.getFullYear()}-${String(q * 3 + 1).padStart(2, "0")}-01`;
+      const em = q * 3 + 3;
+      endDate = `${now.getFullYear()}-${String(em).padStart(2, "0")}-${em === 2 ? 28 : [4, 6, 9, 11].includes(em) ? 30 : 31}`;
+    } else {
+      startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+      endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-31`;
+    }
+    const rows = await rawQuery<any>(
+      `SELECT b."accountCode", coa.name AS "accountName",
+              SUM(b.amount) AS budget,
+              COALESCE(SUM(b.used), 0) AS actual
+       FROM budgets b
+       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId"
+       WHERE b."companyId" = $1 AND b.period >= $2 AND b.period <= $3
+       GROUP BY b."accountCode", coa.name
+       ORDER BY b."accountCode"`,
+      [scope.companyId, startDate.slice(0, 7), endDate.slice(0, 7)]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (_e) {
+    res.json({ data: [], total: 0 });
+  }
+});
+
 budgetRouter.post("/budget", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;

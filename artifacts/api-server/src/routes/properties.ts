@@ -1532,6 +1532,24 @@ router.get("/payments", requirePermission("property:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Rent payments error:"); }
 });
 
+router.get("/payments/:id", requirePermission("property:read"), async (req, res): Promise<any> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    if (req.path.includes("/pay")) return;
+    const [row] = await rawQuery<any>(
+      `SELECT rp.*, c."tenantName", u."unitNumber"
+       FROM rent_payments rp
+       JOIN rental_contracts c ON c.id=rp."contractId" AND c."deletedAt" IS NULL
+       LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL
+       WHERE rp.id = $1 AND c."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الدفعة غير موجودة");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Property payment detail error:"); }
+});
+
 router.post("/payments/:id/pay", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;

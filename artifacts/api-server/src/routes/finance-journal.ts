@@ -484,6 +484,28 @@ journalRouter.get("/vouchers", requirePermission("finance:read"), async (req, re
   }
 });
 
+journalRouter.get("/vouchers/:id", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT je.id, je.ref, je.description,
+              CASE WHEN je.ref LIKE 'RV%' THEN 'receipt' ELSE 'payment' END AS "voucherType",
+              je."paymentMethod", je.reference, je."attachmentUrl", je."attachmentType",
+              je."relatedEntityType", je."relatedEntityId", je."operationType",
+              COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt", je.status
+       FROM journal_entries je
+       JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+         AND (je.ref LIKE 'RV%' OR je.ref LIKE 'PV%')
+       GROUP BY je.id`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("السند غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get voucher detail error:"); }
+});
+
 journalRouter.post("/vouchers", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
