@@ -39,7 +39,7 @@ accountsRouter.get("/accounts", requirePermission("finance:read"), async (req, r
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters);
-    const { search, type: accountType } = req.query as { search?: string; type?: string };
+    const { search, type: accountType, postingOnly } = req.query as { search?: string; type?: string; postingOnly?: string };
 
     let extraWhere = "";
     if (search && search.trim()) {
@@ -49,6 +49,9 @@ accountsRouter.get("/accounts", requirePermission("finance:read"), async (req, r
     if (accountType && accountType.trim()) {
       params.push(accountType.trim());
       extraWhere += ` AND type = $${params.length}`;
+    }
+    if (postingOnly === "true") {
+      extraWhere += ` AND "allowPosting" = true`;
     }
 
     const rows = await rawQuery(
