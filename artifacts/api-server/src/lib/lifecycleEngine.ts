@@ -420,7 +420,7 @@ export const STATE_MACHINES: StateMachine[] = [
     },
   },
   {
-    entity: "hr_discipline_memos",
+    entity: "hr_inquiry_memos",
     label: "مذكرة تأديبية",
     transitions: {
       draft: ["issued"],

@@ -43,7 +43,7 @@ describe("HR domain registry completeness", () => {
   it("has lifecycle entities for workflows", () => {
     expect(hr.lifecycleEntities).toContain("hr_leave_requests");
     expect(hr.lifecycleEntities).toContain("hr_exit_requests");
-    expect(hr.lifecycleEntities).toContain("hr_discipline_memos");
+    expect(hr.lifecycleEntities).toContain("hr_inquiry_memos");
     expect(hr.lifecycleEntities).toContain("hr_transfers");
   });
 

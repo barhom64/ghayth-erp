@@ -2076,14 +2076,14 @@ router.get("/:id/letters", requirePermission("projects:read"), async (req, res) 
     const projectId = Number(req.params.id);
     await assertProjectAccess(projectId, scope);
     const rows = await rawQuery<any>(
-      `SELECT l.id, l.subject, l.type, l.direction, l.status, l."letterDate",
-              l."fromEntity", l."toEntity", l."createdAt"
-       FROM letters l
+      `SELECT l.id, l.subject, l.type, l.type AS direction, l.status, l."sentAt" AS "letterDate",
+              l.sender AS "fromEntity", l.recipient AS "toEntity", l."createdAt"
+       FROM correspondence l
        WHERE l."companyId" = $1
-         AND l."relatedType" = 'project'
-         AND l."relatedId" = $2
+         AND l."relatedEntity" = 'project'
+         AND l."relatedEntityId" = $2
          AND l."deletedAt" IS NULL
-       ORDER BY l."letterDate" DESC NULLS LAST, l."createdAt" DESC
+       ORDER BY l."sentAt" DESC NULLS LAST, l."createdAt" DESC
        LIMIT 50`,
       [scope.companyId, projectId]
     );
