@@ -182,8 +182,8 @@ router.post("/policies/:id/new-version", requirePermission("governance:write"), 
     );
 
     await rawExecute(
-      `UPDATE governance_policies SET status='archived' WHERE id=$1`,
-      [parentId]
+      `UPDATE governance_policies SET status='archived' WHERE id=$1 AND "companyId"=$2`,
+      [parentId, scope.companyId]
     );
 
     const links = await rawQuery<any>(`SELECT module FROM policy_module_links WHERE "policyId"=$1`, [parentId]);

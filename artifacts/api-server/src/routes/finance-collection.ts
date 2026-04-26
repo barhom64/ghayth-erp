@@ -130,7 +130,7 @@ collectionRouter.post("/collection/:invoiceId/action", requirePermission("financ
     }
 
     if (invoice.status !== "overdue") {
-      await rawExecute(`UPDATE invoices SET status = 'overdue' WHERE id = $1`, [Number(invoiceId)]);
+      await rawExecute(`UPDATE invoices SET status = 'overdue' WHERE id = $1 AND "companyId" = $2`, [Number(invoiceId), scope.companyId]);
     }
 
     await rawExecute(

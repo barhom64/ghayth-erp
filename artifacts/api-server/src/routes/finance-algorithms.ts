@@ -430,8 +430,8 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", requirePermiss
     if (!jl) throw new NotFoundError("سطر القيد غير موجود أو لا يتبع نفس الشركة/الحساب أو تمت مطابقته");
 
     await rawExecute(
-      `UPDATE bank_statements SET "matchStatus"='matched', "matchedJournalLineId"=$1 WHERE id=$2`,
-      [journalLineId, bankStatementId]
+      `UPDATE bank_statements SET "matchStatus"='matched', "matchedJournalLineId"=$1 WHERE id=$2 AND "companyId"=$3`,
+      [journalLineId, bankStatementId, scope.companyId]
     );
     res.json({ success: true, message: "تمت المطابقة اليدوية" });
   } catch (err) {
@@ -781,8 +781,8 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", requirePermission("
     entryId = entRes[0].id;
 
     await rawExecute(
-      `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3`,
-      [newAccumulated, newBookValue, id]
+      `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
+      [newAccumulated, newBookValue, id, scope.companyId]
     );
 
     res.status(201).json({
@@ -851,8 +851,8 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", requirePermission("
         [asset.id, scope.companyId, targetPeriod, depAmount, newBookValue, journalId]
       );
       await rawExecute(
-        `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3`,
-        [newAccumulated, newBookValue, asset.id]
+        `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
+        [newAccumulated, newBookValue, asset.id, scope.companyId]
       );
 
       results.push({ assetId: asset.id, assetName: asset.name, depAmount, newBookValue });

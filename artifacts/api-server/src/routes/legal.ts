@@ -642,8 +642,8 @@ router.patch("/cases/:id", requirePermission("legal:write"), async (req, res) =>
     if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
     if (b.court !== undefined) { params.push(b.court); sets.push(`court=$${params.length}`); }
     if (sets.length <= 1 && params.length === 0) { res.json(existing); return; }
-    params.push(id);
-    await rawExecute(`UPDATE legal_cases SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    params.push(id); params.push(scope.companyId);
+    await rawExecute(`UPDATE legal_cases SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
