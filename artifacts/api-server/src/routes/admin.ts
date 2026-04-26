@@ -523,7 +523,7 @@ router.get("/integrations", requirePermission("admin:read"), async (req, res) =>
     await assertAdmin(req);
     const scope = req.scope!;
     const rows = await rawQuery(
-      `SELECT * FROM integrations WHERE "companyId"=$1 ORDER BY "createdAt" DESC`,
+      `SELECT id, "companyId", type, name, status, "lastSuccessAt", "lastFailureAt", "retryCount", "maxRetries", "createdAt", "updatedAt" FROM integrations WHERE "companyId"=$1 ORDER BY "createdAt" DESC`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
@@ -544,7 +544,7 @@ router.post("/integrations", requirePermission("admin:write"), async (req, res) 
        VALUES ($1,$2,$3,$4,$5,$6)`,
       [scope.companyId, type, name, JSON.stringify(config || {}), status || "inactive", maxRetries || 3]
     );
-    const [row] = await rawQuery(`SELECT * FROM integrations WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    const [row] = await rawQuery(`SELECT id, "companyId", type, name, status, "lastSuccessAt", "lastFailureAt", "retryCount", "maxRetries", "createdAt", "updatedAt" FROM integrations WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "create", entity: "integrations", entityId: r.insertId,
@@ -582,7 +582,7 @@ router.patch("/integrations/:id", requirePermission("admin:write"), async (req, 
       `UPDATE integrations SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`,
       params
     );
-    const [row] = await rawQuery(`SELECT * FROM integrations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery(`SELECT id, "companyId", type, name, status, "lastSuccessAt", "lastFailureAt", "retryCount", "maxRetries", "createdAt", "updatedAt" FROM integrations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "integrations", entityId: id,

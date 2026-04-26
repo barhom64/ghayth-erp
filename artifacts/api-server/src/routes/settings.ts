@@ -218,7 +218,7 @@ router.delete("/", requirePermission("settings:write"), async (req, res) => {
 router.get("/general", requirePermission("settings:read"), async (_req, res) => {
   try {
     const rows = await rawQuery(`SELECT * FROM system_settings WHERE "companyId" IS NULL AND "branchId" IS NULL ORDER BY key`);
-    res.json({ data: rows });
+    res.json({ data: maskSecretSettings(rows) });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
@@ -254,6 +254,9 @@ router.get("/resolved", requirePermission("settings:read"), async (req, res) => 
       }
     }
 
+    for (const item of resolved) {
+      if (SETTINGS_SECRET_KEYS.has(item.key) && item.value) item.value = "__configured__";
+    }
     res.json({ data: resolved });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -739,6 +742,12 @@ router.delete("/approval-config/:id", requirePermission("settings:write"), async
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
+
+const SETTINGS_SECRET_KEYS = new Set(["sms_auth_token", "whatsapp_access_token", "whatsapp_verify_token"]);
+
+function maskSecretSettings(rows: any[]): any[] {
+  return rows.map((r: any) => SETTINGS_SECRET_KEYS.has(r.key) && r.value ? { ...r, value: "__configured__" } : r);
+}
 
 const CHANNEL_SETTING_KEYS = [
   "sms_account_sid",
