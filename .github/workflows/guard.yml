@@ -39,5 +39,23 @@ jobs:
           # inside Actions but we skip it explicitly to keep the log clean.
           HUSKY: '0'
 
-      - name: Run guard suite (typecheck + lint:patterns + audit:routes + audit:schema + audit:boundaries + audit:domain-routes + test)
-        run: bash scripts/guard.sh
+      - name: typecheck
+        run: pnpm -s run typecheck
+
+      - name: lint:patterns
+        run: pnpm -s run lint:patterns
+
+      - name: audit:routes
+        run: node scripts/src/audit-routes.mjs
+
+      - name: audit:schema-drift
+        run: node scripts/src/audit-schema-drift.mjs
+
+      - name: audit:boundaries
+        run: node scripts/src/audit-domain-boundaries.mjs
+
+      - name: audit:domain-routes
+        run: node scripts/src/audit-domain-routes.mjs
+
+      - name: test
+        run: pnpm -s --filter @workspace/api-server run test
