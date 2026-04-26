@@ -778,12 +778,12 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
         [Number(id)]
       ),
       rawQuery<any>(
-        `SELECT tp.id, tp.status, tp."completedAt",
-                tc.title AS "courseTitle", tc.type AS "courseType"
-         FROM training_participants tp
-         JOIN training_courses tc ON tc.id = tp."courseId"
-         WHERE tp."employeeId" = $1
-         ORDER BY tc."startDate" DESC LIMIT 20`,
+        `SELECT te.id, te.status, te."completedAt",
+                tp.title AS "courseTitle", tp.type AS "courseType"
+         FROM training_enrollments te
+         JOIN training_programs tp ON tp.id = te."programId"
+         WHERE te."employeeId" = $1
+         ORDER BY tp."startDate" DESC LIMIT 20`,
         [Number(id)]
       ).catch(() => []),
       rawQuery<any>(

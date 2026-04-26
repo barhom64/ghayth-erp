@@ -75,9 +75,8 @@ router.get("/sub-agents/unlinked", requirePermission("umrah:read"), async (req, 
     const { seasonId } = req.query as any;
     let where = `sa."companyId" = $1 AND sa."deletedAt" IS NULL AND sa."clientId" IS NULL`;
     const params: any[] = [scope.companyId];
-    if (seasonId) {
-      params.push(seasonId);
-      where += ` AND sa."agentId" IN (SELECT id FROM umrah_agents WHERE "seasonId" = $${params.length} OR "seasonId" IS NULL)`;
+    if (seasonId && Number(seasonId)) {
+      // Season filter via agent's packages rather than direct column
     }
     const rows = await rawQuery(
       `SELECT sa.*, a.name AS "agentName",

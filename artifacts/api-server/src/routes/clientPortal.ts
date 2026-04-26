@@ -342,10 +342,10 @@ protectedRouter.get("/invoices/:id", withPortalScope(async (req, res) => {
     const scope = req.portalScope;
     const { id } = req.params;
     const [invoice] = await portalScopedQuery<any>(scope,
-      `SELECT i.*, 
-              json_agg(json_build_object('description', ii.description, 'qty', ii.qty, 'unitPrice', ii."unitPrice", 'total', ii.total) ORDER BY ii.id) AS items
+      `SELECT i.*,
+              json_agg(json_build_object('description', il.description, 'qty', il.quantity, 'unitPrice', il."unitPrice", 'total', il."lineTotal") ORDER BY il.id) AS items
        FROM invoices i
-       LEFT JOIN invoice_items ii ON ii."invoiceId" = i.id
+       LEFT JOIN invoice_lines il ON il."invoiceId" = i.id
        WHERE i.id = $3 AND i."clientId" = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL
        GROUP BY i.id`,
       [scope.clientId, scope.companyId, Number(id)]

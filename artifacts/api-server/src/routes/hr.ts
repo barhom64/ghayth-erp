@@ -2520,11 +2520,11 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
 
     // جلب محضر التحقيق المرتبط إن وجد
     const memos = await rawQuery<any>(
-      `SELECT dm.id, dm."memoNumber", dm.status, dm."penaltyLabel",
-              dm."baseDeductionAmount", dm."totalDeductionAmount", dm."createdAt"
-       FROM discipline_memos dm
-       WHERE dm."violationId" = $1 AND dm."companyId" = $2
-       ORDER BY dm."createdAt" DESC`,
+      `SELECT m.id, m."memoNumber", m.status, m."appliedPenaltyLabel" AS "penaltyLabel",
+              m."appliedDeductionAmount" AS "baseDeductionAmount", m."appliedExtraDeduction", m."createdAt"
+       FROM hr_inquiry_memos m
+       WHERE m."violationId" = $1 AND m."companyId" = $2
+       ORDER BY m."createdAt" DESC`,
       [item.id, scope.companyId]
     ).catch(() => [] as any[]);
 
@@ -5340,7 +5340,7 @@ router.post("/delegations", requirePermission("hr:approve"), async (req, res) =>
     }
 
     const [emp] = await rawQuery<{ id: number }>(
-      `SELECT id FROM employees WHERE "userId" = $1 LIMIT 1`,
+      `SELECT e.id FROM employees e JOIN users u ON u."employeeId" = e.id WHERE u.id = $1 LIMIT 1`,
       [scope.userId]
     );
     if (!emp) throw new ValidationError("لم يتم العثور على الموظف المرتبط بحسابك");
