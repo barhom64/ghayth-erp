@@ -830,15 +830,15 @@ invoicesRouter.delete("/invoices/:id", requirePermission("finance:delete"), asyn
       try {
         await reverseAccountBalances(scope.companyId, Number(je.id));
         await rawExecute(
-          `UPDATE journal_entries SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1`,
-          [Number(je.id)]
+          `UPDATE journal_entries SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2`,
+          [Number(je.id), scope.companyId]
         );
       } catch (e) { console.error("Failed to reverse invoice GL on delete:", e); }
     }
 
     await rawExecute(
-      `UPDATE invoices SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1`,
-      [id]
+      `UPDATE invoices SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
     );
 
     createAuditLog({

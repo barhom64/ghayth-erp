@@ -333,7 +333,7 @@ router.delete("/applications/:id", requirePermission("hr:write"), async (req, re
     const id = Number(req.params.id);
     const [before] = await rawQuery<any>(`SELECT a.* FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2`, [id, scope.companyId]);
     if (!before) throw new NotFoundError("طلب التوظيف غير موجود");
-    await rawExecute(`UPDATE job_applications SET "deletedAt" = NOW() WHERE id=$1`, [id]);
+    await rawExecute(`UPDATE job_applications SET "deletedAt" = NOW() WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_applications", entityId: id, before }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,

@@ -1318,8 +1318,8 @@ router.delete("/alert-fatigue/mute/:alertType", requirePermission("bi:write"), a
     const scope = req.scope!;
     const { alertType } = req.params;
     await rawExecute(
-      `DELETE FROM alert_mute_rules WHERE "assignmentId" = $1 AND "alertType" = $2`,
-      [scope.activeAssignmentId, alertType]
+      `DELETE FROM alert_mute_rules WHERE "assignmentId" = $1 AND "alertType" = $2 AND "companyId" = $3`,
+      [scope.activeAssignmentId, alertType, scope.companyId]
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.alert.unmuted", entity: "alert_mute_rules", entityId: 0, details: JSON.stringify({ alertType }) }).catch(console.error);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "alert_mute_rules", entityId: 0, after: { alertType } }).catch(console.error);

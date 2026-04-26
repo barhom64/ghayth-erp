@@ -1443,6 +1443,7 @@ router.patch("/tenants/:id", requirePermission("property:update"), async (req, r
     if (fields.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE tenants SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    if (!rows[0]) throw new NotFoundError("المستأجر غير موجود");
 
     createAuditLog({
       companyId: scope.companyId,
@@ -3025,6 +3026,7 @@ router.patch("/owners/:id", requirePermission("property:update"), async (req, re
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(`UPDATE property_owners SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    if (!rows[0]) throw new NotFoundError("المالك غير موجود");
 
     createAuditLog({
       companyId: scope.companyId,
@@ -3287,6 +3289,7 @@ router.patch("/inspections/:id", requirePermission("property:update"), async (re
       `UPDATE property_inspections SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
+    if (!rows[0]) throw new NotFoundError("المعاينة غير موجودة");
 
     createAuditLog({
       companyId: scope.companyId,
@@ -3383,7 +3386,7 @@ router.post("/deposits", requirePermission("property:create"), async (req, res) 
       );
     } catch (jErr) {
       console.error("Deposit journal entry failed:", jErr);
-      await rawExecute(`DELETE FROM property_security_deposits WHERE id=$1`, [insertId]).catch(console.error);
+      await rawExecute(`DELETE FROM property_security_deposits WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]).catch(console.error);
       throw new IntegrationError(
         "تعذّر إنشاء القيد المحاسبي للوديعة — لم يتم تسجيل الوديعة",
         { field: "journalEntry", fix: "راجع إعدادات شجرة الحسابات (1100/2300) ثم أعد المحاولة" }
