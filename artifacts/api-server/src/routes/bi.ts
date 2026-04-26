@@ -1148,11 +1148,11 @@ router.get("/reports/training-roi", requirePermission("bi:read"), async (req, re
       `SELECT
          COUNT(DISTINCT tp."employeeId") AS "trainedEmployees",
          COUNT(*) AS "totalSessions",
-         COALESCE(SUM(tp.hours), 0) AS "totalHours",
+         COALESCE(SUM(t.duration), 0) AS "totalHours",
          COALESCE(SUM(t.cost), 0) AS "totalCost",
          ROUND(AVG(tp.score), 1) AS "avgScore"
        FROM training_participants tp
-       JOIN trainings t ON t.id = tp."trainingId"
+       JOIN training_programs t ON t.id = tp."trainingId"
        WHERE t."companyId" = $1
          AND DATE(t."startDate") BETWEEN $2::date AND $3::date`,
       [cid, dateFrom, dateTo]

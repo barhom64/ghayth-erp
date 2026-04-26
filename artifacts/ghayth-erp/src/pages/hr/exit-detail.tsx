@@ -54,7 +54,7 @@ export default function ExitDetail() {
   const { data, isLoading, isError } = useApiQuery<any>(["hr-exit-detail", id], `/hr/exit/${id}`);
   const item = data?.data ?? data;
 
-  const approveMut = useApiMutation(null as any, "PATCH", [["hr-exit"]], {
+  const approveMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-exit"]], {
     successMessage: "تم اعتماد طلب نهاية الخدمة",
   });
 
