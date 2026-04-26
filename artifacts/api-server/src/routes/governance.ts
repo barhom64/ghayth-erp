@@ -672,8 +672,8 @@ router.post("/policies/:id/compliance-actions", requirePermission("governance:wr
     const policyId = Number(req.params.id);
     const b = req.body;
     const r = await rawExecute(
-      `INSERT INTO policy_compliance_actions ("policyId","companyId",action,status,"responsiblePerson","dueDate",notes) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [policyId, scope.companyId, b.action, b.status || 'not_implemented', b.responsiblePerson || null, b.dueDate || null, b.notes || null]
+      `INSERT INTO policy_compliance_actions ("policyId","companyId",title,status,owner,"dueDate",description) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [policyId, scope.companyId, b.action || b.title, b.status || 'open', b.responsiblePerson || b.owner || null, b.dueDate || null, b.notes || b.description || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [r.insertId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "policy_compliance_actions", entityId: r.insertId, after: { policyId, action: b.action } }).catch(console.error);
@@ -697,10 +697,10 @@ router.patch("/compliance-actions/:id", requirePermission("governance:write"), a
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
-    if (b.action !== undefined) { params.push(b.action); sets.push(`action=$${params.length}`); }
-    if (b.responsiblePerson !== undefined) { params.push(b.responsiblePerson); sets.push(`"responsiblePerson"=$${params.length}`); }
+    if (b.action !== undefined || b.title !== undefined) { params.push(b.action ?? b.title); sets.push(`title=$${params.length}`); }
+    if (b.responsiblePerson !== undefined || b.owner !== undefined) { params.push(b.responsiblePerson ?? b.owner); sets.push(`owner=$${params.length}`); }
     if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
-    if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
+    if (b.notes !== undefined || b.description !== undefined) { params.push(b.notes ?? b.description); sets.push(`description=$${params.length}`); }
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [id]);

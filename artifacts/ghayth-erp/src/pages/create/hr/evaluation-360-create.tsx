@@ -21,7 +21,7 @@ export default function Evaluation360Create() {
   const { toast } = useToast();
   const { scopeQueryString } = useAppContext();
 
-  const createMut = useApiMutation("/hr/evaluation-360", "POST", [["evaluation-360"]], {
+  const createMut = useApiMutation("/hr/evaluation-cycles", "POST", [["evaluation-360"]], {
     successMessage: "تم بدء دورة التقييم بنجاح",
   });
 

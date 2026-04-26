@@ -447,7 +447,7 @@ router.post("/departments", requirePermission("settings:write"), async (req, res
     const body = parsed_createDepartmentSchema.data;
     const { name, nameEn, manager } = body;
     const scope = req.scope!;
-    const r = await rawExecute(`INSERT INTO departments (name, "nameEn", manager) VALUES ($1,$2,$3)`, [name, nameEn || null, manager || null]);
+    const r = await rawExecute(`INSERT INTO departments (name, "companyId", "managerId") VALUES ($1,$2,$3)`, [name, scope.companyId, manager || null]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "create_department",
       entity: "departments", entityId: r.insertId,
@@ -466,7 +466,7 @@ router.put("/departments/:id", requirePermission("settings:write"), async (req, 
     const { id } = req.params;
     const { name, nameEn, manager } = body;
     const scope = req.scope!;
-    await rawExecute(`UPDATE departments SET name=$1, "nameEn"=$2, manager=$3 WHERE id=$4 RETURNING id`, [name, nameEn || null, manager || null, id]);
+    await rawExecute(`UPDATE departments SET name=$1, "managerId"=$2 WHERE id=$3 RETURNING id`, [name, manager || null, id]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_department",
       entity: "departments", entityId: Number(id),
@@ -507,7 +507,7 @@ router.post("/companies", requirePermission("settings:write"), async (req, res) 
     const body = parsed_createCompanySchema.data;
     const scope = req.scope!;
     const { name, nameEn, taxNumber, crNumber } = body;
-    const r = await rawExecute(`INSERT INTO companies (name, "nameEn", "taxNumber", "crNumber") VALUES ($1,$2,$3,$4)`, [name, nameEn || null, taxNumber || null, crNumber || null]);
+    const r = await rawExecute(`INSERT INTO companies (name, "nameEn", "vatNumber", "crNumber") VALUES ($1,$2,$3,$4)`, [name, nameEn || null, taxNumber || null, crNumber || null]);
     const companyId = r.insertId;
 
     let branchId: number | undefined;
@@ -571,7 +571,7 @@ router.put("/companies/:id", requirePermission("settings:write"), async (req, re
     const { id } = req.params;
     const { name, nameEn, taxNumber, crNumber } = body;
     const scope = req.scope!;
-    await rawExecute(`UPDATE companies SET name=$1, "nameEn"=$2, "taxNumber"=$3, "crNumber"=$4 WHERE id=$5 RETURNING id`, [name, nameEn || null, taxNumber || null, crNumber || null, id]);
+    await rawExecute(`UPDATE companies SET name=$1, "nameEn"=$2, "vatNumber"=$3, "crNumber"=$4 WHERE id=$5 RETURNING id`, [name, nameEn || null, taxNumber || null, crNumber || null, id]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_company",
       entity: "companies", entityId: Number(id),

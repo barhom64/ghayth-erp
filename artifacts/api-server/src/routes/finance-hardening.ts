@@ -1146,12 +1146,12 @@ financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:rea
        WHERE po."companyId"=$1 AND po.status IN ('approved','pending')
          AND po."expectedDelivery" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
        UNION ALL
-       SELECT 'PAYROLL' AS ref, COALESCE(SUM(em."baseSalary"),0) AS expected,
+       SELECT 'PAYROLL' AS ref, COALESCE(SUM(ea.salary),0) AS expected,
               (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')::date AS "dueDate",
               'رواتب الموظفين' AS "supplierName", 'payroll' AS type
        FROM employee_assignments ea
        JOIN employees em ON em.id=ea."employeeId"
-       WHERE ea."companyId"=$1 AND ea.status='active' AND em."baseSalary" IS NOT NULL
+       WHERE ea."companyId"=$1 AND ea.status='active' AND ea.salary IS NOT NULL
        GROUP BY 1,3,4,5`,
       [scope.companyId]
     );

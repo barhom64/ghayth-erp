@@ -982,12 +982,12 @@ router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) 
          fv.model,
          fv.year,
          fv.status,
-         COALESCE(fv."purchasePrice", 0) AS "purchasePrice",
-         COALESCE(fv."monthlyLeaseCost", 0) AS "monthlyLeaseCost",
+         0 AS "purchasePrice",
+         0 AS "monthlyLeaseCost",
          COALESCE(fm_total.total, 0) AS "maintenanceCost",
          COALESCE(fuel_total.total, 0) AS "fuelCost",
          COALESCE(ins_total.total, 0) AS "insuranceCost",
-         fv."odometer"
+         fv."currentMileage" AS "odometer"
        FROM fleet_vehicles fv
        LEFT JOIN LATERAL (
          SELECT COALESCE(SUM(cost), 0) AS total FROM fleet_maintenance

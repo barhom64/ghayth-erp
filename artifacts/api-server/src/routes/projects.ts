@@ -1670,9 +1670,10 @@ router.get("/:id/resources", requirePermission("projects:read"), async (req, res
     const projectId = Number(req.params.id);
     const project = await assertProjectAccess(projectId, scope);
     const rows = await rawQuery<any>(
-      `SELECT pr.*, e.name AS "employeeName", e."jobTitle" AS "employeeJobTitle"
+      `SELECT pr.*, e.name AS "employeeName", ea."jobTitle" AS "employeeJobTitle"
        FROM project_resources pr
        LEFT JOIN employees e ON e.id=pr."employeeId"
+       LEFT JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea.status='active'
        WHERE pr."projectId"=$1 AND pr."companyId"=$2
        ORDER BY pr.id`,
       [projectId, scope.companyId]

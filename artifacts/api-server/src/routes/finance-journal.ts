@@ -240,7 +240,7 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
     } catch { /* table may not exist yet */ }
     if (costCenterValidationEnabled) {
       const [ccRow] = await rawQuery<any>(
-        `SELECT id FROM departments WHERE "companyId" = ANY($1) AND (name = $2 OR "nameEn" = $2) LIMIT 1`,
+        `SELECT id FROM departments WHERE "companyId" = ANY($1) AND name = $2 LIMIT 1`,
         [[effectiveCompanyId], costCenter]
       );
       if (!ccRow) {

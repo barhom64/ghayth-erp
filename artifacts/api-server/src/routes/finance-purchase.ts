@@ -365,9 +365,9 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
     const poRef = `PO-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
 
     const { insertId: poId } = await rawExecute(
-      `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","vatAmount","supplierId",notes,"requestedBy")
-       VALUES ($1,$2,$3,'pending',$4,$5,$6,$7,$8)`,
-      [scope.companyId, scope.branchId, poRef, totalAmount, vatAmount, pr.supplierId ?? null, pr.notes ?? null, scope.activeAssignmentId]
+      `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"createdBy")
+       VALUES ($1,$2,$3,'pending',$4,$5,$6,$7)`,
+      [scope.companyId, scope.branchId, poRef, totalAmount, pr.supplierId ?? null, pr.notes ?? null, scope.userId]
     );
 
     if (Array.isArray(items) && items.length > 0) {
@@ -470,9 +470,9 @@ purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), asy
     const ref = `PO-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
 
     const { insertId } = await rawExecute(
-      `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","vatAmount","supplierId",notes,"expectedDelivery","requestedBy")
-       VALUES ($1,$2,$3,'pending',$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, scope.branchId, ref, Number(totalAmount), Number(vatAmount ?? 0), supplierId, notes ?? null, expectedDelivery ?? null, scope.activeAssignmentId]
+      `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"expectedDelivery","createdBy")
+       VALUES ($1,$2,$3,'pending',$4,$5,$6,$7,$8)`,
+      [scope.companyId, scope.branchId, ref, Number(totalAmount), supplierId, notes ?? null, expectedDelivery ?? null, scope.userId]
     );
 
     if (Array.isArray(items) && items.length > 0) {
@@ -688,7 +688,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
     const totalRemaining = Number(remainingItems[0]?.remaining ?? 0);
     const newStatus = totalRemaining <= 0.0001 ? "received" : "partially_received";
     await rawExecute(
-      `UPDATE purchase_orders SET status = $1, "receivedAt" = $2 WHERE id = $3`,
+      `UPDATE purchase_orders SET status = $1, "deliveredAt" = $2 WHERE id = $3`,
       [newStatus, receiptDate, Number(id)]
     );
 
@@ -786,7 +786,7 @@ purchaseRouter.get("/purchase-orders/:id/match", requirePermission("finance:read
     const scope = req.scope!;
     const poId = Number(req.params.id);
     const [po] = await rawQuery<any>(
-      `SELECT id, ref, status, "totalAmount", "vatAmount", "supplierId"
+      `SELECT id, ref, status, "totalAmount", 0 AS "vatAmount", "supplierId"
          FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [poId, scope.companyId]
     );
@@ -848,7 +848,7 @@ purchaseRouter.get("/payment-run/pending", requirePermission("finance:read"), as
 
     const rows = await rawQuery<any>(
       `SELECT po.id, po.ref, po."totalAmount", po."createdAt", po."expectedDelivery",
-              po."supplierId", s.name AS "supplierName", s."bankAccount"
+              po."supplierId", s.name AS "supplierName"
          FROM purchase_orders po
          LEFT JOIN suppliers s ON s.id = po."supplierId"
         WHERE ${where}

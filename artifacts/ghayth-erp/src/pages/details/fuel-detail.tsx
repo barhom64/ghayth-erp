@@ -25,7 +25,7 @@ export default function FuelDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["fuel-detail", String(id)],
-    id ? `/fleet/fuel/${id}` : null,
+    id ? `/fleet/fuel-logs/${id}` : null,
     !!id,
   );
 
