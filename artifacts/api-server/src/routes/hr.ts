@@ -2061,7 +2061,23 @@ router.get("/payroll/:id", requirePermission("hr:read"), async (req, res): Promi
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("مسير الرواتب غير موجود");
-    res.json({ ...row, month: row.period, totalAmount: Number(row.totalNet) });
+    const lines = await rawQuery<any>(
+      `SELECT pl.*, e.name AS "employeeName"
+       FROM payroll_lines pl
+       LEFT JOIN employee_assignments ea ON ea.id = pl."assignmentId"
+       LEFT JOIN employees e ON e.id = ea."employeeId"
+       WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY pl.id`,
+      [id]
+    );
+    const totalBasic = lines.reduce((s: number, l: any) => s + Number(l.basicSalary || 0), 0);
+    const totalAllowances = lines.reduce((s: number, l: any) => s + Number(l.allowances || 0), 0);
+    const totalDeductions = lines.reduce((s: number, l: any) => s + Number(l.deductions || 0), 0);
+    res.json({
+      ...row, month: row.period, totalAmount: Number(row.totalNet),
+      basicSalary: totalBasic, allowances: totalAllowances, deductions: totalDeductions,
+      netSalary: Number(row.totalNet),
+      lines,
+    });
   } catch (err) { handleRouteError(err, res, "Get payroll detail error:"); }
 });
 

@@ -1517,7 +1517,7 @@ router.get("/fuel-logs", requirePermission("fleet:read"), async (req, res) => {
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND f."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId)); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT f.*, v."plateNumber" FROM fleet_fuel_logs f LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId" WHERE ${where} AND f."deletedAt" IS NULL ORDER BY f.id DESC`,
+      `SELECT f.*, f.liters AS quantity, f."totalCost" AS cost, f."mileageAtFuel" AS mileage, f."stationName" AS station, f."fuelDate" AS date, v."plateNumber" FROM fleet_fuel_logs f LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId" WHERE ${where} AND f."deletedAt" IS NULL ORDER BY f.id DESC`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -1529,9 +1529,13 @@ router.get("/fuel-logs/:id", requirePermission("fleet:read"), async (req, res) =
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [row] = await rawQuery<any>(
-      `SELECT f.*, v."plateNumber", v.make AS "vehicleMake", v.model AS "vehicleModel"
+      `SELECT f.*, f.liters AS quantity, f."totalCost" AS cost, f."mileageAtFuel" AS odometer,
+              f."stationName" AS station, f."fuelDate" AS date,
+              v."plateNumber", v.make AS "vehicleMake", v.model AS "vehicleModel",
+              d.name AS "driverName"
        FROM fleet_fuel_logs f
        LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId"
+       LEFT JOIN fleet_drivers d ON d.id=f."driverId"
        WHERE f.id = $1 AND f."companyId" = $2 AND f."deletedAt" IS NULL`,
       [id, scope.companyId]
     );

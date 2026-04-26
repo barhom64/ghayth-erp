@@ -462,6 +462,22 @@ router.get("/movements", requirePermission("warehouse:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Warehouse movements error:"); }
 });
 
+router.get("/movements/:id", requirePermission("warehouse:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT m.*, p.name AS "productName", p.sku
+       FROM warehouse_movements m
+       LEFT JOIN warehouse_products p ON p.id=m."productId"
+       WHERE m.id=$1 AND m."companyId"=$2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("حركة المخزن غير موجودة");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Warehouse movement detail error:"); }
+});
+
 router.post("/movements", requirePermission("warehouse:create"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
@@ -819,6 +835,19 @@ router.get("/categories", requirePermission("warehouse:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Warehouse categories error:"); }
 });
 
+router.get("/categories/:id", requirePermission("warehouse:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT * FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الفئة غير موجودة");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Warehouse category detail error:"); }
+});
+
 router.post("/categories", requirePermission("warehouse:create"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -874,6 +903,19 @@ router.get("/suppliers", requirePermission("warehouse:read"), async (req, res) =
     );
     res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
   } catch (err) { handleRouteError(err, res, "Suppliers error:"); }
+});
+
+router.get("/suppliers/:id", requirePermission("warehouse:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("المورد غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Supplier detail error:"); }
 });
 
 router.post("/suppliers", requirePermission("warehouse:create"), async (req, res) => {

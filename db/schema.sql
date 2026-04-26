@@ -20589,6 +20589,38 @@ CREATE INDEX IF NOT EXISTS event_dlq_unresolved_idx ON public.event_dlq USING bt
 CREATE INDEX IF NOT EXISTS event_dlq_company_idx ON public.event_dlq USING btree ("companyId", "createdAt" DESC);
 CREATE INDEX IF NOT EXISTS event_dlq_event_idx ON public.event_dlq USING btree ("eventName") WHERE ("resolvedAt" IS NULL);
 
+-- salary_history — tracks salary changes over time
+CREATE TABLE IF NOT EXISTS public.salary_history (
+    id integer NOT NULL,
+    "employeeId" integer NOT NULL,
+    "assignmentId" integer,
+    "companyId" integer NOT NULL,
+    "oldSalary" numeric(18,2) DEFAULT 0,
+    "newSalary" numeric(18,2) DEFAULT 0,
+    "effectiveDate" date DEFAULT CURRENT_DATE,
+    "changedBy" integer,
+    "createdAt" timestamp without time zone DEFAULT now()
+);
+CREATE SEQUENCE IF NOT EXISTS public.salary_history_id_seq AS integer;
+ALTER TABLE ONLY public.salary_history ALTER COLUMN id SET DEFAULT nextval('public.salary_history_id_seq'::regclass);
+ALTER SEQUENCE public.salary_history_id_seq OWNED BY public.salary_history.id;
+ALTER TABLE ONLY public.salary_history ADD CONSTRAINT salary_history_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS salary_history_employee_idx ON public.salary_history USING btree ("employeeId", "effectiveDate" DESC);
+
+-- payment_run_items — individual POs included in a payment run
+CREATE TABLE IF NOT EXISTS public.payment_run_items (
+    id integer NOT NULL,
+    "runId" integer NOT NULL,
+    "poId" integer NOT NULL,
+    "supplierId" integer,
+    amount numeric(18,2) NOT NULL,
+    "journalId" integer
+);
+CREATE SEQUENCE IF NOT EXISTS public.payment_run_items_id_seq AS integer;
+ALTER TABLE ONLY public.payment_run_items ALTER COLUMN id SET DEFAULT nextval('public.payment_run_items_id_seq'::regclass);
+ALTER SEQUENCE public.payment_run_items_id_seq OWNED BY public.payment_run_items.id;
+ALTER TABLE ONLY public.payment_run_items ADD CONSTRAINT payment_run_items_pkey PRIMARY KEY (id);
+
 --
 -- PostgreSQL database dump complete
 --

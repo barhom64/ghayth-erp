@@ -755,6 +755,55 @@ journalRouter.patch("/salary-advances/:id/approve", requirePermission("finance:u
 // JOURNAL ENTRY DETAIL + REVERSAL (Phase 2)
 // ─────────────────────────────────────────────────────────────────────────────
 
+journalRouter.get("/journal", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const filters = parseScopeFilters(req);
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true });
+    const rows = await rawQuery<any>(
+      `SELECT je.id, je.ref, je.description, je.status, je."createdAt",
+              je."reversalOfId", je."reversedById", je."operationType",
+              COALESCE(SUM(jl.debit), 0) AS "totalDebit",
+              COALESCE(SUM(jl.credit), 0) AS "totalCredit"
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE ${where} AND je."deletedAt" IS NULL
+       GROUP BY je.id
+       ORDER BY je."createdAt" DESC LIMIT 200`,
+      params
+    );
+    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+  } catch (err) { handleRouteError(err, res, "List journal entries error:"); }
+});
+
+journalRouter.post("/journal", requirePermission("finance:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { description, lines, date } = req.body as any;
+    if (!description) throw new ValidationError("وصف القيد مطلوب", { field: "description" });
+    if (!Array.isArray(lines) || lines.length < 2) throw new ValidationError("القيد يجب أن يحتوي على بندين على الأقل", { field: "lines" });
+    const totalDebit = lines.reduce((s: number, l: any) => s + (Number(l.debit) || 0), 0);
+    const totalCredit = lines.reduce((s: number, l: any) => s + (Number(l.credit) || 0), 0);
+    if (Math.abs(totalDebit - totalCredit) > 0.01) throw new ValidationError(`القيد غير متوازن: مدين ${totalDebit.toFixed(2)} ≠ دائن ${totalCredit.toFixed(2)}`, { field: "lines", fix: "تأكد من تساوي المدين والدائن" });
+
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('journal_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
+    const ref = `JE-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
+    const { insertId } = await rawExecute(
+      `INSERT INTO journal_entries ("companyId","branchId",ref,description,status,"createdAt") VALUES ($1,$2,$3,$4,'posted',$5)`,
+      [scope.companyId, scope.branchId, ref, description, date || new Date().toISOString()]
+    );
+    for (const l of lines) {
+      await rawExecute(
+        `INSERT INTO journal_lines ("journalId","accountCode",description,debit,credit,"costCenter","departmentId","projectId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [insertId, l.accountCode, l.description || null, Number(l.debit) || 0, Number(l.credit) || 0, l.costCenter || null, l.departmentId || null, l.projectId || null]
+      );
+    }
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "journal_entries", entityId: insertId, after: { ref, description, totalDebit } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "finance.journal.created", entity: "journal_entries", entityId: insertId, details: JSON.stringify({ ref }) }).catch(console.error);
+    res.status(201).json({ id: insertId, ref });
+  } catch (err) { handleRouteError(err, res, "Create journal entry error:"); }
+});
+
 journalRouter.get("/journal/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
