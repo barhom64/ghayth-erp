@@ -304,7 +304,7 @@ purchaseRouter.patch("/purchase-requests/:id/approve", requirePermission("financ
       );
     }
 
-    await rawExecute(`UPDATE purchase_requests SET status = $1, notes = COALESCE($2, notes) WHERE id = $3`, [newStatus, notes ?? null, Number(id)]);
+    await rawExecute(`UPDATE purchase_requests SET status = $1, notes = COALESCE($2, notes) WHERE id = $3 AND "companyId" = $4`, [newStatus, notes ?? null, Number(id), scope.companyId]);
     try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_request',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
 
     // Bus emission — the dead listeners in eventListeners.ts:193/326

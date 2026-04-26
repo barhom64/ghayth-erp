@@ -470,8 +470,8 @@ router.patch("/vehicles/:id", requirePermission("fleet:update"), async (req, res
       return;
     }
 
-    params.push(id);
-    await rawExecute(`UPDATE fleet_vehicles SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    params.push(id, scope.companyId);
+    await rawExecute(`UPDATE fleet_vehicles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
@@ -1310,7 +1310,7 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
       });
     }
     const finalCost = Number(b.cost || m.cost || 0);
-    await rawExecute(`UPDATE fleet_maintenance SET status='completed', cost=$1 WHERE id=$2`, [finalCost, id]);
+    await rawExecute(`UPDATE fleet_maintenance SET status='completed', cost=$1 WHERE id=$2 AND "companyId"=$3`, [finalCost, id, scope.companyId]);
     if (m.vehicleId) {
       await rawExecute(`UPDATE fleet_vehicles SET status='available', "lastMaintenanceDate"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [m.vehicleId, scope.companyId]);
     }

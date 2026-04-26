@@ -780,7 +780,7 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
       `SELECT
          COUNT(*) FILTER (WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 30) AS "expiringContracts",
          COUNT(*) FILTER (WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 90) AS "expiringContracts90"
-       FROM legal_contracts WHERE "companyId" = $1`,
+       FROM legal_contracts WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid]
     ).catch(() => [{}]);
 

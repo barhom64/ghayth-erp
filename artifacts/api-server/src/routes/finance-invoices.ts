@@ -879,7 +879,7 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
         { field: "status", fix: `الانتقالات المسموحة: ${allowedFromApproval.length ? allowedFromApproval.join(", ") : "لا يوجد"}` }
       );
     }
-    await rawExecute(`UPDATE invoices SET status = $1 WHERE id = $2`, [newStatus, Number(id)]);
+    await rawExecute(`UPDATE invoices SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [newStatus, Number(id), scope.companyId]);
 
     // CRITICAL: If the invoice is rejected or returned after the GL was
     // already posted at creation time, reverse the AR/Revenue/VAT balances

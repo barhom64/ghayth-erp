@@ -117,7 +117,7 @@ router.get("/", requirePermission("documents:read"), async (req: Request, res: R
         `SELECT d.* FROM documents d
          JOIN document_entity_links del ON del."documentId" = d.id
          WHERE del."entityType" = $1 AND del."entityId" = $2
-         AND (d."companyId" = $3 OR d."companyId" IS NULL)
+         AND (d."companyId" = $3 OR d."companyId" IS NULL) AND d."deletedAt" IS NULL
          ORDER BY d."createdAt" DESC`,
         [entity, Number(entityId), scope.companyId]
       );
@@ -125,7 +125,7 @@ router.get("/", requirePermission("documents:read"), async (req: Request, res: R
       return;
     }
 
-    let where = `WHERE ("companyId"=$1 OR "companyId" IS NULL)`;
+    let where = `WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`;
     const params: any[] = [scope.companyId];
 
     if (category) {
@@ -861,11 +861,11 @@ router.get("/stats", requirePermission("documents:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [docs] = await rawQuery(`SELECT COUNT(*) as count FROM documents WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]);
+    const [docs] = await rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
     const [folders] = await rawQuery(`SELECT COUNT(*) as count FROM document_folders WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]);
     const [templates] = await rawQuery(`SELECT COUNT(*) as count FROM document_templates WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]);
-    const [drafts] = await rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND status='draft'`, [cid]);
-    const [approved] = await rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND status='approved'`, [cid]);
+    const [drafts] = await rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL AND status='draft'`, [cid]);
+    const [approved] = await rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL AND status='approved'`, [cid]);
     res.json({
       totalDocuments: Number(docs.count),
       totalFolders: Number(folders.count),

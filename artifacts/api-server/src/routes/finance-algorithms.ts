@@ -542,7 +542,7 @@ financeAlgorithmsRouter.post("/fixed-assets", requirePermission("finance:create"
        b.assetAccountCode ?? "1500", b.depreciationAccountCode ?? "6100",
        b.accDepreciationAccountCode ?? "1590"]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM fixed_assets WHERE id = $1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fixed_assets WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) {
     handleRouteError(err, res, "Create fixed asset error:");
@@ -886,7 +886,7 @@ financeAlgorithmsRouter.get("/inventory-costing", requirePermission("finance:rea
               (p."currentStock" * p."costPrice") AS "stockValue"
        FROM warehouse_products p
        LEFT JOIN warehouse_categories c ON c.id = p."categoryId"
-       WHERE p."companyId" = $1 AND p.status = 'active'
+       WHERE p."companyId" = $1 AND p.status = 'active' AND p."deletedAt" IS NULL
        ORDER BY p.name`,
       [scope.companyId]
     );
@@ -909,7 +909,7 @@ financeAlgorithmsRouter.get("/inventory-costing/:productId", requirePermission("
     const productId = Number(req.params.productId);
 
     const [product] = await rawQuery<any>(
-      `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2`,
+      `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [productId, scope.companyId]
     );
     if (!product) { throw new NotFoundError("المنتج غير موجود"); return; }
@@ -1002,7 +1002,7 @@ financeAlgorithmsRouter.post("/rounding-account/setup", requirePermission("finan
        VALUES ($1,'9999','فروقات التقريب','Rounding Differences','expense',2,null,true)`,
       [scope.companyId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM chart_of_accounts WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM chart_of_accounts WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json({ account: row, message: "تم إنشاء حساب فروقات التقريب (9999)" });
   } catch (err) {
     handleRouteError(err, res, "Setup rounding account error:");

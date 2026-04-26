@@ -3450,7 +3450,7 @@ async function violationApprovalAction(req: any, res: any, newStatus: "approved"
     if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
       throw new ValidationError(newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع", { field: "notes" });
     }
-    await rawExecute(`UPDATE employee_violations SET status=$1 WHERE id=$2`, [newStatus, id]);
+    await rawExecute(`UPDATE employee_violations SET status=$1 WHERE id=$2 AND "companyId"=$3`, [newStatus, id, scope.companyId]);
     try {
       await rawExecute(
         `INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('violation',$1,$2,$3,$4,$5)`,

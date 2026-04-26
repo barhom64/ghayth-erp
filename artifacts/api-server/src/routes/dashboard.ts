@@ -213,7 +213,7 @@ router.get("/summary", async (req, res) => {
     let warehouseAlerts = 0;
     try {
       const [w] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM warehouse_products WHERE ${where} AND status='active' AND "currentStock" <= "minStock"`,
+        `SELECT COUNT(*) AS total FROM warehouse_products WHERE ${where} AND status='active' AND "deletedAt" IS NULL AND "currentStock" <= "minStock"`,
         [...params]
       );
       warehouseAlerts = Number(w?.total ?? 0);
