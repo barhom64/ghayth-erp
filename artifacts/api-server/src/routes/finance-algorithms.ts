@@ -1135,9 +1135,9 @@ financeAlgorithmsRouter.post("/fx/rates", requirePermission("finance:create"), a
     }
     await ensureFxTables();
     const [row] = await rawQuery<any>(
-      `INSERT INTO fx_rates ("companyId","rateDate","fromCurrency","toCurrency",rate,type)
+      `INSERT INTO fx_rates ("companyId","effectiveDate","fromCurrency","toCurrency",rate,source)
        VALUES ($1,$2,$3,$4,$5,$6)
-       ON CONFLICT ("companyId","rateDate","fromCurrency","toCurrency","type")
+       ON CONFLICT ("companyId","effectiveDate","fromCurrency","toCurrency","source")
        DO UPDATE SET rate=EXCLUDED.rate
        RETURNING *`,
       [scope.companyId, rateDate, String(fromCurrency).toUpperCase(), String(toCurrency).toUpperCase(), Number(rate), type]
@@ -1412,9 +1412,9 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:
     const totalLoss = lines.filter(l => l.accountCode === lossCode).reduce((s, l) => s + l.debit, 0);
 
     const [revRow] = await rawQuery<any>(
-      `INSERT INTO fx_revaluations ("companyId",period,"journalEntryId","totalGain","totalLoss",details,"postedBy")
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [scope.companyId, period, journalEntryId, totalGain, totalLoss, JSON.stringify(details), scope.activeAssignmentId]
+      `INSERT INTO fx_revaluations ("companyId","revaluationDate","journalEntryId","totalImpact","createdBy")
+       VALUES ($1,$2::date,$3,$4,$5) RETURNING id`,
+      [scope.companyId, period, journalEntryId, totalGain - totalLoss, scope.activeAssignmentId]
     );
     const revalId = revRow?.id;
 

@@ -49,7 +49,7 @@ export default function PaymentRecord() {
     }
     setSaving(true);
     try {
-      await apiFetch(`/properties/contracts/${params?.contractId}/installments/${params?.installmentId}/pay`, {
+      await apiFetch(`/properties/contracts/${params?.contractId}/schedule/${params?.installmentId}/pay`, {
         method: "POST",
         body: JSON.stringify({
           amount: Number(form.amount),

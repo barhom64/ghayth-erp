@@ -18,6 +18,12 @@ const createProgramSchema = z.object({
   trainer: z.string().optional(),
   capacity: z.coerce.number().optional(),
   status: z.string().optional(),
+  type: z.string().optional(),
+  provider: z.string().optional(),
+  duration: z.coerce.number().optional(),
+  durationUnit: z.string().optional(),
+  cost: z.coerce.number().optional(),
+  maxParticipants: z.coerce.number().optional(),
 });
 
 const patchProgramSchema = z.object({
@@ -50,7 +56,6 @@ const createEnrollmentSchema = z.object({
 const patchEnrollmentSchema = z.object({
   status: z.string().optional(),
   score: z.coerce.number().optional(),
-  feedback: z.string().optional(),
 });
 
 const router = Router();
@@ -70,7 +75,7 @@ router.post("/programs", requirePermission("hr:create"), async (req, res) => {
     if (!parsed_createProgramSchema.success) throw new ValidationError(parsed_createProgramSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_createProgramSchema.data;
     const scope = req.scope!;
-    const { title, description, category, startDate, endDate, location, trainer, capacity, status } = body;
+    const { title, description, category, startDate, endDate, location, trainer, capacity, status, type, provider, duration, durationUnit, cost, maxParticipants } = body;
     if (!String(title).trim()) {
       throw new ValidationError("عنوان البرنامج التدريبي مطلوب", {
         field: "title",
@@ -84,8 +89,8 @@ router.post("/programs", requirePermission("hr:create"), async (req, res) => {
       });
     }
     const r = await rawExecute(
-      `INSERT INTO training_programs (title, description, category, "startDate", "endDate", location, trainer, capacity, status, "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [String(title).trim(), description ?? null, category ?? null, startDate ?? null, endDate ?? null, location ?? null, trainer ?? null, Number(capacity ?? 0), status ?? "upcoming", scope.companyId]
+      `INSERT INTO training_programs (title, description, category, "startDate", "endDate", location, trainer, capacity, status, "companyId", type, provider, duration, "durationUnit", cost, "maxParticipants") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+      [String(title).trim(), description ?? null, category ?? null, startDate ?? null, endDate ?? null, location ?? null, trainer ?? null, Number(capacity ?? 0), status ?? "upcoming", scope.companyId, type ?? null, provider ?? null, duration ? Number(duration) : null, durationUnit ?? null, cost ? Number(cost) : 0, maxParticipants ? Number(maxParticipants) : null]
     );
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -275,7 +280,6 @@ router.patch("/enrollments/:id", requirePermission("hr:update"), async (req, res
     const params: any[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     if (b.score !== undefined) { params.push(b.score); sets.push(`score=$${params.length}`); }
-    if (b.feedback !== undefined) { params.push(b.feedback); sets.push(`feedback=$${params.length}`); }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id);
     await rawExecute(`UPDATE training_enrollments SET ${sets.join(",")} WHERE id=$${params.length}`, params);

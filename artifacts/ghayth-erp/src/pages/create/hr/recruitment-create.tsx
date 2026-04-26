@@ -31,7 +31,7 @@ export default function RecruitmentCreate() {
   // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
   // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
   // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
-  const createMut = useApiMutation("/recruitment/postings", "POST", [["jobs"]], {
+  const createMut = useApiMutation("/hr/recruitment/postings", "POST", [["jobs"]], {
     successMessage: "تم إضافة الوظيفة بنجاح",
   });
   const { data: deptData, isLoading, isError } = useApiQuery<{ data: any[] }>(["departments-list"], "/settings/departments");

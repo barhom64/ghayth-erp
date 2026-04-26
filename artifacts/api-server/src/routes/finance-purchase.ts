@@ -38,6 +38,7 @@ const createPurchaseRequestSchema = z.object({
   notes: z.string().optional(),
   expectedDate: z.string().optional(),
   expectedDelivery: z.string().optional(),
+  costCenter: z.string().optional(),
 });
 
 const createPurchaseOrderSchema = z.object({
@@ -46,6 +47,8 @@ const createPurchaseOrderSchema = z.object({
   vatAmount: z.coerce.number().optional(),
   notes: z.string().optional(),
   expectedDelivery: z.string().optional(),
+  branchId: z.coerce.number().optional().nullable(),
+  companyId: z.coerce.number().optional().nullable(),
   items: z.array(z.any()).optional(),
 });
 
@@ -199,7 +202,7 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
     // historically accepted `expectedDate` + items with `itemName`.
     // Accept BOTH conventions so the frontend is not silently saving
     // lines named "بند" and losing the delivery date.
-    const { items, supplierId, notes } = b;
+    const { items, supplierId, notes, costCenter } = b;
     const expectedDate = b.expectedDate ?? b.expectedDelivery ?? null;
 
     const totalAmount = items.reduce((sum: number, i: any) => sum + Number(i.quantity ?? 1) * Number(i.unitPrice ?? 0), 0);
@@ -228,9 +231,9 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
     const ref = `PR-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
 
     const { insertId } = await rawExecute(
-      `INSERT INTO purchase_requests ("companyId","branchId","requestedBy",ref,status,"totalAmount","supplierId",notes,"expectedDelivery")
-       VALUES ($1,$2,$3,$4,'draft',$5,$6,$7,$8)`,
-      [scope.companyId, scope.branchId, scope.activeAssignmentId, ref, totalAmount, supplierId ?? null, notes ?? null, expectedDate ?? null]
+      `INSERT INTO purchase_requests ("companyId","branchId","requestedBy",ref,status,"totalAmount","supplierId",notes,"expectedDelivery","costCenter")
+       VALUES ($1,$2,$3,$4,'draft',$5,$6,$7,$8,$9)`,
+      [scope.companyId, scope.branchId, scope.activeAssignmentId, ref, totalAmount, supplierId ?? null, notes ?? null, expectedDate ?? null, costCenter ?? null]
     );
 
     if (Array.isArray(items) && items.length > 0) {
@@ -365,9 +368,9 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
     const poRef = `PO-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
 
     const { insertId: poId } = await rawExecute(
-      `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","vatAmount","supplierId",notes,"requestedBy")
-       VALUES ($1,$2,$3,'pending',$4,$5,$6,$7,$8)`,
-      [scope.companyId, scope.branchId, poRef, totalAmount, vatAmount, pr.supplierId ?? null, pr.notes ?? null, scope.activeAssignmentId]
+      `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"createdBy")
+       VALUES ($1,$2,$3,'pending',$4,$5,$6,$7)`,
+      [scope.companyId, scope.branchId, poRef, totalAmount, pr.supplierId ?? null, pr.notes ?? null, scope.userId]
     );
 
     if (Array.isArray(items) && items.length > 0) {
@@ -462,17 +465,19 @@ purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), asy
 
     const parsed = createPurchaseOrderSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { supplierId, totalAmount, vatAmount, notes, expectedDelivery, items } = parsed.data as any;
+    const { supplierId, totalAmount, vatAmount, notes, expectedDelivery, branchId, companyId: bodyCompanyId, items } = parsed.data as any;
 
     if (!totalAmount || Number(totalAmount) <= 0) { throw new ValidationError("المبلغ الإجمالي مطلوب"); return; }
+    const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies?.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
+    const effectiveBranchId = branchId ?? scope.branchId;
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
     const ref = `PO-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
 
     const { insertId } = await rawExecute(
-      `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","vatAmount","supplierId",notes,"expectedDelivery","requestedBy")
-       VALUES ($1,$2,$3,'pending',$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, scope.branchId, ref, Number(totalAmount), Number(vatAmount ?? 0), supplierId, notes ?? null, expectedDelivery ?? null, scope.activeAssignmentId]
+      `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"expectedDelivery","createdBy")
+       VALUES ($1,$2,$3,'pending',$4,$5,$6,$7,$8)`,
+      [effectiveCompanyId, effectiveBranchId, ref, Number(totalAmount), supplierId, notes ?? null, expectedDelivery ?? null, scope.userId]
     );
 
     if (Array.isArray(items) && items.length > 0) {
@@ -688,7 +693,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
     const totalRemaining = Number(remainingItems[0]?.remaining ?? 0);
     const newStatus = totalRemaining <= 0.0001 ? "received" : "partially_received";
     await rawExecute(
-      `UPDATE purchase_orders SET status = $1, "receivedAt" = $2 WHERE id = $3`,
+      `UPDATE purchase_orders SET status = $1, "deliveredAt" = $2 WHERE id = $3`,
       [newStatus, receiptDate, Number(id)]
     );
 
@@ -786,7 +791,7 @@ purchaseRouter.get("/purchase-orders/:id/match", requirePermission("finance:read
     const scope = req.scope!;
     const poId = Number(req.params.id);
     const [po] = await rawQuery<any>(
-      `SELECT id, ref, status, "totalAmount", "vatAmount", "supplierId"
+      `SELECT id, ref, status, "totalAmount", 0 AS "vatAmount", "supplierId"
          FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [poId, scope.companyId]
     );
@@ -848,7 +853,7 @@ purchaseRouter.get("/payment-run/pending", requirePermission("finance:read"), as
 
     const rows = await rawQuery<any>(
       `SELECT po.id, po.ref, po."totalAmount", po."createdAt", po."expectedDelivery",
-              po."supplierId", s.name AS "supplierName", s."bankAccount"
+              po."supplierId", s.name AS "supplierName"
          FROM purchase_orders po
          LEFT JOIN suppliers s ON s.id = po."supplierId"
         WHERE ${where}

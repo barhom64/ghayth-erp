@@ -2,11 +2,25 @@ import pg from "pg";
 
 const { Pool } = pg;
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL must be set");
+let _pool: pg.Pool | undefined;
+
+function getPool(): pg.Pool {
+  if (!_pool) {
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL must be set");
+    }
+    _pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  }
+  return _pool;
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const pool = new Proxy({} as pg.Pool, {
+  get(_target, prop, receiver) {
+    const real = getPool();
+    const val = Reflect.get(real, prop, receiver);
+    return typeof val === "function" ? val.bind(real) : val;
+  },
+});
 
 export async function rawQuery<T = any>(sql: string, params: any[] = []): Promise<T[]> {
   const result = await pool.query(sql, params);

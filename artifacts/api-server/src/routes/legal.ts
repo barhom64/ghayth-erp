@@ -41,6 +41,7 @@ const createCaseSchema = z.object({
   lawyerName: z.string().optional(),
   status: z.string().optional(),
   description: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 const createSessionSchema = z.object({
@@ -556,8 +557,8 @@ router.post("/cases", requirePermission("legal:create"), async (req, res) => {
     if (!lawyerName && responsible) lawyerName = responsible.employeeName;
 
     const { insertId } = await rawExecute(
-      `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType",court,"filingDate","opposingParty","lawyerName",status,priority,description) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [scope.companyId, b.caseNumber, b.title, b.caseType, b.court, b.filingDate, b.opposingParty, lawyerName, b.status || 'open', b.priority || 'medium', b.description]
+      `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType",court,"filingDate","opposingParty","lawyerName",status,priority,description,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [scope.companyId, b.caseNumber, b.title, b.caseType, b.court, b.filingDate, b.opposingParty, lawyerName, b.status || 'open', b.priority || 'medium', b.description, b.notes ?? null]
     );
 
     createAuditLog({
@@ -1215,6 +1216,54 @@ router.patch("/cases/:id/financial-risk", requirePermission("legal:write"), asyn
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Financial risk update error:"); }
+});
+
+router.get("/sessions/:id", requirePermission("legal:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT s.*, lc."caseNumber", lc.title AS "caseTitle"
+       FROM legal_sessions s
+       JOIN legal_cases lc ON lc.id = s."caseId" AND lc."companyId" = $2 AND lc."deletedAt" IS NULL
+       WHERE s.id = $1`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الجلسة غير موجودة");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Legal session detail error:"); }
+});
+
+router.get("/judgments/:id", requirePermission("legal:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT j.*, lc."caseNumber", lc.title AS "caseTitle"
+       FROM legal_judgments j
+       JOIN legal_cases lc ON lc.id = j."caseId" AND lc."companyId" = $2 AND lc."deletedAt" IS NULL
+       WHERE j.id = $1`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الحكم غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Legal judgment detail error:"); }
+});
+
+router.get("/correspondence/:id", requirePermission("legal:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT c.*, lc."caseNumber", lc.title AS "caseTitle"
+       FROM legal_correspondence c
+       JOIN legal_cases lc ON lc.id = c."caseId" AND lc."companyId" = $2 AND lc."deletedAt" IS NULL
+       WHERE c.id = $1`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("المراسلة غير موجودة");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Legal correspondence detail error:"); }
 });
 
 router.get("/sessions/upcoming", requirePermission("legal:read"), async (req, res) => {

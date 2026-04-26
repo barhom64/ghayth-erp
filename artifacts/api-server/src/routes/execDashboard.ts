@@ -305,7 +305,7 @@ execDashboardRouter.get("/overdue-invoices", async (req, res) => {
     const scope = req.scope!;
     requireExec(scope);
     const rows = await rawQuery<any>(
-      `SELECT i.id, i."invoiceNumber", i."dueDate",
+      `SELECT i.id, i.ref AS "invoiceNumber", i."dueDate",
               i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
               (i.total - COALESCE(i."paidAmount",0)) AS outstanding,
               (CURRENT_DATE - i."dueDate"::date)::int AS "daysPastDue",

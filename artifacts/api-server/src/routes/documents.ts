@@ -547,7 +547,7 @@ router.get("/templates", requirePermission("documents:read"), async (req, res) =
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT * FROM document_templates WHERE ("companyId"=$1 OR "companyId" IS NULL) ORDER BY "createdAt" DESC`,
+      `SELECT * FROM document_templates WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC`,
       [scope.companyId]
     );
     res.json(rows);

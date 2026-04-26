@@ -45,7 +45,7 @@ export default function TripDetailPage() {
   // Fuel logs filtered by trip
   const { data: fuelResp } = useApiQuery<any>(
     ["trip-fuel", id],
-    id ? `/fleet/fuel?tripId=${id}` : null,
+    id ? `/fleet/fuel-logs?tripId=${id}` : null,
     !!id
   );
   const allFuel: any[] = fuelResp?.data || [];

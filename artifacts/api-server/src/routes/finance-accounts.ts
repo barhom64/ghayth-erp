@@ -73,8 +73,8 @@ accountsRouter.post("/accounts", requirePermission("finance:create"), async (req
       });
     }
     const r = await rawExecute(
-      `INSERT INTO chart_of_accounts ("companyId", code, name, type, "parentCode") VALUES ($1,$2,$3,$4,$5)`,
-      [scope.companyId, b.code, b.name, b.type || "asset", b.parentCode]
+      `INSERT INTO chart_of_accounts ("companyId", code, name, type, "parentCode", "nameEn", nature, "allowPosting", "isAnalytical") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [scope.companyId, b.code, b.name, b.type || "asset", b.parentCode, b.nameEn ?? null, b.nature ?? "debit", b.allowPosting ?? true, b.isAnalytical ?? false]
     );
 
     emitEvent({

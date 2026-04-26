@@ -45,8 +45,8 @@ router.get("/", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rules = await rawQuery<any>(
-      `SELECT * FROM business_rules 
-       WHERE ("companyId" IS NULL OR "companyId" = $1)
+      `SELECT * FROM business_rules
+       WHERE ("companyId" IS NULL OR "companyId" = $1) AND "deletedAt" IS NULL
        ORDER BY priority DESC, "createdAt" DESC`,
       [scope.companyId]
     );

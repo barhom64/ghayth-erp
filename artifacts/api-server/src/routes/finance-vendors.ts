@@ -34,7 +34,7 @@ vendorsRouter.get("/vendors", requirePermission("finance:read"), async (req, res
 vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { name, contactPerson, phone, email, taxNumber, address, paymentTerms } = req.body as any;
+    const { name, contactPerson, phone, email, taxNumber, address, paymentTerms, category } = req.body as any;
     if (!name) {
       throw new ValidationError("اسم المورد مطلوب", {
         field: "name",
@@ -42,9 +42,9 @@ vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, 
       });
     }
     const { insertId } = await rawExecute(
-      `INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null, address || null, paymentTerms || null]
+      `INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms", category)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null, address || null, paymentTerms || null, category || null]
     );
 
     emitEvent({
@@ -222,6 +222,7 @@ vendorsRouter.get("/receivables", requirePermission("finance:read"), async (req,
     const scope = req.scope!;
     const rows = await rawQuery<any>(
       `SELECT i.id, i.ref, i.total, i."paidAmount", i."dueDate", i.status,
+              (i.total - COALESCE(i."paidAmount", 0)) AS "remainingAmount",
               c.name AS "clientName"
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId"
@@ -234,6 +235,22 @@ vendorsRouter.get("/receivables", requirePermission("finance:read"), async (req,
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
+});
+
+vendorsRouter.get("/receivables/:id", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT i.*, c.name AS "clientName"
+       FROM invoices i
+       LEFT JOIN clients c ON c.id = i."clientId"
+       WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("المستحق غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Receivable detail error:"); }
 });
 
 vendorsRouter.get("/payments", requirePermission("finance:read"), async (req, res) => {
@@ -261,8 +278,9 @@ vendorsRouter.get("/commitments", requirePermission("finance:read"), async (req,
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT po.id, po.ref, po."totalAmount", po.status, po."createdAt",
-              s.name AS "supplierName"
+      `SELECT po.id, po.ref, po."totalAmount", po."totalAmount" AS amount,
+              po.status, po."createdAt", po."expectedDelivery" AS "dueDate",
+              s.name AS "supplierName", s.name AS "vendorName"
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id = po."supplierId"
        WHERE po."companyId" = $1 AND po.status NOT IN ('cancelled','closed','received')
@@ -275,16 +293,49 @@ vendorsRouter.get("/commitments", requirePermission("finance:read"), async (req,
   }
 });
 
+vendorsRouter.get("/commitments/:id", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT po.*, s.name AS "supplierName"
+       FROM purchase_orders po
+       LEFT JOIN suppliers s ON s.id = po."supplierId"
+       WHERE po.id = $1 AND po."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الالتزام غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Commitment detail error:"); }
+});
+
+vendorsRouter.get("/financial-requests/:id", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT wr.*, e.name AS "submittedByName"
+       FROM workflow_requests wr
+       LEFT JOIN employee_assignments ea ON ea.id = wr."submittedBy"
+       LEFT JOIN employees e ON e.id = ea."employeeId"
+       WHERE wr.id = $1 AND wr."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الطلب المالي غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Financial request detail error:"); }
+});
+
 vendorsRouter.get("/financial-requests", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT wr.id, wr."requestType", wr.title, wr.status, wr."createdAt",
+      `SELECT wr.id, wr."workflowType" AS "requestType", wr."entityType" AS title, wr.status, wr."createdAt",
               e.name AS "submittedByName"
        FROM workflow_requests wr
-       LEFT JOIN employee_assignments ea ON ea.id = wr."submittedBy"
+       LEFT JOIN employee_assignments ea ON ea.id = wr."requestedBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       WHERE wr."companyId" = $1 AND wr."requestType" IN ('expense','salary_advance','custody','purchase_order')
+       WHERE wr."companyId" = $1 AND wr."workflowType" IN ('expense','salary_advance','custody','purchase_order')
        ORDER BY wr."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );

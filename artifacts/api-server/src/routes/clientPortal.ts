@@ -422,7 +422,7 @@ protectedRouter.get("/tickets/:id/replies", withPortalScope(async (req, res) => 
     );
     if (!ticket) throw new NotFoundError("الطلب غير موجود");
     const replies = await rawQuery<any>(
-      `SELECT tr.id, tr.message, tr."senderType", tr."senderName", tr."createdAt"
+      `SELECT tr.id, tr.message, CASE WHEN tr."isInternal" THEN 'agent' ELSE 'client' END AS "senderType", tr."authorName" AS "senderName", tr."createdAt"
        FROM ticket_replies tr
        WHERE tr."ticketId" = $1
        ORDER BY tr."createdAt" ASC`,
@@ -454,8 +454,8 @@ protectedRouter.post("/tickets/:id/replies", withPortalScope(async (req, res) =>
       throw new ValidationError("لا يمكن الرد على طلب مغلق أو محلول");
     }
     await rawExecute(
-      `INSERT INTO ticket_replies ("ticketId", message, "senderType", "senderName")
-       VALUES ($1, $2, 'client', 'العميل')`,
+      `INSERT INTO ticket_replies ("ticketId", message, "isInternal", "authorName")
+       VALUES ($1, $2, false, 'العميل')`,
       [Number(id), message]
     );
     const { supportEngine } = await import("../lib/engines/index.js");

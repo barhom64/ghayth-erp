@@ -49,6 +49,7 @@ const createInvoiceSchema = z.object({
   invoiceTypeCode: z.string().optional(),
   taxCategoryCode: z.string().optional(),
   exemptionReason: z.string().optional(),
+  costCenter: z.string().optional(),
 });
 
 const createPaymentSchema = z.object({
@@ -217,7 +218,8 @@ invoicesRouter.get("/invoices", requirePermission("finance:read"), async (req, r
 
     const invoices = await rawQuery<any>(
       `SELECT i.id, i.ref, i.status, i."createdAt" AS "issueDate", i."dueDate",
-              i.total, i."paidAmount", i."vatAmount",
+              i.total, i."paidAmount", i."vatAmount", i.subtotal, i."vatRate",
+              i."clientId", i.description, i."paymentTerms", i.notes,
               i."isTaxLinked", i."zatcaStatus",
               c.name AS "clientName"
        FROM invoices i
@@ -359,11 +361,12 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
       const invResult = await client.query(
         `INSERT INTO invoices ("companyId","branchId","clientId",ref,description,
                 subtotal,"vatRate","vatAmount",total,"paidAmount",status,"dueDate","createdBy",notes,
-                "isTaxLinked","invoiceTypeCode","taxCategoryCode","exemptionReason")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
+                "isTaxLinked","invoiceTypeCode","taxCategoryCode","exemptionReason","costCenter")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
         [effectiveCompanyId, branchId ?? scope.branchId, clientId ?? null, ref, description ?? null,
           baseAmount, Number(vatRate), vatAmount, total, finalDueDate, scope.activeAssignmentId, notes ?? null,
-          isTaxLinked ? true : false, invoiceTypeCode ?? "388", taxCategoryCode ?? "S", exemptionReason ?? null]
+          isTaxLinked ? true : false, invoiceTypeCode ?? "388", taxCategoryCode ?? "S", exemptionReason ?? null,
+          (req.body as any).costCenter ?? null]
       );
       insertId = invResult.rows[0].id;
 
@@ -1086,7 +1089,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
       guardId: memoId ?? 0,
     }));
     if (journalId && memoId) {
-      await rawExecute(`UPDATE credit_memos SET "journalId" = $1 WHERE id = $2`, [journalId, memoId]);
+      await rawExecute(`UPDATE credit_memos SET "journalEntryId" = $1 WHERE id = $2`, [journalId, memoId]);
     }
 
     emitEvent({
@@ -1875,13 +1878,9 @@ invoicesRouter.post("/dunning/send", requirePermission("finance:create"), async 
 
       const [row] = await rawQuery<any>(
         `INSERT INTO dunning_letters
-         ("companyId","invoiceId","clientId",stage,"daysPastDue","outstandingAmount","letterContent","sentBy","sentVia")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-        [scope.companyId, inv.id, inv.clientId, stg.stage, days, outstanding, letter, scope.activeAssignmentId, sentVia]
-      );
-      await rawExecute(
-        `UPDATE invoices SET "lastDunningStage"=$1, "lastDunningAt"=NOW() WHERE id=$2`,
-        [stg.stage, inv.id]
+         ("companyId","invoiceId","clientId","level",subject,body,"sentAt",status)
+         VALUES ($1,$2,$3,$4,$5,$6,NOW(),'sent') RETURNING id`,
+        [scope.companyId, inv.id, inv.clientId, stg.stage, `تذكير سداد - مرحلة ${stg.stage}`, letter]
       );
       results.push({ invoiceId: inv.id, letterId: row.id, stage: stg.stage, daysPastDue: days, outstanding, status: "sent" });
     }

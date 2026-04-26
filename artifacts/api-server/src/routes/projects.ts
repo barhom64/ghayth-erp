@@ -1670,9 +1670,10 @@ router.get("/:id/resources", requirePermission("projects:read"), async (req, res
     const projectId = Number(req.params.id);
     const project = await assertProjectAccess(projectId, scope);
     const rows = await rawQuery<any>(
-      `SELECT pr.*, e.name AS "employeeName", e."jobTitle" AS "employeeJobTitle"
+      `SELECT pr.*, e.name AS "employeeName", ea."jobTitle" AS "employeeJobTitle"
        FROM project_resources pr
        LEFT JOIN employees e ON e.id=pr."employeeId"
+       LEFT JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea.status='active'
        WHERE pr."projectId"=$1 AND pr."companyId"=$2
        ORDER BY pr.id`,
       [projectId, scope.companyId]
@@ -2076,8 +2077,8 @@ router.get("/:id/letters", requirePermission("projects:read"), async (req, res) 
     const projectId = Number(req.params.id);
     await assertProjectAccess(projectId, scope);
     const rows = await rawQuery<any>(
-      `SELECT l.id, l.subject, l.type, l.type AS direction, l.status, l."sentAt" AS "letterDate",
-              l.sender AS "fromEntity", l.recipient AS "toEntity", l."createdAt"
+      `SELECT l.id, l.subject, l.direction, l.direction AS type, l.status, l."sentAt" AS "letterDate",
+              l."senderName" AS "fromEntity", l."recipientName" AS "toEntity", l."createdAt"
        FROM correspondence l
        WHERE l."companyId" = $1
          AND l."relatedEntity" = 'project'

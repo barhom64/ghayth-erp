@@ -1532,6 +1532,24 @@ router.get("/payments", requirePermission("property:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Rent payments error:"); }
 });
 
+router.get("/payments/:id", requirePermission("property:read"), async (req, res): Promise<any> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    if (req.path.includes("/pay")) return;
+    const [row] = await rawQuery<any>(
+      `SELECT rp.*, c."tenantName", u."unitNumber"
+       FROM rent_payments rp
+       JOIN rental_contracts c ON c.id=rp."contractId" AND c."deletedAt" IS NULL
+       LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL
+       WHERE rp.id = $1 AND c."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الدفعة غير موجودة");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Property payment detail error:"); }
+});
+
 router.post("/payments/:id/pay", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -3514,8 +3532,8 @@ router.get("/tenants/:id/letters", requirePermission("property:read"), async (re
     const scope = req.scope!;
     const tenantId = Number(req.params.id);
     const rows = await rawQuery<any>(
-      `SELECT l.id, l.subject, l.type, l.type AS direction, l.status, l."sentAt" AS "letterDate",
-              l.sender AS "fromEntity", l.recipient AS "toEntity", l."createdAt"
+      `SELECT l.id, l.subject, l.direction, l.direction AS type, l.status, l."sentAt" AS "letterDate",
+              l."senderName" AS "fromEntity", l."recipientName" AS "toEntity", l."createdAt"
        FROM correspondence l
        WHERE l."companyId" = $1
          AND l."relatedEntity" = 'tenant'

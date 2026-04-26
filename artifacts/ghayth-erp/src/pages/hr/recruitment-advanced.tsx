@@ -11,8 +11,8 @@ import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 
 export default function RecruitmentAdvancedPage() {
-  const { data: stats, isLoading: statsLoading, isError: statsError } = useApiQuery<any>(["recruitment-stats"], "/recruitment/stats");
-  const { data: appsData, isLoading: appsLoading, isError: appsError } = useApiQuery<any>(["applicants"], "/recruitment/applications");
+  const { data: stats, isLoading: statsLoading, isError: statsError } = useApiQuery<any>(["recruitment-stats"], "/hr/recruitment/stats");
+  const { data: appsData, isLoading: appsLoading, isError: appsError } = useApiQuery<any>(["applicants"], "/hr/recruitment/applications");
 
   const isLoading = statsLoading || appsLoading;
   const isError = statsError || appsError;

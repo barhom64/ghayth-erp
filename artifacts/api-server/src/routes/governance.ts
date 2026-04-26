@@ -537,7 +537,7 @@ router.get("/stats", requirePermission("governance:read"), async (req, res) => {
     const [risks] = await rawQuery(`SELECT COUNT(*) as count FROM governance_risks WHERE status='open' AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
     const [audits] = await rawQuery(`SELECT COUNT(*) as count FROM governance_audits WHERE status IN ('planned','in_progress') AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
     const [compliance] = await rawQuery(`SELECT COUNT(*) as count FROM governance_compliance WHERE status='non_compliant' AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
-    const [complianceActions] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='implemented') AS implemented, COUNT(*) AS total FROM policy_compliance_actions WHERE "companyId"=$1`, [cid]).catch(() => [{ implemented: 0, total: 0 }]);
+    const [complianceActions] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='done') AS implemented, COUNT(*) AS total FROM policy_compliance_actions WHERE "companyId"=$1`, [cid]).catch(() => [{ implemented: 0, total: 0 }]);
     const [risksNoTreatment] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM governance_risks WHERE status='open' AND "treatmentPlan" IS NULL AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]).catch(() => [{ count: 0 }]);
     const [openCapas] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM governance_capa WHERE status IN ('open','in_progress') AND "companyId"=$1`, [cid]).catch(() => [{ count: 0 }]);
     const implementedPct = Number(complianceActions?.total) > 0 ? Math.round(Number(complianceActions?.implemented) / Number(complianceActions?.total) * 100) : 100;
@@ -560,7 +560,7 @@ router.get("/compliance-dashboard", requirePermission("governance:read"), async 
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [actions] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='implemented') AS implemented, COUNT(*) FILTER (WHERE status='not_implemented') AS "notImplemented", COUNT(*) AS total FROM policy_compliance_actions WHERE "companyId"=$1`, [cid]).catch(() => [{ implemented: 0, notImplemented: 0, total: 0 }]);
+    const [actions] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='done') AS implemented, COUNT(*) FILTER (WHERE status IN ('open','in_progress')) AS "notImplemented", COUNT(*) AS total FROM policy_compliance_actions WHERE "companyId"=$1`, [cid]).catch(() => [{ implemented: 0, notImplemented: 0, total: 0 }]);
     const [risks] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='open' AND "treatmentPlan" IS NOT NULL) AS "withTreatment", COUNT(*) FILTER (WHERE status='open' AND "treatmentPlan" IS NULL) AS "withoutTreatment", COUNT(*) FILTER (WHERE status='open') AS open FROM governance_risks WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]).catch(() => [{ withTreatment: 0, withoutTreatment: 0, open: 0 }]);
     const [policiesNoActions] = await rawQuery<any>(
       `SELECT COUNT(*) AS count FROM governance_policies gp WHERE ("companyId"=$1 OR "companyId" IS NULL) AND status='active' AND NOT EXISTS (SELECT 1 FROM policy_compliance_actions pca WHERE pca."policyId"=gp.id AND pca."companyId"=$1)`,
@@ -672,8 +672,8 @@ router.post("/policies/:id/compliance-actions", requirePermission("governance:wr
     const policyId = Number(req.params.id);
     const b = req.body;
     const r = await rawExecute(
-      `INSERT INTO policy_compliance_actions ("policyId","companyId",action,status,"responsiblePerson","dueDate",notes) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [policyId, scope.companyId, b.action, b.status || 'not_implemented', b.responsiblePerson || null, b.dueDate || null, b.notes || null]
+      `INSERT INTO policy_compliance_actions ("policyId","companyId",title,status,owner,"dueDate",description) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [policyId, scope.companyId, b.action || b.title, b.status || 'open', b.responsiblePerson || b.owner || null, b.dueDate || null, b.notes || b.description || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [r.insertId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "policy_compliance_actions", entityId: r.insertId, after: { policyId, action: b.action } }).catch(console.error);
@@ -697,10 +697,10 @@ router.patch("/compliance-actions/:id", requirePermission("governance:write"), a
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
-    if (b.action !== undefined) { params.push(b.action); sets.push(`action=$${params.length}`); }
-    if (b.responsiblePerson !== undefined) { params.push(b.responsiblePerson); sets.push(`"responsiblePerson"=$${params.length}`); }
+    if (b.action !== undefined || b.title !== undefined) { params.push(b.action ?? b.title); sets.push(`title=$${params.length}`); }
+    if (b.responsiblePerson !== undefined || b.owner !== undefined) { params.push(b.responsiblePerson ?? b.owner); sets.push(`owner=$${params.length}`); }
     if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
-    if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
+    if (b.notes !== undefined || b.description !== undefined) { params.push(b.notes ?? b.description); sets.push(`description=$${params.length}`); }
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [id]);

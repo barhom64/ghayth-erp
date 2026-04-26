@@ -87,10 +87,11 @@ router.post("/", requirePermission("crm:create"), async (req, res) => {
       language,
     } = parsed.data;
 
+    const attachments = (req.body as any).attachments ?? null;
     const { insertId } = await rawExecute(
-      `INSERT INTO clients (name, phone, email, classification, source, notes, "type", nationality, language, "companyId", "isBlacklisted")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false)`,
-      [String(name).trim(), phone ?? null, email ?? null, classification, source ?? null, notes ?? null, type, nationality ?? null, language, scope.companyId]
+      `INSERT INTO clients (name, phone, email, classification, source, notes, "type", nationality, language, "companyId", "isBlacklisted", attachments)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11)`,
+      [String(name).trim(), phone ?? null, email ?? null, classification, source ?? null, notes ?? null, type, nationality ?? null, language, scope.companyId, attachments ? JSON.stringify(attachments) : null]
     );
 
     const [client] = await rawQuery<any>(

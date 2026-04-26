@@ -882,15 +882,15 @@ router.get("/reports/branch-performance", requirePermission("bi:read"), async (r
 
       const [ticketsRow] = await rawQuery<any>(
         `SELECT COUNT(*) AS cnt FROM support_tickets
-         WHERE "companyId" = $1 AND "branchId" = $2 AND status = 'open'`,
-        [cid, branch.id]
+         WHERE "companyId" = $1 AND status = 'open'`,
+        [cid]
       ).catch(() => [{}]);
 
       const [satisfactionRow] = await rawQuery<any>(
         `SELECT COALESCE(AVG(rating), 0) AS avg FROM support_tickets
-         WHERE "companyId" = $1 AND "branchId" = $2 AND rating IS NOT NULL
-           AND DATE("createdAt") BETWEEN $3::date AND $4::date`,
-        [cid, branch.id, dateFrom, dateTo]
+         WHERE "companyId" = $1 AND rating IS NOT NULL
+           AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
+        [cid, dateFrom, dateTo]
       ).catch(() => [{}]);
 
       const rev = Number(revenue?.revenue ?? 0);
@@ -982,12 +982,12 @@ router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) 
          fv.model,
          fv.year,
          fv.status,
-         COALESCE(fv."purchasePrice", 0) AS "purchasePrice",
-         COALESCE(fv."monthlyLeaseCost", 0) AS "monthlyLeaseCost",
+         0 AS "purchasePrice",
+         0 AS "monthlyLeaseCost",
          COALESCE(fm_total.total, 0) AS "maintenanceCost",
          COALESCE(fuel_total.total, 0) AS "fuelCost",
          COALESCE(ins_total.total, 0) AS "insuranceCost",
-         fv."odometer"
+         fv."currentMileage" AS "odometer"
        FROM fleet_vehicles fv
        LEFT JOIN LATERAL (
          SELECT COALESCE(SUM(cost), 0) AS total FROM fleet_maintenance
@@ -1056,9 +1056,9 @@ router.get("/reports/department-leave-balance", requirePermission("bi:read"), as
                AND CURRENT_DATE BETWEEN lr."startDate" AND lr."endDate"
            )
          ) AS "onLeaveNow",
-         ROUND(AVG(COALESCE(lb.balance, lb.entitled, 0)), 1) AS "avgRemainingBalance",
+         ROUND(AVG(COALESCE(lb.remaining, lb.entitled, 0)), 1) AS "avgRemainingBalance",
          SUM(COALESCE(lb.used, 0)) AS "totalUsedDays",
-         SUM(COALESCE(lb.balance, lb.entitled, 0)) AS "totalRemainingDays"
+         SUM(COALESCE(lb.remaining, lb.entitled, 0)) AS "totalRemainingDays"
        FROM employee_assignments ea
        LEFT JOIN departments d ON d.id = ea."departmentId"
        LEFT JOIN hr_leave_balances lb ON lb."employeeId" = ea."employeeId"
@@ -1208,7 +1208,7 @@ router.get("/ai-insights", requirePermission("bi:read"), async (req, res) => {
     }
 
     const alerts = await rawQuery<any>(
-      `SELECT sa.id, sa.type, sa.title, sa.message, sa.severity, sa."createdAt",
+      `SELECT sa.id, sa.type, sa.title, sa.description AS message, sa.severity, sa."createdAt",
               sa."relatedType", sa."relatedId", sa."isDismissed", sa."isRead",
               sa."suggestedAction"
        FROM smart_alerts sa

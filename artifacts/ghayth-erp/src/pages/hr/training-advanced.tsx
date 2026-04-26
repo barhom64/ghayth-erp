@@ -11,9 +11,9 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 
 export default function TrainingAdvancedPage() {
-  const { data: statsData, isLoading: statsLoading, isError: statsError } = useApiQuery<any>(["training-stats"], "/training/stats");
-  const { data: programsData, isLoading: programsLoading, isError: programsError } = useApiQuery<any>(["training-programs"], "/training/programs");
-  const { data: enrollmentsData, isLoading: enrollmentsLoading, isError: enrollmentsError } = useApiQuery<any>(["training-enrollments"], "/training/enrollments");
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useApiQuery<any>(["training-stats"], "/hr/training/stats");
+  const { data: programsData, isLoading: programsLoading, isError: programsError } = useApiQuery<any>(["training-programs"], "/hr/training/programs");
+  const { data: enrollmentsData, isLoading: enrollmentsLoading, isError: enrollmentsError } = useApiQuery<any>(["training-enrollments"], "/hr/training/enrollments");
 
   const isLoading = statsLoading || programsLoading || enrollmentsLoading;
   const isError = statsError || programsError || enrollmentsError;

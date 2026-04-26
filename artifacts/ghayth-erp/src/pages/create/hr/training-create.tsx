@@ -30,7 +30,7 @@ export default function TrainingCreate() {
   // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
   // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
   // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
-  const createMut = useApiMutation("/training/programs", "POST", [["training-programs"]], {
+  const createMut = useApiMutation("/hr/training/programs", "POST", [["training-programs"]], {
     successMessage: "تم إضافة البرنامج التدريبي بنجاح",
   });
 

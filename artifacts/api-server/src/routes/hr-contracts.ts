@@ -101,7 +101,7 @@ contractsRouter.post("/", requirePermission("hr:create"), async (req, res) => {
     const data = createContractSchema.parse(req.body);
 
     const [emp] = await rawQuery<any>(
-      `SELECT id, name FROM employees WHERE id = $1 AND "companyId" = $2`,
+      `SELECT e.id, e.name FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE e.id = $1 AND ea."companyId" = $2 LIMIT 1`,
       [data.employeeId, scope.companyId]
     );
     if (!emp) throw new NotFoundError("الموظف غير موجود");

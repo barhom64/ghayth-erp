@@ -1267,14 +1267,14 @@ router.get("/auto-detection/summary", requirePermission("hr:read"), async (req, 
     const stats = await rawQuery<any>(
       `SELECT
          COUNT(*) AS "totalRuns",
-         COALESCE(SUM(detected), 0) AS "totalDetected",
-         COALESCE(SUM("violationsCreated"), 0) AS "totalViolations",
-         COALESCE(SUM("memosCreated"), 0) AS "totalMemos",
-         COALESCE(SUM(errors), 0) AS "totalErrors",
-         MAX("createdAt") AS "lastRunAt"
+         COUNT(*) AS "totalDetected",
+         COUNT(*) FILTER (WHERE "violationId" IS NOT NULL) AS "totalViolations",
+         0 AS "totalMemos",
+         0 AS "totalErrors",
+         MAX("detectedAt") AS "lastRunAt"
        FROM auto_detection_log
        WHERE "companyId" = $1
-         AND "createdAt" >= NOW() - INTERVAL '30 days'`,
+         AND "detectedAt" >= NOW() - INTERVAL '30 days'`,
       [scope.companyId]
     ).catch(() => [{}]);
 
@@ -1286,7 +1286,7 @@ router.get("/auto-detection/summary", requirePermission("hr:read"), async (req, 
        FROM auto_detection_log adl,
             jsonb_array_elements(adl.details) AS d(value)
        WHERE adl."companyId" = $1
-         AND adl."createdAt" >= NOW() - INTERVAL '30 days'
+         AND adl."detectedAt" >= NOW() - INTERVAL '30 days'
        GROUP BY d.value->>'type'
        ORDER BY count DESC`,
       [scope.companyId]

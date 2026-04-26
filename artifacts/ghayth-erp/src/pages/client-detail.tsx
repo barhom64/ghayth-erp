@@ -789,7 +789,7 @@ function ClientPortalTab({ clientId, clientEmail }: { clientId: string; clientEm
 }
 
 function UmrahTab({ clientId }: { clientId: string }) {
-  const { data, isLoading } = useApiQuery<any>(["umrah-client", clientId], `/umrah/entities/sub-agents?clientId=${clientId}`);
+  const { data, isLoading } = useApiQuery<any>(["umrah-client", clientId], `/umrah/sub-agents?clientId=${clientId}`);
   const subAgents: any[] = data?.rows ?? data ?? [];
 
   if (isLoading) return <Skeleton className="h-48 w-full rounded-xl" />;

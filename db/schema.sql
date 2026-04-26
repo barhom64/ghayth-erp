@@ -1879,7 +1879,8 @@ CREATE TABLE public.approval_chains (
     "minAmount" numeric DEFAULT 0,
     "maxAmount" numeric DEFAULT 999999999,
     "isActive" boolean DEFAULT true,
-    "createdAt" timestamp without time zone DEFAULT now()
+    "createdAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -1971,7 +1972,9 @@ CREATE TABLE public.attendance (
     method character varying(20) DEFAULT 'gps'::character varying,
     notes text,
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
-    "deviceId" character varying(100)
+    "deviceId" character varying(100),
+    "workType" character varying(20) DEFAULT 'office'::character varying,
+    "contractId" integer
 );
 
 
@@ -2579,7 +2582,8 @@ CREATE TABLE public.budgets (
     notes text,
     "approvedBy" integer,
     "createdBy" integer,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -2664,7 +2668,8 @@ CREATE TABLE public.business_rules (
     "isActive" boolean DEFAULT true,
     "createdBy" integer,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "updatedAt" timestamp without time zone DEFAULT now()
+    "updatedAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -2846,6 +2851,7 @@ CREATE TABLE public.clients (
     "lastPaymentAt" timestamp without time zone,
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
     notes text,
+    attachments jsonb DEFAULT '[]'::jsonb,
     "deletedAt" timestamp with time zone
 );
 
@@ -2923,7 +2929,8 @@ CREATE TABLE public.communications_log (
     status character varying(20) DEFAULT 'sent'::character varying,
     "relatedType" character varying(50),
     "relatedId" integer,
-    "createdAt" timestamp without time zone DEFAULT now()
+    "createdAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -3622,6 +3629,10 @@ CREATE TABLE public.digital_signature_logs (
     "userAgent" text,
     metadata jsonb,
     "createdAt" timestamp with time zone DEFAULT now(),
+    "entityType" text,
+    "entityId" text,
+    "signatureRef" text,
+    "otpRef" integer,
     CONSTRAINT digital_signature_logs_action_check CHECK ((action = ANY (ARRAY['otp_requested'::text, 'otp_verified'::text, 'signed'::text, 'rejected'::text])))
 );
 
@@ -3660,7 +3671,12 @@ CREATE TABLE public.digital_signature_otps (
     used boolean DEFAULT false NOT NULL,
     "ipAddress" text,
     "deviceFingerprint" text,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "entityType" text,
+    "entityId" text,
+    action text,
+    "userAgent" text,
+    "usedAt" timestamp with time zone
 );
 
 
@@ -3774,7 +3790,8 @@ CREATE TABLE public.document_templates (
     "branchId" integer,
     "signatureUrl" text,
     "htmlContent" text,
-    "isDefault" boolean DEFAULT false
+    "isDefault" boolean DEFAULT false,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -3856,7 +3873,9 @@ CREATE TABLE public.documents (
     category character varying(50),
     status character varying(30) DEFAULT 'draft'::character varying,
     "storageKey" text,
-    "currentVersion" integer DEFAULT 1
+    "currentVersion" integer DEFAULT 1,
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -4012,7 +4031,8 @@ CREATE TABLE public.employee_contracts (
     "updatedAt" timestamp without time zone DEFAULT now(),
     "deletedAt" timestamp without time zone,
     "approvedBy" integer,
-    "approvedAt" timestamp without time zone
+    "approvedAt" timestamp without time zone,
+    "renewalDate" date
 );
 
 
@@ -4055,7 +4075,8 @@ CREATE TABLE public.employee_development_plans (
     "updatedAt" timestamp with time zone DEFAULT now(),
     "trainingIds" jsonb DEFAULT '[]'::jsonb,
     "reviewDate" date,
-    progress integer DEFAULT 0
+    progress integer DEFAULT 0,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -4379,7 +4400,9 @@ CREATE TABLE public.employees (
     "sponsorNumber" character varying(50),
     "workPermitNumber" character varying(50),
     "workPermitExpiry" date,
-    "iqamaStatus" character varying(30) DEFAULT 'active'::character varying
+    "iqamaStatus" character varying(30) DEFAULT 'active'::character varying,
+    attachments jsonb DEFAULT '[]'::jsonb,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -5067,7 +5090,8 @@ CREATE TABLE public.fleet_traffic_violations (
     "paidAt" timestamp with time zone,
     "paidBy" integer,
     notes text,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -5332,6 +5356,7 @@ CREATE TABLE public.gov_integration_links (
     "lastSyncAt" timestamp with time zone,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
     CONSTRAINT "gov_integration_links_syncStatus_check" CHECK ((("syncStatus")::text = ANY (ARRAY[('pending'::character varying)::text, ('synced'::character varying)::text, ('failed'::character varying)::text, ('skipped'::character varying)::text])))
 );
 
@@ -5412,7 +5437,8 @@ CREATE TABLE public.governance_audits (
     "endDate" date,
     findings text,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "companyId" integer
+    "companyId" integer,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -5491,7 +5517,8 @@ CREATE TABLE public.governance_compliance (
     "responsiblePerson" character varying(255),
     notes text,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "companyId" integer
+    "companyId" integer,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -5531,7 +5558,8 @@ CREATE TABLE public.governance_policies (
     "companyId" integer,
     version integer DEFAULT 1,
     "expiryDate" date,
-    "parentId" integer
+    "parentId" integer,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -5574,7 +5602,9 @@ CREATE TABLE public.governance_risks (
     "treatmentPlan" text,
     "treatmentOwner" text,
     "treatmentDueDate" date,
-    "treatmentStatus" text
+    "treatmentStatus" text,
+    "deletedAt" timestamp with time zone,
+    "updatedAt" timestamp with time zone DEFAULT now()
 );
 
 
@@ -6255,6 +6285,7 @@ CREATE TABLE public.invoices (
     "taxCategoryCode" character varying(10) DEFAULT 'S'::character varying,
     "exemptionReason" text,
     "projectId" integer,
+    "costCenter" character varying(100),
     "approvedBy" integer,
     "approvedAt" timestamp with time zone,
     "postedBy" integer,
@@ -6300,7 +6331,8 @@ CREATE TABLE public.job_applications (
     "interviewDate" timestamp without time zone,
     "createdAt" timestamp without time zone DEFAULT now(),
     "applicantAccountId" integer,
-    "coverLetter" text
+    "coverLetter" text,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -6345,7 +6377,8 @@ CREATE TABLE public.job_postings (
     "isPublic" boolean DEFAULT true,
     "closedAt" timestamp with time zone,
     "closedReason" text,
-    "reopenedAt" timestamp with time zone
+    "reopenedAt" timestamp with time zone,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -6541,7 +6574,8 @@ CREATE TABLE public.journal_entry_templates (
     "activityType" character varying(100),
     "isActive" boolean DEFAULT true NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -6586,7 +6620,8 @@ CREATE TABLE public.journal_lines (
     "propertyId" integer,
     "contractId" integer,
     "activityType" character varying(100),
-    "templateId" integer
+    "templateId" integer,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -6628,6 +6663,7 @@ CREATE TABLE public.kb_articles (
     "createdBy" integer,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
     CONSTRAINT kb_articles_status_check CHECK ((status = ANY (ARRAY['published'::text, 'draft'::text, 'archived'::text])))
 );
 
@@ -6998,7 +7034,8 @@ CREATE TABLE public.legal_sessions (
     result text,
     "nextSessionDate" timestamp without time zone,
     notes text,
-    "createdAt" timestamp without time zone DEFAULT now()
+    "createdAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -7135,7 +7172,8 @@ CREATE TABLE public.marketing_campaigns (
     "companyId" integer,
     "createdBy" integer,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    revenue numeric(15,2) DEFAULT 0
+    revenue numeric(15,2) DEFAULT 0,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -7514,10 +7552,15 @@ CREATE INDEX idx_auto_detection_company ON public.auto_detection_log USING btree
 CREATE TABLE public.credit_memos (
     id integer NOT NULL,
     "companyId" integer NOT NULL,
+    "branchId" integer,
     "invoiceId" integer NOT NULL,
+    "clientId" integer,
     ref character varying(40),
     amount numeric(14,2) NOT NULL,
+    "netAmount" numeric(18,2),
+    "vatAmount" numeric(18,2),
     reason text,
+    "memoDate" date,
     status character varying(20) DEFAULT 'posted'::character varying,
     "journalEntryId" integer,
     "createdBy" integer,
@@ -7788,7 +7831,10 @@ CREATE TABLE public.official_letters (
     "dispatchedVia" character varying(32),
     "approvedAt" timestamp with time zone,
     "approvedBy" integer,
-    "createdByAssignmentId" integer
+    "createdByAssignmentId" integer,
+    "deletedAt" timestamp with time zone,
+    ref character varying(50),
+    "branchId" integer
 );
 
 
@@ -8107,6 +8153,7 @@ CREATE TABLE public.performance_reviews (
     comments text,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
     CONSTRAINT performance_reviews_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('in_progress'::character varying)::text, ('completed'::character varying)::text, ('acknowledged'::character varying)::text])))
 );
 
@@ -8197,6 +8244,7 @@ CREATE TABLE public.policy_compliance_actions (
     "createdBy" integer,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
     CONSTRAINT policy_compliance_actions_status_check CHECK ((status = ANY (ARRAY['open'::text, 'in_progress'::text, 'done'::text, 'overdue'::text])))
 );
 
@@ -8636,7 +8684,9 @@ CREATE TABLE public.project_tasks (
     "completedAt" timestamp without time zone,
     "estimatedHours" numeric(8,2),
     "actualHours" numeric(8,2),
-    "createdAt" timestamp without time zone DEFAULT now()
+    "createdAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
+    progress numeric(5,2)
 );
 
 
@@ -8667,6 +8717,8 @@ ALTER SEQUENCE public.project_tasks_id_seq OWNED BY public.project_tasks.id;
 CREATE TABLE public.projects (
     id integer NOT NULL,
     "companyId" integer NOT NULL,
+    "branchId" integer,
+    ref character varying(100),
     name character varying(300) NOT NULL,
     description text,
     "clientId" integer,
@@ -9000,7 +9052,8 @@ CREATE TABLE public.public_holidays (
     description text,
     "isRecurring" boolean DEFAULT false,
     "createdAt" timestamp with time zone DEFAULT now(),
-    "updatedAt" timestamp with time zone DEFAULT now()
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -9081,6 +9134,7 @@ CREATE TABLE public.purchase_orders (
     "branchId" integer,
     "journalEntryId" integer,
     "glStatus" character varying(20) DEFAULT 'pending',
+    "paidAt" timestamp with time zone,
     "deletedAt" timestamp with time zone,
     CONSTRAINT purchase_orders_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('received'::character varying)::text, ('cancelled'::character varying)::text, ('completed'::character varying)::text, ('paid'::character varying)::text, ('confirmed'::character varying)::text, ('ordered'::character varying)::text, ('delivered'::character varying)::text])))
 );
@@ -9391,7 +9445,8 @@ CREATE TABLE public.rent_payments (
     "receiptNumber" character varying(50),
     notes text,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "updatedAt" timestamp without time zone DEFAULT now()
+    "updatedAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -9553,7 +9608,17 @@ CREATE TABLE public.requests (
     notes text,
     "reviewedBy" integer,
     "reviewedAt" timestamp without time zone,
-    "returnReason" text
+    "returnReason" text,
+    "deletedAt" timestamp with time zone,
+    ref character varying(50),
+    "requestDate" date,
+    "branchId" integer,
+    "approvedAt" timestamp without time zone,
+    "approvedBy" integer,
+    "convertedTo" integer,
+    "convertedType" character varying(50),
+    "closedAt" timestamp without time zone,
+    "closedBy" integer
 );
 
 
@@ -9887,7 +9952,8 @@ CREATE TABLE public.shifts (
     "splitBreakStart" time without time zone,
     "splitBreakEnd" time without time zone,
     "flexStartEarliest" time without time zone,
-    "flexStartLatest" time without time zone
+    "flexStartLatest" time without time zone,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10161,7 +10227,9 @@ CREATE TABLE public.store_orders (
     "companyId" integer,
     "branchId" integer,
     "paidAt" timestamp with time zone,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    "journalEntryId" integer
 );
 
 
@@ -10203,7 +10271,8 @@ CREATE TABLE public.store_products (
     "createdAt" timestamp without time zone DEFAULT now(),
     "companyId" integer,
     "isActive" boolean DEFAULT true NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10281,7 +10350,8 @@ CREATE TABLE public.suppliers (
     rating numeric(3,2) DEFAULT 5.0,
     status character varying(20) DEFAULT 'active'::character varying,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    category character varying(100)
 );
 
 
@@ -10492,7 +10562,8 @@ CREATE TABLE public.tasks (
     "assignmentId" integer,
     "linkedEntityType" character varying(50),
     "linkedEntityId" integer,
-    "autoGenerated" boolean DEFAULT false
+    "autoGenerated" boolean DEFAULT false,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10735,7 +10806,8 @@ CREATE TABLE public.training_enrollments (
     score numeric(5,2),
     "completedAt" timestamp without time zone,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "certificateUrl" text
+    "certificateUrl" text,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10784,7 +10856,8 @@ CREATE TABLE public.training_programs (
     "durationUnit" character varying(20) DEFAULT 'hours'::character varying,
     cost numeric(12,2) DEFAULT 0 NOT NULL,
     "maxParticipants" integer,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10878,6 +10951,7 @@ CREATE TABLE public.umrah_agents (
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
     CONSTRAINT umrah_agents_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('inactive'::character varying)::text, ('suspended'::character varying)::text, ('blocked'::character varying)::text])))
 );
 
@@ -10963,7 +11037,8 @@ CREATE TABLE public.umrah_packages (
     duration integer DEFAULT 7,
     description text,
     status character varying(20) DEFAULT 'active'::character varying,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone
 );
 
 
@@ -11058,6 +11133,9 @@ CREATE TABLE public.umrah_pilgrims (
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
+    "branchId" integer,
+    "createdBy" integer,
     CONSTRAINT umrah_pilgrims_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('arrived'::character varying)::text, ('active'::character varying)::text, ('overstayed'::character varying)::text, ('departed'::character varying)::text, ('violated'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
@@ -20387,28 +20465,35 @@ ALTER TABLE ONLY public.zatca_submission_log
 
 CREATE TABLE IF NOT EXISTS public.correspondence (
     id SERIAL PRIMARY KEY,
-    "companyId" integer NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-    "branchId" integer,
-    type varchar(50) NOT NULL DEFAULT 'outgoing',
-    "referenceNumber" varchar(100),
-    subject varchar(500) NOT NULL,
-    body text,
-    sender varchar(255),
-    recipient varchar(255),
-    department varchar(100),
-    status varchar(50) DEFAULT 'draft',
-    priority varchar(20) DEFAULT 'normal',
-    "attachmentUrl" text,
-    "relatedEntity" varchar(100),
-    "relatedEntityId" integer,
-    "sentAt" timestamptz,
-    "receivedAt" timestamptz,
-    "createdBy" integer,
-    "updatedBy" integer,
-    "deletedAt" timestamptz,
-    "createdAt" timestamptz DEFAULT now(),
-    "updatedAt" timestamptz DEFAULT now()
+    "companyId" INTEGER NOT NULL,
+    "branchId" INTEGER,
+    direction VARCHAR(10) NOT NULL CHECK (direction IN ('outgoing', 'incoming')),
+    ref VARCHAR(50) NOT NULL,
+    subject VARCHAR(500) NOT NULL,
+    content TEXT,
+    "entityType" VARCHAR(50),
+    "entityId" INTEGER,
+    "senderName" VARCHAR(300),
+    "senderOrg" VARCHAR(300),
+    "recipientName" VARCHAR(300),
+    "recipientOrg" VARCHAR(300),
+    channel VARCHAR(30) DEFAULT 'internal',
+    status VARCHAR(30) DEFAULT 'draft',
+    "sentAt" TIMESTAMP WITH TIME ZONE,
+    "receivedAt" TIMESTAMP WITH TIME ZONE,
+    "respondedAt" TIMESTAMP WITH TIME ZONE,
+    "responseRef" VARCHAR(50),
+    attachments JSONB DEFAULT '[]',
+    notes TEXT,
+    "createdBy" INTEGER,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS correspondence_company_idx ON correspondence("companyId");
+CREATE INDEX IF NOT EXISTS correspondence_direction_idx ON correspondence("companyId", direction);
+CREATE INDEX IF NOT EXISTS correspondence_entity_idx ON correspondence("entityType", "entityId");
+CREATE INDEX IF NOT EXISTS correspondence_ref_idx ON correspondence(ref);
 
 CREATE TABLE IF NOT EXISTS public.company_documents (
     id SERIAL PRIMARY KEY,
@@ -20450,10 +20535,14 @@ CREATE TABLE IF NOT EXISTS public.debit_memos (
     "invoiceId" integer,
     "clientId" integer,
     amount numeric(15,2) NOT NULL DEFAULT 0,
+    "netAmount" numeric(18,2),
+    "vatAmount" numeric(18,2),
     reason text,
+    "memoDate" date,
     status varchar(50) DEFAULT 'draft',
     "approvedBy" integer,
     "approvedAt" timestamptz,
+    "createdBy" integer,
     "deletedAt" timestamptz,
     "createdAt" timestamptz DEFAULT now(),
     "updatedAt" timestamptz DEFAULT now()
@@ -20588,6 +20677,88 @@ ALTER TABLE ONLY public.event_dlq ADD CONSTRAINT event_dlq_pkey PRIMARY KEY (id)
 CREATE INDEX IF NOT EXISTS event_dlq_unresolved_idx ON public.event_dlq USING btree ("createdAt" DESC) WHERE ("resolvedAt" IS NULL);
 CREATE INDEX IF NOT EXISTS event_dlq_company_idx ON public.event_dlq USING btree ("companyId", "createdAt" DESC);
 CREATE INDEX IF NOT EXISTS event_dlq_event_idx ON public.event_dlq USING btree ("eventName") WHERE ("resolvedAt" IS NULL);
+
+-- salary_history — tracks salary changes over time
+CREATE TABLE IF NOT EXISTS public.salary_history (
+    id integer NOT NULL,
+    "employeeId" integer NOT NULL,
+    "assignmentId" integer,
+    "companyId" integer NOT NULL,
+    "oldSalary" numeric(18,2) DEFAULT 0,
+    "newSalary" numeric(18,2) DEFAULT 0,
+    "effectiveDate" date DEFAULT CURRENT_DATE,
+    "changedBy" integer,
+    "createdAt" timestamp without time zone DEFAULT now()
+);
+CREATE SEQUENCE IF NOT EXISTS public.salary_history_id_seq AS integer;
+ALTER TABLE ONLY public.salary_history ALTER COLUMN id SET DEFAULT nextval('public.salary_history_id_seq'::regclass);
+ALTER SEQUENCE public.salary_history_id_seq OWNED BY public.salary_history.id;
+ALTER TABLE ONLY public.salary_history ADD CONSTRAINT salary_history_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS salary_history_employee_idx ON public.salary_history USING btree ("employeeId", "effectiveDate" DESC);
+
+-- payment_run_items — individual POs included in a payment run
+CREATE TABLE IF NOT EXISTS public.payment_run_items (
+    id integer NOT NULL,
+    "runId" integer NOT NULL,
+    "poId" integer NOT NULL,
+    "supplierId" integer,
+    amount numeric(18,2) NOT NULL,
+    "journalId" integer
+);
+CREATE SEQUENCE IF NOT EXISTS public.payment_run_items_id_seq AS integer;
+ALTER TABLE ONLY public.payment_run_items ALTER COLUMN id SET DEFAULT nextval('public.payment_run_items_id_seq'::regclass);
+ALTER SEQUENCE public.payment_run_items_id_seq OWNED BY public.payment_run_items.id;
+ALTER TABLE ONLY public.payment_run_items ADD CONSTRAINT payment_run_items_pkey PRIMARY KEY (id);
+
+--
+-- Name: request_number_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE IF NOT EXISTS public.request_number_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: letter_number_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE IF NOT EXISTS public.letter_number_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: correspondence_outgoing_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE IF NOT EXISTS public.correspondence_outgoing_seq
+    START WITH 1000
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: correspondence_incoming_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE IF NOT EXISTS public.correspondence_incoming_seq
+    START WITH 1000
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
 
 --
 -- PostgreSQL database dump complete

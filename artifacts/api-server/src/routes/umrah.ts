@@ -76,6 +76,19 @@ router.get("/seasons", requirePermission("umrah:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List seasons error"); }
 });
 
+router.get("/seasons/:id", requirePermission("umrah:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT * FROM umrah_seasons WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الموسم غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Season detail error"); }
+});
+
 router.post("/seasons", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -687,6 +700,23 @@ router.get("/penalties", requirePermission("umrah:read"), async (req, res) => {
     );
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List penalties error"); }
+});
+
+router.get("/penalties/:id", requirePermission("umrah:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT pen.*, p."fullName" AS "pilgrimName", p."passportNumber", a.name AS "agentName"
+       FROM umrah_penalties pen
+       LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id
+       LEFT JOIN umrah_agents a ON pen."agentId"=a.id
+       WHERE pen.id=$1 AND pen."companyId"=$2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("العقوبة غير موجودة");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Penalty detail error"); }
 });
 
 router.post("/agent-invoices/generate", requirePermission("umrah:write"), async (req, res): Promise<void> => {

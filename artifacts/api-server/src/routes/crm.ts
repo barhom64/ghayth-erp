@@ -33,6 +33,7 @@ const createOpportunitySchema = z.object({
   expectedCloseDate: z.string({ invalid_type_error: "تاريخ الإغلاق المتوقع يجب أن يكون نصاً" }).optional().nullable(),
   assignedTo: z.coerce.number({ invalid_type_error: "معرّف الموظف المسؤول يجب أن يكون رقماً" }).optional().nullable(),
   notes: z.string({ invalid_type_error: "الملاحظات يجب أن تكون نصاً" }).optional().nullable(),
+  nextFollowUp: z.string({ invalid_type_error: "تاريخ المتابعة القادمة يجب أن يكون نصاً" }).optional().nullable(),
 });
 
 const updateOpportunitySchema = z.object({
@@ -50,6 +51,7 @@ const updateOpportunitySchema = z.object({
   assignedTo: z.coerce.number({ invalid_type_error: "معرّف الموظف المسؤول يجب أن يكون رقماً" }).optional().nullable(),
   notes: z.string({ invalid_type_error: "الملاحظات يجب أن تكون نصاً" }).optional().nullable(),
   lostReason: z.string({ invalid_type_error: "سبب الخسارة يجب أن يكون نصاً" }).optional().nullable(),
+  nextFollowUp: z.string({ invalid_type_error: "تاريخ المتابعة القادمة يجب أن يكون نصاً" }).optional().nullable(),
 });
 
 const convertOpportunitySchema = z.object({
@@ -212,8 +214,8 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO crm_opportunities ("companyId",title,"clientId","contactName","contactPhone","contactEmail",source,stage,value,probability,"expectedCloseDate","assignedTo",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-      [scope.companyId, title, b.clientId ?? null, b.contactName ?? null, b.contactPhone ?? null, b.contactEmail ?? null, b.source ?? null, stage, value, probability, b.expectedCloseDate ?? null, b.assignedTo ?? null, b.notes ?? null]
+      `INSERT INTO crm_opportunities ("companyId",title,"clientId","contactName","contactPhone","contactEmail",source,stage,value,probability,"expectedCloseDate","assignedTo",notes,"nextFollowUp") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [scope.companyId, title, b.clientId ?? null, b.contactName ?? null, b.contactPhone ?? null, b.contactEmail ?? null, b.source ?? null, stage, value, probability, b.expectedCloseDate ?? null, b.assignedTo ?? null, b.notes ?? null, b.nextFollowUp ?? null]
     );
 
     const stageConfig = STAGE_AUTO_ACTIONS[stage];
@@ -450,6 +452,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
     if (b.expectedCloseDate !== undefined) { params.push(b.expectedCloseDate || null); sets.push(`"expectedCloseDate"=$${params.length}`); }
     if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
     if (b.source !== undefined) { params.push(b.source); sets.push(`source=$${params.length}`); }
+    if (b.nextFollowUp !== undefined) { params.push(b.nextFollowUp || null); sets.push(`"nextFollowUp"=$${params.length}`); }
     params.push(oppId);
     await rawExecute(`UPDATE crm_opportunities SET ${sets.join(",")} WHERE id=$${params.length}`, params);
 

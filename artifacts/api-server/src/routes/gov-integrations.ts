@@ -333,7 +333,7 @@ router.get("/links", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.query as any;
-    const conditions = [`gl."companyId" = $1`];
+    const conditions = [`gl."companyId" = $1`, `gl."deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
 
     if (entityType) { params.push(entityType); conditions.push(`gl."entityType" = $${params.length}`); }
@@ -442,7 +442,7 @@ router.delete("/links/:id", requirePermission("admin:write"), async (req, res) =
       [id, scope.companyId]
     );
     await rawExecute(
-      `DELETE FROM gov_integration_links WHERE id = $1 AND "companyId" = $2`,
+      `UPDATE gov_integration_links SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
 

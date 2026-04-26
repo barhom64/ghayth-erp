@@ -49,13 +49,13 @@ export default function JobDetailPage() {
 
   const { data: job, isLoading, isError, refetch } = useApiQuery<any>(
     ["recruitment-job", id],
-    id ? `/recruitment/postings/${id}` : null,
+    id ? `/hr/recruitment/postings/${id}` : null,
     !!id
   );
 
   const { data: appsResp } = useApiQuery<any>(
     ["job-applications", id],
-    id ? `/recruitment/applications?postingId=${id}` : null,
+    id ? `/hr/recruitment/applications?postingId=${id}` : null,
     !!id
   );
   const applicants: any[] = appsResp?.data || [];
@@ -134,7 +134,7 @@ export default function JobDetailPage() {
           className="gap-1"
           onClick={async () => {
             try {
-              await apiFetch(`/recruitment/postings/${id}/reopen`, {
+              await apiFetch(`/hr/recruitment/postings/${id}/reopen`, {
                 method: "POST",
                 body: JSON.stringify({}),
               });
@@ -160,7 +160,7 @@ export default function JobDetailPage() {
           className="gap-1"
           onClick={async () => {
             try {
-              await apiFetch(`/recruitment/postings/${id}/close`, {
+              await apiFetch(`/hr/recruitment/postings/${id}/close`, {
                 method: "POST",
                 body: JSON.stringify({}),
               });

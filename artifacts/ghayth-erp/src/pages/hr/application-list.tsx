@@ -17,7 +17,7 @@ const STATUS_OPTIONS = Object.entries(RECRUITMENT_STAGES).map(([value, { label }
 export default function ApplicationListPage() {
   const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
-  const { data, isLoading, isError } = useApiQuery<any>(["applicants"], "/recruitment/applications");
+  const { data, isLoading, isError } = useApiQuery<any>(["applicants"], "/hr/recruitment/applications");
   const apps = data?.data || [];
 
   const filtered = applyFilters(apps, filters, {

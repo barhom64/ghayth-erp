@@ -317,6 +317,28 @@ financeHardeningRouter.get("/journal-manual", requirePermission("finance:read"),
   }
 });
 
+financeHardeningRouter.get("/journal-manual/:id", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT je.*, json_agg(jl.*) FILTER (WHERE jl.id IS NOT NULL) AS lines,
+              e_cre.name AS "createdByName"
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId"=je.id
+       LEFT JOIN employee_assignments ea_cre ON ea_cre.id=je."createdBy"
+       LEFT JOIN employees e_cre ON e_cre.id=ea_cre."employeeId"
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id, e_cre.name`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("القيد اليدوي غير موجود");
+    res.json(row);
+  } catch (err) {
+    handleRouteError(err, res, "Journal manual detail error:");
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // JOURNAL MANUAL APPROVAL WORKFLOW — fully wired to lifecycleEngine
 //
@@ -1065,6 +1087,23 @@ financeHardeningRouter.post("/projects", requirePermission("finance:create"), as
   }
 });
 
+financeHardeningRouter.get("/projects/:id", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT p.*, COALESCE(p.budget - p."spentAmount", 0) AS "budgetRemaining"
+       FROM projects p
+       WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("المشروع غير موجود");
+    res.json(row);
+  } catch (err) {
+    handleRouteError(err, res, "Project detail error:");
+  }
+});
+
 financeHardeningRouter.get("/projects/:id/costs", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1146,12 +1185,12 @@ financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:rea
        WHERE po."companyId"=$1 AND po.status IN ('approved','pending')
          AND po."expectedDelivery" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
        UNION ALL
-       SELECT 'PAYROLL' AS ref, COALESCE(SUM(em."baseSalary"),0) AS expected,
+       SELECT 'PAYROLL' AS ref, COALESCE(SUM(ea.salary),0) AS expected,
               (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')::date AS "dueDate",
               'رواتب الموظفين' AS "supplierName", 'payroll' AS type
        FROM employee_assignments ea
        JOIN employees em ON em.id=ea."employeeId"
-       WHERE ea."companyId"=$1 AND ea.status='active' AND em."baseSalary" IS NOT NULL
+       WHERE ea."companyId"=$1 AND ea.status='active' AND ea.salary IS NOT NULL
        GROUP BY 1,3,4,5`,
       [scope.companyId]
     );

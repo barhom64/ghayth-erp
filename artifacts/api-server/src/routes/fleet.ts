@@ -27,6 +27,19 @@ const createVehicleSchema = z.object({
   model: z.string().min(1),
   year: z.coerce.number().optional(),
   fuelType: z.enum(["gasoline", "diesel", "electric", "hybrid", "lpg"]).optional(),
+  color: z.string().optional(),
+  vinNumber: z.string().optional(),
+  currentMileage: z.coerce.number().optional(),
+  fuelCapacity: z.coerce.number().optional(),
+  status: z.string().optional(),
+  insuranceExpiry: z.string().optional(),
+  registrationExpiry: z.string().optional(),
+  notes: z.string().optional(),
+  registrationNumber: z.string().optional(),
+  plateType: z.string().optional(),
+  sequenceNumber: z.string().optional(),
+  inspectionDate: z.string().optional(),
+  nextInspectionDate: z.string().optional(),
 });
 
 const createDriverSchema = z.object({
@@ -34,6 +47,9 @@ const createDriverSchema = z.object({
   phone: z.string().min(1),
   licenseNumber: z.string().min(1),
   licenseExpiry: z.string().optional(),
+  licenseType: z.string().optional(),
+  employeeId: z.coerce.number().optional(),
+  status: z.string().optional(),
 });
 
 const createMaintenanceSchema = z.object({
@@ -41,12 +57,24 @@ const createMaintenanceSchema = z.object({
   type: z.string().min(1, "نوع الصيانة مطلوب"),
   description: z.string().min(1, "وصف الصيانة مطلوب"),
   cost: z.coerce.number().min(0).optional(),
+  mileageAtService: z.coerce.number().optional(),
+  serviceDate: z.string().optional(),
+  nextServiceDate: z.string().optional(),
+  nextServiceKm: z.coerce.number().optional(),
+  performedBy: z.string().optional(),
+  status: z.string().optional(),
 });
 
 const createFuelLogSchema = z.object({
   vehicleId: z.coerce.number().optional(),
   vehiclePlate: z.string().optional(),
   liters: z.coerce.number().positive("كمية الوقود يجب أن تكون أكبر من صفر"),
+  driverId: z.coerce.number().optional(),
+  costPerLiter: z.coerce.number().optional(),
+  fuelDate: z.string().optional(),
+  mileageAtFuel: z.coerce.number().optional(),
+  stationName: z.string().optional(),
+  fuelType: z.string().optional(),
 });
 
 const createInsuranceSchema = z.object({
@@ -54,6 +82,11 @@ const createInsuranceSchema = z.object({
   provider: z.string().min(1, "شركة التأمين مطلوبة"),
   startDate: z.string().min(1, "تاريخ بداية الوثيقة مطلوب"),
   endDate: z.string().min(1, "تاريخ انتهاء الوثيقة مطلوب"),
+  type: z.string().optional(),
+  policyNumber: z.string().optional(),
+  premium: z.coerce.number().optional(),
+  coverageAmount: z.coerce.number().optional(),
+  notes: z.string().optional(),
 });
 
 const router = Router();
@@ -158,8 +191,8 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_vehicles ("companyId","plateNumber",make,model,year,color,"vinNumber","fuelType","currentMileage",status,"branchId",notes,"registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","insuranceExpiry") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
-      [scope.companyId, plateNumber, b.make.trim(), b.model.trim(), b.year ? Number(b.year) : null, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null]
+      `INSERT INTO fleet_vehicles ("companyId","plateNumber",make,model,year,color,"vinNumber","fuelType","currentMileage",status,"branchId",notes,"registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","insuranceExpiry","fuelCapacity") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+      [scope.companyId, plateNumber, b.make.trim(), b.model.trim(), b.year ? Number(b.year) : null, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null, b.fuelCapacity ? Number(b.fuelCapacity) : null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_vehicles WHERE id=$1`, [insertId]);
     createAuditLog({
@@ -274,8 +307,8 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","employeeId") VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.employeeId || null]
+      `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","employeeId",status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.employeeId || null, b.status || 'available']
     );
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1`, [insertId]);
 
@@ -686,7 +719,9 @@ router.get("/trips", requirePermission("fleet:read"), async (req, res) => {
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT t.*, v."plateNumber", d.name AS "driverName" FROM fleet_trips t LEFT JOIN fleet_vehicles v ON v.id=t."vehicleId" AND v."deletedAt" IS NULL LEFT JOIN fleet_drivers d ON d.id=t."driverId" AND d."deletedAt" IS NULL WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC`,
+      `SELECT t.*, t."fromLocation" AS origin, t."toLocation" AS destination, t."startDate" AS "tripDate",
+              v."plateNumber", v."plateNumber" AS "vehiclePlate", d.name AS "driverName"
+       FROM fleet_trips t LEFT JOIN fleet_vehicles v ON v.id=t."vehicleId" AND v."deletedAt" IS NULL LEFT JOIN fleet_drivers d ON d.id=t."driverId" AND d."deletedAt" IS NULL WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -698,7 +733,8 @@ router.get("/trips/:id", requirePermission("fleet:read"), async (req, res) => {
     const scope = req.scope!;
     const tripId = Number(req.params.id);
     const [row] = await rawQuery<any>(
-      `SELECT t.*, v."plateNumber", d.name AS "driverName"
+      `SELECT t.*, t."fromLocation" AS origin, t."toLocation" AS destination, t."startDate" AS "tripDate",
+              v."plateNumber", v."plateNumber" AS "vehiclePlate", d.name AS "driverName"
        FROM fleet_trips t
        LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId"
        LEFT JOIN fleet_drivers d ON d.id = t."driverId"
@@ -1116,11 +1152,39 @@ router.get("/maintenance", requirePermission("fleet:read"), async (req, res) => 
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND m."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId)); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT m.*, v."plateNumber" FROM fleet_maintenance m LEFT JOIN fleet_vehicles v ON v.id=m."vehicleId" WHERE ${where} AND m."deletedAt" IS NULL ORDER BY m.id DESC`,
+      `SELECT m.*, m.type AS "maintenanceType", m.cost AS amount,
+              m."serviceDate" AS "scheduledDate", m."serviceDate" AS date,
+              m."mileageAtService" AS mileage, m."nextServiceKm" AS "nextServiceMileage",
+              m."performedBy" AS workshop,
+              v."plateNumber", v."plateNumber" AS "vehiclePlateNumber", v."plateNumber" AS "vehiclePlate",
+              v.make AS "vehicleMake", v.model AS "vehicleModel"
+       FROM fleet_maintenance m LEFT JOIN fleet_vehicles v ON v.id=m."vehicleId" WHERE ${where} AND m."deletedAt" IS NULL ORDER BY m.id DESC`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Fleet maintenance error:"); }
+});
+
+router.get("/maintenance/:id", requirePermission("fleet:read"), async (req, res): Promise<any> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    if (req.path.includes("/complete") || req.path.includes("/cancel")) return;
+    const [row] = await rawQuery<any>(
+      `SELECT m.*, m.type AS "maintenanceType", m.cost AS amount,
+              m."serviceDate" AS "scheduledDate", m."serviceDate" AS date,
+              m."mileageAtService" AS mileage, m."nextServiceKm" AS "nextServiceMileage",
+              m."performedBy" AS workshop,
+              v."plateNumber", v."plateNumber" AS "vehiclePlateNumber",
+              v.make AS "vehicleMake", v.model AS "vehicleModel"
+       FROM fleet_maintenance m
+       LEFT JOIN fleet_vehicles v ON v.id=m."vehicleId"
+       WHERE m.id = $1 AND m."companyId" = $2 AND m."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("سجل الصيانة غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Fleet maintenance detail error:"); }
 });
 
 router.post("/maintenance", requirePermission("fleet:create"), async (req, res) => {
@@ -1148,12 +1212,13 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
     );
     const assignedMechanic = b.performedBy || (mechanics[0]?.name ?? null);
 
-    const nextServiceDate = new Date();
-    nextServiceDate.setMonth(nextServiceDate.getMonth() + 3);
+    const defaultNextDate = new Date();
+    defaultNextDate.setMonth(defaultNextDate.getMonth() + 3);
+    const effectiveNextServiceDate = b.nextServiceDate || defaultNextDate.toISOString().split('T')[0];
 
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_maintenance ("companyId","vehicleId",type,description,cost,"mileageAtService","serviceDate","performedBy",status,"nextServiceDate") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [scope.companyId, b.vehicleId, b.type, b.description, b.cost || 0, b.mileageAtService, b.serviceDate || new Date().toISOString().split('T')[0], assignedMechanic, b.status || 'in_progress', nextServiceDate.toISOString().split('T')[0]]
+      `INSERT INTO fleet_maintenance ("companyId","vehicleId",type,description,cost,"mileageAtService","serviceDate","performedBy",status,"nextServiceDate","nextServiceKm") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [scope.companyId, b.vehicleId, b.type, b.description, b.cost || 0, b.mileageAtService, b.serviceDate || new Date().toISOString().split('T')[0], assignedMechanic, b.status || 'in_progress', effectiveNextServiceDate, b.nextServiceKm ?? null]
     );
 
     if (b.vehicleId) {
@@ -1500,11 +1565,31 @@ router.get("/fuel-logs", requirePermission("fleet:read"), async (req, res) => {
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND f."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId)); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT f.*, v."plateNumber" FROM fleet_fuel_logs f LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId" WHERE ${where} AND f."deletedAt" IS NULL ORDER BY f.id DESC`,
+      `SELECT f.*, f.liters AS quantity, f."totalCost" AS cost, f."mileageAtFuel" AS mileage, f."stationName" AS station, f."fuelDate" AS date, v."plateNumber", v."plateNumber" AS "vehiclePlate" FROM fleet_fuel_logs f LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId" WHERE ${where} AND f."deletedAt" IS NULL ORDER BY f.id DESC`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Fleet fuel error:"); }
+});
+
+router.get("/fuel-logs/:id", requirePermission("fleet:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT f.*, f.liters AS quantity, f."totalCost" AS cost, f."mileageAtFuel" AS odometer,
+              f."stationName" AS station, f."fuelDate" AS date,
+              v."plateNumber", v.make AS "vehicleMake", v.model AS "vehicleModel",
+              d.name AS "driverName"
+       FROM fleet_fuel_logs f
+       LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId"
+       LEFT JOIN fleet_drivers d ON d.id=f."driverId"
+       WHERE f.id = $1 AND f."companyId" = $2 AND f."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("سجل الوقود غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Fleet fuel detail error:"); }
 });
 
 router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) => {
@@ -1623,6 +1708,22 @@ router.get("/insurance", requirePermission("fleet:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet insurance error:"); }
 });
 
+router.get("/insurance/:id", requirePermission("fleet:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT i.*, v."plateNumber", v.make AS "vehicleMake", v.model AS "vehicleModel"
+       FROM fleet_insurance i
+       LEFT JOIN fleet_vehicles v ON v.id=i."vehicleId"
+       WHERE i.id = $1 AND i."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("سجل التأمين غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Fleet insurance detail error:"); }
+});
+
 router.post("/insurance", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1652,8 +1753,8 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_insurance ("companyId","vehicleId",type,provider,"policyNumber","startDate","endDate",premium) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [scope.companyId, b.vehicleId, b.type || b.insuranceType || 'comprehensive', b.provider.trim(), b.policyNumber, b.startDate, b.endDate, premium]
+      `INSERT INTO fleet_insurance ("companyId","vehicleId",type,provider,"policyNumber","startDate","endDate",premium,"coverageAmount",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [scope.companyId, b.vehicleId, b.type || b.insuranceType || 'comprehensive', b.provider.trim(), b.policyNumber, b.startDate, b.endDate, premium, b.coverageAmount ? Number(b.coverageAmount) : null, b.notes || null]
     );
 
     // Auto journal entry for insurance premium
@@ -2395,6 +2496,24 @@ router.get("/traffic-violations", requirePermission("fleet:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "Traffic violations error:"); }
 });
 
+router.get("/traffic-violations/:id", requirePermission("fleet:read"), async (req, res): Promise<any> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    if (req.path.includes("/pay")) return;
+    const [row] = await rawQuery<any>(
+      `SELECT tv.*, v."plateNumber", d.name AS "driverName"
+       FROM fleet_traffic_violations tv
+       LEFT JOIN fleet_vehicles v ON v.id=tv."vehicleId" AND v."deletedAt" IS NULL
+       LEFT JOIN fleet_drivers d ON d.id=tv."driverId" AND d."deletedAt" IS NULL
+       WHERE tv.id = $1 AND tv."companyId" = $2 AND tv."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("المخالفة المرورية غير موجودة");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Traffic violation detail error:"); }
+});
+
 router.post("/traffic-violations", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -2465,7 +2584,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
         journalEntryId = glResult.journalId;
       } catch (jeErr) {
         console.error("Traffic violation journal entry failed:", jeErr);
-        await rawExecute(`DELETE FROM fleet_traffic_violations WHERE id=$1`, [insertId]).catch(() => {});
+        await rawExecute(`UPDATE fleet_traffic_violations SET "deletedAt" = NOW() WHERE id=$1`, [insertId]).catch(() => {});
         throw new IntegrationError("تعذّر إنشاء القيد المحاسبي للمخالفة — لم يتم تسجيل المخالفة", { field: "journalEntry", fix: "تحقق من إعدادات ربط الحسابات (fleet_fines_expense / fleet_fines_payable) ثم أعد المحاولة" });
       }
     }

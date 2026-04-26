@@ -240,7 +240,7 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
     } catch { /* table may not exist yet */ }
     if (costCenterValidationEnabled) {
       const [ccRow] = await rawQuery<any>(
-        `SELECT id FROM departments WHERE "companyId" = ANY($1) AND (name = $2 OR "nameEn" = $2) LIMIT 1`,
+        `SELECT id FROM departments WHERE "companyId" = ANY($1) AND name = $2 LIMIT 1`,
         [[effectiveCompanyId], costCenter]
       );
       if (!ccRow) {
@@ -482,6 +482,28 @@ journalRouter.get("/vouchers", requirePermission("finance:read"), async (req, re
     console.error("Get vouchers error:", err);
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
+});
+
+journalRouter.get("/vouchers/:id", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT je.id, je.ref, je.description,
+              CASE WHEN je.ref LIKE 'RV%' THEN 'receipt' ELSE 'payment' END AS "voucherType",
+              je."paymentMethod", je.reference, je."attachmentUrl", je."attachmentType",
+              je."relatedEntityType", je."relatedEntityId", je."operationType",
+              COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt", je.status
+       FROM journal_entries je
+       JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+         AND (je.ref LIKE 'RV%' OR je.ref LIKE 'PV%')
+       GROUP BY je.id`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("السند غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get voucher detail error:"); }
 });
 
 journalRouter.post("/vouchers", requirePermission("finance:create"), async (req, res) => {
@@ -732,6 +754,56 @@ journalRouter.patch("/salary-advances/:id/approve", requirePermission("finance:u
 // ─────────────────────────────────────────────────────────────────────────────
 // JOURNAL ENTRY DETAIL + REVERSAL (Phase 2)
 // ─────────────────────────────────────────────────────────────────────────────
+
+journalRouter.get("/journal", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const filters = parseScopeFilters(req);
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true });
+    const rows = await rawQuery<any>(
+      `SELECT je.id, je.ref, je.description, je.status, je."createdAt",
+              je."reversalOfId", je."reversedById", je."operationType",
+              COALESCE(SUM(jl.debit), 0) AS "totalDebit",
+              COALESCE(SUM(jl.credit), 0) AS "totalCredit",
+              COALESCE(json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) FILTER (WHERE jl.id IS NOT NULL), '[]') AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE ${where} AND je."deletedAt" IS NULL
+       GROUP BY je.id
+       ORDER BY je."createdAt" DESC LIMIT 200`,
+      params
+    );
+    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+  } catch (err) { handleRouteError(err, res, "List journal entries error:"); }
+});
+
+journalRouter.post("/journal", requirePermission("finance:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { description, lines, date } = req.body as any;
+    if (!description) throw new ValidationError("وصف القيد مطلوب", { field: "description" });
+    if (!Array.isArray(lines) || lines.length < 2) throw new ValidationError("القيد يجب أن يحتوي على بندين على الأقل", { field: "lines" });
+    const totalDebit = lines.reduce((s: number, l: any) => s + (Number(l.debit) || 0), 0);
+    const totalCredit = lines.reduce((s: number, l: any) => s + (Number(l.credit) || 0), 0);
+    if (Math.abs(totalDebit - totalCredit) > 0.01) throw new ValidationError(`القيد غير متوازن: مدين ${totalDebit.toFixed(2)} ≠ دائن ${totalCredit.toFixed(2)}`, { field: "lines", fix: "تأكد من تساوي المدين والدائن" });
+
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('journal_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
+    const ref = `JE-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
+    const { insertId } = await rawExecute(
+      `INSERT INTO journal_entries ("companyId","branchId",ref,description,status,"createdAt") VALUES ($1,$2,$3,$4,'posted',$5)`,
+      [scope.companyId, scope.branchId, ref, description, date || new Date().toISOString()]
+    );
+    for (const l of lines) {
+      await rawExecute(
+        `INSERT INTO journal_lines ("journalId","accountCode",description,debit,credit,"costCenter","departmentId","projectId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [insertId, l.accountCode, l.description || null, Number(l.debit) || 0, Number(l.credit) || 0, l.costCenter || null, l.departmentId || null, l.projectId || null]
+      );
+    }
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "journal_entries", entityId: insertId, after: { ref, description, totalDebit } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "finance.journal.created", entity: "journal_entries", entityId: insertId, details: JSON.stringify({ ref }) }).catch(console.error);
+    res.status(201).json({ id: insertId, ref });
+  } catch (err) { handleRouteError(err, res, "Create journal entry error:"); }
+});
 
 journalRouter.get("/journal/:id", requirePermission("finance:read"), async (req, res) => {
   try {
