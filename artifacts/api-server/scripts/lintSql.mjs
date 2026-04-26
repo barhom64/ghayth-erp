@@ -61,6 +61,12 @@ const SAFE_NAMES = new Set([
   // fragments plus properly parameterized $n placeholders — same pattern as
   // `where` and `conditions` above.
   "extra",
+  // `likeClauses` in businessHelpers.ts builds parameterized LIKE fragments
+  // from a hardcoded keyword array — indices are derived from array position.
+  "likeClauses",
+  // `seq` in correspondence.ts is a ternary between two hardcoded sequence
+  // names ('correspondence_outgoing_seq' / 'correspondence_incoming_seq').
+  "seq",
 ]);
 
 // Member expressions like `params.length` or `sets.join(...)` are allowed

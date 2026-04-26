@@ -210,7 +210,7 @@ router.delete("/agents/:id", requirePermission("umrah:write"), async (req, res):
 router.get("/packages", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT p.*, s.title as "seasonTitle" FROM umrah_packages p LEFT JOIN umrah_seasons s ON p."seasonId"=s.id WHERE p."companyId"=$1 AND p."deletedAt" IS NULL ORDER BY p.name`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT p.*, s.title as "seasonTitle" FROM umrah_packages p LEFT JOIN umrah_seasons s ON p."seasonId"=s.id WHERE p."companyId"=$1 ORDER BY p.name`, [scope.companyId]);
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List packages error"); }
 });
@@ -279,7 +279,7 @@ router.delete("/packages/:id", requirePermission("umrah:write"), async (req, res
     if (Number(inUse[0]?.c) > 0) {
       throw new ConflictError(`لا يمكن حذف الباقة — مرتبطة بـ ${inUse[0].c} معتمر`);
     }
-    await rawExecute(`UPDATE umrah_packages SET "deletedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [req.params.id, scope.companyId]);
+    await rawExecute(`UPDATE umrah_packages SET status='deleted' WHERE id=$1 AND "companyId"=$2`, [req.params.id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_packages", entityId: Number(req.params.id) }).catch(console.error);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.package.deleted", entity: "umrah_packages", entityId: Number(req.params.id), details: "{}" }).catch(console.error);
     res.json({ success: true });

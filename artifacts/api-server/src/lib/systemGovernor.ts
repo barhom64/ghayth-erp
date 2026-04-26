@@ -88,7 +88,7 @@ const postingFailuresGuard: GuardFn = async (companyId) => {
 const auditViolationsGuard: GuardFn = async (companyId) => {
   const [result] = await rawQuery<{ cnt: number }>(
     `SELECT COUNT(*)::int AS cnt FROM audit_violations
-     WHERE "companyId" = $1 AND status = 'open' AND severity IN ('critical', 'high')`,
+     WHERE "companyId" = $1 AND status = 'open' AND priority IN ('critical', 'high')`,
     [companyId]
   );
   if (result && result.cnt >= 5) {

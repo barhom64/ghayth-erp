@@ -78,8 +78,8 @@ export async function auditSeparationOfDuties(companyId: number): Promise<Policy
     const rows = await rawQuery<{ userId: number; email: string }>(
       `SELECT DISTINCT u.id AS "userId", u.email
        FROM users u
-       JOIN employee_assignments ea ON ea."employeeId" = (SELECT id FROM employees WHERE "userId" = u.id LIMIT 1)
-       WHERE ea."companyId" = $1 AND ea.status = 'active'
+       JOIN employee_assignments ea ON ea."employeeId" = u."employeeId"
+       WHERE u."employeeId" IS NOT NULL AND ea."companyId" = $1 AND ea.status = 'active'
          AND ea.role IN ($2, $3)
        GROUP BY u.id, u.email
        HAVING COUNT(DISTINCT ea.role) = 2`,
@@ -103,8 +103,8 @@ export async function auditMaxPrivilege(companyId: number): Promise<PolicyViolat
     `SELECT u.id AS "userId", u.email, ea.role,
             (SELECT COUNT(*) FROM role_permissions rp WHERE rp.role = ea.role AND (rp."companyId" = $1 OR rp."companyId" IS NULL))::int AS "permCount"
      FROM users u
-     JOIN employee_assignments ea ON ea."employeeId" = (SELECT id FROM employees WHERE "userId" = u.id LIMIT 1)
-     WHERE ea."companyId" = $1 AND ea.status = 'active'`,
+     JOIN employee_assignments ea ON ea."employeeId" = u."employeeId"
+     WHERE u."employeeId" IS NOT NULL AND ea."companyId" = $1 AND ea.status = 'active'`,
     [companyId]
   );
   for (const r of rows) {
