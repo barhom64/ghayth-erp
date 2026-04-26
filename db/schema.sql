@@ -3629,6 +3629,10 @@ CREATE TABLE public.digital_signature_logs (
     "userAgent" text,
     metadata jsonb,
     "createdAt" timestamp with time zone DEFAULT now(),
+    "entityType" text,
+    "entityId" text,
+    "signatureRef" text,
+    "otpRef" integer,
     CONSTRAINT digital_signature_logs_action_check CHECK ((action = ANY (ARRAY['otp_requested'::text, 'otp_verified'::text, 'signed'::text, 'rejected'::text])))
 );
 
@@ -3667,7 +3671,12 @@ CREATE TABLE public.digital_signature_otps (
     used boolean DEFAULT false NOT NULL,
     "ipAddress" text,
     "deviceFingerprint" text,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "entityType" text,
+    "entityId" text,
+    action text,
+    "userAgent" text,
+    "usedAt" timestamp with time zone
 );
 
 
@@ -3781,7 +3790,8 @@ CREATE TABLE public.document_templates (
     "branchId" integer,
     "signatureUrl" text,
     "htmlContent" text,
-    "isDefault" boolean DEFAULT false
+    "isDefault" boolean DEFAULT false,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -3863,7 +3873,9 @@ CREATE TABLE public.documents (
     category character varying(50),
     status character varying(30) DEFAULT 'draft'::character varying,
     "storageKey" text,
-    "currentVersion" integer DEFAULT 1
+    "currentVersion" integer DEFAULT 1,
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -8672,7 +8684,8 @@ CREATE TABLE public.project_tasks (
     "estimatedHours" numeric(8,2),
     "actualHours" numeric(8,2),
     "createdAt" timestamp without time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    progress numeric(5,2)
 );
 
 
@@ -10214,7 +10227,8 @@ CREATE TABLE public.store_orders (
     "branchId" integer,
     "paidAt" timestamp with time zone,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "journalEntryId" integer
 );
 
 
@@ -10335,7 +10349,8 @@ CREATE TABLE public.suppliers (
     rating numeric(3,2) DEFAULT 5.0,
     status character varying(20) DEFAULT 'active'::character varying,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    category character varying(100)
 );
 
 
@@ -20446,28 +20461,35 @@ ALTER TABLE ONLY public.zatca_submission_log
 
 CREATE TABLE IF NOT EXISTS public.correspondence (
     id SERIAL PRIMARY KEY,
-    "companyId" integer NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-    "branchId" integer,
-    type varchar(50) NOT NULL DEFAULT 'outgoing',
-    "referenceNumber" varchar(100),
-    subject varchar(500) NOT NULL,
-    body text,
-    sender varchar(255),
-    recipient varchar(255),
-    department varchar(100),
-    status varchar(50) DEFAULT 'draft',
-    priority varchar(20) DEFAULT 'normal',
-    "attachmentUrl" text,
-    "relatedEntity" varchar(100),
-    "relatedEntityId" integer,
-    "sentAt" timestamptz,
-    "receivedAt" timestamptz,
-    "createdBy" integer,
-    "updatedBy" integer,
-    "deletedAt" timestamptz,
-    "createdAt" timestamptz DEFAULT now(),
-    "updatedAt" timestamptz DEFAULT now()
+    "companyId" INTEGER NOT NULL,
+    "branchId" INTEGER,
+    direction VARCHAR(10) NOT NULL CHECK (direction IN ('outgoing', 'incoming')),
+    ref VARCHAR(50) NOT NULL,
+    subject VARCHAR(500) NOT NULL,
+    content TEXT,
+    "entityType" VARCHAR(50),
+    "entityId" INTEGER,
+    "senderName" VARCHAR(300),
+    "senderOrg" VARCHAR(300),
+    "recipientName" VARCHAR(300),
+    "recipientOrg" VARCHAR(300),
+    channel VARCHAR(30) DEFAULT 'internal',
+    status VARCHAR(30) DEFAULT 'draft',
+    "sentAt" TIMESTAMP WITH TIME ZONE,
+    "receivedAt" TIMESTAMP WITH TIME ZONE,
+    "respondedAt" TIMESTAMP WITH TIME ZONE,
+    "responseRef" VARCHAR(50),
+    attachments JSONB DEFAULT '[]',
+    notes TEXT,
+    "createdBy" INTEGER,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS correspondence_company_idx ON correspondence("companyId");
+CREATE INDEX IF NOT EXISTS correspondence_direction_idx ON correspondence("companyId", direction);
+CREATE INDEX IF NOT EXISTS correspondence_entity_idx ON correspondence("entityType", "entityId");
+CREATE INDEX IF NOT EXISTS correspondence_ref_idx ON correspondence(ref);
 
 CREATE TABLE IF NOT EXISTS public.company_documents (
     id SERIAL PRIMARY KEY,
@@ -20683,6 +20705,56 @@ CREATE SEQUENCE IF NOT EXISTS public.payment_run_items_id_seq AS integer;
 ALTER TABLE ONLY public.payment_run_items ALTER COLUMN id SET DEFAULT nextval('public.payment_run_items_id_seq'::regclass);
 ALTER SEQUENCE public.payment_run_items_id_seq OWNED BY public.payment_run_items.id;
 ALTER TABLE ONLY public.payment_run_items ADD CONSTRAINT payment_run_items_pkey PRIMARY KEY (id);
+
+--
+-- Name: request_number_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE IF NOT EXISTS public.request_number_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: letter_number_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE IF NOT EXISTS public.letter_number_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: correspondence_outgoing_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE IF NOT EXISTS public.correspondence_outgoing_seq
+    START WITH 1000
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: correspondence_incoming_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE IF NOT EXISTS public.correspondence_incoming_seq
+    START WITH 1000
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
 
 --
 -- PostgreSQL database dump complete

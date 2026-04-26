@@ -328,8 +328,8 @@ router.post("/pbx/completed", async (req, res): Promise<void> => {
       const sender = await matchSenderToEntity(call.callerNumber, companyId);
 
       await rawExecute(
-        `INSERT INTO tasks ("companyId",title,description,status,priority,"createdAt")
-         VALUES ($1,$2,$3,'pending','high',NOW())`,
+        `INSERT INTO tasks ("companyId",title,description,type,status,priority,"createdAt")
+         VALUES ($1,$2,$3,'follow_up','pending','high',NOW())`,
         [
           companyId,
           `رد على مكالمة من ${sender.name}`,
@@ -538,17 +538,17 @@ router.post("/log/:id/convert", requirePermission("communications:write"), async
 
     if (targetType === "task") {
       const { insertId } = await rawExecute(
-        `INSERT INTO project_tasks ("companyId", title, description, status, priority)
-         VALUES ($1, $2, $3, 'todo', 'medium')`,
+        `INSERT INTO tasks ("companyId", title, description, type, status, priority)
+         VALUES ($1, $2, $3, 'follow_up', 'pending', 'medium')`,
         [scope.companyId, fullTitle, fullDesc]
       );
       createdId = insertId;
-      targetPath = "/projects/tasks";
+      targetPath = "/tasks";
     } else if (targetType === "ticket") {
       const { insertId } = await rawExecute(
-        `INSERT INTO support_tickets ("companyId", title, description, status, priority, ref, "clientName")
-         VALUES ($1, $2, $3, 'open', 'medium', $4, $5)`,
-        [scope.companyId, fullTitle, fullDesc, `TKT-COMM-${logId}`, logEntry.fromNumber || "من اتصال"]
+        `INSERT INTO support_tickets ("companyId", title, description, status, priority, ref)
+         VALUES ($1, $2, $3, 'open', 'medium', $4)`,
+        [scope.companyId, fullTitle, fullDesc, `TKT-COMM-${logId}`]
       );
       createdId = insertId;
       targetPath = "/support/tickets";

@@ -38,6 +38,7 @@ const createPurchaseRequestSchema = z.object({
   notes: z.string().optional(),
   expectedDate: z.string().optional(),
   expectedDelivery: z.string().optional(),
+  costCenter: z.string().optional(),
 });
 
 const createPurchaseOrderSchema = z.object({
@@ -199,7 +200,7 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
     // historically accepted `expectedDate` + items with `itemName`.
     // Accept BOTH conventions so the frontend is not silently saving
     // lines named "بند" and losing the delivery date.
-    const { items, supplierId, notes } = b;
+    const { items, supplierId, notes, costCenter } = b;
     const expectedDate = b.expectedDate ?? b.expectedDelivery ?? null;
 
     const totalAmount = items.reduce((sum: number, i: any) => sum + Number(i.quantity ?? 1) * Number(i.unitPrice ?? 0), 0);
@@ -228,9 +229,9 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
     const ref = `PR-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
 
     const { insertId } = await rawExecute(
-      `INSERT INTO purchase_requests ("companyId","branchId","requestedBy",ref,status,"totalAmount","supplierId",notes,"expectedDelivery")
-       VALUES ($1,$2,$3,$4,'draft',$5,$6,$7,$8)`,
-      [scope.companyId, scope.branchId, scope.activeAssignmentId, ref, totalAmount, supplierId ?? null, notes ?? null, expectedDate ?? null]
+      `INSERT INTO purchase_requests ("companyId","branchId","requestedBy",ref,status,"totalAmount","supplierId",notes,"expectedDelivery","costCenter")
+       VALUES ($1,$2,$3,$4,'draft',$5,$6,$7,$8,$9)`,
+      [scope.companyId, scope.branchId, scope.activeAssignmentId, ref, totalAmount, supplierId ?? null, notes ?? null, expectedDate ?? null, costCenter ?? null]
     );
 
     if (Array.isArray(items) && items.length > 0) {

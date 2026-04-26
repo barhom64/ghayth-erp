@@ -75,7 +75,7 @@ router.post("/programs", requirePermission("hr:create"), async (req, res) => {
     if (!parsed_createProgramSchema.success) throw new ValidationError(parsed_createProgramSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_createProgramSchema.data;
     const scope = req.scope!;
-    const { title, description, category, startDate, endDate, location, trainer, capacity, status } = body;
+    const { title, description, category, startDate, endDate, location, trainer, capacity, status, type, provider, duration, durationUnit, cost, maxParticipants } = body;
     if (!String(title).trim()) {
       throw new ValidationError("عنوان البرنامج التدريبي مطلوب", {
         field: "title",
@@ -89,8 +89,8 @@ router.post("/programs", requirePermission("hr:create"), async (req, res) => {
       });
     }
     const r = await rawExecute(
-      `INSERT INTO training_programs (title, description, category, "startDate", "endDate", location, trainer, capacity, status, "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [String(title).trim(), description ?? null, category ?? null, startDate ?? null, endDate ?? null, location ?? null, trainer ?? null, Number(capacity ?? 0), status ?? "upcoming", scope.companyId]
+      `INSERT INTO training_programs (title, description, category, "startDate", "endDate", location, trainer, capacity, status, "companyId", type, provider, duration, "durationUnit", cost, "maxParticipants") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+      [String(title).trim(), description ?? null, category ?? null, startDate ?? null, endDate ?? null, location ?? null, trainer ?? null, Number(capacity ?? 0), status ?? "upcoming", scope.companyId, type ?? null, provider ?? null, duration ? Number(duration) : null, durationUnit ?? null, cost ? Number(cost) : 0, maxParticipants ? Number(maxParticipants) : null]
     );
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,

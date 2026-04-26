@@ -41,6 +41,7 @@ const createCaseSchema = z.object({
   lawyerName: z.string().optional(),
   status: z.string().optional(),
   description: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 const createSessionSchema = z.object({
@@ -556,8 +557,8 @@ router.post("/cases", requirePermission("legal:create"), async (req, res) => {
     if (!lawyerName && responsible) lawyerName = responsible.employeeName;
 
     const { insertId } = await rawExecute(
-      `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType",court,"filingDate","opposingParty","lawyerName",status,priority,description) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [scope.companyId, b.caseNumber, b.title, b.caseType, b.court, b.filingDate, b.opposingParty, lawyerName, b.status || 'open', b.priority || 'medium', b.description]
+      `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType",court,"filingDate","opposingParty","lawyerName",status,priority,description,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [scope.companyId, b.caseNumber, b.title, b.caseType, b.court, b.filingDate, b.opposingParty, lawyerName, b.status || 'open', b.priority || 'medium', b.description, b.notes ?? null]
     );
 
     createAuditLog({
