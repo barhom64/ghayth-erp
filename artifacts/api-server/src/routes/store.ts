@@ -241,7 +241,7 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE store_orders SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM store_orders WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
     if (b.status === "completed" && existing.status !== "completed") {
       try {
@@ -313,8 +313,8 @@ async function postStoreOrderGl(scope: any, order: any) {
 
   if (result) {
     await rawExecute(
-      `UPDATE store_orders SET "journalEntryId"=$1 WHERE id=$2`,
-      [result.journalId, order.id]
+      `UPDATE store_orders SET "journalEntryId"=$1 WHERE id=$2 AND "companyId"=$3`,
+      [result.journalId, order.id, order.companyId]
     ).catch(console.error);
   }
 

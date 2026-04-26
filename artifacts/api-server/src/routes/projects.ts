@@ -745,7 +745,7 @@ router.post("/:id/phases", requirePermission("projects:create"), async (req, res
       `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
       [projectId, b.name.trim(), b.orderIndex || 0, b.startDate || null, b.endDate || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM project_phases WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2`, [insertId, projectId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -920,7 +920,7 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
       }
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM project_tasks WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM project_tasks WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     if (b.assigneeId) {
       const [assigneeAssignment] = await rawQuery<any>(
@@ -1545,7 +1545,7 @@ router.post("/:id/risks", requirePermission("projects:create"), async (req, res)
        probability, impact, riskScore, riskLevel,
        b.mitigationPlan || null, b.responsibleId || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM project_risks WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM project_risks WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,

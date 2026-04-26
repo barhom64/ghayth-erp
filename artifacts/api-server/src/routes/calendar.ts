@@ -53,7 +53,7 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
                 t.name as "tenantName", rc."unitId"
          FROM rental_contracts rc
          LEFT JOIN tenants t ON t.id = rc."tenantId"
-         WHERE rc."companyId" = $1 AND rc.status = 'active'
+         WHERE rc."companyId" = $1 AND rc."deletedAt" IS NULL AND rc.status = 'active'
            AND rc."endDate" BETWEEN $2 AND $3
          ORDER BY rc."endDate" LIMIT 30`,
         [cid, now, cutoff]
@@ -62,7 +62,7 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
         `SELECT t.id, t.title, t."dueDate" as "date", t.status, t.priority, p.name as "projectName"
          FROM project_tasks t
          LEFT JOIN projects p ON p.id = t."projectId"
-         WHERE t."companyId" = $1 AND t.status NOT IN ('completed','cancelled')
+         WHERE t."companyId" = $1 AND t."deletedAt" IS NULL AND t.status NOT IN ('completed','cancelled')
            AND t."dueDate" BETWEEN $2 AND $3
          ORDER BY t."dueDate" LIMIT 50`,
         [cid, now, cutoff]
@@ -113,7 +113,7 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
          FROM hr_leave_requests lr
          JOIN employees e ON e.id = lr."employeeId"
          LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-         WHERE lr."companyId" = $1
+         WHERE lr."companyId" = $1 AND lr."deletedAt" IS NULL
            AND lr.status IN ('approved','pending')
            AND lr."startDate" BETWEEN $2 AND $3
          ORDER BY lr."startDate" LIMIT 50`,
