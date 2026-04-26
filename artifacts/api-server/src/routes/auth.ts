@@ -1,5 +1,5 @@
 import { handleRouteError, ValidationError, ForbiddenError, NotFoundError } from "../lib/errorHandler.js";
-import { Router } from "express";
+import { Router, type Response as ExpressResponse } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { signToken, signRefreshToken, verifyPassword, hashPassword } from "../lib/auth.js";
@@ -9,6 +9,33 @@ import { logger } from "../lib/logger.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 const router = Router();
+
+const isProduction = process.env.NODE_ENV === "production";
+
+function setAccessTokenCookie(res: ExpressResponse, token: string) {
+  res.cookie("erp_access", token, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "strict",
+    path: "/api",
+    maxAge: 15 * 60 * 1000,
+  });
+}
+
+function setRefreshTokenCookie(res: ExpressResponse, refreshToken: string) {
+  res.cookie("erp_refresh", refreshToken, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "strict",
+    path: "/api/auth",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+}
+
+function clearAuthCookies(res: ExpressResponse) {
+  res.clearCookie("erp_access", { path: "/api" });
+  res.clearCookie("erp_refresh", { path: "/api/auth" });
+}
 
 const loginSchema = z.object({
   email: z.string().min(1, "البريد الإلكتروني مطلوب"),
@@ -192,8 +219,11 @@ router.post("/login", loginLimiter, async (req, res) => {
       [refreshToken, user.id, expiresAt.toISOString(), userAgent, ipAddress]
     );
 
+    setAccessTokenCookie(res, token);
+    setRefreshTokenCookie(res, refreshToken);
+
     emitEvent({ companyId: primary.companyId, branchId: primary.branchId, userId: user.id, action: "auth.login.success", entity: "users", entityId: user.id, details: JSON.stringify({ email, assignmentId: primary.id }) }).catch(console.error);
-    res.json({ token, refreshToken, assignments, userRoles });
+    res.json({ assignments, userRoles });
   } catch (err) {
     handleRouteError(err, res, "Login error:");
   }
@@ -201,11 +231,10 @@ router.post("/login", loginLimiter, async (req, res) => {
 
 router.post("/refresh", async (req, res) => {
   try {
-    const parsed = refreshSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const refreshToken = req.cookies?.erp_refresh || req.body?.refreshToken;
+    if (!refreshToken || typeof refreshToken !== "string") {
+      throw new ValidationError("رمز التحديث مطلوب");
     }
-    const { refreshToken } = parsed.data;
 
     const [rt] = await rawQuery<any>(
       `SELECT rt.*, u."isActive", u."employeeId"
@@ -248,9 +277,11 @@ router.post("/refresh", async (req, res) => {
       role: primaryAssignment.role,
     });
 
+    setAccessTokenCookie(res, newToken);
+
     emitEvent({ companyId: 0, userId: rt.userId, action: "auth.refresh", entity: "users", entityId: rt.userId }).catch(console.error);
     createAuditLog({ companyId: 0, userId: rt.userId, action: "update", entity: "users", entityId: rt.userId, after: { reason: "token_refresh" } }).catch(console.error);
-    res.json({ token: newToken });
+    res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Refresh token error:");
   }
@@ -259,7 +290,7 @@ router.post("/refresh", async (req, res) => {
 router.post("/logout", authMiddleware, async (req, res) => {
   try {
     const scope = req.scope!;
-    const { refreshToken } = req.body as { refreshToken?: string };
+    const refreshToken = req.cookies?.erp_refresh || req.body?.refreshToken;
     if (refreshToken) {
       try {
         await rawExecute(
@@ -270,6 +301,7 @@ router.post("/logout", authMiddleware, async (req, res) => {
         logger.error({ err: revokeErr, userId: scope.userId }, "Failed to revoke refresh token on logout");
       }
     }
+    clearAuthCookies(res);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "auth.logout", entity: "users", entityId: scope.userId }).catch(console.error);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "users", entityId: scope.userId, after: { reason: "logout" } }).catch(console.error);
     res.json({ success: true });
@@ -297,9 +329,10 @@ router.post("/switch-assignment", authMiddleware, async (req, res) => {
       throw new NotFoundError("التعيين غير موجود أو غير نشط");
     }
     const token = signToken({ userId: scope.userId, assignmentId: Number(assignmentId), role: assignment.role });
+    setAccessTokenCookie(res, token);
     emitEvent({ companyId: assignment.companyId, userId: scope.userId, action: "auth.switch_assignment", entity: "user_assignments", entityId: Number(assignmentId) }).catch(console.error);
     createAuditLog({ companyId: assignment.companyId, userId: scope.userId, action: "update", entity: "employee_assignments", entityId: Number(assignmentId), after: { switchedTo: assignmentId, role: assignment.role } }).catch(console.error);
-    res.json({ token });
+    res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Switch assignment error:");
   }
@@ -366,6 +399,7 @@ router.post("/change-password", authMiddleware, changePasswordLimiter, async (re
       companyId: scope.companyId, userId: scope.userId,
       action: "password_change", entity: "users", entityId: scope.userId,
     }).catch(console.error);
+    clearAuthCookies(res);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "auth.password.changed", entity: "users", entityId: scope.userId }).catch(console.error);
     res.json({ success: true, message: "تم تغيير كلمة المرور بنجاح" });
   } catch (err) {

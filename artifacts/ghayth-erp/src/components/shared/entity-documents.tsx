@@ -52,9 +52,8 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
 
   const handleDownload = async (docId: number, fileName: string) => {
     try {
-      const token = localStorage.getItem("erp_token");
       const res = await fetch(`${BASE}/api/documents/${docId}/download`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: "include",
       });
       if (!res.ok) throw new Error("فشل التنزيل");
       const blob = await res.blob();
@@ -156,10 +155,10 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
     if (!file || !form.title) return;
     setUploading(true);
     try {
-      const token = localStorage.getItem("erp_token");
       const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       });
       if (!urlRes.ok) throw new Error("فشل الرفع");

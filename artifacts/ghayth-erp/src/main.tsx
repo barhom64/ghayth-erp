@@ -1,14 +1,8 @@
 import { createRoot } from "react-dom/client";
-import { setAuthTokenGetter } from "@workspace/api-client-react";
 import { ApiError } from "@/lib/api";
 import App from "./App";
 import "./index.css";
 import "./styles/print.css";
-
-// Configure API client to use the token from localStorage
-setAuthTokenGetter(() => {
-  return localStorage.getItem("erp_token");
-});
 
 // Silence the Replit dev overlay for ApiError — the error is already handled
 // downstream by PageStateWrapper (typed error UI), so letting the overlay
