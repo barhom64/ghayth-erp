@@ -99,8 +99,9 @@ router.post("/seasons", requirePermission("umrah:write"), async (req, res) => {
       `INSERT INTO umrah_seasons ("companyId",title,"startDate","endDate",notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
       [scope.companyId, b.title, b.startDate, b.endDate, b.notes]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_seasons", entityId: rows[0]?.id, after: { title: b.title } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.season.opened", entity: "umrah_seasons", entityId: rows[0]?.id, after: { title: b.title } }).catch(console.error);
+    if (!rows[0]) throw new NotFoundError("فشل في إنشاء الموسم");
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_seasons", entityId: rows[0].id, after: { title: b.title } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.season.opened", entity: "umrah_seasons", entityId: rows[0].id, after: { title: b.title } }).catch(console.error);
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create season error"); }
 });
@@ -178,8 +179,9 @@ router.post("/agents", requirePermission("umrah:write"), async (req, res) => {
       `INSERT INTO umrah_agents ("companyId",name,"contactPerson",phone,email,country,"profitMargin","contractRef",currency,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [scope.companyId, b.name, b.contactPerson, b.phone, b.email, b.country, b.profitMargin || 0, b.contractRef, b.currency || "SAR", b.notes]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_agents", entityId: rows[0]?.id, after: { name: b.name } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.created", entity: "umrah_agents", entityId: rows[0]?.id, details: JSON.stringify({ name: b.name, country: b.country }) }).catch(console.error);
+    if (!rows[0]) throw new NotFoundError("فشل في إنشاء الوكيل");
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_agents", entityId: rows[0].id, after: { name: b.name } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.created", entity: "umrah_agents", entityId: rows[0].id, details: JSON.stringify({ name: b.name, country: b.country }) }).catch(console.error);
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create agent error"); }
 });

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError, ValidationError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
@@ -65,6 +65,7 @@ router.post("/comments/:entityType/:entityId", requirePermission("admin:write"),
     }).catch(console.error);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.comment.created", entity: "entity_comments", entityId: Number(entityId), details: JSON.stringify({ entityType, body: body.trim() }) }).catch(console.error);
 
+    if (!rows[0]) throw new NotFoundError("فشل في إنشاء التعليق");
     res.json(rows[0]);
   } catch (err) {
     handleRouteError(err, res, "Create comment error");

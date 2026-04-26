@@ -659,17 +659,22 @@ router.get("/integration-logs", requirePermission("admin:read"), async (req, res
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const { channel, status, integrationId } = req.query as any;
+    const { channel, status, integrationId, limit: lim, offset: off } = req.query as any;
+    const pageLimit = Math.min(Number(lim) || 50, 200);
+    const pageOffset = Number(off) || 0;
     const conditions = [`"companyId"=$1`];
     const params: any[] = [scope.companyId];
     if (channel) { params.push(channel); conditions.push(`channel=$${params.length}`); }
     if (status) { params.push(status); conditions.push(`status=$${params.length}`); }
     if (integrationId) { params.push(Number(integrationId)); conditions.push(`"integrationId"=$${params.length}`); }
+    const where = conditions.join(" AND ");
+    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM integration_logs WHERE ${where}`, params);
+    params.push(pageLimit, pageOffset);
     const rows = await rawQuery(
-      `SELECT * FROM integration_logs WHERE ${conditions.join(" AND ")} ORDER BY "createdAt" DESC LIMIT 200`,
+      `SELECT * FROM integration_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -815,7 +820,9 @@ router.get("/violations-report", requirePermission("admin:read"), async (req, re
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const { type, priority, status, department, from, to } = req.query as any;
+    const { type, priority, status, department, from, to, limit: lim, offset: off } = req.query as any;
+    const pageLimit = Math.min(Number(lim) || 50, 200);
+    const pageOffset = Number(off) || 0;
 
     const conditions = [`"companyId"=$1`];
     const params: any[] = [scope.companyId];
@@ -829,9 +836,10 @@ router.get("/violations-report", requirePermission("admin:read"), async (req, re
 
     const whereClause = conditions.join(" AND ");
 
+    const paginated = [...params, pageLimit, pageOffset];
     const violations = await rawQuery(
-      `SELECT * FROM audit_violations WHERE ${whereClause} ORDER BY "createdAt" DESC LIMIT 500`,
-      params
+      `SELECT * FROM audit_violations WHERE ${whereClause} ORDER BY "createdAt" DESC LIMIT $${paginated.length - 1} OFFSET $${paginated.length}`,
+      paginated
     );
 
     const [totalCount] = await rawQuery<any>(

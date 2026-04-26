@@ -306,8 +306,9 @@ router.post("/", requirePermission("tasks:write"), async (req, res) => {
       ]
     );
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "tasks", entityId: rows[0]?.id, after: { title, type: type || "task", priority: priority || "medium", assignedTo: finalAssignedTo } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "task.created", entity: "tasks", entityId: rows[0]?.id, details: JSON.stringify({ title, type: type || "task", priority: priority || "medium" }) }).catch(console.error);
+    if (!rows[0]) throw new NotFoundError("فشل في إنشاء المهمة");
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "tasks", entityId: rows[0].id, after: { title, type: type || "task", priority: priority || "medium", assignedTo: finalAssignedTo } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "task.created", entity: "tasks", entityId: rows[0].id, details: JSON.stringify({ title, type: type || "task", priority: priority || "medium" }) }).catch(console.error);
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create task error:"); }
 });

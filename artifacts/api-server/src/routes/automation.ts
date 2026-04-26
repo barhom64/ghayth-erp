@@ -75,12 +75,17 @@ router.get("/notification-stats", requirePermission("admin:read"), async (req, r
 router.get("/event-logs", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { action } = req.query as any;
+    const { action, limit: lim, offset: off } = req.query as any;
+    const pageLimit = Math.min(Number(lim) || 50, 200);
+    const pageOffset = Number(off) || 0;
     const conditions = [`"companyId" = $1`];
     const params: any[] = [scope.companyId];
     if (action) { params.push(action); conditions.push(`action = $${params.length}`); }
-    const rows = await rawQuery<any>(`SELECT * FROM event_logs WHERE ${conditions.join(" AND ")} ORDER BY "createdAt" DESC LIMIT 200`, params);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    const where = conditions.join(" AND ");
+    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM event_logs WHERE ${where}`, params);
+    params.push(pageLimit, pageOffset);
+    const rows = await rawQuery<any>(`SELECT * FROM event_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
   } catch (err) { handleRouteError(err, res, "Event logs error:"); }
 });
 

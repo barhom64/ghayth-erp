@@ -6699,16 +6699,17 @@ router.get("/employee-documents", requirePermission("hr:read"), async (req, res)
     let paramIdx = 1;
     const params: any[] = [scope.companyId];
     paramIdx++;
-    let where = `WHERE ed."companyId"=$1 AND ed.status != 'deleted'`;
+    const conditions: string[] = [`ed."companyId"=$1`, `ed.status != 'deleted'`];
     if (employeeId) {
-      where += ` AND ed."employeeId"=$${paramIdx}`;
+      conditions.push(`ed."employeeId"=$${paramIdx}`);
       params.push(Number(employeeId));
       paramIdx++;
     }
+    const where = `WHERE ${conditions.join(" AND ")}`;
 
     const countParams = [...params];
     const [countRow] = await rawQuery<any>(
-      `SELECT COUNT(*) AS total FROM employee_documents ed WHERE ${where.replace('WHERE ', '')}`,
+      `SELECT COUNT(*) AS total FROM employee_documents ed ${where}`,
       countParams
     ).catch(() => [{ total: 0 }] as any[]);
 

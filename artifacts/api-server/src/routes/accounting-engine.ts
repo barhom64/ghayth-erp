@@ -351,6 +351,7 @@ router.post("/journal-templates", requirePermission("finance:write"), async (req
     const [template] = await rawQuery<any>(
       `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`, [result, scope.companyId]
     );
+    if (!template) throw new NotFoundError("القالب غير موجود");
     template.lines = await rawQuery<any>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
@@ -406,6 +407,7 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
     }
 
     const [template] = await rawQuery<any>(`SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`, [Number(id), scope.companyId]);
+    if (!template) throw new NotFoundError("القالب غير موجود");
     template.lines = await rawQuery<any>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl

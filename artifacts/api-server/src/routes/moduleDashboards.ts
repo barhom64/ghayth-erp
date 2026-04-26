@@ -126,7 +126,7 @@ router.get("/legal", requirePermission("legal:read"), async (req, res) => {
     const cid = scope.companyId;
 
     const [contracts, cases, sessions] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COUNT(*) FILTER (WHERE status = 'active' AND "endDate"::date - CURRENT_DATE <= 30) AS "expiringSoon", COALESCE(SUM(value), 0) AS "totalValue" FROM legal_contracts WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COUNT(*) FILTER (WHERE status = 'active' AND "endDate"::date - CURRENT_DATE <= 30) AS "expiringSoon", COALESCE(SUM(value), 0) AS "totalValue" FROM legal_contracts WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE priority = 'high') AS "highPriority" FROM legal_cases WHERE "companyId" = $1`, [cid]),
       sq1(`SELECT COUNT(*) AS upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id = ls."caseId" WHERE lc."companyId" = $1 AND ls."sessionDate" >= CURRENT_DATE AND ls."sessionDate" <= CURRENT_DATE + INTERVAL '30 days'`, [cid]),
     ]);
@@ -212,7 +212,7 @@ router.get("/crm", async (req, res) => {
     const cid = scope.companyId;
 
     const [opportunities, contacts, activities] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'won') AS won, COUNT(*) FILTER (WHERE status = 'lost') AS lost, COALESCE(SUM(value), 0) AS "totalValue", COALESCE(SUM(value) FILTER (WHERE status = 'won'), 0) AS "wonValue" FROM crm_opportunities WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'won') AS won, COUNT(*) FILTER (WHERE status = 'lost') AS lost, COALESCE(SUM(value), 0) AS "totalValue", COALESCE(SUM(value) FILTER (WHERE status = 'won'), 0) AS "wonValue" FROM crm_opportunities WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total FROM crm_contacts WHERE "companyId" = $1`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COUNT(*) FILTER (WHERE status = 'pending' OR status = 'planned') AS pending FROM crm_activities WHERE "companyId" = $1`, [cid]),
     ]);
@@ -264,12 +264,12 @@ router.get("/support", async (req, res) => {
     const cid = scope.companyId;
 
     const [tickets, sla] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE status = 'resolved' OR status = 'closed') AS resolved, COUNT(*) FILTER (WHERE priority = 'critical' OR priority = 'high') AS "highPriority", COALESCE(AVG(EXTRACT(EPOCH FROM (COALESCE("resolvedAt", NOW()) - "createdAt")) / 3600) FILTER (WHERE status IN ('resolved','closed')), 0) AS "avgResolutionHours" FROM support_tickets WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COUNT(*) FILTER (WHERE "slaBreached" = true) AS breached, COUNT(*) AS total FROM support_tickets WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '30 days'`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE status = 'resolved' OR status = 'closed') AS resolved, COUNT(*) FILTER (WHERE priority = 'critical' OR priority = 'high') AS "highPriority", COALESCE(AVG(EXTRACT(EPOCH FROM (COALESCE("resolvedAt", NOW()) - "createdAt")) / 3600) FILTER (WHERE status IN ('resolved','closed')), 0) AS "avgResolutionHours" FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COUNT(*) FILTER (WHERE "slaBreached" = true) AS breached, COUNT(*) AS total FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" >= CURRENT_DATE - INTERVAL '30 days'`, [cid]),
     ]);
 
     const byCategory = await safeQuery(
-      `SELECT COALESCE(category, 'غير مصنف') AS category, COUNT(*) AS count FROM support_tickets WHERE "companyId" = $1 GROUP BY category ORDER BY count DESC LIMIT 10`, [cid]
+      `SELECT COALESCE(category, 'غير مصنف') AS category, COUNT(*) AS count FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL GROUP BY category ORDER BY count DESC LIMIT 10`, [cid]
     );
 
     const weeklyTickets = await safeQuery(

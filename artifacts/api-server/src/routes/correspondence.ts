@@ -175,6 +175,7 @@ correspondenceRouter.patch("/:id", requirePermission("communications:write"), as
        RETURNING *`,
       params
     );
+    if (!updated) throw new NotFoundError("المراسلة غير موجودة");
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.updated", entity: "correspondence", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
     res.json(updated);
   } catch (err) {

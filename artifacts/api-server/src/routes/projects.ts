@@ -443,7 +443,7 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
       }
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -651,7 +651,7 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
     if (Object.keys(after).length === 0) { res.json(existing); return; }
     params.push(id);
     await rawExecute(`UPDATE projects SET ${sets.join(",")} WHERE id=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -1476,8 +1476,8 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
       `UPDATE project_milestones SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
+    if (rows.length === 0) throw new NotFoundError("المرحلة غير موجودة");
 
-    // If milestone was marked completed, mark its obligation as met
     if (b.status === 'completed') {
       await markObligationMet(scope.companyId, "project_milestone", id, "delivery").catch(console.error);
     }
