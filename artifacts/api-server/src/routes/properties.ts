@@ -340,7 +340,7 @@ router.get("/units/:id", requirePermission("property:read"), async (req, res) =>
         `SELECT rc.*, (SELECT COUNT(*) FROM rent_payments WHERE "contractId"=rc.id AND status='paid') AS "paidCount",
                 (SELECT COALESCE(SUM(amount),0) FROM rent_payments WHERE "contractId"=rc.id) AS "totalAmount",
                 (SELECT COALESCE(SUM("paidAmount"),0) FROM rent_payments WHERE "contractId"=rc.id) AS "totalPaid"
-         FROM rental_contracts rc WHERE "unitId"=$1 AND "companyId"=$2 ORDER BY rc.id DESC LIMIT 10`,
+         FROM rental_contracts rc WHERE "unitId"=$1 AND "companyId"=$2 AND rc."deletedAt" IS NULL ORDER BY rc.id DESC LIMIT 10`,
         [id, scope.companyId]
       ),
       rawQuery<any>(
@@ -634,7 +634,7 @@ router.post("/contracts/impact-preview", requirePermission("properties:read"), a
       const [[activeContracts]] = await Promise.all([
         rawQuery<any>(
           `SELECT COUNT(*)::int AS c FROM rental_contracts
-           WHERE "tenantId" = $1 AND "companyId" = $2 AND status = 'active'`,
+           WHERE "tenantId" = $1 AND "companyId" = $2 AND status = 'active' AND "deletedAt" IS NULL`,
           [Number(tenantId), scope.companyId]
         ),
       ]);
@@ -841,7 +841,7 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
        contractNumber, b.ejarNumber || null, b.contractType || 'residential', frequency, yearlyRent, totalContractValue, b.latePenaltyType || 'percentage', b.latePenaltyValue || 0, b.gracePeriodDays || 0, b.terminationNoticeDays || 30, b.earlyTerminationFee || 0, b.autoRenewal || false, b.renewalNoticeDays || 60, b.renewalPeriodMonths || 12, b.electricityResponsibility || 'tenant', b.waterResponsibility || 'tenant', b.gasResponsibility || 'tenant', b.maintenanceResponsibility || 'shared', b.brokerageFee || 0, b.brokeragePayor || 'tenant', b.depositHolder || 'owner', b.insuranceRequired || false, b.ownerId || null, installmentCount, b.specialConditions || null, b.ejarStatus || 'draft', b.registrationDate || null]
     );
 
-    await rawExecute(`UPDATE property_units SET status='rented', "updatedAt"=NOW() WHERE id=$1`, [b.unitId]);
+    await rawExecute(`UPDATE property_units SET status='rented', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [b.unitId, scope.companyId]);
 
     if (installmentCount && installmentCount > 0 && totalContractValue > 0) {
       const installmentAmount = Math.round((totalContractValue / installmentCount) * 100) / 100;
@@ -899,7 +899,7 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
       });
     } catch (obErr) { console.error("Contract obligation registration failed:", obErr); }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     const schedule = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber"`, [insertId]);
 
     // Lifecycle event: lease.created
@@ -1218,7 +1218,7 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
       after: { endDate: newEndDate.toISOString().split("T")[0], totalContractValue: newTotal },
     }).catch(console.error);
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1`, [id]);
+    const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ ...updated, event: "property.contract.renewed", renewalMonths });
   } catch (err) { handleRouteError(err, res, "Renew contract error:"); }
 });
@@ -1307,7 +1307,7 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
       after: { status: "terminated", reason: b.reason, earlyFee, journalEntryId },
     }).catch(console.error);
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1`, [id]);
+    const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ ...updated, event: "property.contract.terminated", earlyFee, journalEntryId });
   } catch (err) { handleRouteError(err, res, "Terminate contract error:"); }
 });
@@ -1338,7 +1338,7 @@ router.get("/tenants/list", requirePermission("property:read"), async (req, res)
         COALESCE(SUM(CASE WHEN rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE THEN rp.amount - rp."paidAmount" ELSE 0 END),0) AS "overdueAmount",
         t."createdAt"
        FROM tenants t
-       LEFT JOIN rental_contracts c ON (c."tenantId"=t.id OR c."tenantName"=t.name) AND c."companyId"=$1
+       LEFT JOIN rental_contracts c ON (c."tenantId"=t.id OR c."tenantName"=t.name) AND c."companyId"=$1 AND c."deletedAt" IS NULL
        LEFT JOIN property_units u ON u.id=c."unitId"
        LEFT JOIN rent_payments rp ON rp."contractId"=c.id
        WHERE ${tConditions.join(" AND ")}
@@ -1646,7 +1646,7 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
     const today = new Date();
 
     const overduePayments = await rawQuery<any>(
-      `SELECT rp.*, c."tenantName", c."tenantPhone", c.id AS "contractId", c."monthlyRent", u."unitNumber", u."buildingName" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."companyId"=$1 AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE`,
+      `SELECT rp.*, c."tenantName", c."tenantPhone", c.id AS "contractId", c."monthlyRent", u."unitNumber", u."buildingName" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE`,
       [cid]
     );
 
@@ -2318,7 +2318,7 @@ router.get("/tenants/:id", requirePermission("property:read"), async (req, res) 
 
     const contracts = tenantName
       ? await rawQuery<any>(
-          `SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."companyId"=$1 AND (c."tenantId"=$2 OR c."tenantName"=$3) ORDER BY c.id DESC`,
+          `SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND (c."tenantId"=$2 OR c."tenantName"=$3) ORDER BY c.id DESC`,
           [scope.companyId, numericId ?? null, tenantName]
         )
       : [];
@@ -2376,7 +2376,7 @@ router.get("/buildings", requirePermission("property:read"), async (req, res) =>
         COALESCE(SUM(rp."paidAmount"),0) AS "totalRevenue"
        FROM property_buildings b
        LEFT JOIN property_units u ON (u."buildingId"=b.id OR u."buildingName"=b.name) AND u."companyId"=b."companyId"
-       LEFT JOIN rental_contracts rc ON rc."unitId"=u.id AND rc."companyId"=b."companyId"
+       LEFT JOIN rental_contracts rc ON rc."unitId"=u.id AND rc."companyId"=b."companyId" AND rc."deletedAt" IS NULL
        LEFT JOIN rent_payments rp ON rp."contractId"=rc.id AND rp.status='paid'
        WHERE ${conditions.join(" AND ")} AND b."deletedAt" IS NULL
        GROUP BY b.id
@@ -2668,11 +2668,11 @@ router.get("/stats", requirePermission("property:read"), async (req, res) => {
         COUNT(*) FILTER (WHERE status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days') as "expiring30",
         COUNT(*) FILTER (WHERE status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '60 days') as "expiring60",
         COUNT(*) FILTER (WHERE status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days') as "expiring90"
-      FROM rental_contracts WHERE "companyId"=$1`, [cid]);
-    const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "totalCollected", COALESCE(SUM(amount),0) as "totalExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1`, [cid]);
-    const [monthlyRevenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "monthlyCollected", COALESCE(SUM(amount),0) as "monthlyExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND DATE_TRUNC('month',rp."dueDate")=DATE_TRUNC('month',CURRENT_DATE)`, [cid]);
-    const [annualRevenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "annualCollected", COALESCE(SUM(amount),0) as "annualExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND DATE_TRUNC('year',rp."dueDate")=DATE_TRUNC('year',CURRENT_DATE)`, [cid]);
-    const [overdue] = await rawQuery<any>(`SELECT COUNT(*) as count, COALESCE(SUM(amount - "paidAmount"),0) as "overdueAmount" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE`, [cid]);
+      FROM rental_contracts WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "totalCollected", COALESCE(SUM(amount),0) as "totalExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL`, [cid]);
+    const [monthlyRevenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "monthlyCollected", COALESCE(SUM(amount),0) as "monthlyExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND DATE_TRUNC('month',rp."dueDate")=DATE_TRUNC('month',CURRENT_DATE)`, [cid]);
+    const [annualRevenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "annualCollected", COALESCE(SUM(amount),0) as "annualExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND DATE_TRUNC('year',rp."dueDate")=DATE_TRUNC('year',CURRENT_DATE)`, [cid]);
+    const [overdue] = await rawQuery<any>(`SELECT COUNT(*) as count, COALESCE(SUM(amount - "paidAmount"),0) as "overdueAmount" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE`, [cid]);
     const [maintenance] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status NOT IN ('completed','closed')) as "openTickets", COUNT(*) FILTER (WHERE priority='critical') as "criticalTickets" FROM maintenance_requests WHERE "companyId"=$1`, [cid]);
     const buildingPerf = await rawQuery<any>(`
       SELECT b.id, b.name,
@@ -2682,7 +2682,7 @@ router.get("/stats", requirePermission("property:read"), async (req, res) => {
         COALESCE(SUM(rp.amount),0) AS "totalExpected"
       FROM property_buildings b
       LEFT JOIN property_units u ON u."buildingId"=b.id AND u."companyId"=$1
-      LEFT JOIN rental_contracts rc ON rc."unitId"=u.id AND rc."companyId"=$1
+      LEFT JOIN rental_contracts rc ON rc."unitId"=u.id AND rc."companyId"=$1 AND rc."deletedAt" IS NULL
       LEFT JOIN rent_payments rp ON rp."contractId"=rc.id
       WHERE b."companyId"=$1
       GROUP BY b.id, b.name
@@ -2873,14 +2873,14 @@ router.get("/operations-dashboard", requirePermission("property:read"), async (r
     const expiringContracts = await rawQuery<any>(
       `SELECT c.id, c."tenantName", c."endDate", u."unitNumber", u."buildingName"
        FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId"
-       WHERE c."companyId"=$1 AND c.status='active' AND c."endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+       WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND c.status='active' AND c."endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
        ORDER BY c."endDate"`, [cid]
     );
     const overduePayments = await rawQuery<any>(
       `SELECT rp.id, rp.amount, rp."paidAmount", rp."dueDate", c."tenantName", u."unitNumber"
        FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId"
        LEFT JOIN property_units u ON u.id=c."unitId"
-       WHERE c."companyId"=$1 AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE
+       WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE
        ORDER BY rp."dueDate" LIMIT 20`, [cid]
     );
     const openMaintenance = await rawQuery<any>(
@@ -2893,7 +2893,7 @@ router.get("/operations-dashboard", requirePermission("property:read"), async (r
     const [collectionSummary] = await rawQuery<any>(
       `SELECT COALESCE(SUM(amount),0) as expected, COALESCE(SUM("paidAmount"),0) as collected
        FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId"
-       WHERE c."companyId"=$1 AND rp."dueDate" >= date_trunc('month', CURRENT_DATE)
+       WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp."dueDate" >= date_trunc('month', CURRENT_DATE)
          AND rp."dueDate" < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'`, [cid]
     );
     res.json({
@@ -2920,7 +2920,7 @@ router.get("/owners", requirePermission("property:read"), async (req, res) => {
       `SELECT o.*,
         (SELECT COUNT(*) FROM property_buildings WHERE "ownerId"=o.id) AS "buildingCount",
         (SELECT COUNT(*) FROM property_units WHERE "ownerId"=o.id AND "deletedAt" IS NULL) AS "unitCount",
-        (SELECT COUNT(*) FROM rental_contracts WHERE "ownerId"=o.id AND status='active') AS "activeContracts"
+        (SELECT COUNT(*) FROM rental_contracts WHERE "ownerId"=o.id AND status='active' AND "deletedAt" IS NULL) AS "activeContracts"
        FROM property_owners o WHERE ${conditions.join(" AND ")} AND o."deletedAt" IS NULL ORDER BY o.name`,
       params
     );
@@ -2936,7 +2936,7 @@ router.get("/owners/:id", requirePermission("property:read"), async (req, res) =
     if (!owner) throw new NotFoundError("المالك غير موجود");
     const buildings = await rawQuery<any>(`SELECT * FROM property_buildings WHERE "ownerId"=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const units = await rawQuery<any>(`SELECT * FROM property_units WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    const contracts = await rawQuery<any>(`SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."ownerId"=$1 AND c."companyId"=$2 ORDER BY c.id DESC`, [id, scope.companyId]);
+    const contracts = await rawQuery<any>(`SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."ownerId"=$1 AND c."companyId"=$2 AND c."deletedAt" IS NULL ORDER BY c.id DESC`, [id, scope.companyId]);
     res.json({ ...owner, buildings, units, contracts });
   } catch (err) { handleRouteError(err, res, "Owner detail error:"); }
 });

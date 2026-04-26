@@ -208,7 +208,7 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
         `SELECT id, title, "endDate" FROM legal_contracts
          WHERE "companyId" = $2 AND status = 'active'
            AND ("partyName" = $3 OR id IN (
-             SELECT "contractId" FROM rental_contracts WHERE "tenantName" = $3 AND "companyId" = $2
+             SELECT "contractId" FROM rental_contracts WHERE "tenantName" = $3 AND "companyId" = $2 AND "deletedAt" IS NULL
            ))
          LIMIT 10`,
         [Number(id), scope.companyId, client.name]
@@ -295,7 +295,7 @@ router.post("/auto-create", requirePermission("crm:create"), async (req, res) =>
       [clientName, phone, source, code, scope.companyId]
     );
 
-    const [newClient] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "deletedAt" IS NULL`, [insertId]);
+    const [newClient] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     if (!newClient) throw new NotFoundError("فشل في استرجاع العميل");
 
     createAuditLog({

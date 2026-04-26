@@ -162,7 +162,7 @@ router.post("/contracts", requirePermission("legal:create"), async (req, res) =>
       `INSERT INTO legal_contracts ("companyId",ref,title,"contractType","partyName","partyContact","startDate","endDate",value,status,notes,"createdBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [scope.companyId, b.ref || null, b.title.trim(), b.contractType || null, b.partyName.trim(), b.partyContact || null, b.startDate, b.endDate, b.value || 0, b.status || 'draft', b.notes || null, scope.userId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_contracts WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -305,9 +305,9 @@ router.patch("/contracts/:id", requirePermission("legal:write"), async (req, res
       after[f] = b[f];
     }
     if (sets.length === 0) { res.json(existing); return; }
-    params.push(id);
-    await rawExecute(`UPDATE legal_contracts SET ${sets.join(",")}, "updatedAt"=NOW() WHERE id=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_contracts WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
+    params.push(id, scope.companyId);
+    await rawExecute(`UPDATE legal_contracts SET ${sets.join(",")}, "updatedAt"=NOW() WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -588,7 +588,7 @@ router.post("/cases", requirePermission("legal:create"), async (req, res) => {
       }).catch(console.error);
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create legal case error:"); }
 });
@@ -839,7 +839,7 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
     }
 
     if (legalCase.status === 'open') {
-      await rawExecute(`UPDATE legal_cases SET status='in_progress', "updatedAt"=NOW() WHERE id=$1`, [caseId]);
+      await rawExecute(`UPDATE legal_cases SET status='in_progress', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
     }
 
     // Register obligation for this hearing
@@ -982,7 +982,7 @@ router.post("/cases/:caseId/correspondence", requirePermission("legal:create"), 
       `INSERT INTO legal_correspondence ("caseId","companyId",direction,subject,parties,"correspondenceDate","documentRef",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [caseId, scope.companyId, b.direction || 'outgoing', b.subject, b.parties, b.correspondenceDate || new Date().toISOString().split('T')[0], b.documentRef || null, b.notes || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_correspondence WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_correspondence WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -1034,7 +1034,7 @@ router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async
       [caseId, scope.companyId, b.judgmentDate, b.judgmentType || 'judgment', b.verdict, b.amount || 0, b.paidAmount || 0, b.dueDate || null, b.notes || null]
     );
     if (b.amount && Number(b.amount) > 0) {
-      await rawExecute(`UPDATE legal_cases SET "financialRisk"=COALESCE("financialRisk",0)+$1, "updatedAt"=NOW() WHERE id=$2`, [Number(b.amount), caseId]).catch(console.error);
+      await rawExecute(`UPDATE legal_cases SET "financialRisk"=COALESCE("financialRisk",0)+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`, [Number(b.amount), caseId, scope.companyId]).catch(console.error);
     }
 
     // Register appeal deadline obligation (30 days after judgment by default)

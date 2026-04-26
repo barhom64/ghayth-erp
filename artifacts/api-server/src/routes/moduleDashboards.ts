@@ -127,7 +127,7 @@ router.get("/legal", requirePermission("legal:read"), async (req, res) => {
 
     const [contracts, cases, sessions] = await Promise.all([
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COUNT(*) FILTER (WHERE status = 'active' AND "endDate"::date - CURRENT_DATE <= 30) AS "expiringSoon", COALESCE(SUM(value), 0) AS "totalValue" FROM legal_contracts WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE priority = 'high') AS "highPriority" FROM legal_cases WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE priority = 'high') AS "highPriority" FROM legal_cases WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id = ls."caseId" WHERE lc."companyId" = $1 AND ls."sessionDate" >= CURRENT_DATE AND ls."sessionDate" <= CURRENT_DATE + INTERVAL '30 days'`, [cid]),
     ]);
 
@@ -153,7 +153,7 @@ router.get("/properties", requirePermission("property:read"), async (req, res) =
 
     const [units, rentalContracts, payments, maintenanceReqs] = await Promise.all([
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'available') AS available, COUNT(*) FILTER (WHERE status = 'rented') AS rented, COUNT(*) FILTER (WHERE status = 'maintenance') AS "underMaintenance" FROM property_units WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COUNT(*) FILTER (WHERE "endDate"::date - CURRENT_DATE <= 30 AND status = 'active') AS "expiringSoon", COALESCE(SUM("monthlyRent"), 0) AS "monthlyIncome" FROM rental_contracts WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COUNT(*) FILTER (WHERE "endDate"::date - CURRENT_DATE <= 30 AND status = 'active') AS "expiringSoon", COALESCE(SUM("monthlyRent"), 0) AS "monthlyIncome" FROM rental_contracts WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COALESCE(SUM(amount), 0) AS "totalDue", COALESCE(SUM("paidAmount"), 0) AS "totalCollected", COUNT(*) FILTER (WHERE status = 'pending' AND "dueDate" < CURRENT_DATE) AS overdue FROM rent_payments rp JOIN rental_contracts rc ON rc.id = rp."contractId" WHERE rc."companyId" = $1`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status NOT IN ('completed','closed')) AS open, COUNT(*) FILTER (WHERE priority = 'critical') AS critical FROM maintenance_requests WHERE "companyId" = $1`, [cid]),
     ]);
@@ -320,13 +320,13 @@ router.get("/warehouse", async (req, res) => {
     const cid = scope.companyId;
 
     const [products, movements, lowStock] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COALESCE(SUM("currentQty"), 0) AS "totalQty", COALESCE(SUM("currentQty" * COALESCE("unitCost", 0)), 0) AS "totalValue" FROM warehouse_products WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COALESCE(SUM("currentQty"), 0) AS "totalQty", COALESCE(SUM("currentQty" * COALESCE("unitCost", 0)), 0) AS "totalValue" FROM warehouse_products WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE type = 'in') AS "inCount", COUNT(*) FILTER (WHERE type = 'out') AS "outCount", COALESCE(SUM(quantity) FILTER (WHERE type = 'in'), 0) AS "inQty", COALESCE(SUM(quantity) FILTER (WHERE type = 'out'), 0) AS "outQty" FROM warehouse_movements WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '30 days'`, [cid]),
-      sq1(`SELECT COUNT(*) AS count FROM warehouse_products WHERE "companyId" = $1 AND "currentQty" <= COALESCE("minQty", 0) AND "currentQty" >= 0`, [cid]),
+      sq1(`SELECT COUNT(*) AS count FROM warehouse_products WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "currentQty" <= COALESCE("minQty", 0) AND "currentQty" >= 0`, [cid]),
     ]);
 
     const categories = await safeQuery(
-      `SELECT wc.name, COUNT(wp.id) AS "productCount", COALESCE(SUM(wp."currentQty"), 0) AS "totalQty" FROM warehouse_categories wc LEFT JOIN warehouse_products wp ON wp."categoryId" = wc.id AND wp."companyId" = $1 WHERE wc."companyId" = $1 GROUP BY wc.id, wc.name ORDER BY "productCount" DESC LIMIT 10`, [cid]
+      `SELECT wc.name, COUNT(wp.id) AS "productCount", COALESCE(SUM(wp."currentQty"), 0) AS "totalQty" FROM warehouse_categories wc LEFT JOIN warehouse_products wp ON wp."categoryId" = wc.id AND wp."companyId" = $1 AND wp."deletedAt" IS NULL WHERE wc."companyId" = $1 GROUP BY wc.id, wc.name ORDER BY "productCount" DESC LIMIT 10`, [cid]
     );
 
     const recentMovements = await safeQuery(

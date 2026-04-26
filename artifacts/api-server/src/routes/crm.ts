@@ -453,8 +453,8 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
     if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
     if (b.source !== undefined) { params.push(b.source); sets.push(`source=$${params.length}`); }
     if (b.nextFollowUp !== undefined) { params.push(b.nextFollowUp || null); sets.push(`"nextFollowUp"=$${params.length}`); }
-    params.push(oppId);
-    await rawExecute(`UPDATE crm_opportunities SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    params.push(oppId, scope.companyId);
+    await rawExecute(`UPDATE crm_opportunities SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
 
     let autoActions: string[] = [];
 
@@ -647,7 +647,7 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
         );
         clientId = newClientId;
       }
-      await rawExecute(`UPDATE crm_opportunities SET "clientId"=$1 WHERE id=$2`, [clientId, opp.id]);
+      await rawExecute(`UPDATE crm_opportunities SET "clientId"=$1 WHERE id=$2 AND "companyId"=$3`, [clientId, opp.id, scope.companyId]);
     }
 
     try {
