@@ -537,7 +537,7 @@ router.get("/stats", requirePermission("governance:read"), async (req, res) => {
     const [risks] = await rawQuery(`SELECT COUNT(*) as count FROM governance_risks WHERE status='open' AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
     const [audits] = await rawQuery(`SELECT COUNT(*) as count FROM governance_audits WHERE status IN ('planned','in_progress') AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
     const [compliance] = await rawQuery(`SELECT COUNT(*) as count FROM governance_compliance WHERE status='non_compliant' AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
-    const [complianceActions] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='implemented') AS implemented, COUNT(*) AS total FROM policy_compliance_actions WHERE "companyId"=$1`, [cid]).catch(() => [{ implemented: 0, total: 0 }]);
+    const [complianceActions] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='done') AS implemented, COUNT(*) AS total FROM policy_compliance_actions WHERE "companyId"=$1`, [cid]).catch(() => [{ implemented: 0, total: 0 }]);
     const [risksNoTreatment] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM governance_risks WHERE status='open' AND "treatmentPlan" IS NULL AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]).catch(() => [{ count: 0 }]);
     const [openCapas] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM governance_capa WHERE status IN ('open','in_progress') AND "companyId"=$1`, [cid]).catch(() => [{ count: 0 }]);
     const implementedPct = Number(complianceActions?.total) > 0 ? Math.round(Number(complianceActions?.implemented) / Number(complianceActions?.total) * 100) : 100;
@@ -560,7 +560,7 @@ router.get("/compliance-dashboard", requirePermission("governance:read"), async 
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [actions] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='implemented') AS implemented, COUNT(*) FILTER (WHERE status='not_implemented') AS "notImplemented", COUNT(*) AS total FROM policy_compliance_actions WHERE "companyId"=$1`, [cid]).catch(() => [{ implemented: 0, notImplemented: 0, total: 0 }]);
+    const [actions] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='done') AS implemented, COUNT(*) FILTER (WHERE status IN ('open','in_progress')) AS "notImplemented", COUNT(*) AS total FROM policy_compliance_actions WHERE "companyId"=$1`, [cid]).catch(() => [{ implemented: 0, notImplemented: 0, total: 0 }]);
     const [risks] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='open' AND "treatmentPlan" IS NOT NULL) AS "withTreatment", COUNT(*) FILTER (WHERE status='open' AND "treatmentPlan" IS NULL) AS "withoutTreatment", COUNT(*) FILTER (WHERE status='open') AS open FROM governance_risks WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]).catch(() => [{ withTreatment: 0, withoutTreatment: 0, open: 0 }]);
     const [policiesNoActions] = await rawQuery<any>(
       `SELECT COUNT(*) AS count FROM governance_policies gp WHERE ("companyId"=$1 OR "companyId" IS NULL) AND status='active' AND NOT EXISTS (SELECT 1 FROM policy_compliance_actions pca WHERE pca."policyId"=gp.id AND pca."companyId"=$1)`,

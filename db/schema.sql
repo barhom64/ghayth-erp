@@ -5603,7 +5603,8 @@ CREATE TABLE public.governance_risks (
     "treatmentOwner" text,
     "treatmentDueDate" date,
     "treatmentStatus" text,
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "updatedAt" timestamp with time zone DEFAULT now()
 );
 
 

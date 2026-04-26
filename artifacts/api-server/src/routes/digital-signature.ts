@@ -62,8 +62,8 @@ router.post("/request-otp", requirePermission("documents:write"), async (req, re
     const userAgent = req.headers["user-agent"] || "";
 
     await rawExecute(
-      `INSERT INTO digital_signature_otps ("companyId","userId","entityType","entityId",action,otp,"expiresAt","ipAddress","deviceFingerprint","userAgent",used) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,false)`,
-      [scope.companyId, scope.userId, entityType, String(entityId), action, otp, expiresAt.toISOString(), ip, deviceFingerprint, userAgent]
+      `INSERT INTO digital_signature_otps ("companyId","userId","documentId","entityType","entityId",action,otp,"expiresAt","ipAddress","deviceFingerprint","userAgent",used) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,false)`,
+      [scope.companyId, scope.userId, String(entityId), entityType, String(entityId), action, otp, expiresAt.toISOString(), ip, deviceFingerprint, userAgent]
     );
 
     console.log(`[DIGITAL_SIGNATURE] OTP requested by user ${scope.userId} for ${entityType}#${entityId} action=${action} IP=${ip}`);
@@ -115,8 +115,8 @@ router.post("/verify", requirePermission("documents:write"), async (req, res: Re
 
     const signatureRef = `SIG-${Date.now().toString(36).toUpperCase()}`;
     await rawExecute(
-      `INSERT INTO digital_signature_logs ("companyId","userId","entityType","entityId",action,"signatureRef","ipAddress","deviceFingerprint","userAgent","otpRef") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [scope.companyId, scope.userId, entityType, String(entityId), action, signatureRef, ip, deviceFingerprint, userAgent, record.id]
+      `INSERT INTO digital_signature_logs ("companyId","userId","documentId","entityType","entityId",action,"signatureRef","ipAddress","deviceFingerprint","userAgent","otpRef") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [scope.companyId, scope.userId, String(entityId), entityType, String(entityId), action, signatureRef, ip, deviceFingerprint, userAgent, record.id]
     );
 
     createAuditLog({
