@@ -68,7 +68,7 @@ router.post("/policies", requirePermission("governance:write"), async (req, res)
         );
       }
     }
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1`, [r.insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_policies", entityId: r.insertId, after: { title, category } }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
@@ -194,7 +194,7 @@ router.post("/policies/:id/new-version", requirePermission("governance:write"), 
       );
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1`, [r.insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_policies", entityId: r.insertId, after: { version: nextVersion, parentId } }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
@@ -598,7 +598,7 @@ router.post("/compliance-actions", requirePermission("governance:write"), async 
       `INSERT INTO policy_compliance_actions ("companyId",title,regulation,description,owner,"dueDate",status) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [scope.companyId, b.title, b.regulation || null, b.description || null, b.owner || null, b.dueDate || null, b.status || 'open']
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [r.insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "policy_compliance_actions", entityId: r.insertId, after: { title: b.title } }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
@@ -626,7 +626,7 @@ router.patch("/compliance-actions/:actionId", requirePermission("governance:writ
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "policy_compliance_actions", entityId: id }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
@@ -675,7 +675,7 @@ router.post("/policies/:id/compliance-actions", requirePermission("governance:wr
       `INSERT INTO policy_compliance_actions ("policyId","companyId",title,status,owner,"dueDate",description) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [policyId, scope.companyId, b.action || b.title, b.status || 'open', b.responsiblePerson || b.owner || null, b.dueDate || null, b.notes || b.description || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [r.insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "policy_compliance_actions", entityId: r.insertId, after: { policyId, action: b.action } }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
@@ -703,7 +703,7 @@ router.patch("/compliance-actions/:id", requirePermission("governance:write"), a
     if (b.notes !== undefined || b.description !== undefined) { params.push(b.notes ?? b.description); sets.push(`description=$${params.length}`); }
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "policy_compliance_actions", entityId: id }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
@@ -758,7 +758,7 @@ router.post("/capa", requirePermission("governance:write"), async (req, res) => 
       `INSERT INTO governance_capa ("companyId","auditId",finding,"rootCause","correctiveAction","preventiveAction",status,"responsiblePerson","dueDate","completedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [scope.companyId, b.auditId || null, b.finding, b.rootCause || null, b.correctiveAction || null, b.preventiveAction || null, b.status || 'open', b.responsiblePerson || null, b.dueDate || null, null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_capa WHERE id=$1`, [r.insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_capa WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_capa", entityId: r.insertId, after: { finding: b.finding } }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
@@ -788,7 +788,7 @@ router.patch("/capa/:id", requirePermission("governance:write"), async (req, res
     if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE governance_capa SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_capa WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_capa WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_capa", entityId: id }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,

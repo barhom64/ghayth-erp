@@ -1942,7 +1942,7 @@ router.post("/maintenance-requests", requirePermission("property:create"), async
       );
     } catch (taskErr) { console.error("Auto-task creation failed:", taskErr); }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json({
       ...row,
       smsNotificationQueued: !!b.tenantPhone,
@@ -2221,7 +2221,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
       } catch (e) { console.error("Unit audit log for maintenance completion failed:", e); }
     }
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1`, [id]);
+    const [updated] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ ...updated, invoiceCreated: !!invoiceId, invoiceId, surveyQueued: true, journalEntryId, followUpTaskId });
   } catch (err) { handleRouteError(err, res, "Complete maintenance request error:"); }
 });
@@ -2637,7 +2637,7 @@ router.post("/maintenance", requirePermission("property:create"), async (req, re
       `INSERT INTO maintenance_requests ("companyId","unitId","tenantName",category,description,priority,status) VALUES ($1,$2,$3,$4,$5,$6,'open')`,
       [scope.companyId, b.unitId, b.tenantName, b.category || 'general', b.description, b.priority || 'medium']
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,

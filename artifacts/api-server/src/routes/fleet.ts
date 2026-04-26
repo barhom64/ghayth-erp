@@ -310,7 +310,7 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
       `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","employeeId",status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.employeeId || null, b.status || 'available']
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name).catch(console.error);
 
@@ -639,8 +639,8 @@ router.patch("/drivers/:id", requirePermission("fleet:update"), async (req, res)
     }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id);
-    await rawExecute(`UPDATE fleet_drivers SET ${sets.join(",")} WHERE id=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1`, [id]);
+    await rawExecute(`UPDATE fleet_drivers SET ${sets.join(",")} WHERE id=$${params.length} AND "companyId"=$${params.length + 1}`, [...params, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -938,7 +938,7 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       after: { vehicleId: selectedVehicleId, driverId: selectedDriverId, distance: estimatedDistanceKm, cost: totalEstimatedCost },
     }).catch(console.error);
 
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.trip.created", entity: "fleet_trips", entityId: insertId,
@@ -1032,7 +1032,7 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
       details: JSON.stringify({ status: "completed", distance: actualDistanceKm, cost: totalCost, fuelCost: actualFuelCost, driverFare, depreciation, journalEntryId }),
     }).catch(console.error);
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1`, [tripId]);
+    const [updated] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2`, [tripId, scope.companyId]);
     res.json({
       ...updated,
       event: 'fleet.trip.completed',
@@ -1232,7 +1232,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
       );
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     // Emit the creation event so listeners write audit + event_logs in one place.
     emitEvent({
@@ -1416,7 +1416,7 @@ router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async 
       after: { status: "cancelled", reason: b.reason },
     }).catch(console.error);
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1`, [id]);
+    const [updated] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ ...updated, event: "fleet.maintenance.cancelled" });
   } catch (err) { handleRouteError(err, res, "Cancel maintenance error:"); }
 });

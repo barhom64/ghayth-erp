@@ -975,8 +975,8 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     if (workPermitExpiry !== undefined) { empVals.push(workPermitExpiry || null); empFields.push(`"workPermitExpiry" = $${empVals.length}`); }
     if (iqamaStatus !== undefined) { empVals.push(iqamaStatus); empFields.push(`"iqamaStatus" = $${empVals.length}`); }
     if (empFields.length) {
-      empVals.push(Number(id));
-      await rawExecute(`UPDATE employees SET ${empFields.join(",")} WHERE id = $${empVals.length}`, empVals);
+      empVals.push(Number(id), scope.companyId);
+      await rawExecute(`UPDATE employees SET ${empFields.join(",")} WHERE id = $${empVals.length - 1} AND "companyId" = $${empVals.length}`, empVals);
     }
 
     if (status === "active" && before.status !== "active") {

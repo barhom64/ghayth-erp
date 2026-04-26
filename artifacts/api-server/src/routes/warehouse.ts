@@ -260,7 +260,7 @@ router.post("/products", requirePermission("warehouse:create"), async (req, res)
       `INSERT INTO warehouse_products ("companyId",sku,name,description,"categoryId",unit,"minStock","maxStock","currentStock","costPrice","sellPrice",location,"branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [scope.companyId, b.sku.trim(), b.name.trim(), b.description, b.categoryId || null, b.unit || 'piece', b.minStock || 0, b.maxStock || 99999, b.currentStock || 0, costPrice, sellPrice, b.location, b.branchId || scope.branchId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -375,8 +375,8 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
       return;
     }
     params.push(id);
-    await rawExecute(`UPDATE warehouse_products SET ${sets.join(",")} WHERE id=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1`, [id]);
+    await rawExecute(`UPDATE warehouse_products SET ${sets.join(",")} WHERE id=$${params.length} AND "companyId"=$${params.length + 1}`, [...params, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
