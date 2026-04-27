@@ -328,8 +328,11 @@ export const STATE_MACHINES: StateMachine[] = [
     entity: "invoices",
     label: "فاتورة مبيعات",
     transitions: {
-      draft: ["approved", "cancelled"],
-      approved: ["posted", "cancelled"],
+      draft: ["approved", "rejected", "returned", "sent", "cancelled"],
+      approved: ["sent", "cancelled", "rejected"],
+      returned: ["draft", "approved", "cancelled"],
+      rejected: ["draft", "cancelled"],
+      sent: ["partial", "paid", "overdue", "cancelled"],
       posted: ["paid", "partial", "overdue", "cancelled", "closed"],
       partial: ["paid", "overdue", "cancelled"],
       overdue: ["paid", "partial", "cancelled"],

@@ -10,6 +10,7 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
+import { applyTransition } from "../lib/lifecycleEngine.js";
 
 
 export const collectionRouter = Router();
@@ -130,7 +131,14 @@ collectionRouter.post("/collection/:invoiceId/action", requirePermission("financ
     }
 
     if (invoice.status !== "overdue") {
-      await rawExecute(`UPDATE invoices SET status = 'overdue' WHERE id = $1 AND "companyId" = $2`, [Number(invoiceId), scope.companyId]);
+      await applyTransition({
+        entity: "invoices",
+        id: Number(invoiceId),
+        scope,
+        action: "invoice.overdue",
+        fromStates: ["sent", "posted", "partial"],
+        toState: "overdue",
+      });
     }
 
     await rawExecute(
