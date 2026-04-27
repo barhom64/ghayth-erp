@@ -24,7 +24,7 @@ import {
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
-import { applyTransition } from "../lib/lifecycleEngine.js";
+import { applyTransition, LifecycleError } from "../lib/lifecycleEngine.js";
 import {
   computeLeaveImpact,
   computeTerminationImpact,
@@ -3715,15 +3715,6 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
  * Use when leave is no longer needed (e.g. employee returned early, emergency).
  */
 router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async (req, res) => {
-  // P3.2 pilot — this endpoint is the unification plan's reference
-  // implementation for how a cancel handler should look after adoption:
-  //   - structured errors via the P0.3 TypedError hierarchy
-  //   - one thrown error per failure reason, no `res.status().json()` calls
-  //   - handleRouteError translates the TypedError to the exact
-  //     { error, code, field?, fix? } shape the frontend's
-  //     PageErrorBoundary + useApiMutation(.onFieldError) expect
-  // Leaves approve/reject untouched for now — they need a separate
-  // multi-stage refactor that's tracked under P3.x follow-ups.
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -3734,6 +3725,7 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
         fix: "أدخل سبب إلغاء الإجازة",
       });
     }
+
     const [request] = await rawQuery<any>(
       `SELECT lr.*, lt.name AS "leaveTypeName"
        FROM hr_leave_requests lr
@@ -3741,9 +3733,8 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
        WHERE lr.id = $1 AND lr."companyId" = $2`,
       [id, scope.companyId]
     );
-    if (!request) {
-      throw new NotFoundError("طلب الإجازة غير موجود");
-    }
+    if (!request) throw new NotFoundError("طلب الإجازة غير موجود");
+
     const isOwn = request.employeeId === scope.employeeId;
     if (!isOwn && !["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError(
@@ -3762,58 +3753,55 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
       );
     }
 
-    // Restore balance if was approved (used → 0, or reduce used by days)
-    if (request.status === "approved") {
-      const year = new Date(request.startDate).getFullYear();
-      await rawExecute(
-        `UPDATE hr_leave_balances
-           SET used = GREATEST(used - $1, 0)
-         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-        [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
-      );
-      // Clear attendance 'on_leave' records for future dates
-      await rawExecute(
-        `DELETE FROM attendance
-         WHERE "companyId" = $1 AND status = 'on_leave' AND notes LIKE $2
-           AND date >= CURRENT_DATE AND date BETWEEN $3 AND $4`,
-        [scope.companyId, `%طلب رقم ${id}%`, request.startDate, request.endDate]
-      ).catch(console.error);
-    } else if (request.status === "pending") {
-      // Release reserved balance
-      const year = new Date(request.startDate).getFullYear();
-      await rawExecute(
-        `UPDATE hr_leave_balances
-           SET reserved = GREATEST(reserved - $1, 0)
-         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-        [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
-      );
-    }
+    const prevStatus = request.status;
+    await applyTransition({
+      entity: "hr_leave_requests",
+      id,
+      scope,
+      action: "leave.cancelled",
+      fromStates: ["approved", "pending"],
+      toState: "cancelled",
+      reason: b.reason,
+      setExtras: {
+        rejectedReason: { raw: `COALESCE("rejectedReason",'') || ' | إلغاء: ' || '${b.reason.replace(/'/g, "''")}'` },
+      },
+      onApply: async (_row, client) => {
+        const year = new Date(request.startDate).getFullYear();
+        if (prevStatus === "approved") {
+          await client.query(
+            `UPDATE hr_leave_balances SET used = GREATEST(used - $1, 0)
+             WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+            [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
+          );
+          await client.query(
+            `DELETE FROM attendance
+             WHERE "companyId" = $1 AND status = 'on_leave' AND notes LIKE $2
+               AND date >= CURRENT_DATE AND date BETWEEN $3 AND $4`,
+            [scope.companyId, `%طلب رقم ${id}%`, request.startDate, request.endDate]
+          );
+        } else {
+          await client.query(
+            `UPDATE hr_leave_balances SET reserved = GREATEST(reserved - $1, 0)
+             WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+            [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
+          );
+        }
+      },
+      after: { status: "cancelled", reason: b.reason, previousStatus: prevStatus },
+    });
 
-    await rawExecute(
-      `UPDATE hr_leave_requests SET status = 'cancelled', "rejectedReason" = COALESCE("rejectedReason",'') || ' | إلغاء: ' || $1 WHERE id = $2 AND "companyId" = $3`,
-      [b.reason, id, scope.companyId]
-    );
-
-    // Cancel return-to-work obligation
     await cancelObligation(scope.companyId, "hr_leave_request", id);
 
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "hr_leave_requests", entityId: id,
-      before: { status: request.status, employeeId: request.employeeId, days: request.days },
-      after: { status: "cancelled", reason: b.reason },
-    }).catch(console.error);
-    await emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "leave.cancelled",
-      entity: "hr_leave_requests",
-      entityId: id,
-      details: `إلغاء إجازة #${id}: ${b.reason}`,
-    }).catch(console.error);
-
     res.json({ message: "تم إلغاء الإجازة", status: "cancelled", reason: b.reason });
-  } catch (err) { handleRouteError(err, res, "Cancel leave error:"); }
+  } catch (err) {
+    if (err instanceof LifecycleError) {
+      const typed = err.status === 404
+        ? new NotFoundError(err.message)
+        : new ConflictError(err.message, { field: err.field });
+      return handleRouteError(typed, res, "Cancel leave error:");
+    }
+    handleRouteError(err, res, "Cancel leave error:");
+  }
 });
 
 router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req, res) => {
@@ -6811,42 +6799,55 @@ router.post("/excuse-requests", requirePermission("hr:create"), async (req, res)
 router.patch("/excuse-requests/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const excuseId = Number(req.params.id);
     const { approved, rejectionReason } = req.body as any;
-    const [excuse] = await rawQuery<any>(
-      `SELECT * FROM hr_excuse_requests WHERE id = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
-    );
-    if (!excuse) throw new NotFoundError("طلب الاستئذان غير موجود");
-    if (excuse.status !== "pending") throw new ConflictError("الطلب ليس في حالة انتظار");
 
     const newStatus = approved ? "approved" : "rejected";
     if (!approved && !rejectionReason) {
       throw new ValidationError("يجب ذكر سبب الرفض", { field: "rejectionReason" });
     }
 
-    await rawExecute(
-      `UPDATE hr_excuse_requests SET status = $1, "approvedBy" = $2, "approvedAt" = NOW(),
-       "rejectionReason" = $3, "updatedAt" = NOW() WHERE id = $4`,
-      [newStatus, scope.activeAssignmentId, rejectionReason || null, Number(id)]
+    const [excuse] = await rawQuery<any>(
+      `SELECT * FROM hr_excuse_requests WHERE id = $1 AND "companyId" = $2`,
+      [excuseId, scope.companyId]
     );
+    if (!excuse) throw new NotFoundError("طلب الاستئذان غير موجود");
 
-    createNotification({
-      companyId: scope.companyId, assignmentId: excuse.assignmentId,
-      type: `excuse_${newStatus}`, title: approved ? "تمت الموافقة على الاستئذان" : "تم رفض طلب الاستئذان",
-      body: approved ? `تمت الموافقة على استئذانك بتاريخ ${excuse.excuseDate}` : `تم رفض استئذانك: ${rejectionReason}`,
-      priority: "normal", refType: "hr_excuse_request", refId: Number(id),
-    }).catch(console.error);
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: newStatus, entity: "hr_excuse_requests", entityId: Number(id),
-      before: { status: "pending" }, after: { status: newStatus },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "excuse.approved", entity: "hr_excuse_requests", entityId: Number(id), details: JSON.stringify({ id: Number(id), status: newStatus }) }).catch(console.error);
+    const row = await applyTransition({
+      entity: "hr_excuse_requests",
+      id: excuseId,
+      scope,
+      action: `excuse.${newStatus}`,
+      fromStates: ["pending"],
+      toState: newStatus,
+      reason: rejectionReason || undefined,
+      setExtras: {
+        approvedBy: scope.activeAssignmentId ?? 0,
+        approvedAt: { raw: "NOW()" },
+        rejectionReason: rejectionReason || null,
+      },
+      after: { status: newStatus },
+      notifications: [{
+        assignmentId: excuse.assignmentId,
+        type: `excuse_${newStatus}`,
+        title: approved ? "تمت الموافقة على الاستئذان" : "تم رفض طلب الاستئذان",
+        body: approved ? `تمت الموافقة على استئذانك بتاريخ ${excuse.excuseDate}` : `تم رفض استئذانك: ${rejectionReason}`,
+        priority: "normal",
+        refType: "hr_excuse_request",
+        refId: excuseId,
+      }],
+    });
 
     res.json({ message: approved ? "تمت الموافقة على الاستئذان" : "تم رفض الاستئذان", status: newStatus });
-  } catch (err) { handleRouteError(err, res, "Approve excuse request error:"); }
+  } catch (err) {
+    if (err instanceof LifecycleError) {
+      const typed = err.status === 404
+        ? new NotFoundError(err.message)
+        : new ConflictError(err.message, { field: err.field });
+      return handleRouteError(typed, res, "Approve excuse request error:");
+    }
+    handleRouteError(err, res, "Approve excuse request error:");
+  }
 });
 
 export default router;
