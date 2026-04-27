@@ -2717,6 +2717,18 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
       after: { fineAmount },
     });
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "pay", entity: "fleet_traffic_violations", entityId: id,
+      before: { status: existing.status }, after: { status: "paid", fineAmount },
+    }).catch(console.error);
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.traffic_violation.paid", entity: "fleet_traffic_violations", entityId: id,
+      details: `سداد مخالفة ${existing.violationNumber ?? id} بقيمة ${fineAmount}`,
+    }).catch(console.error);
+
+
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Pay violation error:"); }

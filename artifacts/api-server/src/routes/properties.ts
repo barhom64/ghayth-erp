@@ -1220,6 +1220,21 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
       dedupeKey: `contract-${id}-expiry-${newEndDate.toISOString().split("T")[0]}`,
     });
 
+    await emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "property.contract.renewed",
+      entity: "rental_contract",
+      entityId: id,
+      details: `تجديد عقد ${contract.contractNumber} حتى ${newEndDate.toISOString().split("T")[0]}`,
+    });
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "renew", entity: "rental_contracts", entityId: id,
+      before: { endDate: contract.endDate, totalContractValue: contract.totalContractValue },
+      after: { endDate: newEndDate.toISOString().split("T")[0], totalContractValue: newTotal },
+    }).catch(console.error);
+
     const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ ...updated, event: "property.contract.renewed", renewalMonths });
   } catch (err) {
@@ -1296,6 +1311,21 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
         journalEntryId = glResult.journalId;
       } catch { journalEntryId = null; }
     }
+
+    await emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "property.contract.terminated",
+      entity: "rental_contract",
+      entityId: id,
+      details: `إنهاء عقد ${contract.contractNumber}: ${b.reason}`,
+    });
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "terminate", entity: "rental_contracts", entityId: id,
+      before: { status: contract.status },
+      after: { status: "terminated", reason: b.reason, earlyFee, journalEntryId },
+    }).catch(console.error);
 
     const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ ...updated, event: "property.contract.terminated", earlyFee, journalEntryId });

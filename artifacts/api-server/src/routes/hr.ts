@@ -5862,6 +5862,7 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
       const newDeptId = transfer.toDeptId;
       const newJobTitle = transfer.toJobTitle;
       const newSalary = transfer.toSalary;
+      // Notify employee of final approval
       const [empAssign] = await rawQuery<any>(
         `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
         [transfer.employeeId, scope.companyId]
@@ -5890,6 +5891,9 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
         }] : [],
       });
     } else {
+      // Notify employee — previously silent if receiver declined, which
+      // left the employee without feedback. Also notify the original HR
+      // manager so they know the receiving branch declined.
       const [empAssign] = await rawQuery<any>(
         `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
         [transfer.employeeId, scope.companyId]

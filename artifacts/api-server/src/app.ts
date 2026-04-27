@@ -101,7 +101,7 @@ app.use(activityTrackerMiddleware());
 
 const globalLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 100,
+  max: process.env.NODE_ENV === "production" ? 100 : 2000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة لاحقاً" },

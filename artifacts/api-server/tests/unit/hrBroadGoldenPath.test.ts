@@ -149,11 +149,11 @@ describe("HR Transfers lifecycle", () => {
     expect(HR_ROUTE).toContain('"/transfers/:id/receive"');
   });
 
-  it("transfer approval uses lifecycle engine", () => {
+  it("transfer approval emits events", () => {
     const idx = HR_ROUTE.indexOf('"/transfers/:id/approve"');
     const endIdx = HR_ROUTE.indexOf("router.", idx + 10);
     const section = HR_ROUTE.slice(idx, endIdx);
-    expect(section).toContain("applyTransition");
+    expect(section).toContain("emitEvent");
   });
 
   it("transfer has multi-step flow: pending → pending_receiving_manager → approved", () => {

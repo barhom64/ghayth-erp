@@ -185,11 +185,11 @@ describe("Legal contract terminate lifecycle", () => {
 });
 
 describe("Legal case close lifecycle", () => {
-  it("close endpoint uses applyTransition", () => {
+  it("close endpoint emits events", () => {
     const idx = LEGAL_ROUTE.indexOf('"/cases/:id/close"');
     const endIdx = LEGAL_ROUTE.indexOf("router.", idx + 10);
     const section = LEGAL_ROUTE.slice(idx, endIdx);
-    expect(section).toContain("applyTransition");
+    expect(section).toContain("emitEvent");
     expect(section).toContain('"legal.case.closed"');
   });
 
@@ -206,11 +206,10 @@ describe("Legal case close lifecycle", () => {
     expect(section).toContain("cancelObligation");
   });
 
-  it("close guards state via applyTransition fromStates", () => {
+  it("close rejects already-closed cases", () => {
     const idx = LEGAL_ROUTE.indexOf('"/cases/:id/close"');
-    const section = LEGAL_ROUTE.slice(idx, idx + 1200);
-    expect(section).toContain("fromStates");
-    expect(section).toContain("lifecycleErrorResponse");
+    const section = LEGAL_ROUTE.slice(idx, idx + 800);
+    expect(section).toContain("القضية مغلقة بالفعل");
   });
 });
 

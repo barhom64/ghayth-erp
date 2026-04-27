@@ -403,6 +403,19 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
       after: { status: "converted", purchaseOrderId: poId, poRef, totalAmount },
     });
 
+    // Record the PR→PO conversion explicitly so the chain audit/events
+    // can follow "who turned which PR into which PO" without having to
+    // cross-reference timestamps by ref prefix.
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "purchase_request",
+      entityId: Number(id),
+      action: "purchase_request.converted",
+      after: { status: "converted", purchaseOrderId: poId, poRef, totalAmount },
+    }).catch(console.error);
+
     res.status(201).json({ message: "تم تحويل طلب الشراء إلى أمر شراء", purchaseOrderId: poId, poRef, totalAmount });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
