@@ -10,7 +10,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { checkFinancialPeriodOpen, updateAccountBalances, todayISO } from "../lib/businessHelpers.js";
+import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod } from "../lib/businessHelpers.js";
 
 export const financeAlgorithmsRouter = Router();
 financeAlgorithmsRouter.use(authMiddleware);
@@ -1153,7 +1153,7 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", requirePermission("financ
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const period = (req.query.period as string) ?? new Date().toISOString().slice(0, 7);
+    const period = (req.query.period as string) ?? currentPeriod();
     if (!/^\d{4}-\d{2}$/.test(period)) {
       throw new ValidationError("period يجب أن يكون بصيغة YYYY-MM", { field: "period", fix: "استخدم صيغة YYYY-MM مثل 2026-04" });
     }
@@ -1277,7 +1277,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const period = (req.body?.period as string) ?? new Date().toISOString().slice(0, 7);
+    const period = (req.body?.period as string) ?? currentPeriod();
     if (!/^\d{4}-\d{2}$/.test(period)) {
       throw new ValidationError("period يجب أن يكون بصيغة YYYY-MM", { field: "period", fix: "استخدم صيغة YYYY-MM مثل 2026-04" });
     }

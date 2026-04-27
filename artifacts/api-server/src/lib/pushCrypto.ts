@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHmac, createHash, randomBytes } from "crypto";
+import { createCipheriv, createDecipheriv, createHmac, createHash, randomBytes } from "node:crypto";
 
 function getPushSecret(): string {
   const secret = process.env.JWT_SECRET;

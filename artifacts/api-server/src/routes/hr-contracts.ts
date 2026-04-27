@@ -9,7 +9,7 @@ import {
   NotFoundError,
   ForbiddenError,
 } from "../lib/errorHandler.js";
-import { createAuditLog, createNotification, emitEvent, todayISO } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO, currentYear } from "../lib/businessHelpers.js";
 
 const contractsRouter = Router();
 contractsRouter.use(authMiddleware);
@@ -121,7 +121,7 @@ contractsRouter.post("/", requirePermission("hr:create"), async (req, res) => {
     }
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('contract_number_seq') AS seq`);
-    const ref = `CTR-${new Date().getFullYear()}-${String(seqRow.seq).padStart(4, "0")}`;
+    const ref = `CTR-${currentYear()}-${String(seqRow.seq).padStart(4, "0")}`;
 
     const [row] = await rawQuery<any>(
       `INSERT INTO employee_contracts (
@@ -416,7 +416,7 @@ contractsRouter.post("/:id/renew", requirePermission("hr:create"), async (req, r
     if (!contract) throw new NotFoundError("الع��د غير موجود");
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('contract_number_seq') AS seq`);
-    const ref = `CTR-${new Date().getFullYear()}-${String(seqRow.seq).padStart(4, "0")}`;
+    const ref = `CTR-${currentYear()}-${String(seqRow.seq).padStart(4, "0")}`;
 
     const newStart = contract.endDate || todayISO();
 

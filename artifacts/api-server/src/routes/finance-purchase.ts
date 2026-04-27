@@ -17,6 +17,7 @@ import {
   updateBudgetUsed,
   checkFinancialPeriodOpen,
   computeVat,
+  currentYear,
 } from "../lib/businessHelpers.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -228,7 +229,7 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
     }
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('pr_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
-    const ref = `PR-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
+    const ref = `PR-${currentYear()}-${String(seqRow.seq).padStart(5, "0")}`;
 
     const { insertId } = await rawExecute(
       `INSERT INTO purchase_requests ("companyId","branchId","requestedBy",ref,status,"totalAmount","supplierId",notes,"expectedDelivery","costCenter")
@@ -371,7 +372,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
     const totalAmount = subtotal + vatAmount;
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
-    const poRef = `PO-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
+    const poRef = `PO-${currentYear()}-${String(seqRow.seq).padStart(5, "0")}`;
 
     const { insertId: poId } = await rawExecute(
       `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"createdBy")
@@ -477,7 +478,7 @@ purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), asy
     const effectiveBranchId = branchId ?? scope.branchId;
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
-    const ref = `PO-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
+    const ref = `PO-${currentYear()}-${String(seqRow.seq).padStart(5, "0")}`;
 
     const { insertId } = await rawExecute(
       `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"expectedDelivery","createdBy")
@@ -646,7 +647,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
       `SELECT COALESCE(MAX(id),0)+1 AS seq FROM goods_receipts WHERE "companyId" = $1`,
       [scope.companyId]
     );
-    const grnRef = `GRN-${new Date().getFullYear()}-${String(grnSeq?.seq ?? Date.now()).padStart(5, "0")}`;
+    const grnRef = `GRN-${currentYear()}-${String(grnSeq?.seq ?? Date.now()).padStart(5, "0")}`;
 
     const { insertId: grnId } = await rawExecute(
       `INSERT INTO goods_receipts ("companyId","branchId","poId",ref,"receivedAt","receivedBy",notes)
@@ -1112,7 +1113,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
 
     // Auto-generate PO ref using DB sequence (race-safe)
     const [poSeqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`);
-    const poRef = `PO-${new Date().getFullYear()}-${String(Number(poSeqRow.seq)).padStart(4, "0")}`;
+    const poRef = `PO-${currentYear()}-${String(Number(poSeqRow.seq)).padStart(4, "0")}`;
 
     const { insertId: poId } = await rawExecute(
       `INSERT INTO purchase_orders ("companyId",ref,"supplierId","requestId",status,"totalAmount","expectedDelivery","createdBy",notes,"branchId")

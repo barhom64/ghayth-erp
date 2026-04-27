@@ -3,7 +3,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { todayISO } from "../lib/businessHelpers.js";
+import { todayISO, currentPeriod } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -62,7 +62,7 @@ router.get("/finance", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const monthStart = new Date().toISOString().slice(0, 7) + "-01";
+    const monthStart = currentPeriod() + "-01";
 
     const [invoices, expenses, receivables, budgets] = await Promise.all([
       sq1(`SELECT COALESCE(SUM(total), 0) AS "totalRevenue", COALESCE(SUM("paidAmount"), 0) AS "totalPaid", COALESCE(SUM(total - "paidAmount"), 0) AS "outstanding", COUNT(*) AS count, COUNT(*) FILTER (WHERE status = 'overdue') AS overdue, COUNT(*) FILTER (WHERE status = 'paid') AS paid FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),

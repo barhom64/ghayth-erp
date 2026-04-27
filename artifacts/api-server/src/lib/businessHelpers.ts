@@ -8,28 +8,20 @@ export function todayISO(): string {
   return new Date().toISOString().split("T")[0];
 }
 
+export function currentYear(): number {
+  return new Date().getFullYear();
+}
+
+export function currentPeriod(): string {
+  return new Date().toISOString().slice(0, 7);
+}
+
 export function computeVat(baseAmount: number, vatRatePercent: number): number {
   return Math.round(baseAmount * (vatRatePercent / 100) * 100) / 100;
 }
 
 export function extractBaseFromGross(grossAmount: number, vatRatePercent: number): number {
   return Math.round((grossAmount / (1 + vatRatePercent / 100)) * 100) / 100;
-}
-
-export function haversineDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 export async function createNotification(params: {

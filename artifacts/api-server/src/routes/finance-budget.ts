@@ -12,7 +12,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
-import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog, currentPeriod, currentYear } from "../lib/businessHelpers.js";
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
@@ -129,7 +129,7 @@ budgetRouter.post("/budget/validate", requirePermission("finance:create"), async
       });
     }
 
-    const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
+    const targetPeriod = period ?? currentPeriod();
     const [budget] = await rawQuery<any>(
       `SELECT amount, used FROM budgets
        WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3`,
@@ -482,7 +482,7 @@ budgetRouter.post("/budget/approval-requests/:id/decide", requirePermission("fin
 budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const period = (req.query.period as string) ?? new Date().toISOString().slice(0, 7);
+    const period = (req.query.period as string) ?? currentPeriod();
     if (!/^\d{4}-\d{2}$/.test(period)) {
       throw new ValidationError("period يجب أن يكون بصيغة YYYY-MM", {
         field: "period",
@@ -575,7 +575,7 @@ budgetRouter.get("/budget/:id", requirePermission("finance:read"), async (req, r
 budgetRouter.get("/fiscal-periods", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const currentYear = new Date().getFullYear();
+    const currentYear = currentYear();
     const currentMonth = new Date().getMonth() + 1;
 
     const periods = [];

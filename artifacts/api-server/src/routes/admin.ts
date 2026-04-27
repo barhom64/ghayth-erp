@@ -8,7 +8,7 @@ import rateLimit from "express-rate-limit";
 import { integrationService } from "../lib/integrationService.js";
 import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
-import crypto from "crypto";
+import crypto from "node:crypto";
 
 const router = Router();
 router.use(authMiddleware);

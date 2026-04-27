@@ -51,15 +51,11 @@ describe("advancePeriod contracts", () => {
   });
 });
 
-// ─── currentPeriod contracts ───────────────────────────────────────────────
+// ─── currentPeriod (moved to businessHelpers) ────────────────────────────
 
-describe("currentPeriod contracts", () => {
-  it("uses getFullYear and getMonth+1 for YYYY-MM format", () => {
-    const idx = HELPERS_SRC.indexOf("function currentPeriod");
-    const section = HELPERS_SRC.slice(idx, idx + 200);
-    expect(section).toContain("d.getFullYear()");
-    expect(section).toContain("d.getMonth() + 1");
-    expect(section).toContain('padStart(2, "0")');
+describe("currentPeriod — centralized", () => {
+  it("currentPeriod removed from hrHelpers (now in businessHelpers)", () => {
+    expect(HELPERS_SRC).not.toContain("function currentPeriod");
   });
 });
 

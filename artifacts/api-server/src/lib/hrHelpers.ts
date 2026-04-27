@@ -45,12 +45,6 @@ export function advancePeriod(period: string, count: number): string {
   return result;
 }
 
-// ─── الفترة الحالية ─────────────────────────────────────────────────────────
-export function currentPeriod(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
 // ─── معدل الساعة وفق نظام العمل السعودي (المادة 98) ──────────────────────
 // الراتب الشهري / 30 يوم / 8 ساعات
 export function calcHourlyRate(monthlySalary: number): number {

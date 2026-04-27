@@ -14,6 +14,7 @@ import {
   createAuditLog,
   getManagerAssignmentId,
   todayISO,
+  currentYear,
 } from "../lib/businessHelpers.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -365,7 +366,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
       if (!finalEmpNumber) {
         const seqRes = await client.query(`SELECT nextval('employee_number_seq') AS seq`);
         const seq = Number(seqRes.rows[0].seq);
-        const yearStr = new Date().getFullYear().toString();
+        const yearStr = currentYear().toString();
         finalEmpNumber = `EMP-${yearStr}-${String(seq).padStart(3, "0")}`;
       }
 
@@ -412,7 +413,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         `SELECT id, "annualDays" FROM hr_leave_types WHERE "companyId" = $1`,
         [effectiveCompanyId]
       );
-      const year = new Date().getFullYear();
+      const year = currentYear();
       if (leaveTypesRes.rows.length > 0) {
         const valuesSql: string[] = [];
         const params: any[] = [];

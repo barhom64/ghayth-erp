@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import { randomBytes } from "crypto";
+import { randomBytes } from "node:crypto";
 
 const _jwtSecret = process.env.JWT_SECRET;
 if (!_jwtSecret) {
