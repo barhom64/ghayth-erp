@@ -75,7 +75,7 @@ router.get("/finance", requirePermission("finance:read"), async (req, res) => {
     );
 
     const costCenters = await safeQuery(
-      `SELECT "accountCode" AS code, COALESCE(SUM(CASE WHEN type = 'debit' THEN amount ELSE 0 END), 0) AS debit, COALESCE(SUM(CASE WHEN type = 'credit' THEN amount ELSE 0 END), 0) AS credit FROM chart_of_accounts WHERE "companyId" = $1 GROUP BY "accountCode" LIMIT 10`, [cid]
+      `SELECT ca.code, ca.name, COALESCE(SUM(jl.debit), 0) AS debit, COALESCE(SUM(jl.credit), 0) AS credit FROM chart_of_accounts ca LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL) jl ON jl."accountCode" = ca.code WHERE ca."companyId" = $1 AND ca.type = 'expense' GROUP BY ca.code, ca.name ORDER BY debit DESC LIMIT 10`, [cid]
     );
 
     res.json({
@@ -320,13 +320,13 @@ router.get("/warehouse", async (req, res) => {
     const cid = scope.companyId;
 
     const [products, movements, lowStock] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COALESCE(SUM("currentQty"), 0) AS "totalQty", COALESCE(SUM("currentQty" * COALESCE("unitCost", 0)), 0) AS "totalValue" FROM warehouse_products WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COALESCE(SUM("currentStock"), 0) AS "totalQty", COALESCE(SUM("currentStock" * COALESCE("costPrice", 0)), 0) AS "totalValue" FROM warehouse_products WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE type = 'in') AS "inCount", COUNT(*) FILTER (WHERE type = 'out') AS "outCount", COALESCE(SUM(quantity) FILTER (WHERE type = 'in'), 0) AS "inQty", COALESCE(SUM(quantity) FILTER (WHERE type = 'out'), 0) AS "outQty" FROM warehouse_movements WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '30 days'`, [cid]),
-      sq1(`SELECT COUNT(*) AS count FROM warehouse_products WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "currentQty" <= COALESCE("minQty", 0) AND "currentQty" >= 0`, [cid]),
+      sq1(`SELECT COUNT(*) AS count FROM warehouse_products WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "currentStock" <= COALESCE("minStock", 0) AND "currentStock" >= 0`, [cid]),
     ]);
 
     const categories = await safeQuery(
-      `SELECT wc.name, COUNT(wp.id) AS "productCount", COALESCE(SUM(wp."currentQty"), 0) AS "totalQty" FROM warehouse_categories wc LEFT JOIN warehouse_products wp ON wp."categoryId" = wc.id AND wp."companyId" = $1 AND wp."deletedAt" IS NULL WHERE wc."companyId" = $1 GROUP BY wc.id, wc.name ORDER BY "productCount" DESC LIMIT 10`, [cid]
+      `SELECT wc.name, COUNT(wp.id) AS "productCount", COALESCE(SUM(wp."currentStock"), 0) AS "totalQty" FROM warehouse_categories wc LEFT JOIN warehouse_products wp ON wp."categoryId" = wc.id AND wp."companyId" = $1 AND wp."deletedAt" IS NULL WHERE wc."companyId" = $1 GROUP BY wc.id, wc.name ORDER BY "productCount" DESC LIMIT 10`, [cid]
     );
 
     const recentMovements = await safeQuery(
