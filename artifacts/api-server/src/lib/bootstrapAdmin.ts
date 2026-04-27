@@ -6,7 +6,7 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@ghayth.com";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "Admin@123456";
 
 const FLEET_EMAIL = "fleet@ghayth.com";
-const FLEET_PASSWORD = "Fleet@123456";
+const FLEET_PASSWORD = process.env.FLEET_PASSWORD || "Fleet@123456";
 
 interface BootstrapUser {
   email: string;

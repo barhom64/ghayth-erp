@@ -16,6 +16,15 @@ export function currentPeriod(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
+export function toDateISO(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toISOString().split("T")[0];
+}
+
+export function generateRef(prefix: string, seq: number | string, pad = 4): string {
+  return `${prefix}-${currentYear()}-${String(seq).padStart(pad, "0")}`;
+}
+
 export function computeVat(baseAmount: number, vatRatePercent: number): number {
   return Math.round(baseAmount * (vatRatePercent / 100) * 100) / 100;
 }

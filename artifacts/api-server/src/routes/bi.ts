@@ -4,7 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
-import { createAuditLog, emitEvent, todayISO, currentYear } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, todayISO, currentYear, toDateISO } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -557,7 +557,7 @@ router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, re
     const lastWeekStart = new Date(lastWeekEnd);
     lastWeekStart.setDate(lastWeekStart.getDate() - 6);
 
-    const fmt = (d: Date) => d.toISOString().split("T")[0];
+    const fmt = toDateISO;
     const [thisWeek, lastWeek] = await Promise.all([
       buildWeekStats(fmt(thisWeekStart), fmt(thisWeekEnd)),
       buildWeekStats(fmt(lastWeekStart), fmt(lastWeekEnd)),
@@ -587,7 +587,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-    const fmt = (d: Date) => d.toISOString().split("T")[0];
+    const fmt = toDateISO;
 
     const buildMonthStats = async (startDate: string, endDate: string) => {
       const [tasks] = await rawQuery<any>(
@@ -714,9 +714,9 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
     const scope = req.scope!;
     const cid = scope.companyId;
     const now = new Date();
-    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split("T")[0];
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split("T")[0];
+    const thisMonthStart = toDateISO(new Date(now.getFullYear(), now.getMonth(), 1));
+    const lastMonthStart = toDateISO(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    const lastMonthEnd = toDateISO(new Date(now.getFullYear(), now.getMonth(), 0));
 
     const [financial] = await rawQuery<any>(
       `SELECT
@@ -840,7 +840,7 @@ router.get("/reports/branch-performance", requirePermission("bi:read"), async (r
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to } = req.query as any;
-    const dateFrom = from || new Date(currentYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
+    const dateFrom = from || toDateISO(new Date(currentYear(), new Date().getMonth(), 1));
     const dateTo = to || todayISO();
 
     const branches = await rawQuery<any>(
@@ -924,7 +924,7 @@ router.get("/reports/vendor-performance", requirePermission("bi:read"), async (r
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to } = req.query as any;
-    const dateFrom = from || new Date(currentYear(), 0, 1).toISOString().split("T")[0];
+    const dateFrom = from || toDateISO(new Date(currentYear(), 0, 1));
     const dateTo = to || todayISO();
 
     const rows = await rawQuery<any>(
@@ -1141,7 +1141,7 @@ router.get("/reports/training-roi", requirePermission("bi:read"), async (req, re
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to } = req.query as any;
-    const dateFrom = from || new Date(currentYear(), 0, 1).toISOString().split("T")[0];
+    const dateFrom = from || toDateISO(new Date(currentYear(), 0, 1));
     const dateTo = to || todayISO();
 
     const [summary] = await rawQuery<any>(

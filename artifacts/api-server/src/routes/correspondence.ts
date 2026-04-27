@@ -8,7 +8,7 @@ import {
   ValidationError,
   NotFoundError,
 } from "../lib/errorHandler.js";
-import { createAuditLog, emitEvent, currentYear } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, currentYear, generateRef as makeRef } from "../lib/businessHelpers.js";
 
 const correspondenceRouter = Router();
 correspondenceRouter.use(authMiddleware);
@@ -30,12 +30,11 @@ const createSchema = z.object({
 });
 
 // ── Generate outgoing/incoming reference ──
-async function generateRef(direction: "outgoing" | "incoming", companyId: number): Promise<string> {
+async function generateCorrespondenceRef(direction: "outgoing" | "incoming", companyId: number): Promise<string> {
   const prefix = direction === "outgoing" ? "OUT" : "IN";
   const seqName = direction === "outgoing" ? "correspondence_outgoing_seq" : "correspondence_incoming_seq";
   const [row] = await rawQuery<any>(`SELECT nextval($1::regclass) AS seq`, [seqName]);
-  const year = currentYear();
-  return `${prefix}-${year}-${String(row.seq).padStart(4, "0")}`;
+  return makeRef(prefix, row.seq);
 }
 
 // ── List correspondence ──
@@ -108,7 +107,7 @@ correspondenceRouter.post("/", requirePermission("communications:write"), async 
   try {
     const scope = req.scope!;
     const data = createSchema.parse(req.body);
-    const ref = await generateRef(data.direction, scope.companyId);
+    const ref = await generateCorrespondenceRef(data.direction, scope.companyId);
 
     const [row] = await rawQuery<any>(
       `INSERT INTO correspondence (
@@ -227,7 +226,7 @@ correspondenceRouter.post("/:id/respond", requirePermission("communications:writ
     if (!original) throw new NotFoundError("المراسلة الأصلية غير موجودة");
 
     const responseDirection = original.direction === "outgoing" ? "incoming" : "outgoing";
-    const responseRef = await generateRef(responseDirection as "outgoing" | "incoming", scope.companyId);
+    const responseRef = await generateCorrespondenceRef(responseDirection as "outgoing" | "incoming", scope.companyId);
 
     const [response] = await rawQuery<any>(
       `INSERT INTO correspondence (

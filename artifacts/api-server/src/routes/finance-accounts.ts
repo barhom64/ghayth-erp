@@ -8,7 +8,7 @@ import {
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { checkFinancialPeriodOpen, emitEvent, createAuditLog, todayISO } from "../lib/businessHelpers.js";
+import { checkFinancialPeriodOpen, emitEvent, createAuditLog, todayISO, toDateISO } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
@@ -238,7 +238,7 @@ accountsRouter.post("/journal", requirePermission("finance:create"), async (req,
       });
     }
     const journalDate = journalBodyDate
-      ? new Date(journalBodyDate).toISOString().split("T")[0]
+      ? toDateISO(journalBodyDate)
       : todayISO();
     const journalPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, journalDate);
     if (!journalPeriodCheck.open) {

@@ -10,7 +10,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createAuditLog, createNotification, emitEvent, todayISO, currentYear } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -1215,7 +1215,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
 
     const defaultNextDate = new Date();
     defaultNextDate.setMonth(defaultNextDate.getMonth() + 3);
-    const effectiveNextServiceDate = b.nextServiceDate || defaultNextDate.toISOString().split('T')[0];
+    const effectiveNextServiceDate = b.nextServiceDate || toDateISO(defaultNextDate);
 
     const { insertId } = await rawExecute(
       `INSERT INTO fleet_maintenance ("companyId","vehicleId",type,description,cost,"mileageAtService","serviceDate","performedBy",status,"nextServiceDate","nextServiceKm") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
@@ -1352,7 +1352,7 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
           title: `صيانة دورية قادمة — ${veh?.plateNumber || `مركبة #${m.vehicleId}`}`,
           dueAt: nextDate.toISOString(),
           metadata: { previousMaintenanceId: id, type: m.type },
-          dedupeKey: `vehicle-${m.vehicleId}-next-service-${nextDate.toISOString().split("T")[0]}`,
+          dedupeKey: `vehicle-${m.vehicleId}-next-service-${toDateISO(nextDate)}`,
         });
       }
     } catch (obErr) { console.error("Maintenance obligation update failed:", obErr); }
@@ -1437,7 +1437,7 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
     const cid = scope.companyId;
     const alerts: any[] = [];
     const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = toDateISO(today);
 
     const in7Days = new Date(today); in7Days.setDate(today.getDate() + 7);
     const in14Days = new Date(today); in14Days.setDate(today.getDate() + 14);
@@ -1449,7 +1449,7 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
               (i."endDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM fleet_insurance i JOIN fleet_vehicles v ON v.id=i."vehicleId" AND v."deletedAt" IS NULL
        WHERE i."companyId"=$1 AND i."deletedAt" IS NULL AND i."endDate" BETWEEN $2 AND $3`,
-      [cid, todayStr, in90Days.toISOString().split('T')[0]]
+      [cid, todayStr, toDateISO(in90Days)]
     );
     for (const r of allInsurance) {
       const daysLeft = Number(r.daysLeft);
@@ -1474,7 +1474,7 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
        FROM fleet_drivers d
        WHERE d."companyId"=$1 AND d."licenseExpiry" IS NOT NULL
          AND d."licenseExpiry" BETWEEN $2 AND $3`,
-      [cid, todayStr, in90Days.toISOString().split('T')[0]]
+      [cid, todayStr, toDateISO(in90Days)]
     );
     for (const d of expiringLicenses) {
       const daysLeft = Number(d.daysLeft);
@@ -2367,7 +2367,7 @@ router.post("/preventive-plans", requirePermission("fleet:create"), async (req, 
     if (!nextServiceDate && b.lastServiceDate && b.intervalDays) {
       const lastDate = new Date(b.lastServiceDate);
       lastDate.setDate(lastDate.getDate() + Number(b.intervalDays));
-      nextServiceDate = lastDate.toISOString().split("T")[0];
+      nextServiceDate = toDateISO(lastDate);
     }
     if (!nextServiceMileage && b.lastServiceMileage && b.intervalKm) {
       nextServiceMileage = Number(b.lastServiceMileage) + Number(b.intervalKm);
@@ -2443,7 +2443,7 @@ router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (
       if (effectiveLastDate && existing.intervalDays) {
         const d = new Date(effectiveLastDate);
         d.setDate(d.getDate() + Number(existing.intervalDays));
-        const nextDate = d.toISOString().split("T")[0];
+        const nextDate = toDateISO(d);
         params.push(nextDate); sets.push(`"nextServiceDate"=$${params.length}`);
       }
     }

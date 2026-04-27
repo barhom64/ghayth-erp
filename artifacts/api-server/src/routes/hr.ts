@@ -24,6 +24,8 @@ import {
   todayISO,
   currentPeriod,
   currentYear,
+  generateRef,
+  toDateISO,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
@@ -233,7 +235,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
   try {
     const scope = req.scope!;
     const now = new Date();
-    const today = now.toISOString().split("T")[0];
+    const today = toDateISO(now);
     const period = today.slice(0, 7);
     const parsed = checkInSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
@@ -588,7 +590,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
   try {
     const scope = req.scope!;
     const now = new Date();
-    const today = now.toISOString().split("T")[0];
+    const today = toDateISO(now);
     const period = today.slice(0, 7);
     const { notes, lat, lon } = req.body as any;
 
@@ -1794,7 +1796,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
             [asn.companyId, request.employeeId, request.startDate, request.endDate]
           );
           for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
-            const dateStr = d.toISOString().split("T")[0];
+            const dateStr = toDateISO(d);
             await client.query(
               `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
                VALUES ($1,$2,$3,$4,'on_leave',$5)
@@ -3603,7 +3605,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
     }
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('letter_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
-    const letterRef = `LTR-${currentYear()}-${String(seqRow.seq).padStart(4, "0")}`;
+    const letterRef = generateRef("LTR", seqRow.seq);
 
     const { insertId } = await rawExecute(
       `INSERT INTO official_letters ("companyId","employeeId",type,subject,content,status,"createdByAssignmentId",ref,"branchId")
@@ -3914,7 +3916,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
         `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL RETURNING *`,
         [status, Number(req.params.id), scope.companyId]
       );
-      if (!updatedRun) throw new Error("دورة الرواتب غير موجودة");
+      if (!updatedRun) throw new NotFoundError("دورة الرواتب غير موجودة");
 
       const { hrEngine } = await import("../lib/engines/index.js");
       await hrEngine.postPayrollPostGL(
@@ -6088,8 +6090,8 @@ router.get("/gratuity/:employeeId", requirePermission("hr:read"), async (req, re
       employeeName: assignment.employeeName,
       jobTitle: assignment.jobTitle,
       monthlySalary,
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0],
+      startDate: toDateISO(startDate),
+      endDate: toDateISO(endDate),
       yearsOfService: Math.round(yearsOfService * 100) / 100,
       terminationType: type,
       gratuityBeforeReduction: Math.round(gratuity * 100) / 100,

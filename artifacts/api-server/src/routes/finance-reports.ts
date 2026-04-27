@@ -10,7 +10,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { currentPeriod, currentYear } from "../lib/businessHelpers.js";
+import { currentPeriod, currentYear, toDateISO, todayISO } from "../lib/businessHelpers.js";
 
 export const reportsRouter = Router();
 reportsRouter.use(authMiddleware);
@@ -143,8 +143,8 @@ reportsRouter.get("/reports/cash-flow", requirePermission("finance:read"), async
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as any;
-    const from = startDate || new Date(currentYear(), 0, 1).toISOString().slice(0, 10);
-    const to = endDate || new Date().toISOString().slice(0, 10);
+    const from = startDate || toDateISO(new Date(currentYear(), 0, 1));
+    const to = endDate || todayISO();
 
     // Dynamically discover cash/bank accounts by type+code prefix (11xx or
     // explicit mappings). Fall back to defaults if none found.
@@ -420,7 +420,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", requirePermission("fi
     const scope = req.scope!;
     const clientId = Number(req.params.clientId);
     const { startDate, endDate } = req.query as any;
-    const asOf = endDate || new Date().toISOString().slice(0, 10);
+    const asOf = endDate || todayISO();
     const from = startDate || "1900-01-01";
 
     const [client] = await rawQuery<any>(
@@ -540,7 +540,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", requirePermission("fi
     const scope = req.scope!;
     const supplierId = Number(req.params.supplierId);
     const { startDate, endDate } = req.query as any;
-    const asOf = endDate || new Date().toISOString().slice(0, 10);
+    const asOf = endDate || todayISO();
     const from = startDate || "1900-01-01";
 
     const [supplier] = await rawQuery<any>(

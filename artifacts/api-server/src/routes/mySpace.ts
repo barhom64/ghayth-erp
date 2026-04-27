@@ -2,7 +2,7 @@ import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
-import { todayISO, currentPeriod, currentYear } from "../lib/businessHelpers.js";
+import { todayISO, currentPeriod, currentYear, toDateISO } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -429,7 +429,7 @@ router.get("/", async (req, res) => {
          WHERE "employeeId" = $1 AND "expiryDate" IS NOT NULL
            AND "expiryDate" BETWEEN $2 AND $3
          ORDER BY "expiryDate" ASC LIMIT 10`,
-        [scope.employeeId, today, thirtyDaysLater.toISOString().split("T")[0]]
+        [scope.employeeId, today, toDateISO(thirtyDaysLater)]
       ).catch(() => []);
       const expiringContracts = await rawQuery<any>(
         `SELECT c.id, CONCAT('عقد إيجار - ', pu."unitNumber") AS title, 'contract' AS "itemType", c."endDate" AS "expiryDate"
@@ -438,7 +438,7 @@ router.get("/", async (req, res) => {
          WHERE c."companyId" = $1 AND c.status = 'active'
            AND c."endDate" BETWEEN $2 AND $3
          ORDER BY c."endDate" ASC LIMIT 10`,
-        [scope.companyId, today, thirtyDaysLater.toISOString().split("T")[0]]
+        [scope.companyId, today, toDateISO(thirtyDaysLater)]
       ).catch(() => []);
       let expiringInsurance: any[] = [];
       try {
@@ -449,7 +449,7 @@ router.get("/", async (req, res) => {
            JOIN fleet_vehicles fv ON fv.id = fi."vehicleId"
            WHERE fv."companyId" = $1 AND fi."endDate" BETWEEN $2 AND $3
            ORDER BY fi."endDate" ASC LIMIT 5`,
-          [scope.companyId, today, thirtyDaysLater.toISOString().split("T")[0]]
+          [scope.companyId, today, toDateISO(thirtyDaysLater)]
         );
       } catch (e) { console.error("my-space expiringInsurance error:", e); }
       expiringSoon = [...expiringDocs, ...expiringContracts, ...expiringInsurance]

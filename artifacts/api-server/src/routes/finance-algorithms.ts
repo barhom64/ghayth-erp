@@ -10,7 +10,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod } from "../lib/businessHelpers.js";
+import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO } from "../lib/businessHelpers.js";
 
 export const financeAlgorithmsRouter = Router();
 financeAlgorithmsRouter.use(authMiddleware);
@@ -275,7 +275,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/import", requirePermission("f
         if (row.date) {
           const parsed = new Date(row.date);
           if (!isNaN(parsed.getTime())) {
-            date = parsed.toISOString().split("T")[0];
+            date = toDateISO(parsed);
           }
         }
         if (!amount || amount <= 0) continue;
@@ -344,7 +344,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", requirePermissio
          LIMIT 1`,
         [scope.companyId, accountCode,
          amount * 0.99, amount * 1.01,
-         minDate.toISOString().split("T")[0], maxDate.toISOString().split("T")[0],
+         toDateISO(minDate), toDateISO(maxDate),
          amount, bRow.statementDate]
       );
 

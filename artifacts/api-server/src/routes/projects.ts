@@ -19,6 +19,7 @@ import {
   emitEvent,
   todayISO,
   currentYear,
+  toDateISO,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
@@ -834,7 +835,7 @@ router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update
             subtotal: milestoneAmount,
             vatAmount,
             total: milestoneAmount + vatAmount,
-            dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+            dueDate: toDateISO(new Date(Date.now() + 14 * 86400000)),
             sourceType: "project_phases",
             sourceId: phaseId,
           }

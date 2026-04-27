@@ -9,7 +9,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog, createNotification, emitEvent, todayISO, currentYear } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO } from "../lib/businessHelpers.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -660,7 +660,7 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
           contractType: "service",
           partyName: opp.contactName || 'عميل',
           startDate: todayISO(),
-          endDate: new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0],
+          endDate: toDateISO(new Date(Date.now() + 365 * 86400000)),
           value: dealValue,
         }
       );
@@ -687,7 +687,7 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
           subtotal: dealValue,
           vatAmount,
           total: totalAmount,
-          dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+          dueDate: toDateISO(new Date(Date.now() + 14 * 86400000)),
         }
       );
     } catch (invoiceErr) {

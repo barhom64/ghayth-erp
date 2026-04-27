@@ -12,7 +12,7 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
@@ -857,7 +857,7 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
         const dueDate = new Date(startDate);
         dueDate.setMonth(dueDate.getMonth() + (i * freqMonths));
         if (b.paymentDay) dueDate.setDate(Math.min(Number(b.paymentDay), 28));
-        const dueDateStr = dueDate.toISOString().split('T')[0];
+        const dueDateStr = toDateISO(dueDate);
         const isLast = i === installmentCount - 1;
         const amt = isLast ? totalContractValue - (installmentAmount * (installmentCount - 1)) : installmentAmount;
         const rounded = Math.round(amt * 100) / 100;
@@ -1155,13 +1155,13 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
       toState: "active",
       extraWhere: `"deletedAt" IS NULL`,
       setExtras: {
-        startDate: newStartDate.toISOString().split("T")[0],
-        endDate: newEndDate.toISOString().split("T")[0],
+        startDate: toDateISO(newStartDate),
+        endDate: toDateISO(newEndDate),
         monthlyRent: newMonthlyRent,
         yearlyRent: newYearlyRent,
         totalContractValue: newTotal,
       },
-      after: { endDate: newEndDate.toISOString().split("T")[0], totalContractValue: newTotal },
+      after: { endDate: toDateISO(newEndDate), totalContractValue: newTotal },
       onApply: async (_row, client) => {
         // Generate new payment schedule for the renewal period
         const freq = contract.paymentFrequency || "monthly";
@@ -1182,7 +1182,7 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
           await client.query(
             `INSERT INTO contract_payment_schedule ("companyId","contractId","installmentNumber","dueDate",amount,status)
              VALUES ($1,$2,$3,$4,$5,'pending')`,
-            [scope.companyId, id, startNum + i + 1, dueDate.toISOString().split("T")[0], Math.round(amt * 100) / 100]
+            [scope.companyId, id, startNum + i + 1, toDateISO(dueDate), Math.round(amt * 100) / 100]
           );
         }
       },
@@ -1205,7 +1205,7 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
         title: `إشعار تجديد عقد ${contract.contractNumber} — ${contract.tenantName || ""}`,
         dueAt: renewalNoticeDate.toISOString(),
         metadata: { contractNumber: contract.contractNumber, endDate: newEndDate.toISOString() },
-        dedupeKey: `contract-${id}-renewal-notice-${newEndDate.toISOString().split("T")[0]}`,
+        dedupeKey: `contract-${id}-renewal-notice-${toDateISO(newEndDate)}`,
       });
     }
     await registerObligation({
@@ -1216,7 +1216,7 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
       obligationType: "document_expiry",
       title: `انتهاء عقد ${contract.contractNumber} — ${contract.tenantName || ""}`,
       dueAt: newEndDate.toISOString(),
-      dedupeKey: `contract-${id}-expiry-${newEndDate.toISOString().split("T")[0]}`,
+      dedupeKey: `contract-${id}-expiry-${toDateISO(newEndDate)}`,
     });
 
     await emitEvent({
@@ -1225,13 +1225,13 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
       action: "property.contract.renewed",
       entity: "rental_contract",
       entityId: id,
-      details: `تجديد عقد ${contract.contractNumber} حتى ${newEndDate.toISOString().split("T")[0]}`,
+      details: `تجديد عقد ${contract.contractNumber} حتى ${toDateISO(newEndDate)}`,
     });
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "renew", entity: "rental_contracts", entityId: id,
       before: { endDate: contract.endDate, totalContractValue: contract.totalContractValue },
-      after: { endDate: newEndDate.toISOString().split("T")[0], totalContractValue: newTotal },
+      after: { endDate: toDateISO(newEndDate), totalContractValue: newTotal },
     }).catch(console.error);
 
     const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
@@ -2126,7 +2126,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
           subtotal: cost,
           vatAmount,
           total: cost + vatAmount,
-          dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+          dueDate: toDateISO(new Date(Date.now() + 14 * 86400000)),
           sourceType: "maintenance_requests",
           sourceId: id,
         }
@@ -2814,7 +2814,7 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
               subtotal: updatedCost,
               vatAmount,
               total: updatedCost + vatAmount,
-              dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+              dueDate: toDateISO(new Date(Date.now() + 14 * 86400000)),
               sourceType: "maintenance_requests",
               sourceId: id,
             }
