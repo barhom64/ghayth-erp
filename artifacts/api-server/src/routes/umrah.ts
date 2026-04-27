@@ -106,9 +106,16 @@ const createPilgrimSchema = z.object({
   seasonId: z.coerce.number().optional(),
   agentId: z.coerce.number().optional(),
   packageId: z.coerce.number().optional(),
+  visaNumber: z.string().optional(),
   nationality: z.string().optional(),
+  gender: z.string().optional(),
+  dateOfBirth: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().optional(),
+  arrivalDate: z.string().optional(),
+  departureDate: z.string().optional(),
+  hotelName: z.string().optional(),
+  roomNumber: z.string().optional(),
   status: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -480,8 +487,8 @@ router.post("/pilgrims", requirePermission("umrah:write"), async (req, res) => {
     }
 
     const rows = await rawQuery(
-      `INSERT INTO umrah_pilgrims ("companyId","branchId","seasonId","agentId","packageId","fullName","passportNumber","visaNumber",nationality,gender,"dateOfBirth",phone,"arrivalDate","departureDate",notes,"createdBy","updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW()) RETURNING *`,
+      `INSERT INTO umrah_pilgrims ("companyId","branchId","seasonId","agentId","packageId","fullName","passportNumber","visaNumber",nationality,gender,"dateOfBirth",phone,"arrivalDate","departureDate","hotelName","roomNumber",notes,"createdBy","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW()) RETURNING *`,
       [
         scope.companyId,
         scope.branchId || null,
@@ -497,6 +504,8 @@ router.post("/pilgrims", requirePermission("umrah:write"), async (req, res) => {
         b.phone ?? null,
         b.arrivalDate ?? null,
         b.departureDate ?? null,
+        b.hotelName ?? null,
+        b.roomNumber ?? null,
         b.notes ?? null,
         scope.userId,
       ]

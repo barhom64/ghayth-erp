@@ -914,13 +914,15 @@ router.get("/leave-types", requirePermission("hr:read"), async (req, res) => {
 router.get("/leave-balance", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const { employeeId: qEmployeeId } = req.query as { employeeId?: string };
+    const targetEmployeeId = qEmployeeId ? Number(qEmployeeId) : scope.employeeId;
     const year = new Date().getFullYear();
     const balancesFromTable = await rawQuery<any>(
       `SELECT lb.*, lt.name
        FROM hr_leave_balances lb
        JOIN hr_leave_types lt ON lt.id = lb."leaveTypeId"
        WHERE lb."companyId" = $1 AND lb."employeeId" = $2 AND lb.year = $3`,
-      [scope.companyId, scope.employeeId, year]
+      [scope.companyId, targetEmployeeId, year]
     );
 
     if (balancesFromTable.length > 0) {
@@ -943,7 +945,7 @@ router.get("/leave-balance", requirePermission("hr:read"), async (req, res) => {
        WHERE lt."companyId" = $1
        GROUP BY lt.id, lt.name, lt."annualDays"
        ORDER BY lt.name`,
-      [scope.companyId, scope.employeeId, year]
+      [scope.companyId, targetEmployeeId, year]
     );
 
     const data = balances.map((b: any) => ({

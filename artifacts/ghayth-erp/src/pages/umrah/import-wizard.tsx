@@ -105,7 +105,6 @@ export default function UmrahImportWizard() {
     if (!seasonId || parsedRows.length === 0) return;
     setPreviewing(true);
     try {
-      // TODO: endpoint not yet implemented — placeholder response
       const res: any = await apiFetch("/umrah/import/preview", {
         method: "POST",
         body: JSON.stringify({
@@ -130,7 +129,6 @@ export default function UmrahImportWizard() {
     setConfirming(true);
     try {
       const endpoint = fileType === "mutamers" ? "/umrah/import/mutamers" : "/umrah/import/vouchers";
-      // TODO: endpoint not yet implemented — placeholder response
       const res: any = await apiFetch(endpoint, {
         method: "POST",
         body: JSON.stringify({
@@ -153,7 +151,6 @@ export default function UmrahImportWizard() {
     if (!linkingSubAgent || !linkClientId) return;
     setLinking(true);
     try {
-      // TODO: endpoint not yet implemented — placeholder response
       await apiFetch(`/umrah/sub-agents/link-by-nusk`, {
         method: "POST",
         body: JSON.stringify({

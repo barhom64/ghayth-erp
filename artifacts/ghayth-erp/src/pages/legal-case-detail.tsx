@@ -222,7 +222,7 @@ export default function LegalCaseDetail() {
   const { data: caseData, refetch, isLoading, error } = useApiQuery<any>(["legal-case", id], id ? `/legal/cases/${id}` : null);
 
   const transitionMut = useApiMutation<any, { status: string }>(
-    `/legal/cases/${id}`,
+    () => `/legal/cases/${id}`,
     "PATCH",
     [["legal-case", String(id)], ["legal-cases"]],
     {

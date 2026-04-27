@@ -124,7 +124,7 @@ function AttendanceSummary({ attendance }: { attendance: any[] }) {
 }
 
 function LeaveBalanceSummary({ employeeId }: { employeeId: string }) {
-  const { data } = useApiQuery<any>(["leave-balance-emp", employeeId], `/hr/leave-balance`, !!employeeId);
+  const { data } = useApiQuery<any>(["leave-balance-emp", employeeId], `/hr/leave-balance?employeeId=${employeeId}`, !!employeeId);
   const balances = data?.data || [];
 
   if (balances.length === 0) return null;
