@@ -512,6 +512,48 @@ export const STATE_MACHINES: StateMachine[] = [
     },
   },
   {
+    entity: "umrah_pilgrims",
+    label: "معتمر",
+    transitions: {
+      pending:    ["arrived", "cancelled"],
+      arrived:    ["active", "departed", "overstayed", "cancelled"],
+      active:     ["departed", "overstayed", "violated"],
+      overstayed: ["departed", "violated"],
+      departed:   [],
+      violated:   [],
+      cancelled:  [],
+    },
+  },
+  {
+    entity: "umrah_seasons",
+    label: "موسم عمرة",
+    transitions: {
+      open:     ["closed"],
+      closed:   ["archived"],
+      archived: [],
+    },
+  },
+  {
+    entity: "umrah_agents",
+    label: "وكيل عمرة",
+    transitions: {
+      active:    ["inactive", "suspended", "blocked"],
+      inactive:  ["active"],
+      suspended: ["active", "blocked"],
+      blocked:   [],
+    },
+  },
+  {
+    entity: "umrah_transport",
+    label: "نقل عمرة",
+    transitions: {
+      scheduled:   ["in_progress", "cancelled"],
+      in_progress: ["completed", "cancelled"],
+      completed:   [],
+      cancelled:   [],
+    },
+  },
+  {
     entity: "governance_policies",
     label: "سياسة حوكمة",
     transitions: {

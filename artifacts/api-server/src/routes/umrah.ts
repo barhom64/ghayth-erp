@@ -16,7 +16,7 @@ import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/
 const PILGRIM_STATUSES = ["pending", "arrived", "active", "overstayed", "departed", "violated", "cancelled"] as const;
 const PILGRIM_TRANSITIONS: Record<string, readonly string[]> = {
   pending:    ["arrived", "cancelled"],
-  arrived:    ["active", "departed", "cancelled"],
+  arrived:    ["active", "departed", "overstayed", "cancelled"],
   active:     ["departed", "overstayed", "violated"],
   overstayed: ["departed", "violated"],
   departed:   [],
@@ -505,38 +505,60 @@ router.post("/pilgrims", requirePermission("umrah:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create pilgrim error"); }
 });
 
-router.patch("/pilgrims/:id", requirePermission("umrah:write"), async (req, res) => {
+router.patch("/pilgrims/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const b = req.body;
+    const pilgrimId = Number(req.params.id);
+    const fieldKeys = ["agentId","packageId","fullName","passportNumber","visaNumber","nationality","gender","dateOfBirth","phone","arrivalDate","departureDate","actualArrival","actualDeparture","hotelName","roomNumber","transportAssigned","notes"] as const;
 
     if (b.status !== undefined) {
-      const [existing] = await rawQuery<any>(`SELECT status FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [req.params.id, scope.companyId]);
-      if (!existing) throw new NotFoundError("المعتمر غير موجود");
-      if (b.status !== existing.status) {
-        const allowed = PILGRIM_TRANSITIONS[existing.status] ?? [];
-        if (!allowed.includes(b.status)) {
-          throw new ConflictError(
-            `لا يمكن نقل حالة المعتمر من "${existing.status}" إلى "${b.status}"`,
-            { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد (حالة نهائية)"}` }
-          );
-        }
+      const setExtras: Record<string, any> = {};
+      for (const key of fieldKeys) {
+        if (b[key] !== undefined) setExtras[key] = b[key];
       }
-    }
+      const fromStates = Object.entries(PILGRIM_TRANSITIONS)
+        .filter(([, targets]) => targets.includes(b.status))
+        .map(([from]) => from);
 
-    const params: any[] = [];
-    const sets: string[] = [];
-    for (const key of ["agentId","packageId","fullName","passportNumber","visaNumber","nationality","gender","dateOfBirth","phone","arrivalDate","departureDate","actualArrival","actualDeparture","status","hotelName","roomNumber","transportAssigned","notes"]) {
-      if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
+      const row = await applyTransition({
+        entity: "umrah_pilgrims",
+        id: pilgrimId,
+        scope,
+        action: "umrah.pilgrim.status_changed",
+        fromStates,
+        toState: b.status,
+        setExtras: Object.keys(setExtras).length > 0 ? setExtras : undefined,
+        extraWhere: `"deletedAt" IS NULL`,
+        after: { newStatus: b.status },
+      });
+      res.json(row);
+    } else {
+      const params: any[] = [];
+      const sets: string[] = [];
+      for (const key of fieldKeys) {
+        if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
+      }
+      if (sets.length === 0) {
+        const [row] = await rawQuery(`SELECT * FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [pilgrimId, scope.companyId]);
+        if (!row) throw new NotFoundError("المعتمر غير موجود");
+        res.json(row);
+        return;
+      }
+      sets.push(`"updatedAt"=NOW()`);
+      params.push(pilgrimId); params.push(scope.companyId);
+      await rawExecute(`UPDATE umrah_pilgrims SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+      const [row] = await rawQuery(`SELECT * FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [pilgrimId, scope.companyId]);
+      if (!row) throw new NotFoundError("المعتمر غير موجود");
+      createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pilgrims", entityId: pilgrimId }).catch(console.error);
+      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pilgrim.updated", entity: "umrah_pilgrims", entityId: pilgrimId, details: JSON.stringify(b) }).catch(console.error);
+      res.json(row);
     }
-    sets.push(`"updatedAt"=NOW()`);
-    params.push(req.params.id); params.push(scope.companyId);
-    await rawExecute(`UPDATE umrah_pilgrims SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery(`SELECT * FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [req.params.id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pilgrims", entityId: Number(req.params.id) }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pilgrim.updated", entity: "umrah_pilgrims", entityId: Number(req.params.id), details: JSON.stringify(b) }).catch(console.error);
-    res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update pilgrim error"); }
+  } catch (err) {
+    const lr = lifecycleErrorResponse(err);
+    if (lr) { res.status(lr.status).json(lr.body); return; }
+    handleRouteError(err, res, "Update pilgrim error");
+  }
 });
 
 router.get("/pilgrims/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
@@ -722,31 +744,59 @@ router.post("/run-daily-status", requirePermission("umrah:write"), async (req, r
   try {
     const scope = req.scope!;
     const today = new Date().toISOString().split("T")[0];
-    const result = await withTransaction(async (client) => {
-      const arrivedRes = await client.query(
-        `UPDATE umrah_pilgrims SET status='arrived', "actualArrival"=$1, "updatedAt"=NOW()
-         WHERE "companyId"=$2 AND status='pending' AND "arrivalDate" <= $1 AND ("departureDate" IS NULL OR "departureDate" >= $1)`,
-        [today, scope.companyId]
-      );
-      const overstayedRes = await client.query(
-        `UPDATE umrah_pilgrims SET status='overstayed', "updatedAt"=NOW()
-         WHERE "companyId"=$1 AND status IN ('arrived','active') AND "departureDate" < $2 AND "actualDeparture" IS NULL`,
-        [scope.companyId, today]
-      );
-      const departedRes = await client.query(
-        `UPDATE umrah_pilgrims SET status='departed', "updatedAt"=NOW()
-         WHERE "companyId"=$1 AND status IN ('arrived','active') AND "actualDeparture" IS NOT NULL AND "actualDeparture" <= $2`,
-        [scope.companyId, today]
-      );
-      return {
-        arrivedUpdated: arrivedRes.rowCount ?? 0,
-        overstayedUpdated: overstayedRes.rowCount ?? 0,
-        departedUpdated: departedRes.rowCount ?? 0,
-      };
-    });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pilgrims", entityId: 0, after: { date: today, ...result } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.daily_status.run", entity: "umrah_pilgrims", entityId: 0, details: JSON.stringify({ date: today, ...result }) }).catch(console.error);
-    res.json({ date: today, ...result });
+
+    const pendingToArrived = await rawQuery<any>(
+      `SELECT id FROM umrah_pilgrims WHERE "companyId"=$1 AND status='pending' AND "arrivalDate" <= $2 AND ("departureDate" IS NULL OR "departureDate" >= $2) AND "deletedAt" IS NULL`,
+      [scope.companyId, today]
+    );
+    const toOverstayed = await rawQuery<any>(
+      `SELECT id, status FROM umrah_pilgrims WHERE "companyId"=$1 AND status IN ('arrived','active') AND "departureDate" < $2 AND "actualDeparture" IS NULL AND "deletedAt" IS NULL`,
+      [scope.companyId, today]
+    );
+    const toDeparted = await rawQuery<any>(
+      `SELECT id, status FROM umrah_pilgrims WHERE "companyId"=$1 AND status IN ('arrived','active') AND "actualDeparture" IS NOT NULL AND "actualDeparture" <= $2 AND "deletedAt" IS NULL`,
+      [scope.companyId, today]
+    );
+
+    let arrivedUpdated = 0, overstayedUpdated = 0, departedUpdated = 0;
+
+    for (const p of pendingToArrived) {
+      try {
+        await applyTransition({
+          entity: "umrah_pilgrims", id: p.id, scope,
+          action: "umrah.pilgrim.arrived",
+          fromStates: ["pending"], toState: "arrived",
+          setExtras: { actualArrival: today },
+          extraWhere: `"deletedAt" IS NULL`,
+        });
+        arrivedUpdated++;
+      } catch { /* state already changed by another process */ }
+    }
+    for (const p of toOverstayed) {
+      try {
+        await applyTransition({
+          entity: "umrah_pilgrims", id: p.id, scope,
+          action: "umrah.pilgrim.overstayed",
+          fromStates: ["arrived", "active"], toState: "overstayed",
+          extraWhere: `"deletedAt" IS NULL`,
+        });
+        overstayedUpdated++;
+      } catch { /* state already changed */ }
+    }
+    for (const p of toDeparted) {
+      try {
+        await applyTransition({
+          entity: "umrah_pilgrims", id: p.id, scope,
+          action: "umrah.pilgrim.departed",
+          fromStates: ["arrived", "active"], toState: "departed",
+          extraWhere: `"deletedAt" IS NULL`,
+        });
+        departedUpdated++;
+      } catch { /* state already changed */ }
+    }
+
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.daily_status.run", entity: "umrah_pilgrims", entityId: 0, details: JSON.stringify({ date: today, arrivedUpdated, overstayedUpdated, departedUpdated }) }).catch(console.error);
+    res.json({ date: today, arrivedUpdated, overstayedUpdated, departedUpdated });
   } catch (err) { handleRouteError(err, res, "Daily status error"); }
 });
 
