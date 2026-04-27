@@ -9,7 +9,6 @@ import {
   generateSalesInvoice,
   registerPayment,
   generateStatement,
-  getDashboard,
 } from "../lib/umrahInvoicingEngine.js";
 import {
   parseMutamersWorkbook,
@@ -934,18 +933,5 @@ router.get("/statements/:subAgentId", requirePermission("umrah:read"), async (re
 // ============================================================================
 // DASHBOARD
 // ============================================================================
-
-router.get("/dashboard", requirePermission("umrah:read"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { seasonId } = req.query as any;
-    if (!seasonId) throw new ValidationError("معرف الموسم مطلوب");
-    const result = await getDashboard(
-      { companyId: scope.companyId, userId: scope.userId },
-      Number(seasonId)
-    );
-    res.json(result);
-  } catch (err) { handleRouteError(err, res, "Umrah dashboard"); }
-});
 
 export default router;

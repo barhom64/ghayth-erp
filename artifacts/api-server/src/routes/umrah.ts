@@ -669,30 +669,7 @@ router.post("/import/vouchers", requirePermission("umrah:write"), async (req, re
   } catch (err) { handleRouteError(err, res, "Import vouchers error"); }
 });
 
-router.post("/sub-agents/link-by-nusk", requirePermission("umrah:write"), async (req, res): Promise<void> => {
-  try {
-    const scope = req.scope!;
-    const { nuskCode, clientId } = req.body;
-    if (!nuskCode || !clientId) throw new ValidationError("رمز NUSK ومعرّف العميل مطلوبان");
-    const [existing] = await rawQuery<any>(
-      `SELECT id FROM umrah_sub_agents WHERE "companyId"=$1 AND "nuskCode"=$2`,
-      [scope.companyId, nuskCode]
-    );
-    if (existing) {
-      await rawExecute(
-        `UPDATE umrah_sub_agents SET "clientId"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
-        [clientId, existing.id, scope.companyId]
-      );
-    } else {
-      await rawExecute(
-        `INSERT INTO umrah_sub_agents ("companyId","nuskCode","clientId","name") VALUES ($1,$2,$3,$4)`,
-        [scope.companyId, nuskCode, clientId, `وكيل فرعي ${nuskCode}`]
-      );
-    }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: existing?.id ?? 0, after: { nuskCode, clientId } }).catch(console.error);
-    res.json({ success: true, nuskCode, clientId });
-  } catch (err) { handleRouteError(err, res, "Link sub-agent error"); }
-});
+
 
 async function doImport(scope: any, body: { seasonId: number; rows: any[]; fileType?: string; fileName?: string }) {
   const { seasonId, rows: importRows, fileType, fileName } = body;
@@ -1373,95 +1350,6 @@ router.post("/assign-bulk", requirePermission("umrah:write"), async (req, res): 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pilgrims.bulk_assigned", entity: "umrah_pilgrims", entityId: 0, details: JSON.stringify({ count: pilgrimIds.length, agentId }) }).catch(console.error);
     res.json({ assigned: pilgrimIds.length, agentId });
   } catch (err) { handleRouteError(err, res, "Bulk assign error"); }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SUB-AGENTS CRUD
-// ─────────────────────────────────────────────────────────────────────────────
-
-router.get("/sub-agents", requirePermission("umrah:read"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const rows = await rawQuery(
-      `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
-       FROM umrah_sub_agents sa
-       LEFT JOIN umrah_agents a ON a.id = sa."agentId"
-       LEFT JOIN clients c ON c.id = sa."clientId"
-       WHERE sa."companyId"=$1 AND sa."deletedAt" IS NULL
-       ORDER BY sa."createdAt" DESC`,
-      [scope.companyId]
-    );
-    res.json({ data: rows, total: rows.length });
-  } catch (err) { handleRouteError(err, res, "List sub-agents error"); }
-});
-
-router.get("/sub-agents/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
-  try {
-    const scope = req.scope!;
-    const [row] = await rawQuery(
-      `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
-       FROM umrah_sub_agents sa
-       LEFT JOIN umrah_agents a ON a.id = sa."agentId"
-       LEFT JOIN clients c ON c.id = sa."clientId"
-       WHERE sa.id=$1 AND sa."companyId"=$2 AND sa."deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
-    );
-    if (!row) { res.status(404).json({ error: "الوكيل الفرعي غير موجود" }); return; }
-    res.json(row);
-  } catch (err) { handleRouteError(err, res, "Get sub-agent error"); }
-});
-
-router.post("/sub-agents", requirePermission("umrah:write"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const b = req.body;
-    if (!b.name || !b.nuskCode) throw new ValidationError("الاسم ورمز نسك مطلوبان");
-    const rows = await rawQuery(
-      `INSERT INTO umrah_sub_agents ("companyId","branchId","nuskCode",name,"agentId","clientId","paymentTerms","defaultPricePerMutamer",phone,email,country,"isActive","createdBy","updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW()) RETURNING *`,
-      [scope.companyId, scope.branchId || null, b.nuskCode, b.name, b.agentId || null, b.clientId || null, b.paymentTerms || "postpaid", b.defaultPricePerMutamer || null, b.phone || null, b.email || null, b.country || null, b.isActive !== false, scope.userId]
-    );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sub_agents", entityId: rows[0]?.id, after: { name: b.name, nuskCode: b.nuskCode } }).catch(console.error);
-    res.status(201).json(rows[0]);
-  } catch (err) { handleRouteError(err, res, "Create sub-agent error"); }
-});
-
-router.patch("/sub-agents/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
-  try {
-    const scope = req.scope!;
-    const id = Number(req.params.id);
-    const b = req.body;
-    const sets: string[] = ['"updatedAt"=NOW()', `"updatedBy"=${scope.userId}`];
-    const params: any[] = [id, scope.companyId];
-    for (const key of ["nuskCode","name","agentId","clientId","paymentTerms","defaultPricePerMutamer","phone","email","country","isActive","notes"] as const) {
-      if (b[key] !== undefined) {
-        params.push(b[key]);
-        const col = key === "isActive" ? `"isActive"` : key === "nuskCode" ? `"nuskCode"` : key === "agentId" ? `"agentId"` : key === "clientId" ? `"clientId"` : key === "paymentTerms" ? `"paymentTerms"` : key === "defaultPricePerMutamer" ? `"defaultPricePerMutamer"` : key;
-        sets.push(`${col}=$${params.length}`);
-      }
-    }
-    const [row] = await rawQuery(
-      `UPDATE umrah_sub_agents SET ${sets.join(",")} WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL RETURNING *`,
-      params
-    );
-    if (!row) { res.status(404).json({ error: "الوكيل الفرعي غير موجود" }); return; }
-    res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update sub-agent error"); }
-});
-
-router.post("/sub-agents/:id/link-client", requirePermission("umrah:write"), async (req, res): Promise<void> => {
-  try {
-    const scope = req.scope!;
-    const id = Number(req.params.id);
-    const { clientId } = req.body;
-    if (!clientId) throw new ValidationError("معرف العميل مطلوب");
-    const [row] = await rawQuery(
-      `UPDATE umrah_sub_agents SET "clientId"=$3, "updatedAt"=NOW(), "updatedBy"=$4 WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL RETURNING *`,
-      [id, scope.companyId, Number(clientId), scope.userId]
-    );
-    if (!row) { res.status(404).json({ error: "الوكيل الفرعي غير موجود" }); return; }
-    res.json(row);
-  } catch (err) { handleRouteError(err, res, "Link sub-agent client error"); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
