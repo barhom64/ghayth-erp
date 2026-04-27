@@ -94,10 +94,10 @@ describe("Umrah entities route structure", () => {
   });
 
   it("violations CRUD endpoints exist", () => {
-    expect(UMRAH_ENT).toContain('router.get("/violations"');
-    expect(UMRAH_ENT).toContain('router.post("/violations"');
-    expect(UMRAH_ENT).toContain('router.patch("/violations/:id"');
-    expect(UMRAH_ENT).toContain('router.delete("/violations/:id"');
+    expect(UMRAH_ROUTE).toContain('router.get("/violations"');
+    expect(UMRAH_ROUTE).toContain('router.post("/violations"');
+    expect(UMRAH_ROUTE).toContain('router.patch("/violations/:id"');
+    expect(UMRAH_ROUTE).toContain('router.delete("/violations/:id"');
   });
 
   it("groups and nusk-invoices endpoints exist", () => {
@@ -117,9 +117,9 @@ describe("Umrah entities route structure", () => {
   });
 
   it("import preview and confirm endpoints exist", () => {
-    expect(UMRAH_ENT).toContain('"/import/preview"');
-    expect(UMRAH_ENT).toContain('"/import/mutamers"');
-    expect(UMRAH_ENT).toContain('"/import/vouchers"');
+    expect(UMRAH_ROUTE).toContain('"/import/preview"');
+    expect(UMRAH_ROUTE).toContain('"/import/mutamers"');
+    expect(UMRAH_ROUTE).toContain('"/import/vouchers"');
     expect(UMRAH_ENT).toContain('"/import/batches"');
   });
 

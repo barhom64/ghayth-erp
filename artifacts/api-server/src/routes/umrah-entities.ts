@@ -11,14 +11,6 @@ import {
   generateStatement,
 } from "../lib/umrahInvoicingEngine.js";
 import {
-  parseMutamersWorkbook,
-  parseVouchersWorkbook,
-  previewMutamersImport,
-  previewVouchersImport,
-  confirmMutamersImport,
-  confirmVouchersImport,
-} from "../lib/umrahImportEngine.js";
-import {
   calculateCommissionForPlan,
   simulateCommission,
   calculateAllForCompany,
@@ -320,109 +312,6 @@ router.delete("/pricing/:id", requirePermission("umrah:write"), async (req, res)
 });
 
 // ============================================================================
-// VIOLATIONS
-// ============================================================================
-
-router.get("/violations", requirePermission("umrah:read"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { seasonId, type, status, agentId, subAgentId } = req.query as any;
-    let where = `v."companyId" = $1 AND v."deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
-    if (type) { params.push(type); where += ` AND v.type = $${params.length}`; }
-    if (status) { params.push(status); where += ` AND v.status = $${params.length}`; }
-    if (agentId) { params.push(agentId); where += ` AND v."agentId" = $${params.length}`; }
-    if (subAgentId) { params.push(subAgentId); where += ` AND v."subAgentId" = $${params.length}`; }
-    if (seasonId) {
-      params.push(seasonId);
-      where += ` AND v."groupId" IN (SELECT id FROM umrah_groups WHERE "seasonId" = $${params.length})`;
-    }
-    const rows = await rawQuery(
-      `SELECT v.*, p."fullName" AS "mutamerName", p."passportNumber",
-              a.name AS "agentName", sa.name AS "subAgentName"
-       FROM umrah_violations v
-       LEFT JOIN umrah_pilgrims p ON v."mutamerId" = p.id
-       LEFT JOIN umrah_agents a ON v."agentId" = a.id
-       LEFT JOIN umrah_sub_agents sa ON v."subAgentId" = sa.id
-       WHERE ${where}
-       ORDER BY v."createdAt" DESC`,
-      params
-    );
-    res.json({ data: rows });
-  } catch (err) { handleRouteError(err, res, "List violations"); }
-});
-
-router.get("/violations/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
-  try {
-    const scope = req.scope!;
-    const [row] = await rawQuery<any>(
-      `SELECT v.*, a.name AS "agentName", sa.name AS "subAgentName"
-       FROM umrah_violations v
-       LEFT JOIN umrah_agents a ON v."agentId"=a.id
-       LEFT JOIN umrah_sub_agents sa ON v."subAgentId"=sa.id
-       WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
-    );
-    if (!row) throw new NotFoundError("المخالفة غير موجودة");
-    res.json(row);
-  } catch (err) { handleRouteError(err, res, "Get violation"); }
-});
-
-router.post("/violations", requirePermission("umrah:write"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const b = req.body;
-    if (!b.type) throw new ValidationError("نوع المخالفة مطلوب");
-    const rows = await rawQuery(
-      `INSERT INTO umrah_violations
-       ("companyId","branchId",type,"referenceType","referenceNumber","mutamerId","groupId",
-        "subAgentId","agentId",description,"penaltyAmount",status,"createdBy","createdAt","updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),NOW()) RETURNING *`,
-      [scope.companyId, scope.branchId, b.type, b.referenceType || null, b.referenceNumber || null,
-       b.mutamerId || null, b.groupId || null, b.subAgentId || null, b.agentId || null,
-       b.description || null, b.penaltyAmount || 0, b.status || "open", scope.userId]
-    );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_violations", entityId: rows[0]?.id, after: { type: b.type } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.violation.created", entity: "umrah_violations", entityId: rows[0]?.id, after: { type: b.type, penaltyAmount: b.penaltyAmount || 0 } }).catch(console.error);
-    res.status(201).json(rows[0]);
-  } catch (err) { handleRouteError(err, res, "Create violation"); }
-});
-
-router.patch("/violations/:id", requirePermission("umrah:write"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const b = req.body;
-    const params: any[] = [];
-    const sets: string[] = [];
-    for (const key of ["type","referenceType","referenceNumber","description","penaltyAmount","status","linkedInvoiceId"]) {
-      if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
-    }
-    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
-    params.push(scope.userId); sets.push(`"updatedBy"=$${params.length}`);
-    sets.push(`"updatedAt"=NOW()`);
-    params.push(req.params.id); params.push(scope.companyId);
-    await rawExecute(`UPDATE umrah_violations SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery(`SELECT * FROM umrah_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [req.params.id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_violations", entityId: Number(req.params.id), after: b }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.violation.updated", entity: "umrah_violations", entityId: Number(req.params.id), details: JSON.stringify(b) }).catch(console.error);
-    res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update violation"); }
-});
-
-router.delete("/violations/:id", requirePermission("umrah:write"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    await rawExecute(
-      `UPDATE umrah_violations SET "deletedAt"=NOW(), "updatedBy"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
-      [scope.userId, req.params.id, scope.companyId]
-    );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_violations", entityId: Number(req.params.id) }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.violation.deleted", entity: "umrah_violations", entityId: Number(req.params.id), details: "{}" }).catch(console.error);
-    res.json({ success: true });
-  } catch (err) { handleRouteError(err, res, "Delete violation"); }
-});
-
-// ============================================================================
 // GROUPS
 // ============================================================================
 
@@ -692,49 +581,6 @@ router.get("/commission-calculations", requirePermission("umrah:read"), async (r
 // IMPORT — preview + confirm
 // ============================================================================
 
-router.post("/import/preview", requirePermission("umrah:write"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { fileType, seasonId, rows } = req.body;
-    if (!fileType || !seasonId || !Array.isArray(rows)) {
-      throw new ValidationError("نوع الملف والموسم والبيانات مطلوبة");
-    }
-    const importScope = { companyId: scope.companyId, branchId: scope.branchId || 0, userId: scope.userId, seasonId: Number(seasonId) };
-    const diff = fileType === "mutamers"
-      ? await previewMutamersImport(importScope, rows)
-      : await previewVouchersImport(importScope, rows);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId || 0, userId: scope.userId, action: "umrah.import.previewed", entity: "umrah_import_logs", entityId: 0, details: JSON.stringify({ fileType, seasonId, rowCount: rows.length }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "preview", entity: "umrah_pilgrims", entityId: 0, after: { fileType, seasonId, rowCount: rows.length } }).catch(console.error);
-    res.json(diff);
-  } catch (err) { handleRouteError(err, res, "Import preview"); }
-});
-
-router.post("/import/mutamers", requirePermission("umrah:write"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { seasonId, rows, fileName } = req.body;
-    if (!seasonId || !Array.isArray(rows)) throw new ValidationError("الموسم والبيانات مطلوبة");
-    const importScope = { companyId: scope.companyId, branchId: scope.branchId || 0, userId: scope.userId, seasonId: Number(seasonId) };
-    const result = await confirmMutamersImport(importScope, rows, fileName || "mutamers.xlsx");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_import_batches", entityId: result.batchId, after: result }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId || 0, userId: scope.userId, action: "umrah.mutamers.imported", entity: "umrah_import_logs", entityId: result.batchId, details: JSON.stringify({ seasonId, fileName: fileName || "mutamers.xlsx", rowCount: rows.length }) }).catch(console.error);
-    res.json(result);
-  } catch (err) { handleRouteError(err, res, "Import mutamers"); }
-});
-
-router.post("/import/vouchers", requirePermission("umrah:write"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { seasonId, rows, fileName } = req.body;
-    if (!seasonId || !Array.isArray(rows)) throw new ValidationError("الموسم والبيانات مطلوبة");
-    const importScope = { companyId: scope.companyId, branchId: scope.branchId || 0, userId: scope.userId, seasonId: Number(seasonId) };
-    const result = await confirmVouchersImport(importScope, rows, fileName || "vouchers.xlsx");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_import_batches", entityId: result.batchId, after: result }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId || 0, userId: scope.userId, action: "umrah.vouchers.imported", entity: "umrah_import_logs", entityId: result.batchId, details: JSON.stringify({ seasonId, fileName: fileName || "vouchers.xlsx", rowCount: rows.length }) }).catch(console.error);
-    res.json(result);
-  } catch (err) { handleRouteError(err, res, "Import vouchers"); }
-});
-
 router.get("/import/batches", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -807,34 +653,6 @@ router.post("/invoices/generate", requirePermission("umrah:write"), async (req, 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.invoice.generated", entity: "umrah_sales_invoices", entityId: result.invoiceId, after: { ref: result.ref, total: result.total } }).catch(console.error);
     res.status(201).json(result);
   } catch (err) { handleRouteError(err, res, "Generate umrah invoice"); }
-});
-
-router.get("/invoices/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
-  try {
-    const scope = req.scope!;
-    const [invoice] = await rawQuery(
-      `SELECT si.*, sa.name AS "subAgentName", c.name AS "clientName"
-       FROM umrah_sales_invoices si
-       LEFT JOIN umrah_sub_agents sa ON sa.id = si."subAgentId"
-       LEFT JOIN clients c ON c.id = si."clientId"
-       WHERE si.id = $1 AND si."companyId" = $2 AND si."deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
-    );
-    if (!invoice) { throw new NotFoundError("الفاتورة غير موجودة"); }
-    const items = await rawQuery(
-      `SELECT * FROM umrah_sales_invoice_items WHERE "invoiceId" = $1 ORDER BY id`,
-      [req.params.id]
-    );
-    const allocations = await rawQuery(
-      `SELECT pa.*, p.ref AS "paymentRef", p."paymentDate"
-       FROM umrah_payment_allocations pa
-       JOIN umrah_payments p ON p.id = pa."paymentId"
-       WHERE pa."invoiceId" = $1
-       ORDER BY pa."createdAt"`,
-      [req.params.id]
-    );
-    res.json({ ...invoice, items, allocations });
-  } catch (err) { handleRouteError(err, res, "Get umrah invoice"); }
 });
 
 router.patch("/invoices/:id", requirePermission("umrah:write"), async (req, res) => {
