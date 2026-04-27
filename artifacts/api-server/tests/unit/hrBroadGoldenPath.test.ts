@@ -153,7 +153,7 @@ describe("HR Transfers lifecycle", () => {
     const idx = HR_ROUTE.indexOf('"/transfers/:id/approve"');
     const endIdx = HR_ROUTE.indexOf("router.", idx + 10);
     const section = HR_ROUTE.slice(idx, endIdx);
-    expect(section).toContain("emitEvent");
+    expect(section).toContain("applyTransition");
   });
 
   it("transfer has multi-step flow: pending → pending_receiving_manager → approved", () => {

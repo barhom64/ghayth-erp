@@ -189,7 +189,7 @@ describe("Legal case close lifecycle", () => {
     const idx = LEGAL_ROUTE.indexOf('"/cases/:id/close"');
     const endIdx = LEGAL_ROUTE.indexOf("router.", idx + 10);
     const section = LEGAL_ROUTE.slice(idx, endIdx);
-    expect(section).toContain("emitEvent");
+    expect(section).toContain("applyTransition");
     expect(section).toContain('"legal.case.closed"');
   });
 
@@ -209,7 +209,9 @@ describe("Legal case close lifecycle", () => {
   it("close rejects already-closed cases", () => {
     const idx = LEGAL_ROUTE.indexOf('"/cases/:id/close"');
     const section = LEGAL_ROUTE.slice(idx, idx + 800);
-    expect(section).toContain("القضية مغلقة بالفعل");
+    // applyTransition enforces fromStates; "closed" is not in the list so
+    // the lifecycle engine rejects it automatically — no inline guard needed.
+    expect(section).toContain("fromStates");
   });
 });
 

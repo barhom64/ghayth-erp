@@ -183,7 +183,9 @@ describe("Support field visit contract", () => {
   it("sets ticket status to field_visit", () => {
     const idx = SUPPORT_ROUTE.indexOf('"/tickets/:id/field-visit"');
     const section = SUPPORT_ROUTE.slice(idx, idx + 1000);
-    expect(section).toContain("status='field_visit'");
+    // Route uses applyTransition with toState: "field_visit" instead of inline SQL
+    expect(section).toContain("applyTransition");
+    expect(section).toMatch(/toState.*field_visit/);
   });
 
   it("calculates distance using haversine formula", () => {
