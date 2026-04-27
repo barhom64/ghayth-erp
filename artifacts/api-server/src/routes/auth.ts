@@ -57,7 +57,7 @@ const changePasswordSchema = z.object({
 
 const authRouteLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 20,
+  max: process.env.NODE_ENV === "production" ? 20 : 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة بعد دقيقة" },
