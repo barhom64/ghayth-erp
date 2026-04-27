@@ -111,7 +111,6 @@ const createPilgrimSchema = z.object({
   gender: z.string().optional(),
   dateOfBirth: z.string().optional(),
   phone: z.string().optional(),
-  email: z.string().optional(),
   arrivalDate: z.string().optional(),
   departureDate: z.string().optional(),
   hotelName: z.string().optional(),
@@ -1228,11 +1227,15 @@ router.post("/transport", requirePermission("umrah:write"), async (req, res) => 
 
     const tripCost = Number(b.cost || 0);
     if (tripCost > 0) {
-      const { umrahEngine } = await import("../lib/engines/index.js");
-      await umrahEngine.postTransportExpenseGL(
-        { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-        { id: rows[0].id, cost: tripCost, fromLocation: b.fromLocation, toLocation: b.toLocation, vehicleId: b.vehicleId || undefined, driverId: b.driverId || undefined }
-      );
+      try {
+        const { umrahEngine } = await import("../lib/engines/index.js");
+        await umrahEngine.postTransportExpenseGL(
+          { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+          { id: rows[0].id, cost: tripCost, fromLocation: b.fromLocation, toLocation: b.toLocation, vehicleId: b.vehicleId || undefined, driverId: b.driverId || undefined }
+        );
+      } catch (glErr) {
+        console.error("Transport GL posting failed:", glErr);
+      }
     }
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_transport", entityId: rows[0]?.id, after: { fromLocation: b.fromLocation, toLocation: b.toLocation } }).catch(console.error);
@@ -1370,6 +1373,232 @@ router.post("/assign-bulk", requirePermission("umrah:write"), async (req, res): 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pilgrims.bulk_assigned", entity: "umrah_pilgrims", entityId: 0, details: JSON.stringify({ count: pilgrimIds.length, agentId }) }).catch(console.error);
     res.json({ assigned: pilgrimIds.length, agentId });
   } catch (err) { handleRouteError(err, res, "Bulk assign error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUB-AGENTS CRUD
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/sub-agents", requirePermission("umrah:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery(
+      `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
+       FROM umrah_sub_agents sa
+       LEFT JOIN umrah_agents a ON a.id = sa."agentId"
+       LEFT JOIN clients c ON c.id = sa."clientId"
+       WHERE sa."companyId"=$1 AND sa."deletedAt" IS NULL
+       ORDER BY sa."createdAt" DESC`,
+      [scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "List sub-agents error"); }
+});
+
+router.get("/sub-agents/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const [row] = await rawQuery(
+      `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
+       FROM umrah_sub_agents sa
+       LEFT JOIN umrah_agents a ON a.id = sa."agentId"
+       LEFT JOIN clients c ON c.id = sa."clientId"
+       WHERE sa.id=$1 AND sa."companyId"=$2 AND sa."deletedAt" IS NULL`,
+      [Number(req.params.id), scope.companyId]
+    );
+    if (!row) { res.status(404).json({ error: "الوكيل الفرعي غير موجود" }); return; }
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get sub-agent error"); }
+});
+
+router.post("/sub-agents", requirePermission("umrah:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    if (!b.name || !b.nuskCode) throw new ValidationError("الاسم ورمز نسك مطلوبان");
+    const rows = await rawQuery(
+      `INSERT INTO umrah_sub_agents ("companyId","branchId","nuskCode",name,"agentId","clientId","paymentTerms","defaultPricePerMutamer",phone,email,country,"isActive","createdBy","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW()) RETURNING *`,
+      [scope.companyId, scope.branchId || null, b.nuskCode, b.name, b.agentId || null, b.clientId || null, b.paymentTerms || "postpaid", b.defaultPricePerMutamer || null, b.phone || null, b.email || null, b.country || null, b.isActive !== false, scope.userId]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sub_agents", entityId: rows[0]?.id, after: { name: b.name, nuskCode: b.nuskCode } }).catch(console.error);
+    res.status(201).json(rows[0]);
+  } catch (err) { handleRouteError(err, res, "Create sub-agent error"); }
+});
+
+router.patch("/sub-agents/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body;
+    const sets: string[] = ['"updatedAt"=NOW()', `"updatedBy"=${scope.userId}`];
+    const params: any[] = [id, scope.companyId];
+    for (const key of ["nuskCode","name","agentId","clientId","paymentTerms","defaultPricePerMutamer","phone","email","country","isActive","notes"] as const) {
+      if (b[key] !== undefined) {
+        params.push(b[key]);
+        const col = key === "isActive" ? `"isActive"` : key === "nuskCode" ? `"nuskCode"` : key === "agentId" ? `"agentId"` : key === "clientId" ? `"clientId"` : key === "paymentTerms" ? `"paymentTerms"` : key === "defaultPricePerMutamer" ? `"defaultPricePerMutamer"` : key;
+        sets.push(`${col}=$${params.length}`);
+      }
+    }
+    const [row] = await rawQuery(
+      `UPDATE umrah_sub_agents SET ${sets.join(",")} WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL RETURNING *`,
+      params
+    );
+    if (!row) { res.status(404).json({ error: "الوكيل الفرعي غير موجود" }); return; }
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Update sub-agent error"); }
+});
+
+router.post("/sub-agents/:id/link-client", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { clientId } = req.body;
+    if (!clientId) throw new ValidationError("معرف العميل مطلوب");
+    const [row] = await rawQuery(
+      `UPDATE umrah_sub_agents SET "clientId"=$3, "updatedAt"=NOW(), "updatedBy"=$4 WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL RETURNING *`,
+      [id, scope.companyId, Number(clientId), scope.userId]
+    );
+    if (!row) { res.status(404).json({ error: "الوكيل الفرعي غير موجود" }); return; }
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Link sub-agent client error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VIOLATIONS CRUD
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/violations", requirePermission("umrah:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery(
+      `SELECT v.*,
+              p."fullName" AS "mutamerName", p."passportNumber",
+              a.name AS "agentName",
+              sa.name AS "subAgentName"
+       FROM umrah_violations v
+       LEFT JOIN umrah_pilgrims p ON p.id = v."mutamerId"
+       LEFT JOIN umrah_agents a ON a.id = v."agentId"
+       LEFT JOIN umrah_sub_agents sa ON sa.id = v."subAgentId"
+       WHERE v."companyId"=$1 AND v."deletedAt" IS NULL
+       ORDER BY v."detectedAt" DESC`,
+      [scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "List violations error"); }
+});
+
+router.get("/violations/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const [row] = await rawQuery(
+      `SELECT v.*,
+              p."fullName" AS "mutamerName", p."passportNumber",
+              a.name AS "agentName",
+              sa.name AS "subAgentName"
+       FROM umrah_violations v
+       LEFT JOIN umrah_pilgrims p ON p.id = v."mutamerId"
+       LEFT JOIN umrah_agents a ON a.id = v."agentId"
+       LEFT JOIN umrah_sub_agents sa ON sa.id = v."subAgentId"
+       WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`,
+      [Number(req.params.id), scope.companyId]
+    );
+    if (!row) { res.status(404).json({ error: "المخالفة غير موجودة" }); return; }
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get violation error"); }
+});
+
+router.post("/violations", requirePermission("umrah:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    if (!b.type) throw new ValidationError("نوع المخالفة مطلوب");
+    const rows = await rawQuery(
+      `INSERT INTO umrah_violations ("companyId","branchId",type,"referenceType","referenceNumber","mutamerId","agentId","subAgentId",description,"penaltyAmount",status,"createdBy","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW()) RETURNING *`,
+      [scope.companyId, scope.branchId || null, b.type, b.referenceType || null, b.referenceNumber || null, b.mutamerId || null, b.agentId || null, b.subAgentId || null, b.description || null, b.penaltyAmount || 0, b.status || "open", scope.userId]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_violations", entityId: rows[0]?.id, after: { type: b.type, penaltyAmount: b.penaltyAmount } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.violation.created", entity: "umrah_violations", entityId: rows[0]?.id, after: { type: b.type } }).catch(console.error);
+    res.status(201).json(rows[0]);
+  } catch (err) { handleRouteError(err, res, "Create violation error"); }
+});
+
+router.patch("/violations/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body;
+    const sets: string[] = ['"updatedAt"=NOW()', `"updatedBy"=${scope.userId}`];
+    const params: any[] = [id, scope.companyId];
+    for (const key of ["type","referenceType","referenceNumber","mutamerId","agentId","subAgentId","description","penaltyAmount","status","linkedInvoiceId"] as const) {
+      if (b[key] !== undefined) {
+        params.push(b[key]);
+        const col = /[A-Z]/.test(key) ? `"${key}"` : key;
+        sets.push(`${col}=$${params.length}`);
+      }
+    }
+    const [row] = await rawQuery(
+      `UPDATE umrah_violations SET ${sets.join(",")} WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL RETURNING *`,
+      params
+    );
+    if (!row) { res.status(404).json({ error: "المخالفة غير موجودة" }); return; }
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Update violation error"); }
+});
+
+router.delete("/violations/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [row] = await rawQuery(
+      `UPDATE umrah_violations SET "deletedAt"=NOW(), "updatedBy"=$3 WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL RETURNING id`,
+      [id, scope.companyId, scope.userId]
+    );
+    if (!row) { res.status(404).json({ error: "المخالفة غير موجودة" }); return; }
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_violations", entityId: id }).catch(console.error);
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Delete violation error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MANUAL PENALTY CREATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/penalties", requirePermission("umrah:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = req.body;
+    if (!b.pilgrimId && !b.agentId) throw new ValidationError("يجب تحديد المعتمر أو الوكيل");
+    const rows = await rawQuery(
+      `INSERT INTO umrah_penalties ("companyId","pilgrimId","agentId","seasonId",type,amount,reason,status,"createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [scope.companyId, b.pilgrimId || null, b.agentId || null, b.seasonId || null, b.type || "manual", b.amount || 0, b.reason || null, b.status || "pending", scope.userId]
+    );
+    if (Number(b.amount) > 0) {
+      try {
+        let pilgrimName = "غير محدد";
+        let agentName: string | undefined;
+        if (b.pilgrimId) {
+          const [p] = await rawQuery<any>(`SELECT "fullName" FROM umrah_pilgrims WHERE id=$1`, [b.pilgrimId]);
+          if (p) pilgrimName = p.fullName;
+        }
+        if (b.agentId) {
+          const [a] = await rawQuery<any>(`SELECT name FROM umrah_agents WHERE id=$1`, [b.agentId]);
+          if (a) agentName = a.name;
+        }
+        const { umrahEngine } = await import("../lib/engines/index.js");
+        await umrahEngine.postPenaltyGL(
+          { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+          { id: rows[0].id, amount: Number(b.amount), pilgrimName, agentName, type: b.type || "manual" }
+        );
+      } catch (glErr) {
+        console.error("Penalty GL posting failed:", glErr);
+      }
+    }
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_penalties", entityId: rows[0]?.id, after: { amount: b.amount, type: b.type } }).catch(console.error);
+    res.status(201).json(rows[0]);
+  } catch (err) { handleRouteError(err, res, "Create penalty error"); }
 });
 
 export default router;

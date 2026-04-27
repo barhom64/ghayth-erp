@@ -1335,7 +1335,7 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
       await fleetEngine.postMaintenanceGL(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
         { id, vehicleId: m.vehicleId, totalCost: finalCost, type: m.type, description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}` }
-      );
+      ).catch((e: unknown) => console.error("Maintenance GL failed:", e));
     }
 
     // Mark the scheduled obligation as met and register the next one
@@ -1682,7 +1682,7 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
       await fleetEngine.postFuelExpenseGL(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
         { id: insertId, vehicleId: resolvedVehicleId, amount: totalCost, description: `مصروف وقود${plateLabel} / ${liters} لتر / ${stationName ?? ""}` }
-      );
+      ).catch((e: unknown) => console.error("Fuel GL failed:", e));
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_fuel_logs WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
@@ -1778,7 +1778,7 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
       await fleetEngine.postInsuranceGL(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
         { id: insertId, vehicleId: Number(b.vehicleId), premium, description: `مصروف تأمين${plateLabel} / ${insuranceTypeLabel} / ${b.provider ?? ""}` }
-      );
+      ).catch((e: unknown) => console.error("Insurance GL failed:", e));
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_insurance WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);

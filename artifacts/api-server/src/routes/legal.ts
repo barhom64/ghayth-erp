@@ -907,11 +907,15 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
         invoiceError = "فشل إنشاء فاتورة الأتعاب";
       }
 
-      const glResult = await legalEngine.postLegalSessionFeeGL(
-        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-        { id: insertId, caseTitle: legalCase.title, sessionDate: b.sessionDate, billingAmount, vatAmount }
-      );
-      journalEntryId = glResult.journalId;
+      try {
+        const glResult = await legalEngine.postLegalSessionFeeGL(
+          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+          { id: insertId, caseTitle: legalCase.title, sessionDate: b.sessionDate, billingAmount, vatAmount }
+        );
+        journalEntryId = glResult.journalId;
+      } catch (glErr) {
+        console.error("Legal session fee GL failed:", glErr);
+      }
     }
 
     createAuditLog({

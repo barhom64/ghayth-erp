@@ -305,11 +305,16 @@ async function postStoreOrderGl(scope: any, order: any) {
     if (cost > 0) totalCogs += cost;
   }
 
-  const { storeEngine } = await import("../lib/engines/index.js");
-  const result = await storeEngine.postOrderGL(
-    { companyId: scope.companyId, branchId: order.branchId || scope.branchId || 0, createdBy: scope.userId },
-    { id: order.id, subtotal: totalAmount, vatAmount: 0, total: totalAmount, cogsAmount: totalCogs }
-  );
+  let result: any;
+  try {
+    const { storeEngine } = await import("../lib/engines/index.js");
+    result = await storeEngine.postOrderGL(
+      { companyId: scope.companyId, branchId: order.branchId || scope.branchId || 0, createdBy: scope.userId },
+      { id: order.id, subtotal: totalAmount, vatAmount: 0, total: totalAmount, cogsAmount: totalCogs }
+    );
+  } catch (e) {
+    console.error("Store order GL failed:", e);
+  }
 
   if (result) {
     await rawExecute(

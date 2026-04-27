@@ -501,11 +501,15 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
 
       const billableAmount = Number(b.billableAmount || 0);
       if (billableAmount > 0 && ticket.clientId) {
-        const { supportEngine } = await import("../lib/engines/index.js");
-        await supportEngine.postBillingGL(
-          { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-          { id: ticketId, ref: ticket.ref, clientId: ticket.clientId, billableAmount }
-        );
+        try {
+          const { supportEngine } = await import("../lib/engines/index.js");
+          await supportEngine.postBillingGL(
+            { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+            { id: ticketId, ref: ticket.ref, clientId: ticket.clientId, billableAmount }
+          );
+        } catch (glErr) {
+          console.error("Support billing GL failed:", glErr);
+        }
       }
 
       if (ticket.clientId) {

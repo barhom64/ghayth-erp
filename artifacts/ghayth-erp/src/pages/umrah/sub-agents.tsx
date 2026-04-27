@@ -43,7 +43,6 @@ const PAYMENT_TERMS_LABEL: Record<PaymentTerms, string> = {
 };
 
 export default function UmrahSubAgents() {
-  // TODO: endpoint not yet implemented — placeholder response
   const subAgentsQ = useApiQuery<{ data: SubAgent[] }>(["umrah-sub-agents"], "/umrah/sub-agents");
   const agentsQ = useApiQuery<{ data: any[] }>(["umrah-agents"], "/umrah/agents");
   // Reuses existing clients endpoint

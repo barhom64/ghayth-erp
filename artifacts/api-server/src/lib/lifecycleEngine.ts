@@ -584,6 +584,17 @@ export const STATE_MACHINES: StateMachine[] = [
       closed: ["open"],
     },
   },
+  {
+    entity: "fleet_traffic_violations",
+    label: "مخالفة مرورية",
+    transitions: {
+      pending: ["unpaid", "paid", "disputed", "cancelled"],
+      unpaid: ["paid", "disputed", "cancelled"],
+      disputed: ["unpaid", "paid", "cancelled"],
+      paid: [],
+      cancelled: [],
+    },
+  },
 ];
 
 const _smIndex = new Map<string, StateMachine>(
