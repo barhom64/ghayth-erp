@@ -914,13 +914,15 @@ router.get("/leave-types", requirePermission("hr:read"), async (req, res) => {
 router.get("/leave-balance", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const { employeeId: qEmployeeId } = req.query as { employeeId?: string };
+    const targetEmployeeId = qEmployeeId ? Number(qEmployeeId) : scope.employeeId;
     const year = new Date().getFullYear();
     const balancesFromTable = await rawQuery<any>(
       `SELECT lb.*, lt.name
        FROM hr_leave_balances lb
        JOIN hr_leave_types lt ON lt.id = lb."leaveTypeId"
        WHERE lb."companyId" = $1 AND lb."employeeId" = $2 AND lb.year = $3`,
-      [scope.companyId, scope.employeeId, year]
+      [scope.companyId, targetEmployeeId, year]
     );
 
     if (balancesFromTable.length > 0) {
@@ -943,7 +945,7 @@ router.get("/leave-balance", requirePermission("hr:read"), async (req, res) => {
        WHERE lt."companyId" = $1
        GROUP BY lt.id, lt.name, lt."annualDays"
        ORDER BY lt.name`,
-      [scope.companyId, scope.employeeId, year]
+      [scope.companyId, targetEmployeeId, year]
     );
 
     const data = balances.map((b: any) => ({
@@ -3413,15 +3415,20 @@ async function violationApprovalAction(req: any, res: any, newStatus: "approved"
     if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
       throw new ValidationError(newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع", { field: "notes" });
     }
-    await rawExecute(`UPDATE employee_violations SET status=$1 WHERE id=$2 AND "companyId"=$3`, [newStatus, id, scope.companyId]);
-    try {
-      await rawExecute(
-        `INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('violation',$1,$2,$3,$4,$5)`,
-        [id, newStatus, notes || null, scope.userId, scope.companyId]
-      );
-    } catch (e) { console.error(e); }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: `violation.${newStatus}`, entity: "employee_violations", entityId: id, before: { status: violation.status }, after: { status: newStatus } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `violation.${newStatus}`, entity: "hr_violations", entityId: id, details: JSON.stringify({ id, status: newStatus }) }).catch(console.error);
+    await applyTransition({
+      entity: "employee_violations",
+      id,
+      scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+      action: `violation.${newStatus}`,
+      toState: newStatus,
+      reason: notes || undefined,
+      onApply: async (_row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('violation',$1,$2,$3,$4,$5)`,
+          [id, newStatus, notes || null, scope.userId, scope.companyId]
+        );
+      },
+    });
     const labels: Record<string, string> = { approved: "تم اعتماد المخالفة", rejected: "تم رفض المخالفة", returned: "تم إرجاع المخالفة" };
     res.json({ message: labels[newStatus], status: newStatus });
   } catch (err) { handleRouteError(err, res, "Violation approval error:"); }
@@ -4821,15 +4828,14 @@ router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, re
     // Initialize summary
     await recomputeSummary(cycleId, scope.companyId, employeeId);
 
-    // Update cycle status
-    await rawExecute(`UPDATE evaluation_cycles SET status='in_progress' WHERE id=$1 AND "companyId"=$2`, [cycleId, scope.companyId]);
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "create", entity: "evaluation_cycles", entityId: cycleId,
-      after: { employeeId, period, status: "in_progress", participantCount: participants.length },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "evaluation.created", entity: "hr_evaluation_cycles", entityId: cycleId, details: JSON.stringify({ employeeId, period }) }).catch(console.error);
+    await applyTransition({
+      entity: "evaluation_cycles",
+      id: cycleId,
+      scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+      action: "evaluation.created",
+      toState: "in_progress",
+      after: { employeeId, period, participantCount: participants.length },
+    });
     res.status(201).json({ id: cycleId, period, employeeId, status: 'in_progress', systemEval: evalData });
   } catch (err) { handleRouteError(err, res, "خطأ في بدء دورة التقييم"); }
 });
@@ -5739,13 +5745,6 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
     }
 
     if (approved) {
-      // HR approved — move to pending_receiving_manager for the destination branch manager to confirm
-      await rawExecute(
-        `UPDATE employee_transfers SET status='pending_receiving_manager',"approvedBy"=$1,"approvedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3 AND "companyId"=$4`,
-        [scope.employeeId, notes || null, id, scope.companyId]
-      );
-
-      // Notify the receiving branch manager
       const [receivingMgr] = await rawQuery<any>(
         `SELECT ea.id FROM employee_assignments ea
          WHERE ea."companyId"=$1 AND ea."branchId"=$2
@@ -5753,56 +5752,43 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
          ORDER BY CASE ea.role WHEN 'branch_manager' THEN 1 WHEN 'general_manager' THEN 2 ELSE 3 END LIMIT 1`,
         [scope.companyId, transfer.toBranchId]
       );
-      if (receivingMgr) {
-        createNotification({
-          companyId: scope.companyId, assignmentId: receivingMgr.id,
+      await applyTransition({
+        entity: "employee_transfers",
+        id,
+        scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+        action: "hr.transfer.hr_approved",
+        fromStates: ["pending"],
+        toState: "pending_receiving_manager",
+        reason: notes || undefined,
+        setExtras: { approvedBy: scope.employeeId, approvedAt: { raw: "NOW()" }, notes: { raw: `COALESCE('${(notes || '').replace(/'/g, "''")}', notes)` } },
+        notifications: receivingMgr ? [{
+          assignmentId: receivingMgr.id,
           type: "transfer_receiving_approval", title: "طلب استقبال موظف منقول",
           body: `يحتاج استلام موظف منقول إلى فرعك — يرجى المراجعة والتأكيد`,
           priority: "high", refType: "employee_transfer", refId: id,
-        }).catch(console.error);
-      }
-
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: "hr.transfer.hr_approved",
-        entity: "employee_transfers",
-        entityId: id,
-        before: { status: "pending" },
-        after: { status: "pending_receiving_manager", approvedBy: scope.employeeId },
-        reason: notes ?? undefined,
-      }).catch(console.error);
+        }] : [],
+      });
     } else {
-      await rawExecute(
-        `UPDATE employee_transfers SET status='rejected',"approvedBy"=$1,"approvedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3 AND "companyId"=$4`,
-        [scope.employeeId, notes || null, id, scope.companyId]
-      );
-      // Notify employee of rejection
       const [empAssign] = await rawQuery<any>(
         `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
         [transfer.employeeId, scope.companyId]
       );
-      if (empAssign) {
-        createNotification({
-          companyId: scope.companyId, assignmentId: empAssign.id,
+      await applyTransition({
+        entity: "employee_transfers",
+        id,
+        scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+        action: "hr.transfer.rejected",
+        fromStates: ["pending"],
+        toState: "rejected",
+        reason: notes || undefined,
+        setExtras: { approvedBy: scope.employeeId, approvedAt: { raw: "NOW()" }, notes: { raw: `COALESCE('${(notes || '').replace(/'/g, "''")}', notes)` } },
+        notifications: empAssign ? [{
+          assignmentId: empAssign.id,
           type: "transfer_decision", title: "تم رفض طلب النقل",
           body: notes || "تم رفض طلب النقل من قبل مدير الموارد البشرية",
           priority: "high", refType: "employee_transfer", refId: id,
-        }).catch(console.error);
-      }
-
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: "hr.transfer.rejected",
-        entity: "employee_transfers",
-        entityId: id,
-        before: { status: "pending" },
-        after: { status: "rejected", approvedBy: scope.employeeId },
-        reason: notes ?? undefined,
-      }).catch(console.error);
+        }] : [],
+      });
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1`, [id]);
@@ -5876,58 +5862,35 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
       const newDeptId = transfer.toDeptId;
       const newJobTitle = transfer.toJobTitle;
       const newSalary = transfer.toSalary;
-      await rawExecute(
-        `UPDATE employee_assignments SET "branchId"=$1,"departmentId"=$2,"jobTitle"=$3,salary=$4 WHERE "employeeId"=$5 AND "companyId"=$6 AND status='active'`,
-        [newBranchId, newDeptId, newJobTitle, newSalary, transfer.employeeId, scope.companyId]
-      );
-      await rawExecute(
-        `UPDATE employee_transfers SET status='approved',"receivedBy"=$1,"receivedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3 AND "companyId"=$4`,
-        [scope.employeeId, notes || null, id, scope.companyId]
-      );
-
       // Notify employee of final approval
       const [empAssign] = await rawQuery<any>(
         `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
         [transfer.employeeId, scope.companyId]
       );
-      if (empAssign) {
-        createNotification({
-          companyId: scope.companyId, assignmentId: empAssign.id,
+      await applyTransition({
+        entity: "employee_transfers",
+        id,
+        scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+        action: "hr.transfer.completed",
+        fromStates: ["pending_receiving_manager"],
+        toState: "approved",
+        reason: notes || undefined,
+        setExtras: { receivedBy: scope.employeeId, receivedAt: { raw: "NOW()" } },
+        onApply: async (_row, client) => {
+          await client.query(
+            `UPDATE employee_assignments SET "branchId"=$1,"departmentId"=$2,"jobTitle"=$3,salary=$4 WHERE "employeeId"=$5 AND "companyId"=$6 AND status='active'`,
+            [newBranchId, newDeptId, newJobTitle, newSalary, transfer.employeeId, scope.companyId]
+          );
+        },
+        after: { branchId: newBranchId, departmentId: newDeptId, jobTitle: newJobTitle, salary: newSalary },
+        notifications: empAssign ? [{
+          assignmentId: empAssign.id,
           type: "transfer_decision", title: "تم اعتماد نقلك وتفعيله",
           body: notes || "تمت الموافقة على نقلك وتم تحديث بياناتك",
           priority: "high", refType: "employee_transfer", refId: id,
-        }).catch(console.error);
-      }
-
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: "hr.transfer.completed",
-        entity: "employee_transfers",
-        entityId: id,
-        before: {
-          status: "pending_receiving_manager",
-          branchId: transfer.fromBranchId,
-          departmentId: transfer.fromDeptId,
-          jobTitle: transfer.fromJobTitle,
-          salary: transfer.fromSalary,
-        },
-        after: {
-          status: "approved",
-          branchId: newBranchId,
-          departmentId: newDeptId,
-          jobTitle: newJobTitle,
-          salary: newSalary,
-        },
-        reason: notes ?? undefined,
-      }).catch(console.error);
+        }] : [],
+      });
     } else {
-      await rawExecute(
-        `UPDATE employee_transfers SET status='rejected_by_receiver',"receivedBy"=$1,"receivedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3 AND "companyId"=$4`,
-        [scope.employeeId, notes || null, id, scope.companyId]
-      );
-
       // Notify employee — previously silent if receiver declined, which
       // left the employee without feedback. Also notify the original HR
       // manager so they know the receiving branch declined.
@@ -5935,26 +5898,22 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
         `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
         [transfer.employeeId, scope.companyId]
       );
-      if (empAssign) {
-        createNotification({
-          companyId: scope.companyId, assignmentId: empAssign.id,
+      await applyTransition({
+        entity: "employee_transfers",
+        id,
+        scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+        action: "hr.transfer.rejected_by_receiver",
+        fromStates: ["pending_receiving_manager"],
+        toState: "rejected_by_receiver",
+        reason: notes || undefined,
+        setExtras: { receivedBy: scope.employeeId, receivedAt: { raw: "NOW()" } },
+        notifications: empAssign ? [{
+          assignmentId: empAssign.id,
           type: "transfer_decision", title: "رفض الفرع المستقبل طلب نقلك",
           body: notes || "رفض مدير الفرع المستقبل استقبالك. راجع الموارد البشرية.",
           priority: "high", refType: "employee_transfer", refId: id,
-        }).catch(console.error);
-      }
-
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: "hr.transfer.rejected_by_receiver",
-        entity: "employee_transfers",
-        entityId: id,
-        before: { status: "pending_receiving_manager" },
-        after: { status: "rejected_by_receiver", receivedBy: scope.employeeId },
-        reason: notes ?? undefined,
-      }).catch(console.error);
+        }] : [],
+      });
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1`, [id]);

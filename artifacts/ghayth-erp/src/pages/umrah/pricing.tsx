@@ -33,11 +33,11 @@ interface PricingRow {
   notes?: string;
 }
 
-// TODO: endpoint not yet implemented — placeholder response
+
 export default function UmrahPricing() {
   const pricingQ = useApiQuery<{ data: PricingRow[] }>(["umrah-pricing"], "/umrah/pricing");
   const agentsQ = useApiQuery<{ data: any[] }>(["umrah-agents"], "/umrah/agents");
-  // TODO: endpoint not yet implemented — placeholder response
+  
   const subAgentsQ = useApiQuery<{ data: any[] }>(["umrah-sub-agents"], "/umrah/sub-agents");
   const seasonsQ = useApiQuery<{ data: any[] }>(["umrah-seasons"], "/umrah/seasons");
 

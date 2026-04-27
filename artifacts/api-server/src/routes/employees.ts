@@ -58,6 +58,7 @@ const createEmployeeSchema = z.object({
   iban: z.string().optional().nullable(),
   emergencyContact: z.string().optional().nullable(),
   emergencyPhone: z.string().optional().nullable(),
+  attachments: z.any().optional(),
 });
 
 const patchEmployeeSchema = z.object({

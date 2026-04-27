@@ -654,6 +654,13 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
         );
       }
 
+      await client.query(
+        `INSERT INTO event_logs ("companyId", "userId", action, entity, "entityId", details)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [scope.companyId, scope.userId, "invoice.payment", "invoices", String(id),
+         JSON.stringify({ fromStatus: invoice.status, toStatus: newStatus, amount: Number(amount), newPaidAmount: newPaid })]
+      );
+
     });
 
     // Create the payment journal entry via the centralized helper (handles
@@ -840,6 +847,12 @@ invoicesRouter.delete("/invoices/:id", requirePermission("finance:delete"), asyn
       `UPDATE invoices SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
+    rawExecute(
+      `INSERT INTO event_logs ("companyId", "userId", action, entity, "entityId", details)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [scope.companyId, scope.userId, "invoice.deleted", "invoices", String(id),
+       JSON.stringify({ fromStatus: inv.status, toStatus: "cancelled" })]
+    ).catch(console.error);
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -864,65 +877,61 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
 
     const { id } = req.params;
     const { notes } = req.body as any;
-    const [inv] = await rawQuery<any>(`SELECT * FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
-    if (!inv) throw new NotFoundError("الفاتورة غير موجودة");
     if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
       throw new ValidationError(
         newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع",
         { field: "notes", fix: "أدخل سبب القرار في حقل الملاحظات" }
       );
     }
-    const allowedFromApproval = INVOICE_TRANSITIONS[inv.status] ?? [];
-    if (!allowedFromApproval.includes(newStatus)) {
-      throw new ConflictError(
-        `لا يمكن ${newStatus === "approved" ? "اعتماد" : newStatus === "rejected" ? "رفض" : "إرجاع"} فاتورة بحالة "${inv.status}"`,
-        { field: "status", fix: `الانتقالات المسموحة: ${allowedFromApproval.length ? allowedFromApproval.join(", ") : "لا يوجد"}` }
-      );
-    }
-    await rawExecute(`UPDATE invoices SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [newStatus, Number(id), scope.companyId]);
 
-    // CRITICAL: If the invoice is rejected or returned after the GL was
-    // already posted at creation time, reverse the AR/Revenue/VAT balances
-    // so the books stay balanced. Without this the accounts are permanently
-    // overstated. Uses the same reversal pattern as invoice deletion above.
-    if (newStatus === "rejected" || newStatus === "returned") {
-      const [je] = await rawQuery<any>(
-        `SELECT id, status FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
-        [scope.companyId, `JE-${inv.ref}`]
-      );
-      if (je && je.status !== "cancelled" && je.status !== "reversed") {
-        try {
-          await reverseAccountBalances(scope.companyId, Number(je.id));
-          await rawExecute(
-            `UPDATE journal_entries SET status = 'reversed' WHERE id = $1 AND "companyId" = $2`,
-            [Number(je.id), scope.companyId]
+    const fromStates = Object.entries(INVOICE_TRANSITIONS)
+      .filter(([, targets]) => (targets as readonly string[]).includes(newStatus))
+      .map(([src]) => src);
+
+    const row = await applyTransition({
+      entity: "invoices",
+      id: Number(id),
+      scope,
+      action: `invoice.${newStatus}`,
+      fromStates,
+      toState: newStatus,
+      extraWhere: `"deletedAt" IS NULL`,
+      reason: notes ?? undefined,
+      after: { notes: notes ?? null },
+      onApply: async (inv, client) => {
+        if (newStatus === "rejected" || newStatus === "returned") {
+          const jeRes = await client.query(
+            `SELECT id, status FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
+            [scope.companyId, `JE-${inv.ref}`]
           );
-        } catch (e) { console.error("Failed to reverse invoice GL on rejection:", e); }
-      }
-    }
+          const je = jeRes.rows[0];
+          if (je && je.status !== "cancelled" && je.status !== "reversed") {
+            try {
+              await reverseAccountBalances(scope.companyId, Number(je.id));
+              await client.query(
+                `UPDATE journal_entries SET status = 'reversed' WHERE id = $1 AND "companyId" = $2`,
+                [Number(je.id), scope.companyId]
+              );
+            } catch (e) { console.error("Failed to reverse invoice GL on rejection:", e); }
+          }
+        }
+        try {
+          await client.query(
+            `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('invoice',$1,$2,$3,$4,$5)`,
+            [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
+          );
+        } catch (e) { console.error(e); }
+      },
+    });
 
-    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('invoice',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: newStatus, entity: "invoices", entityId: Number(id),
-      before: { status: inv.status }, after: { status: newStatus, notes: notes ?? null },
-    }).catch(console.error);
-
-    emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: `invoice.${newStatus}`, entity: "invoices", entityId: Number(id),
-      details: `فاتورة ${inv.ref || id} — ${newStatus}`,
-    }).catch(console.error);
-
-    if (inv.createdBy) {
+    if (row.createdBy) {
       const titleMap: Record<string, string> = { approved: "تم اعتماد الفاتورة", rejected: "تم رفض الفاتورة", returned: "تم إرجاع الفاتورة" };
       createNotification({
         companyId: scope.companyId,
-        assignmentId: Number(inv.createdBy),
+        assignmentId: Number(row.createdBy),
         type: `invoice_${newStatus}`,
         title: titleMap[newStatus] || `حالة الفاتورة: ${newStatus}`,
-        body: `الفاتورة ${inv.ref || id}${notes ? ` — ${notes}` : ''}`,
+        body: `الفاتورة ${row.ref || id}${notes ? ` — ${notes}` : ''}`,
         priority: newStatus === "rejected" ? "high" : "normal",
         refType: "invoice",
         refId: Number(id),
@@ -933,6 +942,8 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
+    const le = lifecycleErrorResponse(err);
+    if (le) { res.status(le.status).json(le.body); return; }
     handleRouteError(err, res, `Invoice ${newStatus} error:`);
   }
 }

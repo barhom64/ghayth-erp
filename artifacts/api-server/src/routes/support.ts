@@ -12,7 +12,7 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { slaDeadlineForPriority, haversineKm, loadBalanceAssign } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { applyTransition, LifecycleError } from "../lib/lifecycleEngine.js";
+import { applyTransition, LifecycleError, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import type { ExtraValue } from "../lib/lifecycleEngine.js";
 const router = Router();
 router.use(authMiddleware);
@@ -349,31 +349,33 @@ router.post("/tickets/:id/field-visit", requirePermission("support:write"), asyn
     const ticketId = Number(req.params.id);
     const b = req.body;
 
-    const [ticket] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
-    if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
-
     let distanceKm: number | null = null;
     if (b.clientLat && b.clientLon && b.officeLat && b.officeLon) {
       distanceKm = haversineKm(Number(b.officeLat), Number(b.officeLon), Number(b.clientLat), Number(b.clientLon));
     }
 
-    await rawExecute(
-      `UPDATE support_tickets SET status='field_visit', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
-      [ticketId, scope.companyId]
-    );
+    const row = await applyTransition<any>({
+      entity: "support_tickets",
+      id: ticketId,
+      scope,
+      action: "support.ticket.field_visit",
+      toState: "field_visit",
+      extraWhere: '"deletedAt" IS NULL',
+      after: { distanceKm, visitDate: b.visitDate },
+    });
 
-    if (ticket.assigneeId) {
+    if (row.assigneeId) {
       try {
         const [asgn] = await rawQuery<any>(
           `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND status='active' LIMIT 1`,
-          [ticket.assigneeId]
+          [row.assigneeId]
         );
         if (asgn) {
           createNotification({
             companyId: scope.companyId,
             assignmentId: asgn.id,
             type: "field_visit",
-            title: `زيارة ميدانية — تذكرة ${ticket.ref}`,
+            title: `زيارة ميدانية — تذكرة ${row.ref}`,
             body: `زيارة ميدانية مطلوبة${distanceKm ? ` (${distanceKm.toFixed(1)} كم)` : ''} — ${b.visitDate || 'بأسرع وقت'}`,
             priority: "high",
             refType: "support_tickets",
@@ -383,17 +385,20 @@ router.post("/tickets/:id/field-visit", requirePermission("support:write"), asyn
       } catch (e) { console.error("Field visit notification error:", e); }
     }
 
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.ticket.field_visit", entity: "support_tickets", entityId: ticketId, details: JSON.stringify({ distanceKm, visitDate: b.visitDate }) }).catch(console.error);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "field_visits", entityId: ticketId,
-      after: { ticketId, distanceKm, visitDate: b.visitDate, assigneeId: ticket.assigneeId },
+      after: { ticketId, distanceKm, visitDate: b.visitDate, assigneeId: row.assigneeId },
     }).catch(console.error);
     res.json({
       ticketId, status: 'field_visit', distanceKm,
-      visitDate: b.visitDate, assigneeId: ticket.assigneeId,
+      visitDate: b.visitDate, assigneeId: row.assigneeId,
     });
-  } catch (err) { handleRouteError(err, res, "Field visit error:"); }
+  } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
+    handleRouteError(err, res, "Field visit error:");
+  }
 });
 
 // State machine for support tickets — the allowed transitions from each
@@ -496,11 +501,15 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
 
       const billableAmount = Number(b.billableAmount || 0);
       if (billableAmount > 0 && ticket.clientId) {
-        const { supportEngine } = await import("../lib/engines/index.js");
-        await supportEngine.postBillingGL(
-          { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-          { id: ticketId, ref: ticket.ref, clientId: ticket.clientId, billableAmount }
-        );
+        try {
+          const { supportEngine } = await import("../lib/engines/index.js");
+          await supportEngine.postBillingGL(
+            { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+            { id: ticketId, ref: ticket.ref, clientId: ticket.clientId, billableAmount }
+          );
+        } catch (glErr) {
+          console.error("Support billing GL failed:", glErr);
+        }
       }
 
       if (ticket.clientId) {

@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Cog, Building, Users, Building2, ScrollText, Plus, X, Save, Pencil, Trash2, Printer, Eye, Shield, SlidersHorizontal, GitBranch, CheckCircle, Settings2, Workflow, Clock, AlertTriangle, BookOpen, ArrowLeftRight, AlertCircle, Zap, MessageSquare, Link2, WifiOff, Wifi, RefreshCw, ToggleLeft, ToggleRight, Key } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
@@ -28,7 +28,7 @@ import { RolePermissionsTab } from "./settings/role-permissions-tab";
 import { ApprovalWorkflowsTab } from "./settings/approval-workflows-tab";
 
 function GeneralSettings() {
-  const { data: settingsData, isLoading } = useApiQuery<{ data: { key: string; value: string }[] }>(["settings-general"], "/settings/general");
+  const { data: settingsData, isLoading, isError, error, refetch } = useApiQuery<{ data: { key: string; value: string }[] }>(["settings-general"], "/settings/general");
   const { reload: reloadGlobalSettings } = useSettings();
   const { toast } = useToast();
   const [form, setForm] = useState({
@@ -85,9 +85,8 @@ function GeneralSettings() {
     saveMut.mutate(form);
   };
 
-  if (isLoading) {
-    return <div className="flex justify-center p-8"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
-  }
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
 
   return (
     <div className="space-y-4">
@@ -112,7 +111,7 @@ function GeneralSettings() {
 function CrudSection({ title, endpoint, queryKey, fields }: {
   title: string; endpoint: string; queryKey: string; fields: { name: string; label: string; required?: boolean }[];
 }) {
-  const { data } = useApiQuery<any>([queryKey], endpoint);
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>([queryKey], endpoint);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<Record<string, string>>(() => Object.fromEntries(fields.map((f) => [f.name, ""])));
@@ -171,6 +170,9 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
   const handleDelete = (id: number) => {
     deleteMut.mutate({ id });
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
 
   return (
     <div className="space-y-4">
@@ -268,8 +270,10 @@ const SOURCE_LABELS: Record<string, { label: string; color: string; bg: string }
 };
 
 function ResolvedSettingsTab() {
-  const { data } = useApiQuery<any>(["settings-resolved"], "/settings/resolved");
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["settings-resolved"], "/settings/resolved");
   const items = data?.data || [];
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -300,8 +304,10 @@ function ResolvedSettingsTab() {
 }
 
 function AuditLogTab() {
-  const { data } = useApiQuery<any>(["audit-log"], "/settings/audit-log");
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["audit-log"], "/settings/audit-log");
   const items = data?.data || [];
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">سجل التدقيق</h3>

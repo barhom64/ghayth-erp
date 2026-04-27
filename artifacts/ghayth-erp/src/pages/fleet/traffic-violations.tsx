@@ -15,6 +15,7 @@ import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const VIOLATION_TYPES: Record<string, string> = {
   speeding: "تجاوز السرعة",
@@ -36,13 +37,16 @@ export default function TrafficViolationsPage() {
   const [filters, setFilters] = useFilters();
   const [form, setForm] = useState({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: new Date().toISOString().split("T")[0], fineAmount: "", location: "", violationNumber: "", notes: "" });
 
-  const { data, refetch } = useApiQuery<any>(["traffic-violations"], "/fleet/traffic-violations");
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(["traffic-violations"], "/fleet/traffic-violations");
   const violations = asList(data?.data || data);
 
   const { data: vehicles } = useApiQuery<any>(["fleet-vehicles"], "/fleet/vehicles?limit=200");
   const { data: drivers } = useApiQuery<any>(["fleet-drivers"], "/fleet/drivers?limit=200");
   const vehicleList = asList(vehicles?.data || vehicles);
   const driverList = asList(drivers?.data || drivers);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={refetch} />;
 
   const pendingFines = violations.filter((v: any) => v.status !== "paid").reduce((s: number, v: any) => s + Number(v.fineAmount || 0), 0);
   const paidFines = violations.filter((v: any) => v.status === "paid").reduce((s: number, v: any) => s + Number(v.fineAmount || 0), 0);

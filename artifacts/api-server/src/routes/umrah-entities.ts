@@ -9,7 +9,6 @@ import {
   generateSalesInvoice,
   registerPayment,
   generateStatement,
-  getDashboard,
 } from "../lib/umrahInvoicingEngine.js";
 import {
   parseMutamersWorkbook,
@@ -478,6 +477,25 @@ router.get("/nusk-invoices", requirePermission("umrah:read"), async (req, res) =
 });
 
 // ============================================================================
+// EMPLOYEE ASSIGNMENTS (umrah-specific roles / positions)
+// ============================================================================
+
+router.get("/employees/:employeeId/assignments", requirePermission("umrah:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const employeeId = Number(req.params.employeeId);
+    const rows = await rawQuery(
+      `SELECT ea.id, ea."jobTitle" AS title, ea.role, ea."branchId", ea.status
+       FROM employee_assignments ea
+       WHERE ea."employeeId" = $1 AND ea."companyId" = $2 AND ea.status = 'active'
+       ORDER BY ea.id DESC LIMIT 50`,
+      [employeeId, scope.companyId]
+    );
+    res.json({ data: rows });
+  } catch (err) { handleRouteError(err, res, "Employee assignments error"); }
+});
+
+// ============================================================================
 // COMMISSION PLANS
 // ============================================================================
 
@@ -915,18 +933,5 @@ router.get("/statements/:subAgentId", requirePermission("umrah:read"), async (re
 // ============================================================================
 // DASHBOARD
 // ============================================================================
-
-router.get("/dashboard", requirePermission("umrah:read"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { seasonId } = req.query as any;
-    if (!seasonId) throw new ValidationError("معرف الموسم مطلوب");
-    const result = await getDashboard(
-      { companyId: scope.companyId, userId: scope.userId },
-      Number(seasonId)
-    );
-    res.json(result);
-  } catch (err) { handleRouteError(err, res, "Umrah dashboard"); }
-});
 
 export default router;

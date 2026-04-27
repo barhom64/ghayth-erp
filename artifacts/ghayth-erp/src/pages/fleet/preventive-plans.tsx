@@ -13,6 +13,7 @@ import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const SERVICE_TYPES: Record<string, string> = {
   oil_change: "تغيير زيت",
@@ -49,7 +50,7 @@ export default function PreventivePlansPage() {
     nextServiceDate: "", estimatedCost: "", notes: "",
   });
 
-  const { data, refetch } = useApiQuery<any>(
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["preventive-plans", vehicleFilter],
     `/fleet/preventive-plans${vehicleFilter && vehicleFilter !== "__all__" ? `?vehicleId=${vehicleFilter}` : ""}`
   );
@@ -75,6 +76,9 @@ export default function PreventivePlansPage() {
       refetch();
     } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={refetch} />;
 
   const overdueCount = plans.filter((p: any) => getDueStatus(p.nextServiceDate) === "overdue").length;
   const dueSoonCount = plans.filter((p: any) => getDueStatus(p.nextServiceDate) === "due_soon").length;

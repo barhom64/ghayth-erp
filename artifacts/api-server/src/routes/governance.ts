@@ -5,6 +5,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 const createPolicySchema = z.object({
   title: z.string().min(1, "عنوان السياسة مطلوب"),
@@ -181,10 +182,15 @@ router.post("/policies/:id/new-version", requirePermission("governance:write"), 
       ]
     );
 
-    await rawExecute(
-      `UPDATE governance_policies SET status='archived' WHERE id=$1 AND "companyId"=$2`,
-      [parentId, scope.companyId]
-    );
+    await applyTransition({
+      entity: "governance_policies",
+      id: parentId,
+      scope,
+      action: "governance.policy.archived",
+      fromStates: ["draft", "active"],
+      toState: "archived",
+      reason: `أرشفة تلقائية — إصدار جديد v${nextVersion}`,
+    });
 
     const links = await rawQuery<any>(`SELECT module FROM policy_module_links WHERE "policyId"=$1`, [parentId]);
     for (const link of links) {
@@ -205,7 +211,11 @@ router.post("/policies/:id/new-version", requirePermission("governance:write"), 
       details: JSON.stringify({ version: nextVersion, parentId }),
     }).catch(console.error);
     res.status(201).json(row);
-  } catch (err) { handleRouteError(err, res, "governance"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "governance");
+  }
 });
 
 router.get("/policies/:id/module-links", requirePermission("governance:read"), async (req, res) => {

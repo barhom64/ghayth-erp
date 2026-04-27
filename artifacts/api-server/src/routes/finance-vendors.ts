@@ -9,6 +9,7 @@ import {
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { applyTransition } from "../lib/lifecycleEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
 
@@ -372,5 +373,142 @@ vendorsRouter.get("/vendors/:id", requirePermission("finance:read"), async (req,
   } catch (err) {
     handleRouteError(err, res, "Get vendor error:");
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// APPROVAL ENDPOINTS — commitments, receivables, vouchers, financial-requests, budgets
+// ─────────────────────────────────────────────────────────────────────────────
+
+vendorsRouter.patch("/commitments/:id/approve", requirePermission("finance:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { approved, notes } = req.body as any;
+    const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
+    if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
+    const updated = await applyTransition<any>({
+      entity: "purchase_orders",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: `commitment.${newStatus}`,
+      fromStates: ["draft", "pending_approval", "returned"],
+      toState: newStatus,
+      reason: notes ?? undefined,
+      extraWhere: `"deletedAt" IS NULL`,
+      onApply: async (_row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('commitment',$1,$2,$3,$4,$5)`,
+          [id, newStatus, notes || null, scope.userId, scope.companyId]
+        );
+      },
+    });
+    res.json(updated);
+  } catch (err) { handleRouteError(err, res, "Commitment approval error:"); }
+});
+
+vendorsRouter.patch("/receivables/:id/approve", requirePermission("finance:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { approved, notes } = req.body as any;
+    const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
+    if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
+    const updated = await applyTransition<any>({
+      entity: "invoices",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: `receivable.${newStatus}`,
+      fromStates: ["draft", "pending_approval", "returned"],
+      toState: newStatus,
+      reason: notes ?? undefined,
+      extraWhere: `"deletedAt" IS NULL`,
+      onApply: async (_row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('receivable',$1,$2,$3,$4,$5)`,
+          [id, newStatus, notes || null, scope.userId, scope.companyId]
+        );
+      },
+    });
+    res.json(updated);
+  } catch (err) { handleRouteError(err, res, "Receivable approval error:"); }
+});
+
+vendorsRouter.patch("/vouchers/:id/approve", requirePermission("finance:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { approved, notes } = req.body as any;
+    const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
+    if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
+    const updated = await applyTransition<any>({
+      entity: "journal_entries",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: `voucher.${newStatus}`,
+      fromStates: ["draft", "pending_approval", "returned"],
+      toState: newStatus,
+      reason: notes ?? undefined,
+      extraWhere: `"deletedAt" IS NULL AND ref LIKE 'VOUCHER%'`,
+      onApply: async (_row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('voucher',$1,$2,$3,$4,$5)`,
+          [id, newStatus, notes || null, scope.userId, scope.companyId]
+        );
+      },
+    });
+    res.json(updated);
+  } catch (err) { handleRouteError(err, res, "Voucher approval error:"); }
+});
+
+vendorsRouter.patch("/financial-requests/:id/approve", requirePermission("finance:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { approved, notes } = req.body as any;
+    const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
+    if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
+    const updated = await applyTransition<any>({
+      entity: "workflow_instances",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: `financial_request.${newStatus}`,
+      fromStates: ["pending", "draft", "pending_approval", "returned"],
+      toState: newStatus,
+      reason: notes ?? undefined,
+      onApply: async (_row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('financial_request',$1,$2,$3,$4,$5)`,
+          [id, newStatus, notes || null, scope.userId, scope.companyId]
+        );
+      },
+    });
+    res.json(updated);
+  } catch (err) { handleRouteError(err, res, "Financial request approval error:"); }
+});
+
+vendorsRouter.patch("/budgets/:id/approve", requirePermission("finance:update"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { approved, notes } = req.body as any;
+    const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
+    if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
+    const updated = await applyTransition<any>({
+      entity: "budgets",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: `budget.${newStatus}`,
+      fromStates: ["draft", "pending_approval", "returned"],
+      toState: newStatus,
+      reason: notes ?? undefined,
+      onApply: async (_row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('budget',$1,$2,$3,$4,$5)`,
+          [id, newStatus, notes || null, scope.userId, scope.companyId]
+        );
+      },
+    });
+    res.json(updated);
+  } catch (err) { handleRouteError(err, res, "Budget approval error:"); }
 });
 

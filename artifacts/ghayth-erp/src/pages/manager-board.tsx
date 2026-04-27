@@ -35,7 +35,7 @@ export default function ManagerBoard() {
   const { toast } = useToast();
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
-  const { data: actionData, isLoading: actionLoading, refetch: refetchAction } = useApiQuery<any>(
+  const { data: actionData, isLoading: actionLoading, isError: actionError, refetch: refetchAction } = useApiQuery<any>(
     ["action-center", scopeQueryString],
     `/action-center${scopeSuffix}`
   );
@@ -90,6 +90,7 @@ export default function ManagerBoard() {
   );
 
   if (actionLoading) return <LoadingSpinner />;
+  if (actionError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const pending = actionData || {};
   const leaves = pending.pendingLeaves || [];

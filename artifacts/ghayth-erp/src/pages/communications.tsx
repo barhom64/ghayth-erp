@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { formatDateAr , todayLocal } from "@/lib/formatters";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { ErrorState } from "@/components/shared/loading-error-states";
 import { MessageCircle, Mail, Phone, Send, Search, ArrowRightLeft, ClipboardList, Headphones, FileText, ChevronDown, ChevronUp, Bell, BellOff, BellRing, CheckCircle2, XCircle, Clock, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -41,7 +42,8 @@ export default function Communications() {
 }
 
 function StatsCards() {
-  const { data: stats } = useApiQuery(["comm-stats"], "/communications/stats");
+  const { data: stats, isError } = useApiQuery(["comm-stats"], "/communications/stats");
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   return (
     <div className="grid gap-4 md:grid-cols-5">
       <Card><CardHeader className="pb-2"><CardTitle className="text-sm">إجمالي الاتصالات</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.total || 0}</div></CardContent></Card>

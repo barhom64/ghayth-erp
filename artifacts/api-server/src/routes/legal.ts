@@ -68,6 +68,12 @@ const createCorrespondenceSchema = z.object({
   notes: z.string().optional(),
 });
 
+const createCaseCostSchema = z.object({
+  amount: z.coerce.number().positive("المبلغ يجب أن يكون أكبر من صفر"),
+  type: z.string().min(1, "نوع التكلفة مطلوب"),
+  notes: z.string().optional(),
+});
+
 const createJudgmentSchema = z.object({
   judgmentDate: z.string().min(1, "تاريخ الحكم مطلوب"),
   verdict: z.string().min(1, "الحكم مطلوب"),
@@ -726,47 +732,32 @@ router.post("/cases/:id/close", requirePermission("legal:write"), async (req, re
     const scope = req.scope!;
     const id = Number(req.params.id);
     const b = req.body || {};
-    const [lc] = await rawQuery<any>(
-      `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    if (!lc) throw new NotFoundError("القضية غير موجودة");
-    if (lc.status === "closed") {
-      throw new ConflictError(
-        "القضية مغلقة بالفعل",
-        { field: "status", fix: "لا حاجة لإغلاق قضية مغلقة" }
-      );
-    }
     if (!b.closureReason || typeof b.closureReason !== "string" || !b.closureReason.trim()) {
       throw new ValidationError("سبب الإغلاق مطلوب", { field: "closureReason", fix: "أدخل سبب إغلاق القضية" });
     }
 
-    await rawExecute(
-      `UPDATE legal_cases SET status='closed', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
-      [id, scope.companyId]
-    );
-
-    // Cancel all open obligations tied to this case
-    await cancelObligation(scope.companyId, "legal_case", id);
-
-    await emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "legal.case.closed",
+    const updated = await applyTransition<any>({
       entity: "legal_cases",
-      entityId: id,
-      details: `إغلاق قضية ${lc.title}: ${b.closureReason}`,
+      id,
+      scope,
+      action: "legal.case.closed",
+      fromStates: ["open", "in_progress", "on_hold"],
+      toState: "closed",
+      reason: b.closureReason,
+      extraWhere: '"deletedAt" IS NULL',
+      onApply: async (_row, _client) => {
+        // Cancel all open obligations tied to this case
+        await cancelObligation(scope.companyId, "legal_case", id);
+      },
+      after: { reason: b.closureReason, outcome: b.outcome },
     });
-    await createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "close", entity: "legal_cases", entityId: id,
-      before: { status: lc.status },
-      after: { status: "closed", reason: b.closureReason, outcome: b.outcome },
-    }).catch(console.error);
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ ...updated, event: "legal.case.closed" });
-  } catch (err) { handleRouteError(err, res, "Close case error:"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Close case error:");
+  }
 });
 
 router.get("/cases/:caseId/sessions", requirePermission("legal:read"), async (req, res) => {
@@ -839,7 +830,16 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
     }
 
     if (legalCase.status === 'open') {
-      await rawExecute(`UPDATE legal_cases SET status='in_progress', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
+      await applyTransition({
+        entity: "legal_cases",
+        id: caseId,
+        scope,
+        action: "legal.case.in_progress",
+        fromStates: ["open"],
+        toState: "in_progress",
+        extraWhere: '"deletedAt" IS NULL',
+        reason: `جلسة جديدة بتاريخ ${b.sessionDate}`,
+      });
     }
 
     // Register obligation for this hearing
@@ -913,11 +913,15 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
         invoiceError = "فشل إنشاء فاتورة الأتعاب";
       }
 
-      const glResult = await legalEngine.postLegalSessionFeeGL(
-        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-        { id: insertId, caseTitle: legalCase.title, sessionDate: b.sessionDate, billingAmount, vatAmount }
-      );
-      journalEntryId = glResult.journalId;
+      try {
+        const glResult = await legalEngine.postLegalSessionFeeGL(
+          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+          { id: insertId, caseTitle: legalCase.title, sessionDate: b.sessionDate, billingAmount, vatAmount }
+        );
+        journalEntryId = glResult.journalId;
+      } catch (glErr) {
+        console.error("Legal session fee GL failed:", glErr);
+      }
     }
 
     createAuditLog({
@@ -1003,6 +1007,62 @@ router.post("/cases/:caseId/correspondence", requirePermission("legal:create"), 
   } catch (err) { handleRouteError(err, res, "Create correspondence error:"); }
 });
 
+// ─── Case Costs — مصاريف القضية ─────────────────────────────────────────────
+router.post("/cases/:caseId/costs", requirePermission("legal:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const caseId = Number(req.params.caseId);
+    const parsed = createCaseCostSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data;
+
+    const [legalCase] = await rawQuery<any>(
+      `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [caseId, scope.companyId]
+    );
+    if (!legalCase) throw new NotFoundError("القضية غير موجودة");
+
+    // Update the case's financialRisk to accumulate costs
+    await rawExecute(
+      `UPDATE legal_cases SET "financialRisk"=COALESCE("financialRisk",0)+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+      [b.amount, caseId, scope.companyId]
+    );
+
+    // Post the case cost to GL
+    try {
+      const { legalEngine } = await import("../lib/engines/index.js");
+      await legalEngine.postCaseCostGL(
+        { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
+        { caseId, amount: b.amount, type: b.type },
+      );
+    } catch (glErr) {
+      console.error("Legal case cost GL error:", glErr);
+    }
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "legal_case_costs", entityId: caseId,
+      after: { caseId, amount: b.amount, type: b.type, notes: b.notes },
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "legal.case.cost_added",
+      entity: "legal_cases",
+      entityId: caseId,
+      details: `مصروف قانوني: ${b.type} — ${b.amount.toLocaleString()} ريال — قضية #${caseId}`,
+    }).catch(console.error);
+
+    const [updated] = await rawQuery<any>(
+      `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [caseId, scope.companyId]
+    );
+    res.status(201).json({ caseId, amount: b.amount, type: b.type, notes: b.notes ?? null, case: updated });
+  } catch (err) { handleRouteError(err, res, "Create case cost error:"); }
+});
+
 router.get("/cases/:caseId/judgments", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1086,6 +1146,15 @@ router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async
         details: `حكم بقضية ${lc.title}: ${b.verdict || ""} — ${b.amount || 0} ريال`,
       });
     } catch (obErr) { console.error("Legal judgment obligation failed:", obErr); }
+
+    if (b.amount && Number(b.amount) > 0) {
+      const { legalEngine } = await import("../lib/engines/index.js");
+      const isInFavor = b.verdict === "in_favor" || b.verdict === "لصالح الشركة";
+      legalEngine.postSettlementGL(
+        { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
+        { caseId, amount: Number(b.amount), isInFavor },
+      ).catch((e: unknown) => console.error("Legal settlement GL error:", e));
+    }
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,

@@ -433,7 +433,12 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
       period = advancePeriod(period);
     }
 
-    // إشعار الموظف
+    const { hrEngine } = await import("../lib/engines/index.js");
+    hrEngine.postLoanDisbursementGL(
+      { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
+      { id: loan.id, employeeId: loan.employeeId, amount: Number(loan.amount) },
+    ).catch((e: unknown) => console.error("Loan disbursement GL error:", e));
+
     createNotification({
       companyId: scope.companyId, assignmentId: loan.assignmentId,
       type: "loan_approved", title: "تمت الموافقة على سلفتك",

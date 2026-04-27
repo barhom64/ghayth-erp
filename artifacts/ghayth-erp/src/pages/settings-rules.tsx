@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -351,12 +352,13 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
 }
 
 function RuleLogsList() {
-  const { data, isLoading } = useApiQuery<{ data: RuleLog[]; total: number }>(
+  const { data, isLoading, isError, error, refetch } = useApiQuery<{ data: RuleLog[]; total: number }>(
     ["rule-logs"], "/rules/logs?limit=50"
   );
   const logs = data?.data || [];
 
-  if (isLoading) return <div className="text-center py-8 text-muted-foreground">جاري التحميل...</div>;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
 
   if (logs.length === 0) {
     return (
@@ -396,7 +398,7 @@ function RuleLogsList() {
 }
 
 export default function SettingsRulesPage() {
-  const { data, isLoading } = useApiQuery<{ data: BusinessRule[] }>(["business-rules"], "/rules");
+  const { data, isLoading, isError, error, refetch } = useApiQuery<{ data: BusinessRule[] }>(["business-rules"], "/rules");
   const rules = data?.data || [];
 
   const activeRules = rules.filter(r => r.isActive);
@@ -416,6 +418,9 @@ export default function SettingsRulesPage() {
 
   const handleToggle = (ruleId: number) => toggleMut.mutate({ id: ruleId });
   const handleDelete = (ruleId: number) => deleteMut.mutate({ id: ruleId });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
 
   return (
     <div className="p-4 md:p-6 space-y-6" dir="rtl">
@@ -450,9 +455,7 @@ export default function SettingsRulesPage() {
         </TabsList>
 
         <TabsContent value="rules" className="space-y-3 mt-4">
-          {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">جاري التحميل...</div>
-          ) : rules.length === 0 ? (
+          {rules.length === 0 ? (
             <div className="text-center py-12">
               <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-30" />
               <p className="text-muted-foreground">لا توجد قواعد أعمال حالياً</p>

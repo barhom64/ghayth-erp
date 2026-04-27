@@ -44,7 +44,7 @@ export default function OvertimeDetail() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
 
-  const { data, isLoading, isError } = useApiQuery<any>(["hr-overtime-detail", id], `/hr/overtime/${id}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["hr-overtime-detail", id], id ? `/hr/overtime/${id}` : null);
   const item = data?.data ?? data;
 
   if (!item && !isLoading && !isError) {

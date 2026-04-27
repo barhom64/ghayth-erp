@@ -22,6 +22,7 @@ import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { formatDateAr } from "@/lib/formatters";
+import { PageStateWrapper } from "@/components/shared/page-state";
 
 function Support() {
   const [, navigate] = useLocation();
@@ -109,10 +110,9 @@ function Support() {
   ];
 
   if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
+    <PageStateWrapper isLoading={false} error={error} onRetry={() => refetch()}>
+      <div />
+    </PageStateWrapper>
   );
 
   return (
@@ -283,10 +283,9 @@ function KBManagement() {
   };
 
   if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
+    <PageStateWrapper isLoading={false} error={error} onRetry={() => refetch()}>
+      <div />
+    </PageStateWrapper>
   );
 
   return (
@@ -352,7 +351,7 @@ function KBManagement() {
 }
 
 function CSATStats() {
-  const { data: csatResp, isLoading, isError } = useApiQuery<any>(["support-csat-stats"], "/support/csat");
+  const { data: csatResp, isLoading, isError, error } = useApiQuery<any>(["support-csat-stats"], "/support/csat");
   const stats = csatResp?.agentStats || [];
   const avg = csatResp?.avgScore;
 
@@ -370,10 +369,9 @@ function CSATStats() {
   ];
 
   if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
+    <PageStateWrapper isLoading={false} error={error} onRetry={() => window.location.reload()}>
+      <div />
+    </PageStateWrapper>
   );
 
   return (
