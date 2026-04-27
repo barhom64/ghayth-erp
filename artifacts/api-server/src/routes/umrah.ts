@@ -972,6 +972,7 @@ router.patch("/penalties/:id/waive", requirePermission("umrah:write"), async (re
       toState: "waived",
       reason,
       setExtras: { waivedBy: scope.userId, waivedAt: { raw: "NOW()" } },
+      skipUpdatedAt: true,
     });
     if (Number(penalty.amount) > 0) {
       try {

@@ -535,7 +535,7 @@ router.patch("/exit/:id/complete", requirePermission("hr:update"), async (req, r
       onApply: async (_row, client) => {
         // تعطيل التعيين inside the same transaction
         await client.query(
-          `UPDATE employee_assignments SET status = 'terminated', "endDate" = CURRENT_DATE, "updatedAt" = NOW()
+          `UPDATE employee_assignments SET status = 'terminated', "endDate" = CURRENT_DATE
            WHERE id = $1 AND "companyId" = $2`,
           [item.assignmentId, scope.companyId]
         );

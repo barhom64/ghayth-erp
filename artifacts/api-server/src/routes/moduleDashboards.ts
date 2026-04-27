@@ -218,7 +218,7 @@ router.get("/crm", async (req, res) => {
     ]);
 
     const pipeline = await safeQuery(
-      `SELECT ps.name, ps."order", COUNT(o.id) AS count, COALESCE(SUM(o.value), 0) AS value FROM crm_pipeline_stages ps LEFT JOIN crm_opportunities o ON o."stageId" = ps.id AND o."companyId" = $1 WHERE ps."companyId" = $1 GROUP BY ps.id, ps.name, ps."order" ORDER BY ps."order"`, [cid]
+      `SELECT ps.name, ps."order", COUNT(o.id) AS count, COALESCE(SUM(o.value), 0) AS value FROM crm_pipeline_stages ps LEFT JOIN crm_opportunities o ON o."pipelineStageId" = ps.id AND o."companyId" = $1 WHERE ps."companyId" = $1 GROUP BY ps.id, ps.name, ps."order" ORDER BY ps."order"`, [cid]
     );
 
     res.json({
@@ -240,11 +240,11 @@ router.get("/store", async (req, res) => {
     const [orders, products, revenue] = await Promise.all([
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'pending') AS pending, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled FROM store_orders WHERE "companyId" = $1`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE "isActive" = true) AS active FROM store_products WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COALESCE(SUM(total), 0) AS "totalRevenue", COALESCE(SUM(total) FILTER (WHERE status = 'completed'), 0) AS "completedRevenue" FROM store_orders WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COALESCE(SUM("totalAmount"), 0) AS "totalRevenue", COALESCE(SUM("totalAmount") FILTER (WHERE status = 'completed'), 0) AS "completedRevenue" FROM store_orders WHERE "companyId" = $1`, [cid]),
     ]);
 
     const monthlyOrders = await safeQuery(
-      `SELECT TO_CHAR(DATE_TRUNC('month', "createdAt"), 'YYYY-MM') AS month, COUNT(*) AS orders, COALESCE(SUM(total), 0) AS revenue FROM store_orders WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '6 months' GROUP BY month ORDER BY month`, [cid]
+      `SELECT TO_CHAR(DATE_TRUNC('month', "createdAt"), 'YYYY-MM') AS month, COUNT(*) AS orders, COALESCE(SUM("totalAmount"), 0) AS revenue FROM store_orders WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '6 months' GROUP BY month ORDER BY month`, [cid]
     );
 
     res.json({
