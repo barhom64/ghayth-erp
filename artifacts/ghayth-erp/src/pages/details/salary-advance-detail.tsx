@@ -189,9 +189,9 @@ export default function SalaryAdvanceDetail() {
                 entityType="salary-advance"
                 entityId={id}
                 currentStatus={item.status}
-                approveEndpoint={`/hr/salary-advances/${id}/approve`}
-                rejectEndpoint={`/hr/salary-advances/${id}/approve`}
-                returnEndpoint={`/hr/salary-advances/${id}/approve`}
+                approveEndpoint={`/finance/salary-advances/${id}/approve`}
+                rejectEndpoint={`/finance/salary-advances/${id}/approve`}
+                returnEndpoint={`/finance/salary-advances/${id}/approve`}
                 approveMethod="PATCH"
                 rejectMethod="PATCH"
                 returnMethod="PATCH"
