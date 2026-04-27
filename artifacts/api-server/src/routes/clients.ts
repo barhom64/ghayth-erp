@@ -182,7 +182,7 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
          UNION ALL
          SELECT sq.id, sq."recipientPhone" AS phone, sq.message, sq.status, sq."createdAt", 'sms' AS channel
          FROM sms_queue sq
-         WHERE sq."companyId" = $2
+         WHERE sq."clientId" = $1 AND sq."companyId" = $2
          ORDER BY "createdAt" DESC LIMIT 20`,
         [Number(id), scope.companyId]
       ).catch(() => []),

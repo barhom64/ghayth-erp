@@ -37,7 +37,7 @@ class ProjectsEngineImpl implements DomainEngine {
 
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "project_wip", "debit", "1350"),
-      financialEngine.resolveAccountCode(ctx.companyId, "project_wip", "credit", creditFallback),
+      financialEngine.resolveAccountCode(ctx.companyId, "project_cost_cash", "credit", creditFallback),
     ]);
 
     return financialEngine.postJournalEntry({

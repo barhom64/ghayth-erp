@@ -360,8 +360,8 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
     const rejectionReason = reason || notes;
     if (!approved) {
       await rawExecute(
-        `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2`,
-        [rejectionReason || null, loan.id]
+        `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3`,
+        [rejectionReason || null, loan.id, scope.companyId]
       );
       processApprovalStep({
         companyId: scope.companyId, branchId: scope.branchId,
@@ -499,8 +499,8 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
     }).catch(console.error);
 
     await rawExecute(
-      `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2`,
-      [b.reason || null, loan.id]
+      `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3`,
+      [b.reason || null, loan.id, scope.companyId]
     );
 
     createNotification({

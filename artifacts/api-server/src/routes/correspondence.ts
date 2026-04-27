@@ -200,8 +200,8 @@ correspondenceRouter.post("/:id/send", requirePermission("communications:write")
     const sentField = existing.direction === "outgoing" ? '"sentAt"' : '"receivedAt"';
     const [updated] = await rawQuery<any>(
       `UPDATE correspondence SET status = 'sent', ${sentField} = NOW(), "updatedAt" = NOW()
-       WHERE id = $1 RETURNING *`,
-      [id]
+       WHERE id = $1 AND "companyId" = $2 RETURNING *`,
+      [id, scope.companyId]
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "correspondence_sent", entity: "correspondence", entityId: id, after: { ref: existing.ref } });

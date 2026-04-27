@@ -72,7 +72,7 @@ class LegalEngineImpl implements DomainEngine {
         type: "general",
         sourceType: "legal_cases",
         sourceId: settlement.caseId,
-        sourceKey: `legal:settlement:${settlement.caseId}`,
+        sourceKey: `legal:settlement:${settlement.caseId}:for`,
         guardTable: "legal_cases",
         guardId: settlement.caseId,
         lines: [
@@ -96,7 +96,7 @@ class LegalEngineImpl implements DomainEngine {
       type: "general",
       sourceType: "legal_cases",
       sourceId: settlement.caseId,
-      sourceKey: `legal:settlement:${settlement.caseId}`,
+      sourceKey: `legal:settlement:${settlement.caseId}:against`,
       guardTable: "legal_cases",
       guardId: settlement.caseId,
       lines: [

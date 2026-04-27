@@ -206,7 +206,7 @@ class PropertiesEngineImpl implements DomainEngine {
   ) {
     const [assetCode, cashCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "debit", "1520"),
-      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_building_purchase_cash", "credit", "1100"),
     ]);
 
     return financialEngine.postJournalEntry({

@@ -36,7 +36,7 @@ class HREngineImpl implements DomainEngine {
       await Promise.all([
         financialEngine.resolveAccountCode(ctx.companyId, "salary_expense", "debit", "6100"),
         financialEngine.resolveAccountCode(ctx.companyId, "allowance_expense", "debit", "6110"),
-        financialEngine.resolveAccountCode(ctx.companyId, "employee_deductions", "debit", "2130"),
+        financialEngine.resolveAccountCode(ctx.companyId, "employee_deductions", "credit", "2130"),
         financialEngine.resolveAccountCode(ctx.companyId, "salary_payable", "credit", "2120"),
       ]);
 
@@ -91,7 +91,7 @@ class HREngineImpl implements DomainEngine {
   ) {
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_receivable", "debit", "1400"),
-      financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_payable", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_disbursement", "credit", "1100"),
     ]);
 
     return financialEngine.postJournalEntry({

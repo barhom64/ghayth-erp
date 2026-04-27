@@ -336,7 +336,7 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
 
       if (newStatus === "paid") {
         await client.query(
-          `UPDATE umrah_sales_invoices SET "paidAmount" = $1, status = $2, "paidAt" = NOW(), "updatedAt" = NOW() WHERE id = $3 AND "companyId" = $4`,
+          `UPDATE umrah_sales_invoices SET "paidAmount" = $1, status = $2, "updatedAt" = NOW() WHERE id = $3 AND "companyId" = $4`,
           [newPaid, newStatus, inv.id, scope.companyId]
         );
       } else {

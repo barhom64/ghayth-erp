@@ -166,7 +166,7 @@ class FleetEngineImpl implements DomainEngine {
   ) {
     const [assetCode, cashCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_vehicle_asset", "debit", "1510"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_vehicle_asset", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_vehicle_purchase_cash", "credit", "1100"),
     ]);
 
     const vName = `${vehicle.plateNumber} ${vehicle.make || ""} ${vehicle.model || ""}`.trim();

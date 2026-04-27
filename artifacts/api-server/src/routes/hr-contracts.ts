@@ -208,8 +208,8 @@ contractsRouter.post("/:id/submit", requirePermission("hr:create"), async (req, 
 
     const [updated] = await rawQuery<any>(
       `UPDATE employee_contracts SET "approvalStatus" = 'pending_approval', "updatedAt" = NOW()
-       WHERE id = $1 RETURNING *`,
-      [id]
+       WHERE id = $1 AND "companyId" = $2 RETURNING *`,
+      [id, scope.companyId]
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_submitted", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
@@ -237,8 +237,8 @@ contractsRouter.post("/:id/approve", requirePermission("hr:approve"), async (req
     const [updated] = await rawQuery<any>(
       `UPDATE employee_contracts
        SET "approvalStatus" = 'approved', "approvedBy" = $2, "approvedAt" = NOW(), "updatedAt" = NOW()
-       WHERE id = $1 RETURNING *`,
-      [id, scope.userId]
+       WHERE id = $1 AND "companyId" = $3 RETURNING *`,
+      [id, scope.userId, scope.companyId]
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_approved", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
@@ -268,8 +268,8 @@ contractsRouter.post("/:id/reject", requirePermission("hr:approve"), async (req,
     const [updated] = await rawQuery<any>(
       `UPDATE employee_contracts
        SET "approvalStatus" = 'rejected', notes = COALESCE(notes, '') || E'\nسبب الرفض: ' || $2, "updatedAt" = NOW()
-       WHERE id = $1 RETURNING *`,
-      [id, reason || "لم يتم تحديد السبب"]
+       WHERE id = $1 AND "companyId" = $3 RETURNING *`,
+      [id, reason || "لم يتم تحديد السبب", scope.companyId]
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_rejected", entity: "employee_contract", entityId: id, after: { ref: contract.ref, reason } });
@@ -298,8 +298,8 @@ contractsRouter.post("/:id/sign-company", requirePermission("hr:approve"), async
       `UPDATE employee_contracts
        SET "signedByCompany" = TRUE, "companySignedAt" = NOW(), "companySignedBy" = $2, "updatedAt" = NOW(),
            "approvalStatus" = CASE WHEN "signedByEmployee" = TRUE THEN 'signed' ELSE "approvalStatus" END
-       WHERE id = $1 RETURNING *`,
-      [id, scope.userId]
+       WHERE id = $1 AND "companyId" = $3 RETURNING *`,
+      [id, scope.userId, scope.companyId]
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_signed_company", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
@@ -331,8 +331,8 @@ contractsRouter.post("/:id/sign-employee", async (req, res) => {
       `UPDATE employee_contracts
        SET "signedByEmployee" = TRUE, "employeeSignedAt" = NOW(), "updatedAt" = NOW(),
            "approvalStatus" = CASE WHEN "signedByCompany" = TRUE THEN 'signed' ELSE "approvalStatus" END
-       WHERE id = $1 RETURNING *`,
-      [id]
+       WHERE id = $1 AND "companyId" = $2 RETURNING *`,
+      [id, scope.companyId]
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_signed_employee", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
@@ -360,8 +360,8 @@ contractsRouter.post("/:id/activate", requirePermission("hr:update"), async (req
     const [updated] = await rawQuery<any>(
       `UPDATE employee_contracts
        SET "approvalStatus" = 'active', status = 'active', "updatedAt" = NOW()
-       WHERE id = $1 RETURNING *`,
-      [id]
+       WHERE id = $1 AND "companyId" = $2 RETURNING *`,
+      [id, scope.companyId]
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_activated", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
@@ -391,8 +391,8 @@ contractsRouter.post("/:id/terminate", requirePermission("hr:update"), async (re
       `UPDATE employee_contracts
        SET status = 'terminated', "approvalStatus" = 'terminated',
            "terminatedAt" = NOW(), "terminatedBy" = $2, "terminationReason" = $3, "updatedAt" = NOW()
-       WHERE id = $1 RETURNING *`,
-      [id, scope.userId, reason || null]
+       WHERE id = $1 AND "companyId" = $4 RETURNING *`,
+      [id, scope.userId, reason || null, scope.companyId]
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_terminated", entity: "employee_contract", entityId: id, after: { ref: contract.ref, reason } });
