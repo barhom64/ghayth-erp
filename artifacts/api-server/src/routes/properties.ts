@@ -1691,7 +1691,7 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
               description: `إيجار متأخر ${lateDays} يوم - وحدة ${payment.unitNumber} - مبلغ ${payment.amount} ريال`,
               priority: "high",
             }
-          );
+          ).catch((e: unknown) => console.error("Property legal case creation error:", e));
 
           if (responsible) {
             createNotification({
@@ -2427,7 +2427,7 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
               salvageValue: salvage,
               usefulLifeYears: usefulYears,
             }
-          );
+          ).catch((e: unknown) => console.error("Property asset registration error:", e));
           createNotification({
             companyId: scope.companyId, assignmentId: scope.activeAssignmentId,
             type: "auto_journal", title: "قيد تلقائي — إثبات أصل عقاري",

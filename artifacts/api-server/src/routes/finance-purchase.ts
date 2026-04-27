@@ -337,7 +337,7 @@ purchaseRouter.patch("/purchase-requests/:id/approve", requirePermission("financ
       action: `purchase_request.${newStatus}`,
       toState: newStatus,
       reason: notes ?? undefined,
-      setExtras: notes ? { notes: { raw: `COALESCE(notes,'') || ' ' || ${notes ? `'${notes.replace(/'/g, "''")}'` : "''"}` } } : undefined,
+      setExtras: notes ? { notes: notes } : undefined,
       after: { status: newStatus, notes: notes ?? null },
       notifications: prNotifications.length > 0 ? prNotifications : undefined,
     });
@@ -530,7 +530,7 @@ async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rej
       action: `purchase_order.${newStatus}`,
       toState: newStatus,
       reason: notes ?? undefined,
-      setExtras: notes ? { notes: { raw: `COALESCE(notes,'') || ' ' || ${notes ? `'${notes.replace(/'/g, "''")}'` : "''"}` } } : undefined,
+      setExtras: notes ? { notes: notes } : undefined,
       after: { status: newStatus, notes: notes ?? null },
     });
 

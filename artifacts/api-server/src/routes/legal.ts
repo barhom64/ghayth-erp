@@ -1081,6 +1081,15 @@ router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async
       });
     } catch (obErr) { console.error("Legal judgment obligation failed:", obErr); }
 
+    if (b.amount && Number(b.amount) > 0) {
+      const { legalEngine } = await import("../lib/engines/index.js");
+      const isInFavor = b.verdict === "in_favor" || b.verdict === "لصالح الشركة";
+      legalEngine.postSettlementGL(
+        { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
+        { caseId, amount: Number(b.amount), isInFavor },
+      ).catch((e: unknown) => console.error("Legal settlement GL error:", e));
+    }
+
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "legal_case_judgments", entityId: insertId,

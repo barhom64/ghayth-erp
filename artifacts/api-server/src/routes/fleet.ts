@@ -232,7 +232,7 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
               salvageValue: salvage,
               usefulLifeYears: usefulYears,
             }
-          );
+          ).catch((e: unknown) => console.error("Fleet asset registration error:", e));
           createNotification({
             companyId: scope.companyId, assignmentId: scope.activeAssignmentId,
             type: "auto_journal", title: "قيد تلقائي — إثبات أصل مركبة",
@@ -1231,7 +1231,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
       fleetEngine.requestWarehouseDeduction(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
         { maintenanceId: insertId, parts: b.partsUsed }
-      );
+      ).catch((e: unknown) => console.error("Fleet warehouse deduction error:", e));
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
@@ -2467,7 +2467,7 @@ router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (
       fleetEngine.requestWarehouseDeduction(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
         { maintenanceId: id, parts: b.partsUsed }
-      );
+      ).catch((e: unknown) => console.error("Fleet warehouse deduction error:", e));
     }
 
     emitEvent({

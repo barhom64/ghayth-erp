@@ -71,7 +71,7 @@ router.use(authMiddleware);
 const createSeasonSchema = z.object({
   title: z.string().min(1, "اسم الموسم مطلوب"),
   startDate: z.string().min(1, "تاريخ البداية مطلوب"),
-  endDate: z.string().optional(),
+  endDate: z.string().min(1, "تاريخ النهاية مطلوب"),
   notes: z.string().optional(),
 });
 

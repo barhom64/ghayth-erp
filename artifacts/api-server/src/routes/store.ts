@@ -314,7 +314,7 @@ async function postStoreOrderGl(scope: any, order: any) {
   if (result) {
     await rawExecute(
       `UPDATE store_orders SET "journalEntryId"=$1 WHERE id=$2 AND "companyId"=$3`,
-      [result.journalId, order.id, order.companyId]
+      [result.journalId, order.id, scope.companyId]
     ).catch(console.error);
   }
 
