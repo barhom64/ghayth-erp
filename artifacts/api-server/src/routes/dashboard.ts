@@ -3,6 +3,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError } from "../lib/errorHandler.js";
+import { todayISO } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -21,7 +22,7 @@ function buildFilterNoBranch(scope: any, req: any) {
 router.get("/", async (req, res) => {
   try {
     const scope = req.scope!;
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
     const { where, params, nextParamIndex } = buildFilter(scope, req);
 
     const todayIdx = nextParamIndex;
@@ -129,7 +130,7 @@ router.get("/", async (req, res) => {
 router.get("/summary", async (req, res) => {
   try {
     const scope = req.scope!;
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
     const monthStart = today.slice(0, 7) + "-01";
 
     const { where, params, nextParamIndex } = buildFilter(scope, req);

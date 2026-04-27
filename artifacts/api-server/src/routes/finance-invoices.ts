@@ -20,6 +20,7 @@ import {
   reverseAccountBalances,
   computeVat,
   extractBaseFromGross,
+  todayISO,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -322,7 +323,7 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
 
     const invoiceDate = invoiceBodyDate
       ? new Date(invoiceBodyDate).toISOString().split("T")[0]
-      : new Date().toISOString().split("T")[0];
+      : todayISO();
     const periodCheck = await checkFinancialPeriodOpen(effectiveCompanyId, invoiceDate);
     if (!periodCheck.open) {
       throw new ConflictError(

@@ -13,6 +13,7 @@ import {
   createAuditLog,
   emitEvent,
   createNotification,
+  todayISO,
 } from "../lib/businessHelpers.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
@@ -559,7 +560,7 @@ financeHardeningRouter.patch("/journal-manual/:id/post", requirePermission("fina
 financeHardeningRouter.get("/bank-guarantees", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
     const rows = await rawQuery<any>(
       `SELECT bg.*,
               (bg."expiryDate"::date - CURRENT_DATE) AS "daysToExpiry",
@@ -902,7 +903,7 @@ financeHardeningRouter.post("/intercompany", requirePermission("finance:create")
     }
 
     const ref = `IC-${Date.now()}`;
-    const txDate = transactionDate ?? new Date().toISOString().split("T")[0];
+    const txDate = transactionDate ?? todayISO();
 
     // Journal entry for the FROM company (debit AR, credit Revenue)
     const { financialEngine } = await import("../lib/engines/index.js");

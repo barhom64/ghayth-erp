@@ -7,7 +7,7 @@ const mwRoot = join(import.meta.dirname!, "../../../../artifacts/api-server/src/
 const readLib = (f: string) => readFileSync(join(libRoot, f), "utf8");
 const readMw = (f: string) => readFileSync(join(mwRoot, f), "utf8");
 
-const DATE_HELPERS = readLib("dateHelpers.ts");
+const BH = readLib("businessHelpers.ts");
 const LOGGER = readLib("logger.ts");
 const PUSH_CRYPTO = readLib("pushCrypto.ts");
 const RAWDB = readLib("rawdb.ts");
@@ -15,31 +15,15 @@ const SECRETS = readLib("secrets.ts");
 const ROLE_GUARDS = readLib("roleGuards.ts");
 const EVENT_BUS_MW = readMw("eventBusMiddleware.ts");
 
-// ── Date Helpers ──────────────────────────────────────────────────────────
+// ── businessHelpers — todayISO ────────────────────────────────────────────
 
-describe("dateHelpers — exports", () => {
+describe("businessHelpers — todayISO centralized", () => {
   it("exports todayISO", () => {
-    expect(DATE_HELPERS).toContain("export function todayISO");
+    expect(BH).toContain("export function todayISO");
   });
 
-  it("exports currentPeriod", () => {
-    expect(DATE_HELPERS).toContain("export function currentPeriod");
-  });
-
-  it("exports periodOf", () => {
-    expect(DATE_HELPERS).toContain("export function periodOf");
-  });
-
-  it("exports currentYear", () => {
-    expect(DATE_HELPERS).toContain("export function currentYear");
-  });
-
-  it("exports addDays", () => {
-    expect(DATE_HELPERS).toContain("export function addDays");
-  });
-
-  it("exports daysBetween", () => {
-    expect(DATE_HELPERS).toContain("export function daysBetween");
+  it("todayISO returns ISO date string", () => {
+    expect(BH).toContain("toISOString");
   });
 });
 

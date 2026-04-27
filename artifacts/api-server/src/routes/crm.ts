@@ -9,7 +9,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog, createNotification, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -659,7 +659,7 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
           title: `عقد خدمات - ${opp.title}`,
           contractType: "service",
           partyName: opp.contactName || 'عميل',
-          startDate: new Date().toISOString().split('T')[0],
+          startDate: todayISO(),
           endDate: new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0],
           value: dealValue,
         }

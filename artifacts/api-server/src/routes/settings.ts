@@ -14,7 +14,6 @@ import { auditLog } from "../lib/audit.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { reloadCronScheduler } from "../lib/cronScheduler.js";
 import { bootstrapCompany } from "../lib/companyBootstrap.js";
-import { eventBus } from "../lib/eventBus.js";
 import { z } from "zod";
 
 /* ── Zod Schemas ────────────────────────────────────────────── */

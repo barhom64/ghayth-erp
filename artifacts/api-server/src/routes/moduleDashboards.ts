@@ -3,6 +3,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { todayISO } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -24,7 +25,7 @@ router.get("/hr", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
 
     const [employees, attendance, leaves, violations, contracts, evaluations] = await Promise.all([
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active FROM employee_assignments WHERE "companyId" = $1`, [cid]),

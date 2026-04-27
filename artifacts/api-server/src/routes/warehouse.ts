@@ -12,11 +12,11 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { movingAverage } from "../lib/algorithms.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { eventBus } from "../lib/eventBus.js";
 import {
   checkFinancialPeriodOpen,
   createAuditLog,
   emitEvent,
+  todayISO,
 } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
@@ -1185,7 +1185,7 @@ router.post("/inventory-counts", requirePermission("warehouse:create"), async (r
       `INSERT INTO inventory_counts ("companyId","countDate","conductedBy",status,notes,"warehouseLocation")
        VALUES ($1,$2,$3,'draft',$4,$5)`,
       [scope.companyId,
-       b.countDate || new Date().toISOString().split('T')[0],
+       b.countDate || todayISO(),
        scope.employeeId || null,
        b.notes || null, b.warehouseLocation || null]
     );
