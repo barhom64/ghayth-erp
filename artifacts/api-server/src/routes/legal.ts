@@ -68,6 +68,12 @@ const createCorrespondenceSchema = z.object({
   notes: z.string().optional(),
 });
 
+const createCaseCostSchema = z.object({
+  amount: z.coerce.number().positive("المبلغ يجب أن يكون أكبر من صفر"),
+  type: z.string().min(1, "نوع التكلفة مطلوب"),
+  notes: z.string().optional(),
+});
+
 const createJudgmentSchema = z.object({
   judgmentDate: z.string().min(1, "تاريخ الحكم مطلوب"),
   verdict: z.string().min(1, "الحكم مطلوب"),
@@ -999,6 +1005,62 @@ router.post("/cases/:caseId/correspondence", requirePermission("legal:create"), 
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create correspondence error:"); }
+});
+
+// ─── Case Costs — مصاريف القضية ─────────────────────────────────────────────
+router.post("/cases/:caseId/costs", requirePermission("legal:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const caseId = Number(req.params.caseId);
+    const parsed = createCaseCostSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const b = parsed.data;
+
+    const [legalCase] = await rawQuery<any>(
+      `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [caseId, scope.companyId]
+    );
+    if (!legalCase) throw new NotFoundError("القضية غير موجودة");
+
+    // Update the case's financialRisk to accumulate costs
+    await rawExecute(
+      `UPDATE legal_cases SET "financialRisk"=COALESCE("financialRisk",0)+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+      [b.amount, caseId, scope.companyId]
+    );
+
+    // Post the case cost to GL
+    try {
+      const { legalEngine } = await import("../lib/engines/index.js");
+      await legalEngine.postCaseCostGL(
+        { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
+        { caseId, amount: b.amount, type: b.type },
+      );
+    } catch (glErr) {
+      console.error("Legal case cost GL error:", glErr);
+    }
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "legal_case_costs", entityId: caseId,
+      after: { caseId, amount: b.amount, type: b.type, notes: b.notes },
+    }).catch(console.error);
+
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "legal.case.cost_added",
+      entity: "legal_cases",
+      entityId: caseId,
+      details: `مصروف قانوني: ${b.type} — ${b.amount.toLocaleString()} ريال — قضية #${caseId}`,
+    }).catch(console.error);
+
+    const [updated] = await rawQuery<any>(
+      `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [caseId, scope.companyId]
+    );
+    res.status(201).json({ caseId, amount: b.amount, type: b.type, notes: b.notes ?? null, case: updated });
+  } catch (err) { handleRouteError(err, res, "Create case cost error:"); }
 });
 
 router.get("/cases/:caseId/judgments", requirePermission("legal:read"), async (req, res) => {
