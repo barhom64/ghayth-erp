@@ -135,7 +135,7 @@ const createTransportSchema = z.object({
 router.get("/seasons", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM umrah_seasons WHERE "companyId"=$1 ORDER BY "startDate" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM umrah_seasons WHERE "companyId"=$1 ORDER BY "startDate" DESC LIMIT 100`, [scope.companyId]);
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List seasons error"); }
 });
@@ -226,7 +226,7 @@ router.patch("/seasons/:id", requirePermission("umrah:write"), async (req, res):
 router.get("/agents", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM umrah_agents WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM umrah_agents WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List agents error"); }
 });
@@ -315,7 +315,7 @@ router.delete("/agents/:id", requirePermission("umrah:write"), async (req, res):
 router.get("/packages", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT p.*, s.title as "seasonTitle" FROM umrah_packages p LEFT JOIN umrah_seasons s ON p."seasonId"=s.id WHERE p."companyId"=$1 ORDER BY p.name`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT p.*, s.title as "seasonTitle" FROM umrah_packages p LEFT JOIN umrah_seasons s ON p."seasonId"=s.id WHERE p."companyId"=$1 ORDER BY p.name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List packages error"); }
 });
@@ -1352,7 +1352,7 @@ router.get("/unassigned", requirePermission("umrah:read"), async (req, res) => {
     let where = `"companyId"=$1 AND "agentId" IS NULL AND "deletedAt" IS NULL`;
     const params: any[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND "seasonId"=$${params.length}`; }
-    const rows = await rawQuery(`SELECT * FROM umrah_pilgrims WHERE ${where} ORDER BY "createdAt" DESC`, params);
+    const rows = await rawQuery(`SELECT * FROM umrah_pilgrims WHERE ${where} ORDER BY "createdAt" DESC LIMIT 1000`, params);
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List unassigned error"); }
 });

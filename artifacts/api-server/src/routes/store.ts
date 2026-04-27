@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
@@ -167,7 +167,7 @@ router.get("/orders", requirePermission("store:read"), async (req, res) => {
       params.push(status);
       where += ` AND o.status=$${params.length}`;
     }
-    const rows = await rawQuery(`SELECT o.* FROM store_orders o WHERE ${where} ORDER BY o."createdAt" DESC`, params);
+    const rows = await rawQuery(`SELECT o.* FROM store_orders o WHERE ${where} ORDER BY o."createdAt" DESC LIMIT 500`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "List store orders"); }
 });
@@ -226,8 +226,6 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM store_orders WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) throw new NotFoundError("الطلب غير موجود");
     const parsed = updateStoreOrderSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed.data as any;
@@ -238,18 +236,33 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
     if (b.customerPhone !== undefined) { params.push(b.customerPhone); sets.push(`"customerPhone"=$${params.length}`); }
     if (b.totalAmount !== undefined) { params.push(b.totalAmount); sets.push(`"totalAmount"=$${params.length}`); }
     if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
-    if (sets.length === 0) { res.json(existing); return; }
-    params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE store_orders SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
-    if (b.status === "completed" && existing.status !== "completed") {
-      try {
-        await postStoreOrderGl(scope, row);
-      } catch (glErr) {
-        console.error("[store] GL posting failed for order", id, glErr);
+    const row = await withTransaction(async (client) => {
+      const lockRes = await client.query(
+        `SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2 FOR UPDATE`,
+        [id, scope.companyId]
+      );
+      const existing = lockRes.rows[0];
+      if (!existing) throw new NotFoundError("الطلب غير موجود");
+      if (sets.length === 0) return existing;
+
+      params.push(id); params.push(scope.companyId);
+      await client.query(
+        `UPDATE store_orders SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`,
+        params
+      );
+      const updatedRes = await client.query(`SELECT * FROM store_orders WHERE id=$1`, [id]);
+      const updated = updatedRes.rows[0];
+
+      if (b.status === "completed" && existing.status !== "completed") {
+        try {
+          await postStoreOrderGl(scope, updated);
+        } catch (glErr) {
+          console.error("[store] GL posting failed for order", id, glErr);
+        }
       }
-    }
+      return updated;
+    });
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "store_orders", entityId: id, after: b }).catch(console.error);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.order.updated", entity: "store_orders", entityId: id, details: JSON.stringify(b) }).catch(console.error);
