@@ -51,7 +51,7 @@ export default function ExitDetail() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
-  const { data, isLoading, isError } = useApiQuery<any>(["hr-exit-detail", id], `/hr/exit/${id}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["hr-exit-detail", id], id ? `/hr/exit/${id}` : null);
   const item = data?.data ?? data;
 
   const approveMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-exit"]], {

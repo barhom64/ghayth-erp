@@ -41,7 +41,7 @@ function buildViolationSteps(status: string | undefined): StageStep[] {
 export default function ViolationDetail() {
   const { id } = useParams<{ id: string }>();
 
-  const { data, isLoading, isError } = useApiQuery<any>(["hr-violation-detail", id], `/hr/violations/${id}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["hr-violation-detail", id], id ? `/hr/violations/${id}` : null);
   const item = data?.data ?? data;
 
   const severity = item

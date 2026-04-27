@@ -11,12 +11,12 @@ import { Users, Plane, AlertTriangle, UserPlus, Play, Zap } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function UmrahDashboard() {
-  const { data: seasons } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
+  const { data: seasons, isLoading: seasonsLoading, isError: seasonsError } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const activeSeason = (seasons?.data || []).find((s: any) => s.status === "open");
   const seasonId = activeSeason?.id;
-  const { data: dash, refetch, isLoading, isError } = useApiQuery<any>(
+  const { data: dash, refetch, isLoading: dashLoading, isError: dashError } = useApiQuery<any>(
     ["umrah-dashboard", String(seasonId || "")],
-    seasonId ? `/umrah/dashboard?seasonId=${seasonId}` : "/umrah/dashboard"
+    seasonId ? `/umrah/dashboard?seasonId=${seasonId}` : null
   );
   const { toast } = useToast();
   const p = dash?.pilgrims || {};
@@ -37,8 +37,15 @@ export default function UmrahDashboard() {
     } catch { toast({ variant: "destructive", title: "خطأ في محرك الغرامات" }); }
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (seasonsLoading || dashLoading) return <LoadingSpinner />;
+  if (seasonsError || dashError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (!activeSeason) return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <AlertTriangle className="w-12 h-12 text-orange-400 mb-4" />
+      <h2 className="text-xl font-semibold mb-2">لا يوجد موسم نشط</h2>
+      <p className="text-muted-foreground">يرجى إنشاء موسم عمرة وتفعيله من صفحة المواسم</p>
+    </div>
+  );
 
   return (
     <div className="space-y-6">

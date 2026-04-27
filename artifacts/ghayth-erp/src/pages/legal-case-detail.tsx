@@ -219,7 +219,7 @@ export default function LegalCaseDetail() {
   const { toast } = useToast();
   const [showAddSession, setShowAddSession] = useState(false);
 
-  const { data: caseData, refetch, isLoading, error } = useApiQuery<any>(["legal-case", id], `/legal/cases/${id}`);
+  const { data: caseData, refetch, isLoading, error } = useApiQuery<any>(["legal-case", id], id ? `/legal/cases/${id}` : null);
 
   const transitionMut = useApiMutation<any, { status: string }>(
     `/legal/cases/${id}`,
