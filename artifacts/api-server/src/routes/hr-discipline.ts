@@ -6,14 +6,13 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   handleRouteError,
   NotFoundError,
   ValidationError,
-  ConflictError,
   ForbiddenError,
 } from "../lib/errorHandler.js";
 import {
@@ -37,6 +36,10 @@ import {
   saveAutoDetectionSettings,
   type AutoDetectionSettings,
 } from "../lib/autoViolationEngine.js";
+import {
+  applyTransition,
+  lifecycleErrorResponse,
+} from "../lib/lifecycleEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -586,58 +589,52 @@ router.post("/memos/:id/justify", requirePermission("hr:read"), async (req, res)
     if (!isOwnerOfMemo && !isHR) {
       throw new ForbiddenError("لا تملك صلاحية تقديم التبرير على هذا المحضر");
     }
-    if (memo.status !== "pending_employee") {
-      throw new ConflictError(`لا يمكن تقديم التبرير في الحالة ${memo.status}`, { field: "status" });
-    }
     if (!declined && !justification) {
       throw new ValidationError("التبرير مطلوب أو يجب الإقرار برفض التبرير", { field: "justification" });
     }
 
-    await rawExecute(
-      `UPDATE hr_inquiry_memos
-          SET justification = $1, "employeeSignedAt" = NOW(),
-              "employeeDeclined" = $2, status = 'pending_manager',
-              "updatedAt" = NOW()
-        WHERE id = $3 AND "companyId" = $4`,
-      [justification ?? null, !!declined, id, scope.companyId]
-    );
+    const managerAssignmentId = await getManagerAssignmentId(scope.companyId, memo.branchId);
 
-    await logMemoEvent({
-      memoId: id, companyId: scope.companyId, actorId: scope.userId,
-      actorRole: "employee", action: "justified",
-      payload: { declined: !!declined },
-      note: declined ? "رفض الموظف تقديم تبرير" : "قدّم الموظف تبريره",
-    });
-
-    // تنبيه المدير المباشر
-    getManagerAssignmentId(scope.companyId, memo.branchId).then((managerAssignmentId) => {
-      if (managerAssignmentId) {
-        createNotification({
-          companyId: scope.companyId, assignmentId: managerAssignmentId,
-          type: "inquiry_memo", title: "محضر استفسار بانتظار توصيتك",
-          body: `المحضر ${memo.memoNumber} بحاجة إلى توصية المدير المباشر.`,
-          priority: "high", refType: "hr_inquiry_memo", refId: id,
-        }).catch(console.error);
-      }
-    }).catch(console.error);
-
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "hr.memo.justified",
+    await applyTransition({
       entity: "hr_inquiry_memos",
-      entityId: id,
-      details: JSON.stringify({ declined: !!declined }),
-    }).catch(console.error);
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "discipline_memos", entityId: id,
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "hr.memo.justified",
+      fromStates: ["pending_employee"],
+      toState: "pending_manager",
+      setExtras: {
+        justification: justification ?? null,
+        employeeSignedAt: { raw: "NOW()" },
+        employeeDeclined: !!declined,
+      },
       after: { status: "pending_manager", declined: !!declined },
-    }).catch(console.error);
+      onApply: async (_row, _client) => {
+        await logMemoEvent({
+          memoId: id, companyId: scope.companyId, actorId: scope.userId,
+          actorRole: "employee", action: "justified",
+          payload: { declined: !!declined },
+          note: declined ? "رفض الموظف تقديم تبرير" : "قدّم الموظف تبريره",
+        });
+      },
+      notifications: managerAssignmentId
+        ? [
+            {
+              assignmentId: managerAssignmentId,
+              type: "inquiry_memo",
+              title: "محضر استفسار بانتظار توصيتك",
+              body: `المحضر ${memo.memoNumber} بحاجة إلى توصية المدير المباشر.`,
+              priority: "high",
+              refType: "hr_inquiry_memo",
+              refId: id,
+            },
+          ]
+        : [],
+    });
 
     res.json({ ok: true, status: "pending_manager" });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "Justify memo error:");
   }
 });
@@ -653,40 +650,34 @@ router.post("/memos/:id/manager-recommendation", requirePermission("hr:update"),
     const { recommendation, comment } = body;
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
-    if (memo.status !== "pending_manager") {
-      throw new ConflictError(`لا يمكن تسجيل التوصية في الحالة ${memo.status}`, { field: "status" });
-    }
 
-    await rawExecute(
-      `UPDATE hr_inquiry_memos
-          SET "managerId" = $1, "managerRecommendation" = $2,
-              "managerComment" = $3, "managerDecidedAt" = NOW(),
-              status = 'pending_gm', "updatedAt" = NOW()
-        WHERE id = $4 AND "companyId" = $5`,
-      [scope.activeAssignmentId ?? null, recommendation, comment ?? null, id, scope.companyId]
-    );
-
-    await logMemoEvent({
-      memoId: id, companyId: scope.companyId, actorId: scope.userId,
-      actorRole: "direct_manager", action: "manager_recommended",
-      payload: { recommendation }, note: comment ?? undefined,
-    });
-
-    // تنبيه المدير العام
-    emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "hr.memo.manager_recommended", entity: "hr_inquiry_memo", entityId: id,
-      details: JSON.stringify({ recommendation }),
-    }).catch(console.error);
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "discipline_memos", entityId: id,
+    await applyTransition({
+      entity: "hr_inquiry_memos",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "hr.memo.manager_recommended",
+      fromStates: ["pending_manager"],
+      toState: "pending_gm",
+      setExtras: {
+        managerId: scope.activeAssignmentId ?? null,
+        managerRecommendation: recommendation,
+        managerComment: comment ?? null,
+        managerDecidedAt: { raw: "NOW()" },
+      },
       after: { status: "pending_gm", recommendation, comment },
-    }).catch(console.error);
+      onApply: async (_row, _client) => {
+        await logMemoEvent({
+          memoId: id, companyId: scope.companyId, actorId: scope.userId,
+          actorRole: "direct_manager", action: "manager_recommended",
+          payload: { recommendation }, note: comment ?? undefined,
+        });
+      },
+    });
 
     res.json({ ok: true, status: "pending_gm" });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "Manager recommendation error:");
   }
 });
@@ -708,151 +699,135 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
 
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
-    if (memo.status !== "pending_gm") {
-      throw new ConflictError(`لا يمكن اعتماد المحضر في الحالة ${memo.status}`, { field: "status" });
+
+    // Pre-compute penalty details before the transition
+    const [assignment] = await rawQuery<any>(
+      `SELECT id, "companyId", "branchId", "employeeId", salary
+         FROM employee_assignments WHERE id = $1`,
+      [memo.assignmentId]
+    );
+    if (!assignment) throw new Error("التعيين غير موجود");
+
+    let appliedLabel = "";
+    let baseAmount = 0;
+    let extraAmount = 0;
+    let occurrenceCount = memo.occurrenceCount ?? 1;
+    let terminationDecided = false;
+    const newStatus: "approved" | "rejected" = decision === "rejected" ? "rejected" : "approved";
+
+    if (decision !== "rejected") {
+      const dailyWage = Number(assignment.salary ?? 0) > 0 ? Number(assignment.salary) / 30 : 0;
+      const resolution = await resolvePenalty({
+        companyId: scope.companyId,
+        assignmentId: memo.assignmentId,
+        employeeId: memo.employeeId,
+        dailyWage,
+        incidentType: memo.incidentType as IncidentType,
+        incidentDate: memo.incidentDate,
+        durationMinutes: memo.incidentDurationMinutes ?? undefined,
+        absenceDays: undefined,
+        disruptsOthers: false,
+        customRegulationId: memo.regulationId ?? undefined,
+      });
+      if (resolution) {
+        appliedLabel = resolution.penaltyLabel;
+        baseAmount = resolution.baseDeductionAmount;
+        extraAmount = resolution.extraDeductionAmount;
+        occurrenceCount = resolution.occurrenceCount;
+        terminationDecided = resolution.isTermination;
+      }
     }
 
-    await withTransaction(async (client) => {
-      // جلب تفاصيل التعيين والراتب
-      const { rows: assignmentRows } = await client.query(
-        `SELECT id, "companyId", "branchId", "employeeId", salary
-           FROM employee_assignments WHERE id = $1`,
-        [memo.assignmentId]
-      );
-      const assignment = assignmentRows[0];
-      if (!assignment) throw new Error("التعيين غير موجود");
-
-      let appliedLabel = "";
-      let baseAmount = 0;
-      let extraAmount = 0;
-      let occurrenceCount = memo.occurrenceCount ?? 1;
-      let terminationDecided = false;
-      let newStatus: "approved" | "rejected" = "approved";
-
-      if (decision === "rejected") {
-        newStatus = "rejected";
-        if (memo.violationId) {
-          await client.query(
-            `UPDATE employee_violations SET status = 'rejected' WHERE id = $1 AND "companyId" = $2`,
-            [memo.violationId, scope.companyId]
-          );
+    await applyTransition({
+      entity: "hr_inquiry_memos",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "hr.memo.gm_decided",
+      fromStates: ["pending_gm"],
+      toState: newStatus,
+      setExtras: {
+        gmId: scope.activeAssignmentId ?? null,
+        gmDecision: decision,
+        gmComment: comment ?? null,
+        gmDecidedAt: { raw: "NOW()" },
+        occurrenceCount,
+        appliedPenaltyLabel: appliedLabel,
+        appliedDeductionAmount: baseAmount,
+        appliedExtraDeduction: extraAmount,
+        terminationDecided,
+      },
+      after: { status: newStatus, decision, comment },
+      onApply: async (_row, client) => {
+        if (decision === "rejected") {
+          if (memo.violationId) {
+            await client.query(
+              `UPDATE employee_violations SET status = 'rejected' WHERE id = $1 AND "companyId" = $2`,
+              [memo.violationId, scope.companyId]
+            );
+          }
+        } else {
+          // إدخال الخصم في attendance_deductions (pending_payroll) إن وجد مبلغ
+          const totalDeduction = baseAmount + extraAmount;
+          if (totalDeduction > 0) {
+            const period = memo.incidentDate.slice(0, 7);
+            await client.query(
+              `INSERT INTO attendance_deductions
+                 ("companyId","assignmentId",type,minutes,amount,period,status)
+               VALUES ($1,$2,'penalty',$3,$4,$5,'pending_payroll')`,
+              [
+                scope.companyId,
+                memo.assignmentId,
+                memo.incidentDurationMinutes ?? 0,
+                totalDeduction,
+                period,
+              ]
+            );
+          }
+          // تحديث employee_violations المرتبط (إن وجد)
+          if (memo.violationId) {
+            await client.query(
+              `UPDATE employee_violations
+                  SET status = 'approved',
+                      "regulationId" = COALESCE("regulationId", $1),
+                      "occurrenceCount" = $2,
+                      deduction = $3
+                WHERE id = $4 AND "companyId" = $5`,
+              [memo.regulationId, occurrenceCount, baseAmount + extraAmount, memo.violationId, scope.companyId]
+            );
+          }
         }
-      } else {
-        // Re-resolve penalty at decision time (اللائحة قد تكون تحدّثت)
-        const dailyWage = Number(assignment.salary ?? 0) > 0 ? Number(assignment.salary) / 30 : 0;
 
-        const resolution = await resolvePenalty({
-          companyId: scope.companyId,
-          assignmentId: memo.assignmentId,
-          employeeId: memo.employeeId,
-          dailyWage,
-          incidentType: memo.incidentType as IncidentType,
-          incidentDate: memo.incidentDate,
-          durationMinutes: memo.incidentDurationMinutes ?? undefined,
-          absenceDays: undefined,
-          disruptsOthers: false,
-          customRegulationId: memo.regulationId ?? undefined,
+        await logMemoEvent({
+          memoId: id, companyId: scope.companyId, actorId: scope.userId,
+          actorRole: "gm", action: "gm_decided",
+          payload: { decision }, note: comment ?? undefined,
         });
 
-        if (resolution) {
-          appliedLabel = resolution.penaltyLabel;
-          baseAmount = resolution.baseDeductionAmount;
-          extraAmount = resolution.extraDeductionAmount;
-          occurrenceCount = resolution.occurrenceCount;
-          terminationDecided = resolution.isTermination;
+        if (decision === "approved") {
+          await logMemoEvent({
+            memoId: id, companyId: scope.companyId, actorId: scope.userId,
+            actorRole: "system", action: "penalty_applied",
+            note: "تم تطبيق الجزاء على كشف الرواتب",
+          });
         }
-
-        // إدخال الخصم في attendance_deductions (pending_payroll) إن وجد مبلغ
-        const totalDeduction = baseAmount + extraAmount;
-        if (totalDeduction > 0) {
-          const period = memo.incidentDate.slice(0, 7);
-          await client.query(
-            `INSERT INTO attendance_deductions
-               ("companyId","assignmentId",type,minutes,amount,period,status)
-             VALUES ($1,$2,'penalty',$3,$4,$5,'pending_payroll')`,
-            [
-              scope.companyId,
-              memo.assignmentId,
-              memo.incidentDurationMinutes ?? 0,
-              totalDeduction,
-              period,
-            ]
-          );
-        }
-
-        // تحديث employee_violations المرتبط (إن وجد)
-        if (memo.violationId) {
-          await client.query(
-            `UPDATE employee_violations
-                SET status = 'approved',
-                    "regulationId" = COALESCE("regulationId", $1),
-                    "occurrenceCount" = $2,
-                    deduction = $3
-              WHERE id = $4 AND "companyId" = $5`,
-            [memo.regulationId, occurrenceCount, baseAmount + extraAmount, memo.violationId, scope.companyId]
-          );
-        }
-      }
-
-      // Update the memo
-      await client.query(
-        `UPDATE hr_inquiry_memos
-            SET "gmId" = $1, "gmDecision" = $2, "gmComment" = $3,
-                "gmDecidedAt" = NOW(), status = $4,
-                "occurrenceCount" = $5,
-                "appliedPenaltyLabel" = $6,
-                "appliedDeductionAmount" = $7,
-                "appliedExtraDeduction" = $8,
-                "terminationDecided" = $9,
-                "updatedAt" = NOW()
-          WHERE id = $10 AND "companyId" = $11`,
-        [
-          scope.activeAssignmentId ?? null,
-          decision, comment ?? null,
-          newStatus, occurrenceCount,
-          appliedLabel, baseAmount, extraAmount,
-          terminationDecided, id, scope.companyId,
-        ]
-      );
+      },
+      notifications: [
+        {
+          assignmentId: memo.assignmentId,
+          type: "inquiry_memo_result",
+          title: decision === "approved" ? "تم اعتماد جزاء المحضر" : "تم رفض المحضر",
+          body: `المحضر ${memo.memoNumber}: ${decision}`,
+          priority: "high",
+          refType: "hr_inquiry_memo",
+          refId: id,
+        },
+      ],
     });
 
-    await logMemoEvent({
-      memoId: id, companyId: scope.companyId, actorId: scope.userId,
-      actorRole: "gm", action: "gm_decided",
-      payload: { decision }, note: comment ?? undefined,
-    });
-
-    if (decision === "approved") {
-      await logMemoEvent({
-        memoId: id, companyId: scope.companyId, actorId: scope.userId,
-        actorRole: "system", action: "penalty_applied",
-        note: "تم تطبيق الجزاء على كشف الرواتب",
-      });
-    }
-
-    // تنبيه الموظف بالنتيجة
-    createNotification({
-      companyId: scope.companyId, assignmentId: memo.assignmentId,
-      type: "inquiry_memo_result",
-      title: decision === "approved" ? "تم اعتماد جزاء المحضر" : "تم رفض المحضر",
-      body: `المحضر ${memo.memoNumber}: ${decision}`,
-      priority: "high", refType: "hr_inquiry_memo", refId: id,
-    }).catch(console.error);
-
-    emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "hr.memo.gm_decided", entity: "hr_inquiry_memo", entityId: id,
-      details: JSON.stringify({ decision }),
-    }).catch(console.error);
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "discipline_memos", entityId: id,
-      after: { status: decision === "approved" ? "approved" : "rejected", decision, comment },
-    }).catch(console.error);
-
-    res.json({ ok: true, status: decision === "approved" ? "approved" : "rejected" });
+    res.json({ ok: true, status: newStatus });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "GM decision error:");
   }
 });
@@ -868,42 +843,35 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
     const { reason } = body;
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
-    if (["approved", "rejected", "cancelled", "closed", "appeal_pending", "appeal_accepted"].includes(memo.status)) {
-      throw new ConflictError(`لا يمكن إلغاء المحضر في الحالة ${memo.status}`, { field: "status" });
-    }
-    await rawExecute(
-      `UPDATE hr_inquiry_memos SET status = 'cancelled', "updatedAt" = NOW()
-        WHERE id = $1 AND "companyId" = $2`,
-      [id, scope.companyId]
-    );
-    // إذا كان مرتبطاً بمخالفة، نُلغي ربطها
-    if (memo.violationId) {
-      await rawExecute(
-        `UPDATE employee_violations SET status = 'cancelled'
-          WHERE id = $1 AND "companyId" = $2`,
-        [memo.violationId, scope.companyId]
-      );
-    }
-    await logMemoEvent({
-      memoId: id, companyId: scope.companyId, actorId: scope.userId,
-      actorRole: "hr", action: "cancelled", note: reason ?? undefined,
-    });
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
+
+    await applyTransition({
+      entity: "hr_inquiry_memos",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       action: "hr.memo.cancelled",
-      entity: "hr_memos",
-      entityId: id,
-      details: JSON.stringify({ reason, memoNumber: memo.memoNumber, employeeId: memo.employeeId }),
-    }).catch(console.error);
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "discipline_memos", entityId: id,
+      fromStates: ["draft", "pending_employee", "pending_manager", "pending_gm"],
+      toState: "cancelled",
+      reason: reason ?? undefined,
       after: { status: "cancelled", reason, memoNumber: memo.memoNumber },
-    }).catch(console.error);
+      onApply: async (_row, _client) => {
+        // إذا كان مرتبطاً بمخالفة، نُلغي ربطها
+        if (memo.violationId) {
+          await rawExecute(
+            `UPDATE employee_violations SET status = 'cancelled'
+              WHERE id = $1 AND "companyId" = $2`,
+            [memo.violationId, scope.companyId]
+          );
+        }
+        await logMemoEvent({
+          memoId: id, companyId: scope.companyId, actorId: scope.userId,
+          actorRole: "hr", action: "cancelled", note: reason ?? undefined,
+        });
+      },
+    });
     res.json({ ok: true });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "Cancel memo error:");
   }
 });
@@ -921,41 +889,46 @@ router.post("/memos/:id/appeal", requirePermission("hr:read"), async (req, res) 
     }
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
-    if (memo.status !== "approved") {
-      throw new ConflictError("لا يمكن الاستئناف إلا على محضر معتمد", { field: "status" });
-    }
-    await rawExecute(
-      `UPDATE hr_inquiry_memos SET status = 'appeal_pending', "appealReason" = $1, "appealDate" = NOW(), "updatedAt" = NOW()
-       WHERE id = $2 AND "companyId" = $3`,
-      [reason.trim(), id, scope.companyId]
-    );
-    await logMemoEvent({
-      memoId: id, companyId: scope.companyId, actorId: scope.userId,
-      actorRole: "employee", action: "appeal_submitted", note: reason.trim(),
-    });
-    createNotification({
-      companyId: scope.companyId, assignmentId: memo.managerId ?? null,
-      type: "inquiry_memo_appeal",
-      title: `استئناف على محضر ${memo.memoNumber}`,
-      body: `قدّم الموظف استئنافاً على قرار الجزاء`,
-      priority: "high", refType: "hr_inquiry_memo", refId: id,
-    }).catch(console.error);
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
+
+    await applyTransition({
+      entity: "hr_inquiry_memos",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       action: "hr.memo.appealed",
-      entity: "hr_memos",
-      entityId: id,
-      details: JSON.stringify({ reason: reason.trim(), memoNumber: memo.memoNumber, employeeId: memo.employeeId }),
-    }).catch(console.error);
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "discipline_memos", entityId: id,
+      fromStates: ["approved"],
+      toState: "appeal_pending",
+      reason: reason.trim(),
+      setExtras: {
+        appealReason: reason.trim(),
+        appealDate: { raw: "NOW()" },
+      },
       after: { status: "appeal_pending", reason: reason.trim(), memoNumber: memo.memoNumber },
-    }).catch(console.error);
+      onApply: async (_row, _client) => {
+        await logMemoEvent({
+          memoId: id, companyId: scope.companyId, actorId: scope.userId,
+          actorRole: "employee", action: "appeal_submitted", note: reason.trim(),
+        });
+      },
+      notifications: memo.managerId
+        ? [
+            {
+              assignmentId: memo.managerId,
+              type: "inquiry_memo_appeal",
+              title: `استئناف على محضر ${memo.memoNumber}`,
+              body: `قدّم الموظف استئنافاً على قرار الجزاء`,
+              priority: "high",
+              refType: "hr_inquiry_memo",
+              refId: id,
+            },
+          ]
+        : [],
+    });
     res.json({ ok: true, status: "appeal_pending" });
-  } catch (err) { handleRouteError(err, res, "Appeal error:"); }
+  } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
+    handleRouteError(err, res, "Appeal error:");
+  }
 });
 
 router.post("/memos/:id/appeal-decision", requirePermission("hr:discipline:approve"), async (req, res) => {
@@ -968,49 +941,52 @@ router.post("/memos/:id/appeal-decision", requirePermission("hr:discipline:appro
     }
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
-    if (memo.status !== "appeal_pending") {
-      throw new ConflictError("المحضر ليس في حالة استئناف معلق", { field: "status" });
-    }
     const newStatus = decision === "accepted" ? "appeal_accepted" : "approved";
-    await rawExecute(
-      `UPDATE hr_inquiry_memos SET status = $1, "appealDecision" = $2, "appealComment" = $3, "appealDecidedAt" = NOW(), "updatedAt" = NOW()
-       WHERE id = $4 AND "companyId" = $5`,
-      [newStatus, decision, comment || null, id, scope.companyId]
-    );
-    if (decision === "accepted" && memo.violationId) {
-      await rawExecute(
-        `UPDATE employee_violations SET status = 'appeal_accepted' WHERE id = $1 AND "companyId" = $2`,
-        [memo.violationId, scope.companyId]
-      );
-    }
-    await logMemoEvent({
-      memoId: id, companyId: scope.companyId, actorId: scope.userId,
-      actorRole: "gm", action: decision === "accepted" ? "appeal_accepted" : "appeal_rejected",
-      note: comment ?? undefined,
-    });
-    createNotification({
-      companyId: scope.companyId, assignmentId: memo.assignmentId,
-      type: "inquiry_memo_appeal_result",
-      title: decision === "accepted" ? "تم قبول الاستئناف" : "تم رفض الاستئناف",
-      body: `نتيجة استئنافك على المحضر ${memo.memoNumber}: ${decision === "accepted" ? "قُبل" : "رُفض"}`,
-      priority: "high", refType: "hr_inquiry_memo", refId: id,
-    }).catch(console.error);
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
+
+    await applyTransition({
+      entity: "hr_inquiry_memos",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       action: "hr.memo.appeal_decided",
-      entity: "hr_memos",
-      entityId: id,
-      details: JSON.stringify({ decision, comment, newStatus, memoNumber: memo.memoNumber, employeeId: memo.employeeId }),
-    }).catch(console.error);
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "discipline_memos", entityId: id,
+      fromStates: ["appeal_pending"],
+      toState: newStatus,
+      setExtras: {
+        appealDecision: decision,
+        appealComment: comment || null,
+        appealDecidedAt: { raw: "NOW()" },
+      },
       after: { status: newStatus, decision, comment, memoNumber: memo.memoNumber },
-    }).catch(console.error);
+      onApply: async (_row, _client) => {
+        if (decision === "accepted" && memo.violationId) {
+          await rawExecute(
+            `UPDATE employee_violations SET status = 'appeal_accepted' WHERE id = $1 AND "companyId" = $2`,
+            [memo.violationId, scope.companyId]
+          );
+        }
+        await logMemoEvent({
+          memoId: id, companyId: scope.companyId, actorId: scope.userId,
+          actorRole: "gm", action: decision === "accepted" ? "appeal_accepted" : "appeal_rejected",
+          note: comment ?? undefined,
+        });
+      },
+      notifications: [
+        {
+          assignmentId: memo.assignmentId,
+          type: "inquiry_memo_appeal_result",
+          title: decision === "accepted" ? "تم قبول الاستئناف" : "تم رفض الاستئناف",
+          body: `نتيجة استئنافك على المحضر ${memo.memoNumber}: ${decision === "accepted" ? "قُبل" : "رُفض"}`,
+          priority: "high",
+          refType: "hr_inquiry_memo",
+          refId: id,
+        },
+      ],
+    });
     res.json({ ok: true, status: newStatus });
-  } catch (err) { handleRouteError(err, res, "Appeal decision error:"); }
+  } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
+    handleRouteError(err, res, "Appeal decision error:");
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1022,40 +998,37 @@ router.post("/memos/:id/close", requirePermission("hr:update"), async (req, res)
     const id = Number(req.params.id);
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
-    if (!["approved", "rejected", "appeal_accepted", "cancelled"].includes(memo.status)) {
-      throw new ConflictError("لا يمكن إقفال المحضر في هذه الحالة — يجب أن يكون مقرراً أو ملغى", { field: "status" });
-    }
-    await rawExecute(
-      `UPDATE hr_inquiry_memos SET status = 'closed', "closedAt" = NOW(), "updatedAt" = NOW()
-       WHERE id = $1 AND "companyId" = $2`,
-      [id, scope.companyId]
-    );
-    if (memo.violationId) {
-      await rawExecute(
-        `UPDATE employee_violations SET status = 'closed' WHERE id = $1 AND "companyId" = $2`,
-        [memo.violationId, scope.companyId]
-      );
-    }
-    await logMemoEvent({
-      memoId: id, companyId: scope.companyId, actorId: scope.userId,
-      actorRole: "hr", action: "closed", note: req.body.note ?? undefined,
-    });
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
+
+    await applyTransition({
+      entity: "hr_inquiry_memos",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       action: "hr.memo.closed",
-      entity: "hr_memos",
-      entityId: id,
-      details: JSON.stringify({ memoNumber: memo.memoNumber, employeeId: memo.employeeId, previousStatus: memo.status }),
-    }).catch(console.error);
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "discipline_memos", entityId: id,
+      fromStates: ["approved", "rejected", "appeal_accepted", "cancelled"],
+      toState: "closed",
+      setExtras: {
+        closedAt: { raw: "NOW()" },
+      },
       after: { status: "closed", previousStatus: memo.status, memoNumber: memo.memoNumber },
-    }).catch(console.error);
+      onApply: async (_row, _client) => {
+        if (memo.violationId) {
+          await rawExecute(
+            `UPDATE employee_violations SET status = 'closed' WHERE id = $1 AND "companyId" = $2`,
+            [memo.violationId, scope.companyId]
+          );
+        }
+        await logMemoEvent({
+          memoId: id, companyId: scope.companyId, actorId: scope.userId,
+          actorRole: "hr", action: "closed", note: req.body.note ?? undefined,
+        });
+      },
+    });
     res.json({ ok: true, status: "closed" });
-  } catch (err) { handleRouteError(err, res, "Close memo error:"); }
+  } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
+    handleRouteError(err, res, "Close memo error:");
+  }
 });
 
 // Preview penalty without creating a memo (for UI)

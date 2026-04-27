@@ -18,6 +18,7 @@ import {
   createAuditLog,
   emitEvent,
 } from "../lib/businessHelpers.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -306,21 +307,14 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
     if (!existing) throw new NotFoundError("المنتج غير موجود");
     const b = req.body;
 
-    // State machine on status
-    if (b.status !== undefined && b.status !== existing.status) {
-      if (!PRODUCT_STATUSES.includes(b.status)) {
-        throw new ValidationError(
-          `حالة منتج غير صالحة: ${b.status}`,
-          { field: "status", fix: `اختر من: ${PRODUCT_STATUSES.join(", ")}` }
-        );
-      }
-      const allowed = PRODUCT_TRANSITIONS[existing.status] ?? [];
-      if (!allowed.includes(b.status)) {
-        throw new ConflictError(
-          `لا يمكن نقل المنتج من "${existing.status}" إلى "${b.status}"`,
-          { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد (حالة نهائية)"}` }
-        );
-      }
+    const statusChanging = b.status !== undefined && b.status !== existing.status;
+
+    // Validate status value (applyTransition validates the transition itself)
+    if (statusChanging && !PRODUCT_STATUSES.includes(b.status)) {
+      throw new ValidationError(
+        `حالة منتج غير صالحة: ${b.status}`,
+        { field: "status", fix: `اختر من: ${PRODUCT_STATUSES.join(", ")}` }
+      );
     }
     // Duplicate SKU on rename
     if (b.sku && b.sku !== existing.sku) {
@@ -352,56 +346,103 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
     const effectiveSell = b.sellPrice !== undefined ? Number(b.sellPrice) : Number(existing.sellPrice);
     const sellPriceWarning = effectiveSell > 0 && effectiveSell < effectiveCost;
 
-    const tracked = ["name","sku","description","categoryId","unit","minStock","maxStock","costPrice","sellPrice","location","status"] as const;
+    // Build the set of changed non-status fields
+    const nonStatusTracked = ["name","sku","description","categoryId","unit","minStock","maxStock","costPrice","sellPrice","location"] as const;
     const colMap: Record<string, string> = {
       name: "name", sku: "sku", description: "description", categoryId: '"categoryId"',
       unit: "unit", minStock: '"minStock"', maxStock: '"maxStock"',
-      costPrice: '"costPrice"', sellPrice: '"sellPrice"', location: "location", status: "status",
+      costPrice: '"costPrice"', sellPrice: '"sellPrice"', location: "location",
     };
-    const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
-    for (const f of tracked) {
+    const extraSets: Record<string, string | number | boolean | null> = {};
+    for (const f of nonStatusTracked) {
       if (b[f] === undefined) continue;
       if (b[f] === existing[f]) continue;
-      params.push(b[f]);
-      sets.push(`${colMap[f]}=$${params.length}`);
       before[f] = existing[f];
       after[f] = b[f];
+      extraSets[f] = b[f];
     }
+    if (statusChanging) {
+      before.status = existing.status;
+      after.status = b.status;
+    }
+
     if (Object.keys(after).length === 0) {
       res.json({ ...existing, sellPriceWarning: sellPriceWarning ? "سعر البيع أقل من سعر التكلفة" : null });
       return;
     }
-    params.push(id);
-    await rawExecute(`UPDATE warehouse_products SET ${sets.join(",")} WHERE id=$${params.length} AND "companyId"=$${params.length + 1}`, [...params, scope.companyId]);
-    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
-    createAuditLog({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "update",
-      entity: "warehouse_products",
-      entityId: id,
-      before,
-      after,
-    }).catch(console.error);
+    let row: any;
 
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "status" in after ? "warehouse.product.status_changed" : "warehouse.product.updated",
-      entity: "warehouse_products",
-      entityId: id,
-      before,
-      after,
-    }).catch(console.error);
+    if (statusChanging) {
+      // Use lifecycle engine for status transitions — it validates the
+      // transition against PRODUCT_TRANSITIONS, sets the status atomically,
+      // and writes audit_log + event_log in a single transaction.
+      const actionName = b.status === "inactive"
+        ? "warehouse.product.deactivated"
+        : b.status === "discontinued"
+          ? "warehouse.product.discontinued"
+          : "warehouse.product.reactivated";
+      const fromStates = Object.entries(PRODUCT_TRANSITIONS)
+        .filter(([, targets]) => (targets as readonly string[]).includes(b.status))
+        .map(([src]) => src);
+
+      row = await applyTransition({
+        entity: "warehouse_products",
+        id,
+        scope,
+        action: actionName,
+        fromStates,
+        toState: b.status,
+        setExtras: Object.keys(extraSets).length > 0 ? extraSets : undefined,
+        extraWhere: `"deletedAt" IS NULL`,
+        after,
+      });
+    } else {
+      // No status change — plain field update with manual audit/event.
+      const sets: string[] = [`"updatedAt"=NOW()`];
+      const params: any[] = [];
+      for (const f of nonStatusTracked) {
+        if (b[f] === undefined) continue;
+        if (b[f] === existing[f]) continue;
+        params.push(b[f]);
+        sets.push(`${colMap[f]}=$${params.length}`);
+      }
+      params.push(id);
+      await rawExecute(`UPDATE warehouse_products SET ${sets.join(",")} WHERE id=$${params.length} AND "companyId"=$${params.length + 1}`, [...params, scope.companyId]);
+      const [fetched] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+      row = fetched;
+
+      createAuditLog({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "update",
+        entity: "warehouse_products",
+        entityId: id,
+        before,
+        after,
+      }).catch(console.error);
+
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "warehouse.product.updated",
+        entity: "warehouse_products",
+        entityId: id,
+        before,
+        after,
+      }).catch(console.error);
+    }
 
     res.json({ ...row, sellPriceWarning: sellPriceWarning ? "سعر البيع أقل من سعر التكلفة" : null });
-  } catch (err) { handleRouteError(err, res, "Update product error:"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Update product error:");
+  }
 });
 
 router.delete("/products/:id", requirePermission("warehouse:delete"), async (req, res) => {
@@ -422,27 +463,26 @@ router.delete("/products/:id", requirePermission("warehouse:delete"), async (req
       );
     }
 
-    await rawExecute(`UPDATE warehouse_products SET "deletedAt"=NOW(), status='inactive' WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "warehouse.product.deleted",
+    await applyTransition({
       entity: "warehouse_products",
-      entityId: id,
-      before: { sku: existing.sku, name: existing.name },
-      after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "delete", entity: "warehouse_products", entityId: id,
+      id,
+      scope,
+      action: "warehouse.product.deleted",
+      fromStates: ["active", "inactive"],
+      toState: "inactive",
+      setExtras: {
+        deletedAt: { raw: "NOW()" },
+      },
+      extraWhere: `"deletedAt" IS NULL`,
       after: { sku: existing.sku, name: existing.name, deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    });
 
     res.json({ message: "تم حذف المنتج بنجاح" });
-  } catch (err) { handleRouteError(err, res, "Delete product error:"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Delete product error:");
+  }
 });
 
 router.get("/movements", requirePermission("warehouse:read"), async (req, res) => {
@@ -1277,116 +1317,130 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
   try {
     const scope = req.scope!;
     const countId = Number(req.params.id);
-    const [count] = await rawQuery<any>(
-      `SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2 AND status='draft'`,
-      [countId, scope.companyId]
-    );
-    if (!count) throw new NotFoundError("الجرد غير موجود أو تمت معالجته");
 
+    // Pre-fetch count items so we can use them inside onApply and for
+    // GL posting after the transition commits.
     const items = await rawQuery<any>(
       `SELECT ici.*, wp."currentStock" FROM inventory_count_items ici JOIN warehouse_products wp ON wp.id=ici."productId" WHERE ici."countId"=$1`,
       [countId]
     );
 
     // P02-MED2 — GL posting failures used to be swallowed by a bare
-    // try/catch + console.error inside the loop. The approval still
-    // returned `{ message: "تم اعتماد الجرد" }` even when zero
-    // journal entries actually landed, so the accountant saw a
-    // green checkmark and only discovered the missing entries days
-    // later when month-end reconciliation refused to balance.
-    // Collect each failure and surface it on the response so the
-    // user knows to follow up. Inventory adjustments still apply
-    // regardless — partial GL state is recoverable manually, but
-    // missing inventory adjustments would force a re-count.
-    const glFailures: Array<{ productId: number; productName?: string; reason: string }> = [];
+    // try/catch + console.error inside the loop. Collect each failure
+    // and surface it on the response so the user knows to follow up.
+    // GL posting runs AFTER the transition commits — a failing journal
+    // entry must never roll back the approved status or the stock
+    // adjustments.
+    const glPendingItems: Array<{
+      movementId: number; productId: number; productName?: string;
+      variance: number; qty: number; preCost: number;
+    }> = [];
     const glSkipped: Array<{ productId: number; productName?: string; reason: string }> = [];
 
-    // Apply adjustments for items with variance
-    for (const item of items) {
-      const variance = Number(item.variance);
-      if (variance !== 0) {
-        const movType = variance > 0 ? 'in' : 'out';
-        const qty = Math.abs(variance);
-        // Snapshot avg cost BEFORE applying the adjustment so the GL
-        // entry uses the pre-adjustment weighted-average.
-        const [prodBefore] = await rawQuery<any>(
-          `SELECT id, name, "costPrice", "lastWaCost" FROM warehouse_products WHERE id=$1`,
-          [item.productId]
-        );
-        const preCost = prodBefore
-          ? Number(prodBefore.costPrice ?? 0) || Number(prodBefore.lastWaCost ?? 0)
-          : 0;
-        await rawExecute(
-          `UPDATE warehouse_products SET "currentStock"="currentStock"+$1, "updatedAt"=NOW() WHERE id=$2`,
-          [variance, item.productId]
-        );
-        const movRes = await rawQuery<any>(
-          `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy")
-           VALUES ($1,$2,$3,$4,$5,'INV-COUNT-' || $6,$7,$8) RETURNING id`,
-          [scope.companyId, item.productId, movType, qty, preCost, countId,
-           variance > 0 ? `فائض جرد — ${qty} وحدة` : `عجز جرد — ${qty} وحدة`,
-           scope.userId]
-        );
-        const movementId = movRes[0]?.id;
-        // GL posting for variance (non-blocking).
-        if (preCost > 0 && movementId) {
-          try {
-            await postInventoryMovementGl({
-              companyId: scope.companyId,
-              branchId: scope.branchId,
-              createdBy: (scope as any).activeAssignmentId ?? scope.userId,
+    const itemsAdjusted = items.filter((i: any) => Number(i.variance) !== 0).length;
+
+    await applyTransition({
+      entity: "inventory_counts",
+      id: countId,
+      scope,
+      action: "warehouse.inventory_count.approved",
+      fromStates: ["draft", "in_progress"],
+      toState: "approved",
+      setExtras: {
+        approvedAt: { raw: "NOW()" },
+        approvedBy: scope.employeeId || null,
+      },
+      after: { itemsAdjusted, totalItems: items.length },
+      onApply: async (_row, client) => {
+        // Apply stock adjustments for items with variance inside the
+        // same transaction so the status flip and inventory deltas are
+        // atomic.
+        for (const item of items) {
+          const variance = Number(item.variance);
+          if (variance === 0) continue;
+
+          const movType = variance > 0 ? "in" : "out";
+          const qty = Math.abs(variance);
+
+          // Snapshot avg cost BEFORE applying the adjustment so the GL
+          // entry uses the pre-adjustment weighted-average.
+          const prodBeforeRes = await client.query(
+            `SELECT id, name, "costPrice", "lastWaCost" FROM warehouse_products WHERE id=$1 FOR UPDATE`,
+            [item.productId]
+          );
+          const prodBefore = prodBeforeRes.rows[0];
+          const preCost = prodBefore
+            ? Number(prodBefore.costPrice ?? 0) || Number(prodBefore.lastWaCost ?? 0)
+            : 0;
+
+          await client.query(
+            `UPDATE warehouse_products SET "currentStock"="currentStock"+$1, "updatedAt"=NOW() WHERE id=$2`,
+            [variance, item.productId]
+          );
+
+          const movRes = await client.query(
+            `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy")
+             VALUES ($1,$2,$3,$4,$5,'INV-COUNT-' || $6,$7,$8) RETURNING id`,
+            [scope.companyId, item.productId, movType, qty, preCost, countId,
+             variance > 0 ? `فائض جرد — ${qty} وحدة` : `عجز جرد — ${qty} وحدة`,
+             scope.userId]
+          );
+          const movementId = movRes.rows[0]?.id;
+
+          // Collect data for GL posting (runs outside the transaction).
+          if (preCost > 0 && movementId) {
+            glPendingItems.push({
               movementId,
               productId: Number(item.productId),
               productName: prodBefore?.name ?? undefined,
-              trigger: variance > 0 ? "variance_in" : "variance_out",
-              quantity: qty,
-              unitCost: preCost,
-              reference: `INV-COUNT-${countId}`,
+              variance,
+              qty,
+              preCost,
             });
-          } catch (glErr: any) {
-            console.error(
-              `[warehouse-gl] inventory count variance GL failed for count ${countId}, product ${item.productId}:`,
-              glErr
+          } else if (preCost <= 0) {
+            console.warn(
+              `[warehouse-gl] inventory count variance for product ${item.productId}: no unit cost — GL posting skipped`
             );
-            glFailures.push({
+            glSkipped.push({
               productId: Number(item.productId),
               productName: prodBefore?.name ?? undefined,
-              reason: glErr?.message ?? String(glErr),
+              reason: "تكلفة الوحدة غير متوفرة",
             });
           }
-        } else if (preCost <= 0) {
-          console.warn(
-            `[warehouse-gl] inventory count variance for product ${item.productId}: no unit cost — GL posting skipped`
-          );
-          glSkipped.push({
-            productId: Number(item.productId),
-            productName: prodBefore?.name ?? undefined,
-            reason: "تكلفة الوحدة غير متوفرة",
-          });
         }
+      },
+    });
+
+    // GL posting runs after the transition committed — failures must
+    // never roll back the approval or stock adjustments.
+    const glFailures: Array<{ productId: number; productName?: string; reason: string }> = [];
+    for (const pending of glPendingItems) {
+      try {
+        await postInventoryMovementGl({
+          companyId: scope.companyId,
+          branchId: scope.branchId,
+          createdBy: (scope as any).activeAssignmentId ?? scope.userId,
+          movementId: pending.movementId,
+          productId: pending.productId,
+          productName: pending.productName,
+          trigger: pending.variance > 0 ? "variance_in" : "variance_out",
+          quantity: pending.qty,
+          unitCost: pending.preCost,
+          reference: `INV-COUNT-${countId}`,
+        });
+      } catch (glErr: any) {
+        console.error(
+          `[warehouse-gl] inventory count variance GL failed for count ${countId}, product ${pending.productId}:`,
+          glErr
+        );
+        glFailures.push({
+          productId: pending.productId,
+          productName: pending.productName,
+          reason: glErr?.message ?? String(glErr),
+        });
       }
     }
 
-    await rawExecute(
-      `UPDATE inventory_counts SET status='approved', "approvedAt"=NOW(), "approvedBy"=$1 WHERE id=$2`,
-      [scope.employeeId || null, countId]
-    );
-
-    const itemsAdjusted = items.filter((i: any) => Number(i.variance) !== 0).length;
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "warehouse.inventory_count.approved",
-      entity: "inventory_counts",
-      entityId: countId,
-      details: JSON.stringify({ itemsAdjusted, totalItems: items.length }),
-    }).catch(console.error);
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "inventory_counts", entityId: countId,
-      after: { status: "approved", itemsAdjusted, totalItems: items.length },
-    }).catch(console.error);
     const baseMessage = "تم اعتماد الجرد وتحديث المخزون";
     if (glFailures.length > 0 || glSkipped.length > 0) {
       const parts: string[] = [];
@@ -1402,7 +1456,11 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
       return;
     }
     res.json({ message: baseMessage, itemsAdjusted });
-  } catch (err) { handleRouteError(err, res, "Approve count error:"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Approve count error:");
+  }
 });
 
 export default router;

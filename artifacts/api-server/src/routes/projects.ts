@@ -791,17 +791,15 @@ router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update
       );
     }
 
-    await rawExecute(`UPDATE project_phases SET status='completed' WHERE id=$1 AND "projectId"=$2`, [phaseId, projectId]);
-
-    createAuditLog({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "update",
+    await applyTransition({
       entity: "project_phases",
-      entityId: phaseId,
-      after: { projectId, status: "completed", previousStatus: phase.status ?? "pending" },
-    }).catch(console.error);
+      id: phaseId,
+      scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+      action: "project.phase.completed",
+      fromStates: ["pending", "in_progress"],
+      toState: "completed",
+      after: { projectId, previousStatus: phase.status ?? "pending" },
+    });
 
     emitEvent({
       companyId: scope.companyId,

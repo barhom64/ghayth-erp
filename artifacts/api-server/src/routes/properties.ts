@@ -8,6 +8,7 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
@@ -841,7 +842,14 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
        contractNumber, b.ejarNumber || null, b.contractType || 'residential', frequency, yearlyRent, totalContractValue, b.latePenaltyType || 'percentage', b.latePenaltyValue || 0, b.gracePeriodDays || 0, b.terminationNoticeDays || 30, b.earlyTerminationFee || 0, b.autoRenewal || false, b.renewalNoticeDays || 60, b.renewalPeriodMonths || 12, b.electricityResponsibility || 'tenant', b.waterResponsibility || 'tenant', b.gasResponsibility || 'tenant', b.maintenanceResponsibility || 'shared', b.brokerageFee || 0, b.brokeragePayor || 'tenant', b.depositHolder || 'owner', b.insuranceRequired || false, b.ownerId || null, installmentCount, b.specialConditions || null, b.ejarStatus || 'draft', b.registrationDate || null]
     );
 
-    await rawExecute(`UPDATE property_units SET status='rented', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [b.unitId, scope.companyId]);
+    await applyTransition({
+      entity: "property_units",
+      id: Number(b.unitId),
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "property.unit.rented",
+      fromStates: ["available", "reserved"],
+      toState: "rented",
+    });
 
     if (installmentCount && installmentCount > 0 && totalContractValue > 0) {
       const installmentAmount = Math.round((totalContractValue / installmentCount) * 100) / 100;
@@ -916,7 +924,11 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
     }).catch(console.error);
 
     res.status(201).json({ ...row, paymentSchedule: schedule });
-  } catch (err) { handleRouteError(err, res, "Create contract error:"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Create contract error:");
+  }
 });
 
 router.patch("/contracts/:id", requirePermission("property:update"), async (req, res) => {
@@ -1118,17 +1130,13 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
     const scope = req.scope!;
     const id = Number(req.params.id);
     const b = req.body || {};
+    // Pre-fetch the contract to compute renewal params. applyTransition will
+    // re-fetch with SELECT FOR UPDATE inside the transaction.
     const [contract] = await rawQuery<any>(
       `SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود");
-    if (!["active", "expired"].includes(contract.status)) {
-      throw new ConflictError(
-        `لا يمكن تجديد عقد بحالة ${contract.status}`,
-        { field: "status", fix: "يمكن تجديد العقود النشطة أو المنتهية فقط" }
-      );
-    }
 
     const renewalMonths = Number(b.renewalPeriodMonths || contract.renewalPeriodMonths || 12);
     const newStartDate = new Date(b.newStartDate || contract.endDate);
@@ -1139,38 +1147,47 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
     const newYearlyRent = b.yearlyRent ? Number(b.yearlyRent) : newMonthlyRent * 12;
     const newTotal = Number(b.totalContractValue || (newMonthlyRent * renewalMonths));
 
-    // Update contract
-    await rawExecute(
-      `UPDATE rental_contracts
-         SET "startDate"=$1,"endDate"=$2,"monthlyRent"=$3,"yearlyRent"=$4,"totalContractValue"=$5,
-             status='active',"updatedAt"=NOW()
-       WHERE id=$6 AND "companyId"=$7`,
-      [newStartDate.toISOString().split("T")[0], newEndDate.toISOString().split("T")[0],
-       newMonthlyRent, newYearlyRent, newTotal, id, scope.companyId]
-    );
-
-    // Generate new payment schedule for the renewal period
-    const freq = contract.paymentFrequency || "monthly";
-    const freqMonths = freq === "quarterly" ? 3 : freq === "semi_annual" ? 6 : freq === "annual" ? 12 : 1;
-    const installmentCount = Math.ceil(renewalMonths / freqMonths);
-    const installmentAmount = Math.round((newTotal / installmentCount) * 100) / 100;
-    const [maxRow] = await rawQuery<any>(
-      `SELECT COALESCE(MAX("installmentNumber"),0) AS max FROM contract_payment_schedule WHERE "contractId"=$1`,
-      [id]
-    );
-    const startNum = Number(maxRow?.max || 0);
-    for (let i = 0; i < installmentCount; i++) {
-      const dueDate = new Date(newStartDate);
-      dueDate.setMonth(dueDate.getMonth() + (i * freqMonths));
-      if (contract.paymentDay) dueDate.setDate(Math.min(Number(contract.paymentDay), 28));
-      const isLast = i === installmentCount - 1;
-      const amt = isLast ? newTotal - (installmentAmount * (installmentCount - 1)) : installmentAmount;
-      await rawExecute(
-        `INSERT INTO contract_payment_schedule ("companyId","contractId","installmentNumber","dueDate",amount,status)
-         VALUES ($1,$2,$3,$4,$5,'pending')`,
-        [scope.companyId, id, startNum + i + 1, dueDate.toISOString().split("T")[0], Math.round(amt * 100) / 100]
-      );
-    }
+    await applyTransition({
+      entity: "rental_contracts",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "property.contract.renewed",
+      fromStates: ["active", "expired"],
+      toState: "active",
+      extraWhere: `"deletedAt" IS NULL`,
+      setExtras: {
+        startDate: newStartDate.toISOString().split("T")[0],
+        endDate: newEndDate.toISOString().split("T")[0],
+        monthlyRent: newMonthlyRent,
+        yearlyRent: newYearlyRent,
+        totalContractValue: newTotal,
+      },
+      after: { endDate: newEndDate.toISOString().split("T")[0], totalContractValue: newTotal },
+      onApply: async (_row, client) => {
+        // Generate new payment schedule for the renewal period
+        const freq = contract.paymentFrequency || "monthly";
+        const freqMonths = freq === "quarterly" ? 3 : freq === "semi_annual" ? 6 : freq === "annual" ? 12 : 1;
+        const installmentCount = Math.ceil(renewalMonths / freqMonths);
+        const installmentAmount = Math.round((newTotal / installmentCount) * 100) / 100;
+        const maxRes = await client.query(
+          `SELECT COALESCE(MAX("installmentNumber"),0) AS max FROM contract_payment_schedule WHERE "contractId"=$1`,
+          [id]
+        );
+        const startNum = Number(maxRes.rows[0]?.max || 0);
+        for (let i = 0; i < installmentCount; i++) {
+          const dueDate = new Date(newStartDate);
+          dueDate.setMonth(dueDate.getMonth() + (i * freqMonths));
+          if (contract.paymentDay) dueDate.setDate(Math.min(Number(contract.paymentDay), 28));
+          const isLast = i === installmentCount - 1;
+          const amt = isLast ? newTotal - (installmentAmount * (installmentCount - 1)) : installmentAmount;
+          await client.query(
+            `INSERT INTO contract_payment_schedule ("companyId","contractId","installmentNumber","dueDate",amount,status)
+             VALUES ($1,$2,$3,$4,$5,'pending')`,
+            [scope.companyId, id, startNum + i + 1, dueDate.toISOString().split("T")[0], Math.round(amt * 100) / 100]
+          );
+        }
+      },
+    });
 
     // Cancel old obligations and register new ones for the renewed period
     await cancelObligation(scope.companyId, "rental_contract", id, "renewal");
@@ -1203,24 +1220,13 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
       dedupeKey: `contract-${id}-expiry-${newEndDate.toISOString().split("T")[0]}`,
     });
 
-    await emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "property.contract.renewed",
-      entity: "rental_contract",
-      entityId: id,
-      details: `تجديد عقد ${contract.contractNumber} حتى ${newEndDate.toISOString().split("T")[0]}`,
-    });
-    await createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "renew", entity: "rental_contracts", entityId: id,
-      before: { endDate: contract.endDate, totalContractValue: contract.totalContractValue },
-      after: { endDate: newEndDate.toISOString().split("T")[0], totalContractValue: newTotal },
-    }).catch(console.error);
-
     const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ ...updated, event: "property.contract.renewed", renewalMonths });
-  } catch (err) { handleRouteError(err, res, "Renew contract error:"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Renew contract error:");
+  }
 });
 
 /** Terminate an active contract — early termination with optional fee */
@@ -1229,17 +1235,13 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
     const scope = req.scope!;
     const id = Number(req.params.id);
     const b = req.body || {};
+    // Pre-fetch contract to compute termination params. applyTransition will
+    // re-fetch with SELECT FOR UPDATE inside its transaction.
     const [contract] = await rawQuery<any>(
       `SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود");
-    if (!["active", "draft"].includes(contract.status)) {
-      throw new ConflictError(
-        `لا يمكن إنهاء عقد بحالة ${contract.status}`,
-        { field: "status", fix: "العقد منتهي أو ملغي مسبقاً" }
-      );
-    }
     if (!b.reason || typeof b.reason !== "string" || !b.reason.trim()) {
       throw new ValidationError("يجب تحديد سبب الإنهاء", { field: "reason", fix: "أدخل سبب إنهاء العقد" });
     }
@@ -1247,36 +1249,39 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
     const terminationDate = b.terminationDate || new Date().toISOString().split("T")[0];
     const earlyFee = Number(b.earlyTerminationFee ?? contract.earlyTerminationFee ?? 0);
 
-    // Update contract
-    await rawExecute(
-      `UPDATE rental_contracts
-         SET status='terminated',"terminatedAt"=NOW(),"terminationReason"=$1,"updatedAt"=NOW()
-       WHERE id=$2 AND "companyId"=$3`,
-      [b.reason, id, scope.companyId]
-    ).catch(async () => {
-      // If terminatedAt/terminationReason columns don't exist, fall back to status-only
-      await rawExecute(
-        `UPDATE rental_contracts SET status='terminated',"updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
-        [id, scope.companyId]
-      );
+    await applyTransition({
+      entity: "rental_contracts",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "property.contract.terminated",
+      fromStates: ["active", "draft"],
+      toState: "terminated",
+      reason: b.reason,
+      extraWhere: `"deletedAt" IS NULL`,
+      setExtras: {
+        terminatedAt: { raw: "NOW()" },
+        terminationReason: b.reason,
+      },
+      after: { reason: b.reason, earlyFee },
+      onApply: async (_row, client) => {
+        // Cancel remaining pending installments
+        await client.query(
+          `UPDATE contract_payment_schedule SET status='cancelled'
+           WHERE "contractId"=$1 AND status='pending' AND "dueDate" > $2`,
+          [id, terminationDate]
+        );
+
+        // Free the unit
+        if (contract.unitId) {
+          await client.query(
+            `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
+            [contract.unitId, scope.companyId]
+          );
+        }
+      },
     });
 
-    // Cancel remaining pending installments
-    await rawExecute(
-      `UPDATE contract_payment_schedule SET status='cancelled'
-       WHERE "contractId"=$1 AND status='pending' AND "dueDate" > $2`,
-      [id, terminationDate]
-    );
-
-    // Free the unit
-    if (contract.unitId) {
-      await rawExecute(
-        `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
-        [contract.unitId, scope.companyId]
-      );
-    }
-
-    // Cancel active obligations
+    // Cancel active obligations (outside transaction — idempotent)
     await cancelObligation(scope.companyId, "rental_contract", id, "renewal");
     await cancelObligation(scope.companyId, "rental_contract", id, "document_expiry");
 
@@ -1292,24 +1297,13 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
       } catch { journalEntryId = null; }
     }
 
-    await emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "property.contract.terminated",
-      entity: "rental_contract",
-      entityId: id,
-      details: `إنهاء عقد ${contract.contractNumber}: ${b.reason}`,
-    });
-    await createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "terminate", entity: "rental_contracts", entityId: id,
-      before: { status: contract.status },
-      after: { status: "terminated", reason: b.reason, earlyFee, journalEntryId },
-    }).catch(console.error);
-
     const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ ...updated, event: "property.contract.terminated", earlyFee, journalEntryId });
-  } catch (err) { handleRouteError(err, res, "Terminate contract error:"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Terminate contract error:");
+  }
 });
 
 router.get("/tenants/list", requirePermission("property:read"), async (req, res) => {
@@ -1974,51 +1968,36 @@ router.patch("/maintenance-requests/:id/approve", requirePermission("property:up
     }
 
     // State machine: approval is only valid from pending/open/returned.
-    const allowedNext = MAINT_REQUEST_TRANSITIONS[mr.status] ?? [];
-    if (!allowedNext.includes(newStatus)) {
-      throw new ConflictError(
-        `لا يمكن ${newStatus === "approved" ? "اعتماد" : newStatus === "rejected" ? "رفض" : "إرجاع"} طلب بحالة "${mr.status}"`,
-        {
-          field: "status",
-          fix: `الانتقالات المسموحة من الحالة الحالية: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد"}`,
-        }
-      );
-    }
+    // Derive the allowed fromStates from the local MAINT_REQUEST_TRANSITIONS
+    // that would lead to this newStatus.
+    const fromStatesForApproval = Object.entries(MAINT_REQUEST_TRANSITIONS)
+      .filter(([, targets]) => targets.includes(newStatus))
+      .map(([src]) => src);
 
-    await rawExecute(
-      `UPDATE maintenance_requests SET status = $1, "updatedAt" = NOW() WHERE id = $2`,
-      [newStatus, id]
-    );
+    const titleMap: Record<string, string> = {
+      approved: "تم اعتماد طلب الصيانة",
+      rejected: "تم رفض طلب الصيانة",
+      returned: "تم إرجاع طلب الصيانة للمراجعة",
+    };
 
-    try {
-      await rawExecute(
-        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('maintenance_request',$1,$2,$3,$4,$5)`,
-        [id, newStatus, notes || null, scope.userId, scope.companyId]
-      );
-    } catch (e) { console.error("Failed to log approval action:", e); }
-
-    // Audit + event + creator notification. Without these the requester
-    // (tenant-facing officer or reporting staff) has no idea whether their
-    // maintenance request was approved, rejected, or returned for rework.
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: newStatus, entity: "maintenance_requests", entityId: id,
-      before: { status: mr.status }, after: { status: newStatus, notes: notes ?? null },
-    }).catch(console.error);
-    emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: `maintenance.${newStatus}`, entity: "maintenance_requests", entityId: id,
-      details: `طلب صيانة ${mr.title || id} — ${newStatus}`,
-    }).catch(console.error);
-
-    if (mr.createdBy) {
-      const titleMap: Record<string, string> = {
-        approved: "تم اعتماد طلب الصيانة",
-        rejected: "تم رفض طلب الصيانة",
-        returned: "تم إرجاع طلب الصيانة للمراجعة",
-      };
-      createNotification({
-        companyId: scope.companyId,
+    await applyTransition({
+      entity: "maintenance_requests",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: `property.maintenance.${newStatus}`,
+      fromStates: fromStatesForApproval,
+      toState: newStatus,
+      reason: notes || undefined,
+      after: { notes: notes ?? null },
+      onApply: async (_row, client) => {
+        try {
+          await client.query(
+            `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('maintenance_request',$1,$2,$3,$4,$5)`,
+            [id, newStatus, notes || null, scope.userId, scope.companyId]
+          );
+        } catch (e) { console.error("Failed to log approval action:", e); }
+      },
+      notifications: mr.createdBy ? [{
         assignmentId: Number(mr.createdBy),
         type: `maintenance_${newStatus}`,
         title: titleMap[newStatus] || `حالة طلب الصيانة: ${newStatus}`,
@@ -2027,11 +2006,15 @@ router.patch("/maintenance-requests/:id/approve", requirePermission("property:up
         refType: "maintenance_request",
         refId: id,
         actionUrl: `/properties/maintenance/${id}`,
-      }).catch(console.error);
-    }
+      }] : undefined,
+    });
 
     res.json({ id, status: newStatus });
-  } catch (err) { handleRouteError(err, res, "خطأ في اعتماد طلب الصيانة"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "خطأ في اعتماد طلب الصيانة");
+  }
 });
 
 router.post("/maintenance-requests/:id/complete", requirePermission("property:create"), async (req, res) => {
@@ -2042,21 +2025,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
     const [mr] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!mr) throw new NotFoundError("الطلب غير موجود");
 
-    // State machine — only valid from assigned or in_progress
-    const allowedNext = MAINT_REQUEST_TRANSITIONS[mr.status] ?? [];
-    if (!allowedNext.includes("completed")) {
-      throw new ConflictError(
-        `لا يمكن إكمال طلب بحالة "${mr.status}"`,
-        {
-          field: "status",
-          fix: `الانتقالات المسموحة: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد"}`,
-        }
-      );
-    }
-
     // Closure preconditions — report + after photos + cost + materials.
-    // The previous implementation sent them as a raw validationErrors array
-    // which the frontend's toast layer shows as a single "حدث خطأ" fallback.
     // Shipping them as one ValidationError with a structured meta lets the
     // client render each individual message.
     const validationErrors: string[] = [];
@@ -2086,17 +2055,32 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
     }
 
     const cost = resolvedCost ?? 0;
-    const completeSets = [`status='completed'`, `"completedAt"=NOW()`, `"updatedAt"=NOW()`];
-    const completeParams: any[] = [];
-    if (costInput !== undefined) { completeParams.push(cost); completeSets.push(`"actualCost"=$${completeParams.length}`); }
-    if (b.closureReport) { completeParams.push(b.closureReport); completeSets.push(`"closureReport"=$${completeParams.length}`); }
-    if (b.afterPhotos) { completeParams.push(JSON.stringify(b.afterPhotos)); completeSets.push(`"afterPhotos"=$${completeParams.length}`); }
-    if (b.materialsUsed) { completeParams.push(JSON.stringify(b.materialsUsed)); completeSets.push(`"materialsUsed"=$${completeParams.length}`); }
-    completeParams.push(id);
-    await rawExecute(
-      `UPDATE maintenance_requests SET ${completeSets.join(",")} WHERE id=$${completeParams.length}`,
-      completeParams
-    );
+
+    // Build setExtras for the completion columns
+    const completionExtras: Record<string, any> = {
+      completedAt: { raw: "NOW()" },
+    };
+    if (costInput !== undefined) completionExtras.actualCost = cost;
+    if (b.closureReport) completionExtras.closureReport = b.closureReport;
+    if (b.afterPhotos) completionExtras.afterPhotos = JSON.stringify(b.afterPhotos);
+    if (b.materialsUsed) completionExtras.materialsUsed = JSON.stringify(b.materialsUsed);
+
+    // Derive allowed fromStates for "completed" from the local state machine
+    const completionFromStates = Object.entries(MAINT_REQUEST_TRANSITIONS)
+      .filter(([, targets]) => targets.includes("completed"))
+      .map(([src]) => src);
+
+    await applyTransition({
+      entity: "maintenance_requests",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "property.maintenance.completed",
+      fromStates: completionFromStates,
+      toState: "completed",
+      setExtras: completionExtras,
+    });
+
+    // --- Post-commit side-effects ---
 
     let invoiceId: number | null = null;
     if (cost > 0 && !b.coveredByContract) {
@@ -2155,12 +2139,6 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
       } catch { journalEntryId = null; }
     }
 
-    await createAuditLog({
-      userId: scope.userId, entity: "maintenance_requests", entityId: id,
-      action: "status_change", companyId: scope.companyId,
-      before: { status: mr.status }, after: { status: "completed" },
-    });
-
     let followUpTaskId: number | null = null;
     try {
       const followUpRows = await rawQuery<any>(
@@ -2188,26 +2166,6 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
 
     console.log(`[SURVEY] Maintenance #${id} completed — follow-up task #${followUpTaskId} created for ${mr.tenantName}`);
 
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "property.maintenance.completed",
-      entity: "property_maintenance_requests",
-      entityId: id,
-      details: JSON.stringify({ invoiceId, followUpTaskId, journalEntryId, cost, category: mr.category, unitId: mr.unitId }),
-    }).catch(console.error);
-
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "maintenance.completed",
-      entity: "property_maintenance_requests",
-      entityId: id,
-      details: JSON.stringify({ invoiceId, followUpTaskId, journalEntryId, cost, category: mr.category, unitId: mr.unitId }),
-    }).catch(console.error);
-
     if (mr.unitId) {
       try {
         await createAuditLog({
@@ -2223,7 +2181,11 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
 
     const [updated] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ ...updated, invoiceCreated: !!invoiceId, invoiceId, surveyQueued: true, journalEntryId, followUpTaskId });
-  } catch (err) { handleRouteError(err, res, "Complete maintenance request error:"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Complete maintenance request error:");
+  }
 });
 
 router.get("/technicians", requirePermission("property:read"), async (req, res) => {
@@ -3256,65 +3218,87 @@ router.patch("/inspections/:id", requirePermission("property:update"), async (re
 
     const b = req.body;
 
-    // State machine
-    if (b.status !== undefined && b.status !== existing.status) {
+    // Collect extra field changes
+    const extraFields: Record<string, any> = {};
+    const afterPatch: Record<string, unknown> = {};
+    if (b.inspectionDate !== undefined) { extraFields.inspectionDate = b.inspectionDate; afterPatch.inspectionDate = b.inspectionDate; }
+    if (b.notes !== undefined && b.notes !== existing.notes) { extraFields.notes = b.notes; afterPatch.notes = b.notes; }
+    if (b.findings !== undefined) { extraFields.findings = JSON.stringify(b.findings); afterPatch.findings = b.findings; }
+    if (b.conditionRating !== undefined && b.conditionRating !== existing.conditionRating) { extraFields.conditionRating = b.conditionRating; afterPatch.conditionRating = b.conditionRating; }
+    if (b.inspectorName !== undefined && b.inspectorName !== existing.inspectorName) { extraFields.inspectorName = b.inspectorName; afterPatch.inspectorName = b.inspectorName; }
+
+    const hasStatusChange = b.status !== undefined && b.status !== existing.status;
+
+    if (!hasStatusChange && Object.keys(extraFields).length === 0) { res.json(existing); return; }
+
+    if (hasStatusChange) {
+      // Validate status value
       if (!INSPECTION_STATUSES.includes(b.status)) {
         throw new ValidationError(
           `حالة فحص غير صالحة: ${b.status}`,
           { field: "status", fix: `اختر من: ${INSPECTION_STATUSES.join(", ")}` }
         );
       }
-      const allowed = INSPECTION_TRANSITIONS[existing.status] ?? [];
-      if (!allowed.includes(b.status)) {
-        throw new ConflictError(
-          `لا يمكن نقل الفحص من "${existing.status}" إلى "${b.status}"`,
-          { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد (حالة نهائية)"}` }
-        );
+      // Use the lifecycle engine for atomic status transition + extras
+      const fromStatesForInspection = Object.entries(INSPECTION_TRANSITIONS)
+        .filter(([, targets]) => targets.includes(b.status))
+        .map(([src]) => src);
+
+      await applyTransition({
+        entity: "property_inspections",
+        id,
+        scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+        action: "property.inspection.status_changed",
+        fromStates: fromStatesForInspection,
+        toState: b.status,
+        setExtras: Object.keys(extraFields).length > 0 ? extraFields : undefined,
+        after: afterPatch,
+      });
+    } else {
+      // Non-status update — keep the simple PATCH path
+      const sets: string[] = [`"updatedAt"=NOW()`];
+      const params: any[] = [];
+      for (const [col, val] of Object.entries(extraFields)) {
+        params.push(val);
+        sets.push(`"${col}"=$${params.length}`);
       }
+      params.push(id); params.push(scope.companyId);
+      await rawQuery<any>(
+        `UPDATE property_inspections SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
+        params
+      );
+
+      createAuditLog({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "update",
+        entity: "property_inspections",
+        entityId: id,
+        after: afterPatch,
+      }).catch(console.error);
+
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "property.inspection.updated",
+        entity: "property_inspections",
+        entityId: id,
+        after: afterPatch,
+      }).catch(console.error);
     }
 
-    const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
-    const before: Record<string, unknown> = {};
-    const after: Record<string, unknown> = {};
-    if (b.status !== undefined && b.status !== existing.status) { params.push(b.status); sets.push(`status=$${params.length}`); before.status = existing.status; after.status = b.status; }
-    if (b.inspectionDate !== undefined) { params.push(b.inspectionDate); sets.push(`"inspectionDate"=$${params.length}`); before.inspectionDate = existing.inspectionDate; after.inspectionDate = b.inspectionDate; }
-    if (b.notes !== undefined && b.notes !== existing.notes) { params.push(b.notes); sets.push(`notes=$${params.length}`); before.notes = existing.notes; after.notes = b.notes; }
-    if (b.findings !== undefined) { params.push(JSON.stringify(b.findings)); sets.push(`findings=$${params.length}`); before.findings = existing.findings; after.findings = b.findings; }
-    if (b.conditionRating !== undefined && b.conditionRating !== existing.conditionRating) { params.push(b.conditionRating); sets.push(`"conditionRating"=$${params.length}`); before.conditionRating = existing.conditionRating; after.conditionRating = b.conditionRating; }
-    if (b.inspectorName !== undefined && b.inspectorName !== existing.inspectorName) { params.push(b.inspectorName); sets.push(`"inspectorName"=$${params.length}`); before.inspectorName = existing.inspectorName; after.inspectorName = b.inspectorName; }
-    if (sets.length === 1) { res.json(existing); return; }
-    params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(
-      `UPDATE property_inspections SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
-      params
+    const [updatedInspection] = await rawQuery<any>(
+      `SELECT * FROM property_inspections WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
     );
-    if (!rows[0]) throw new NotFoundError("المعاينة غير موجودة");
-
-    createAuditLog({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "update",
-      entity: "property_inspections",
-      entityId: id,
-      before,
-      after,
-    }).catch(console.error);
-
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "status" in after ? "property.inspection.status_changed" : "property.inspection.updated",
-      entity: "property_inspections",
-      entityId: id,
-      before,
-      after,
-    }).catch(console.error);
-
-    res.json(rows[0]);
-  } catch (err) { handleRouteError(err, res, "Update inspection error:"); }
+    res.json(updatedInspection);
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Update inspection error:");
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3420,15 +3404,6 @@ router.patch("/deposits/:id/refund", requirePermission("property:update"), async
     );
     if (!deposit) throw new NotFoundError("الوديعة غير موجودة");
 
-    // State machine — must be held or partial_refund
-    const allowed = DEPOSIT_TRANSITIONS[deposit.status] ?? [];
-    if (!allowed.includes("refunded")) {
-      throw new ConflictError(
-        `لا يمكن إرجاع وديعة حالتها "${deposit.status}"`,
-        { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد (حالة نهائية)"}` }
-      );
-    }
-
     const refundAmount = Number(b.refundAmount || deposit.amount);
     if (!Number.isFinite(refundAmount) || refundAmount < 0 || refundAmount > Number(deposit.amount)) {
       throw new ValidationError(
@@ -3455,26 +3430,35 @@ router.patch("/deposits/:id/refund", requirePermission("property:update"), async
       );
     }
 
-    await rawExecute(
-      `UPDATE property_security_deposits SET status='refunded', "refundAmount"=$1, "refundDate"=$2, "refundReason"=$3 WHERE id=$4`,
-      [refundAmount, b.refundDate || new Date().toISOString().split('T')[0], b.refundReason || null, id]
-    );
+    // Derive fromStates for "refunded" from the local DEPOSIT_TRANSITIONS
+    const depositRefundFrom = Object.entries(DEPOSIT_TRANSITIONS)
+      .filter(([, targets]) => targets.includes("refunded"))
+      .map(([src]) => src);
 
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "refund", entity: "property_security_deposits", entityId: id,
-      before: { status: "held", amount: deposit.amount },
-      after: { status: "refunded", refundAmount, reason: b.refundReason ?? null },
-    }).catch(console.error);
-    emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "deposit.refunded", entity: "property_security_deposits", entityId: id,
-      details: `إرجاع وديعة عقد #${deposit.contractId} بقيمة ${refundAmount}`,
-    }).catch(console.error);
+    await applyTransition({
+      entity: "property_security_deposits",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "property.deposit.refunded",
+      fromStates: depositRefundFrom,
+      toState: "refunded",
+      reason: b.refundReason || undefined,
+      setExtras: {
+        refundAmount,
+        refundDate: b.refundDate || new Date().toISOString().split('T')[0],
+        refundReason: b.refundReason || null,
+      },
+      after: { refundAmount, reason: b.refundReason ?? null },
+      skipUpdatedAt: true,
+    });
 
     const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1`, [id]);
     res.json(row);
-  } catch (err) { handleRouteError(err, res, "Refund deposit error:"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Refund deposit error:");
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

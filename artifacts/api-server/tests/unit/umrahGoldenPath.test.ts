@@ -355,3 +355,71 @@ describe("Umrah entities security", () => {
     expect(auditCalls!.length).toBeGreaterThanOrEqual(10);
   });
 });
+
+describe("Umrah lifecycle engine adoption", () => {
+  it("imports applyTransition from lifecycleEngine", () => {
+    expect(UMRAH_ROUTE).toContain("applyTransition");
+    expect(UMRAH_ROUTE).toContain("lifecycleEngine");
+  });
+
+  it("package delete uses applyTransition", () => {
+    const idx = UMRAH_ROUTE.indexOf('router.delete("/packages/:id"');
+    const endIdx = UMRAH_ROUTE.indexOf("router.", idx + 10);
+    const section = UMRAH_ROUTE.slice(idx, endIdx);
+    expect(section).toContain("applyTransition");
+    expect(section).toContain('"umrah.package.deleted"');
+  });
+
+  it("penalty engine uses applyTransition for violation", () => {
+    const idx = UMRAH_ROUTE.indexOf('"/run-penalty-engine"');
+    const endIdx = UMRAH_ROUTE.indexOf("router.", idx + 10);
+    const section = UMRAH_ROUTE.slice(idx, endIdx);
+    expect(section).toContain("applyTransition");
+    expect(section).toContain('"umrah.pilgrim.violated"');
+  });
+
+  it("agent PATCH validates status transitions", () => {
+    const idx = UMRAH_ROUTE.indexOf('router.patch("/agents/:id"');
+    const endIdx = UMRAH_ROUTE.indexOf("router.", idx + 10);
+    const section = UMRAH_ROUTE.slice(idx, endIdx);
+    expect(section).toContain("AGENT_TRANSITIONS");
+  });
+});
+
+describe("Umrah-Fleet integration", () => {
+  it("transport POST validates vehicle exists in fleet", () => {
+    const idx = UMRAH_ROUTE.indexOf('router.post("/transport"');
+    const endIdx = UMRAH_ROUTE.indexOf("router.", idx + 10);
+    const section = UMRAH_ROUTE.slice(idx, endIdx);
+    expect(section).toContain("fleet_vehicles");
+  });
+
+  it("transport POST validates driver exists in fleet", () => {
+    const idx = UMRAH_ROUTE.indexOf('router.post("/transport"');
+    const endIdx = UMRAH_ROUTE.indexOf("router.", idx + 10);
+    const section = UMRAH_ROUTE.slice(idx, endIdx);
+    expect(section).toContain("fleet_drivers");
+  });
+
+  it("transport POST rejects vehicles under maintenance", () => {
+    const idx = UMRAH_ROUTE.indexOf('router.post("/transport"');
+    const endIdx = UMRAH_ROUTE.indexOf("router.", idx + 10);
+    const section = UMRAH_ROUTE.slice(idx, endIdx);
+    expect(section).toContain("maintenance");
+  });
+
+  it("transport POST checks driver license expiry", () => {
+    const idx = UMRAH_ROUTE.indexOf('router.post("/transport"');
+    const endIdx = UMRAH_ROUTE.indexOf("router.", idx + 10);
+    const section = UMRAH_ROUTE.slice(idx, endIdx);
+    expect(section).toContain("licenseExpiry");
+  });
+
+  it("transport POST validates capacity vs pilgrim count", () => {
+    const idx = UMRAH_ROUTE.indexOf('router.post("/transport"');
+    const endIdx = UMRAH_ROUTE.indexOf("router.", idx + 10);
+    const section = UMRAH_ROUTE.slice(idx, endIdx);
+    expect(section).toContain("pilgrimCount");
+    expect(section).toContain("capacity");
+  });
+});

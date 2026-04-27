@@ -12,9 +12,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   emitEvent,
-  createAuditLog,
   initiateApprovalChain,
-  createNotification,
   updateBudgetUsed,
   checkFinancialPeriodOpen,
   computeVat,
@@ -22,6 +20,7 @@ import {
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation } from "../lib/obligationsEngine.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { z } from "zod";
 
 export const purchaseRouter = Router();
@@ -264,7 +263,16 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
     }
 
     const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "procurement", refType: "purchase_request", refId: insertId, amount: totalAmount });
-    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE purchase_requests SET status = 'pending' WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]); }
+    if (approvalResult.requiresApproval) {
+      await applyTransition({
+        entity: "purchase_requests",
+        id: insertId,
+        scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+        action: "purchase_request.submitted",
+        fromStates: ["draft"],
+        toState: "pending",
+      });
+    }
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "purchase_request.created", entity: "purchase_requests", entityId: insertId, details: JSON.stringify({ ref, totalAmount, supplierId }) }).catch(console.error);
 
@@ -282,6 +290,8 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
 
     res.status(201).json({ id: insertId, ref, totalAmount, supplierId, notes, expectedDate, items, approval: approvalResult });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "Create purchase request error:");
   }
 });
@@ -304,30 +314,9 @@ purchaseRouter.patch("/purchase-requests/:id/approve", requirePermission("financ
       );
     }
 
-    await rawExecute(`UPDATE purchase_requests SET status = $1, notes = COALESCE($2, notes) WHERE id = $3 AND "companyId" = $4`, [newStatus, notes ?? null, Number(id), scope.companyId]);
-    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_request',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
-
-    // Bus emission — the dead listeners in eventListeners.ts:193/326
-    // (purchase_request.approved / purchase_request.rejected) now fire.
-    // Approvals were silent on the bus before this patch.
-    if (newStatus === "approved" || newStatus === "rejected") {
-      await emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: newStatus === "approved" ? "purchase_request.approved" : "purchase_request.rejected",
-        entity: "purchase_request",
-        entityId: Number(id),
-        before: { status: pr.status },
-        after: { status: newStatus, notes: notes ?? null },
-      });
-    }
-
-    // Notify the requester about rejection/return so they see the reason
-    // instead of having to poll the PR status page.
+    const prNotifications: Array<{ assignmentId: number; type: string; title: string; body: string; priority?: string; refType?: string; refId?: number; actionUrl?: string }> = [];
     if ((newStatus === "rejected" || newStatus === "returned") && pr.requestedBy) {
-      await createNotification({
-        companyId: scope.companyId,
+      prNotifications.push({
         assignmentId: Number(pr.requestedBy),
         type: newStatus === "rejected" ? "purchase_request_rejected" : "purchase_request_returned",
         title: newStatus === "rejected" ? "تم رفض طلب الشراء" : "تم إرجاع طلب الشراء",
@@ -338,12 +327,28 @@ purchaseRouter.patch("/purchase-requests/:id/approve", requirePermission("financ
         refType: "purchase_request",
         refId: Number(id),
         actionUrl: `/finance/purchase-orders/${id}`,
-      }).catch((e) => console.error("notify PR requester failed:", e));
+      });
     }
+
+    await applyTransition({
+      entity: "purchase_requests",
+      id: Number(id),
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: `purchase_request.${newStatus}`,
+      toState: newStatus,
+      reason: notes ?? undefined,
+      setExtras: notes ? { notes: { raw: `COALESCE(notes,'') || ' ' || ${notes ? `'${notes.replace(/'/g, "''")}'` : "''"}` } } : undefined,
+      after: { status: newStatus, notes: notes ?? null },
+      notifications: prNotifications.length > 0 ? prNotifications : undefined,
+    });
+
+    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_request',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
 
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "Finance purchase error:");
   }
 });
@@ -388,34 +393,20 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
       ).catch(console.error);
     }
 
-    await rawExecute(`UPDATE purchase_requests SET status = 'converted' WHERE id = $1 AND "companyId" = $2`, [Number(id), scope.companyId]);
-
-    // Record the PR→PO conversion explicitly so the chain audit/events
-    // can follow "who turned which PR into which PO" without having to
-    // cross-reference timestamps by ref prefix.
-    createAuditLog({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      entity: "purchase_request",
-      entityId: Number(id),
+    await applyTransition({
+      entity: "purchase_requests",
+      id: Number(id),
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       action: "purchase_request.converted",
-      before: { status: pr.status },
-      after: { status: "converted", purchaseOrderId: poId, poRef },
-    }).catch(console.error);
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "purchase_request.converted",
-      entity: "purchase_request",
-      entityId: Number(id),
-      before: { status: pr.status },
+      fromStates: ["approved"],
+      toState: "converted",
       after: { status: "converted", purchaseOrderId: poId, poRef, totalAmount },
-    }).catch(console.error);
+    });
 
     res.status(201).json({ message: "تم تحويل طلب الشراء إلى أمر شراء", purchaseOrderId: poId, poRef, totalAmount });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "Convert purchase request error:");
   }
 });
@@ -495,11 +486,22 @@ purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), asy
     }
 
     const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "procurement", refType: "purchase_order", refId: insertId, amount: Number(totalAmount) });
-    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE purchase_orders SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]); }
+    if (approvalResult.requiresApproval) {
+      await applyTransition({
+        entity: "purchase_orders",
+        id: insertId,
+        scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+        action: "purchase_order.submitted_for_approval",
+        fromStates: ["pending"],
+        toState: "pending_approval",
+      });
+    }
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "purchase_order.created", entity: "purchase_orders", entityId: insertId, details: JSON.stringify({ ref, totalAmount, supplierId }) }).catch(console.error);
     res.status(201).json({ id: insertId, ref, totalAmount, vatAmount, supplierId, notes, expectedDelivery, approval: approvalResult });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "Create purchase order error:");
   }
 });
@@ -521,24 +523,24 @@ async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rej
       );
     }
 
-    await rawExecute(`UPDATE purchase_orders SET status = $1, notes = COALESCE($2, notes) WHERE id = $3 AND "companyId" = $4`, [newStatus, notes ?? null, Number(id), scope.companyId]);
-    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_order',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
-
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: `purchase_order.${newStatus}`,
+    await applyTransition({
       entity: "purchase_orders",
-      entityId: Number(id),
-      before: { status: po.status },
+      id: Number(id),
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: `purchase_order.${newStatus}`,
+      toState: newStatus,
+      reason: notes ?? undefined,
+      setExtras: notes ? { notes: { raw: `COALESCE(notes,'') || ' ' || ${notes ? `'${notes.replace(/'/g, "''")}'` : "''"}` } } : undefined,
       after: { status: newStatus, notes: notes ?? null },
-      details: `${newStatus === "approved" ? "اعتماد" : newStatus === "rejected" ? "رفض" : "إرجاع"} أمر شراء ${po.ref || id}${notes ? ` — ${notes}` : ""}`,
-    }).catch(console.error);
+    });
+
+    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_order',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
 
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "Finance purchase error:");
   }
 }
@@ -692,19 +694,16 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
     );
     const totalRemaining = Number(remainingItems[0]?.remaining ?? 0);
     const newStatus = totalRemaining <= 0.0001 ? "received" : "partially_received";
-    await rawExecute(
-      `UPDATE purchase_orders SET status = $1, "deliveredAt" = $2 WHERE id = $3 AND "companyId" = $4`,
-      [newStatus, receiptDate, Number(id), scope.companyId]
-    );
-
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
+    await applyTransition({
+      entity: "purchase_orders",
+      id: Number(id),
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       action: "purchase_order.received",
-      entity: "goods_receipts",
-      entityId: grnId,
-      details: JSON.stringify({ grnRef, poRef: po.ref, subtotal, vatAmount, grnTotal, newStatus }),
-    }).catch(console.error);
+      fromStates: ["approved", "partially_received"],
+      toState: newStatus,
+      setExtras: { deliveredAt: receiptDate },
+      after: { status: newStatus, grnRef, grnTotal },
+    });
 
     // Register obligation to collect + match the vendor invoice (GRNI liability
     // sits on the books until this is done). Default window: 30 days from receipt.
@@ -750,6 +749,8 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
       total: grnTotal,
     });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "GRN receive error:");
   }
 });
@@ -975,15 +976,34 @@ purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"),
           `INSERT INTO payment_run_items ("runId","poId","supplierId",amount) VALUES ($1,$2,$3,$4)`,
           [runId, po.id, po.supplierId, Number(po.totalAmount)]
         );
-        await client.query(
-          `UPDATE purchase_orders SET status = 'paid', "paidAt" = $1 WHERE id = $2 AND "companyId" = $3`,
-          [payDate, po.id, scope.companyId]
-        ).catch(async () => {
-          // paidAt column may not exist — fall back to status only
-          await client.query(`UPDATE purchase_orders SET status = 'paid' WHERE id = $1 AND "companyId" = $2`, [po.id, scope.companyId]);
-        });
       }
     });
+
+    // Mark each PO as paid via the lifecycle engine (outside the
+    // payment_runs transaction so each gets its own audit/event trail).
+    for (const po of pos) {
+      await applyTransition({
+        entity: "purchase_orders",
+        id: po.id,
+        scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+        action: "purchase_order.paid",
+        fromStates: ["invoice_matched"],
+        toState: "paid",
+        setExtras: { paidAt: payDate },
+        after: { paymentRunId: runId, runRef },
+      }).catch(async () => {
+        // paidAt column may not exist — fall back without setExtras
+        await applyTransition({
+          entity: "purchase_orders",
+          id: po.id,
+          scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+          action: "purchase_order.paid",
+          fromStates: ["invoice_matched"],
+          toState: "paid",
+          after: { paymentRunId: runId, runRef },
+        });
+      });
+    }
 
     // Post a single aggregated journal entry for the whole run, with one AP
     // debit per PO so per-vendor subledger still reconciles.
@@ -1030,6 +1050,8 @@ purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"),
       journalId,
     });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "Payment run execute error:");
   }
 });
@@ -1094,10 +1116,15 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
       ]
     );
 
-    await rawExecute(
-      `UPDATE purchase_requests SET status = 'converted' WHERE id = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
-    );
+    await applyTransition({
+      entity: "purchase_requests",
+      id: Number(id),
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "purchase_request.converted",
+      fromStates: ["approved"],
+      toState: "converted",
+      after: { purchaseOrderId: poId, poRef },
+    });
 
     const approvalResult = await initiateApprovalChain({
       companyId: scope.companyId, branchId: scope.branchId,
@@ -1106,10 +1133,14 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
     });
 
     if (approvalResult.requiresApproval) {
-      await rawExecute(
-        `UPDATE purchase_orders SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2`,
-        [poId, scope.companyId]
-      );
+      await applyTransition({
+        entity: "purchase_orders",
+        id: poId,
+        scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+        action: "purchase_order.submitted_for_approval",
+        fromStates: ["pending"],
+        toState: "pending_approval",
+      });
     }
 
     if (pr.supplierId) {
@@ -1144,6 +1175,8 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
 
     res.status(201).json({ ...po, approval: approvalResult, supplierNotified: !!pr.supplierId });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "Finance error:");
   }
 });
@@ -1215,24 +1248,24 @@ purchaseRouter.patch("/purchase-orders/:id/vendor-confirm", requirePermission("f
       throw new ValidationError("لا يمكن تأكيد أمر الشراء في هذه الحالة");
     }
 
-    await rawExecute(
-      `UPDATE purchase_orders
-       SET status = 'confirmed', "expectedDelivery" = COALESCE($1, "expectedDelivery"), notes = COALESCE($2, notes)
-       WHERE id = $3`,
-      [confirmedDelivery ?? null, notes ?? null, Number(id)]
-    );
-
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "purchase_order.vendor_confirmed",
+    await applyTransition({
       entity: "purchase_orders",
-      entityId: Number(id),
-      details: JSON.stringify({ confirmedDelivery }),
-    }).catch(console.error);
+      id: Number(id),
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "purchase_order.vendor_confirmed",
+      fromStates: ["pending", "sent"],
+      toState: "confirmed",
+      setExtras: {
+        ...(confirmedDelivery ? { expectedDelivery: confirmedDelivery } : {}),
+        ...(notes ? { notes: { raw: `COALESCE(notes,'') || ' ' || '${notes.replace(/'/g, "''")}'` } } : {}),
+      },
+      after: { confirmedDelivery },
+    });
 
     res.json({ message: "تم تأكيد أمر الشراء من المورد", status: "confirmed" });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "Finance error:");
   }
 });
@@ -1289,38 +1322,36 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", requirePermission("fin
 
     const isMatched = poVariancePct <= 5 && prVariancePct <= 5 && grVariancePct <= 5;
 
-    await rawExecute(
-      `UPDATE purchase_orders SET status = $1, notes = CONCAT(COALESCE(notes,''), $2) WHERE id = $3 AND "companyId" = $4`,
-      [
-        isMatched ? "invoice_matched" : "invoice_mismatch",
-        ` | مطابقة ثلاثية: فاتورة=${invAmount} طلب=${prTotal} أمر=${poTotal} استلام=${receivedTotal}`,
-        Number(id),
-        scope.companyId,
-      ]
-    );
+    const matchStatus = isMatched ? "invoice_matched" : "invoice_mismatch";
+    const matchNote = ` | مطابقة ثلاثية: فاتورة=${invAmount} طلب=${prTotal} أمر=${poTotal} استلام=${receivedTotal}`;
+    const mismatchNotifications = !isMatched
+      ? [
+          {
+            assignmentId: scope.activeAssignmentId,
+            type: "three_way_mismatch",
+            title: `عدم تطابق ثلاثي – ${po.ref}`,
+            body: `فاتورة=${invAmount} | طلب=${prTotal} | أمر=${poTotal} | استلام=${receivedTotal}`,
+            priority: "high" as const,
+            refType: "purchase_orders",
+            refId: Number(id),
+            actionUrl: `/finance/purchase-orders/${id}`,
+          },
+        ]
+      : undefined;
 
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: isMatched ? "purchase_order.three_way_matched" : "purchase_order.three_way_mismatch",
+    await applyTransition({
       entity: "purchase_orders",
-      entityId: Number(id),
-      details: JSON.stringify({ supplierInvoiceRef, invoicedAmount: invAmount, poTotal, prTotal, receivedTotal }),
-    }).catch(console.error);
-
-    if (!isMatched) {
-      createNotification({
-        companyId: scope.companyId,
-        assignmentId: scope.activeAssignmentId,
-        type: "three_way_mismatch",
-        title: `عدم تطابق ثلاثي – ${po.ref}`,
-        body: `فاتورة=${invAmount} | طلب=${prTotal} | أمر=${poTotal} | استلام=${receivedTotal}`,
-        priority: "high",
-        refType: "purchase_orders",
-        refId: Number(id),
-        actionUrl: `/finance/purchase-orders/${id}`,
-      }).catch(console.error);
-    }
+      id: Number(id),
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: isMatched ? "purchase_order.three_way_matched" : "purchase_order.three_way_mismatch",
+      fromStates: ["received", "partial_received"],
+      toState: matchStatus,
+      setExtras: {
+        notes: { raw: `CONCAT(COALESCE(notes,''), '${matchNote.replace(/'/g, "''")}')` },
+      },
+      after: { supplierInvoiceRef, invoicedAmount: invAmount, poTotal, prTotal, receivedTotal },
+      notifications: mismatchNotifications,
+    });
 
     res.json({
       message: isMatched ? "تمت المطابقة الثلاثية بنجاح" : "عدم تطابق في المطابقة الثلاثية",
@@ -1339,6 +1370,8 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", requirePermission("fin
       status: isMatched ? "invoice_matched" : "invoice_mismatch",
     });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "Finance error:");
   }
 });
@@ -1401,22 +1434,18 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", requirePermission("
       ],
     });
 
-    await rawExecute(
-      `UPDATE purchase_orders
-       SET status = 'payment_scheduled',
-           notes = CONCAT(COALESCE(notes,''), $1)
-       WHERE id = $2`,
-      [` | دفعة مجدولة ${paymentDate}: ${amount} (${method})`, Number(id)]
-    );
-
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "purchase_order.payment_scheduled",
+    const schedNote = ` | دفعة مجدولة ${paymentDate}: ${amount} (${method})`;
+    await applyTransition({
       entity: "purchase_orders",
-      entityId: Number(id),
-      details: JSON.stringify({ paymentDate, amount, method }),
-    }).catch(console.error);
+      id: Number(id),
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "purchase_order.payment_scheduled",
+      toState: "payment_scheduled",
+      setExtras: {
+        notes: { raw: `CONCAT(COALESCE(notes,''), '${schedNote.replace(/'/g, "''")}')` },
+      },
+      after: { paymentDate, amount, method },
+    });
 
     res.json({
       message: "تم جدولة الدفعة بنجاح",
@@ -1426,6 +1455,8 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", requirePermission("
       status: "payment_scheduled",
     });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "Finance error:");
   }
 });

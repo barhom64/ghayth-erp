@@ -166,18 +166,18 @@ describe("Property inspection state machine", () => {
 });
 
 describe("Property contract lifecycle side-effects", () => {
-  it("renew endpoint exists and emits events", () => {
+  it("renew endpoint exists and uses lifecycle engine", () => {
     const idx = PROP_ROUTE.indexOf('"/contracts/:id/renew"');
     const endIdx = PROP_ROUTE.indexOf("router.", idx + 10);
     const section = PROP_ROUTE.slice(idx, endIdx);
-    expect(section).toContain("emitEvent");
+    expect(section).toContain("applyTransition");
   });
 
-  it("terminate endpoint exists and emits events", () => {
+  it("terminate endpoint exists and uses lifecycle engine", () => {
     const idx = PROP_ROUTE.indexOf('"/contracts/:id/terminate"');
     const endIdx = PROP_ROUTE.indexOf("router.", idx + 10);
     const section = PROP_ROUTE.slice(idx, endIdx);
-    expect(section).toContain("emitEvent");
+    expect(section).toContain("applyTransition");
   });
 });
 

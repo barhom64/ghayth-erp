@@ -24,6 +24,7 @@ import {
   processApprovalStep,
   getManagerAssignmentId,
 } from "../lib/businessHelpers.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { generateSequentialNumber } from "../lib/hrHelpers.js";
 import { HR_TABLES, NUMBER_PREFIXES } from "../lib/hrEnums.js";
@@ -350,7 +351,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/exit/:id/approve — اعتماد الطلب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, res) => {
+router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, res): Promise<void> => {
   try {
     const { approved = true, reason, notes } = (req.body ?? {}) as { approved?: boolean; reason?: string; notes?: string };
     const scope = req.scope!;
@@ -373,20 +374,33 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
 
     const rejectionReason = reason || notes;
     if (!approved) {
-      await rawExecute(
-        `UPDATE hr_exit_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2`,
-        [rejectionReason || null, item.id]
-      );
+      await applyTransition({
+        entity: "hr_exit_requests",
+        id: item.id,
+        scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+        action: "hr.exit.rejected",
+        fromStates: ["pending"],
+        toState: "rejected",
+        reason: rejectionReason || undefined,
+        setExtras: { rejectionReason: rejectionReason || null },
+        extraWhere: `"deletedAt" IS NULL`,
+        after: { rejectionReason: rejectionReason || null, exitNumber: item.exitNumber },
+        notifications: [
+          {
+            assignmentId: item.assignmentId,
+            type: "exit_rejected",
+            title: "تم رفض طلب نهاية الخدمة",
+            body: `تم رفض الطلب ${item.exitNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
+            priority: "normal",
+            refType: "hr_exit_request",
+            refId: item.id,
+          },
+        ],
+      });
       processApprovalStep({
         companyId: scope.companyId, branchId: scope.branchId,
         refType: "hr_exit_request", refId: item.id,
         approved: false, decidedBy: scope.activeAssignmentId, reason: rejectionReason,
-      }).catch(console.error);
-      createNotification({
-        companyId: scope.companyId, assignmentId: item.assignmentId,
-        type: "exit_rejected", title: "تم رفض طلب نهاية الخدمة",
-        body: `تم رفض الطلب ${item.exitNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
-        priority: "normal", refType: "hr_exit_request", refId: item.id,
       }).catch(console.error);
       res.json({ success: true, message: "تم رفض طلب نهاية الخدمة" });
       return;
@@ -410,28 +424,36 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
       return;
     }
 
-    await rawExecute(
-      `UPDATE hr_exit_requests
-       SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW()
-       WHERE id = $2`,
-      [scope.userId, item.id]
-    );
+    await applyTransition({
+      entity: "hr_exit_requests",
+      id: item.id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "hr.exit.approved",
+      fromStates: ["pending"],
+      toState: "approved",
+      setExtras: {
+        approvedBy: scope.userId,
+        approvedAt: { raw: "NOW()" },
+      },
+      extraWhere: `"deletedAt" IS NULL`,
+      after: { approvedBy: scope.userId, exitNumber: item.exitNumber },
+      notifications: [
+        {
+          assignmentId: item.assignmentId,
+          type: "exit_approved",
+          title: "تمت الموافقة على طلب نهاية الخدمة",
+          body: `تمت الموافقة على طلب نهاية الخدمة ${item.exitNumber} — يرجى إكمال إخلاء الطرف`,
+          priority: "high",
+          refType: "hr_exit_request",
+          refId: item.id,
+        },
+      ],
+    });
 
-    createNotification({
-      companyId: scope.companyId, assignmentId: item.assignmentId,
-      type: "exit_approved", title: "تمت الموافقة على طلب نهاية الخدمة",
-      body: `تمت الموافقة على طلب نهاية الخدمة ${item.exitNumber} — يرجى إكمال إخلاء الطرف`,
-      priority: "high", refType: "hr_exit_request", refId: item.id,
-    }).catch(console.error);
-
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "exit.approved", entity: "hr_exit_requests", entityId: item.id, details: JSON.stringify({ exitNumber: item.exitNumber }) }).catch(console.error);
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "hr_exit_requests", entityId: Number(req.params.id),
-      after: { status: "approved", approvedBy: scope.userId, exitNumber: item.exitNumber },
-    }).catch(console.error);
     res.json({ success: true, message: "تم اعتماد طلب نهاية الخدمة" });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "خطأ في اعتماد الطلب");
   }
 });
@@ -488,42 +510,42 @@ router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/exit/:id/complete — إتمام نهاية الخدمة نهائياً
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/exit/:id/complete", requirePermission("hr:update"), async (req, res) => {
+router.patch("/exit/:id/complete", requirePermission("hr:update"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
+    // Pre-check clearance before attempting the transition
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_exit_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(req.params.id), scope.companyId]
     );
     if (!item) throw new NotFoundError("الطلب غير موجود");
-    if (item.status !== "approved") throw new ConflictError("يجب اعتماد الطلب أولاً");
     if (!item.clearanceCompleted) throw new ConflictError("يجب إكمال إخلاء الطرف أولاً");
 
-    await rawExecute(
-      `UPDATE hr_exit_requests SET status = 'completed', "settlementPaid" = TRUE, "updatedAt" = NOW() WHERE id = $1`,
-      [item.id]
-    );
-
-    // تعطيل التعيين
-    await rawExecute(
-      `UPDATE employee_assignments SET status = 'terminated', "endDate" = CURRENT_DATE, "updatedAt" = NOW()
-       WHERE id = $1 AND "companyId" = $2`,
-      [item.assignmentId, scope.companyId]
-    ).catch(console.error);
-
-    await createAuditLog({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "exit.completed", entity: "hr_exit_requests", entityId: item.id,
+    await applyTransition({
+      entity: "hr_exit_requests",
+      id: item.id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "hr.exit.completed",
+      fromStates: ["approved"],
+      toState: "completed",
       reason: `إتمام نهاية خدمة: ${item.exitNumber}`,
-    });
-
-    emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "hr.exit.completed", entity: "hr_exit_requests", entityId: item.id,
+      setExtras: { settlementPaid: true },
+      extraWhere: `"deletedAt" IS NULL`,
+      after: { settlementPaid: true, exitNumber: item.exitNumber },
+      onApply: async (_row, client) => {
+        // تعطيل التعيين inside the same transaction
+        await client.query(
+          `UPDATE employee_assignments SET status = 'terminated', "endDate" = CURRENT_DATE, "updatedAt" = NOW()
+           WHERE id = $1 AND "companyId" = $2`,
+          [item.assignmentId, scope.companyId]
+        );
+      },
     });
 
     res.json({ success: true, message: "تم إتمام نهاية الخدمة وتعطيل التعيين" });
   } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "خطأ في إتمام نهاية الخدمة");
   }
 });

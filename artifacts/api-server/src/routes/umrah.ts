@@ -8,6 +8,7 @@ import {
   emitEvent,
   createAuditLog,
 } from "../lib/businessHelpers.js";
+import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LIFECYCLE STATE MACHINES — Umrah domain
@@ -258,6 +259,19 @@ router.patch("/agents/:id", requirePermission("umrah:write"), async (req, res) =
   try {
     const scope = req.scope!;
     const b = req.body;
+    if (b.status !== undefined) {
+      const [existing] = await rawQuery<any>(`SELECT status FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [req.params.id, scope.companyId]);
+      if (!existing) throw new NotFoundError("الوكيل غير موجود");
+      if (b.status !== existing.status) {
+        const allowed = AGENT_TRANSITIONS[existing.status] ?? [];
+        if (!allowed.includes(b.status)) {
+          throw new ConflictError(
+            `لا يمكن نقل حالة الوكيل من "${existing.status}" إلى "${b.status}"`,
+            { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد (حالة نهائية)"}` }
+          );
+        }
+      }
+    }
     const params: any[] = [];
     const sets: string[] = [];
     for (const key of ["name","contactPerson","phone","email","country","profitMargin","contractRef","currency","status","notes"]) {
@@ -363,9 +377,13 @@ router.delete("/packages/:id", requirePermission("umrah:write"), async (req, res
     if (Number(inUse[0]?.c) > 0) {
       throw new ConflictError(`لا يمكن حذف الباقة — مرتبطة بـ ${inUse[0].c} معتمر`);
     }
-    await rawExecute(`UPDATE umrah_packages SET status='deleted' WHERE id=$1 AND "companyId"=$2`, [req.params.id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_packages", entityId: Number(req.params.id) }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.package.deleted", entity: "umrah_packages", entityId: Number(req.params.id), details: "{}" }).catch(console.error);
+    await applyTransition({
+      entity: "umrah_packages",
+      id: Number(req.params.id),
+      scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+      action: "umrah.package.deleted",
+      toState: "deleted",
+    });
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete package error"); }
 });
@@ -755,10 +773,15 @@ router.post("/run-penalty-engine", requirePermission("umrah:write"), async (req,
              VALUES ($1,$2,$3,$4,'overstay',$5,$6,$7)`,
             [scope.companyId, p.id, p.agentId, p.seasonId, p.daysOver, amount, `غرامة تأخر ${p.daysOver} يوم — ${p.fullName}`]
           );
-          await client.query(
-            `UPDATE umrah_pilgrims SET status='violated' WHERE id=$1 AND "companyId"=$2 AND status='overstayed'`,
-            [p.id, scope.companyId]
-          );
+          await applyTransition({
+            entity: "umrah_pilgrims",
+            id: p.id,
+            scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+            action: "umrah.pilgrim.violated",
+            fromStates: ["overstayed"],
+            toState: "violated",
+            extraWhere: `"deletedAt" IS NULL`,
+          });
         });
         created++;
       }
@@ -909,6 +932,28 @@ router.post("/transport", requirePermission("umrah:write"), async (req, res) => 
     const parsed = createTransportSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed.data as any;
+    if (b.vehicleId) {
+      const [vehicle] = await rawQuery<any>(
+        `SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2`,
+        [b.vehicleId, scope.companyId]
+      );
+      if (!vehicle) throw new ValidationError("المركبة غير موجودة في الأسطول");
+      if (vehicle.status === "maintenance") throw new ConflictError("المركبة قيد الصيانة ولا يمكن تخصيصها");
+    }
+    if (b.driverId) {
+      const [driver] = await rawQuery<any>(
+        `SELECT id, status, "licenseExpiry" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2`,
+        [b.driverId, scope.companyId]
+      );
+      if (!driver) throw new ValidationError("السائق غير موجود في الأسطول");
+      if (driver.status === "inactive") throw new ConflictError("السائق غير نشط ولا يمكن تخصيصه");
+      if (driver.licenseExpiry && new Date(driver.licenseExpiry) < new Date(b.tripDate)) {
+        throw new ConflictError("رخصة السائق منتهية الصلاحية في تاريخ الرحلة");
+      }
+    }
+    if (b.pilgrimCount && b.capacity && b.pilgrimCount > b.capacity) {
+      throw new ValidationError(`عدد المعتمرين (${b.pilgrimCount}) يتجاوز سعة المركبة (${b.capacity})`);
+    }
     const rows = await rawQuery(
       `INSERT INTO umrah_transport ("companyId","seasonId","tripDate","fromLocation","toLocation","vehicleId","driverId",capacity,"pilgrimCount",cost,notes)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
