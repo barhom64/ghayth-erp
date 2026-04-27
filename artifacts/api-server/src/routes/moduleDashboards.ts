@@ -301,7 +301,7 @@ router.get("/tasks", async (req, res) => {
     );
 
     const weeklyCompleted = await safeQuery(
-      `SELECT DATE("updatedAt") AS date, COUNT(*) AS count FROM tasks WHERE "companyId" = $1 AND status IN ('done','completed') AND "updatedAt" >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
+      `SELECT DATE("completedAt") AS date, COUNT(*) AS count FROM tasks WHERE "companyId" = $1 AND status IN ('done','completed') AND "completedAt" >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
     );
 
     res.json({

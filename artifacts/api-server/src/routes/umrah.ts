@@ -600,96 +600,161 @@ router.delete("/pilgrims/:id", requirePermission("umrah:write"), async (req, res
   } catch (err) { handleRouteError(err, res, "Delete pilgrim error"); }
 });
 
-router.post("/import", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.post("/import/preview", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows, fileType, fileName } = req.body;
+    const { seasonId, rows: importRows, fileType } = req.body;
+    if (!seasonId || !Array.isArray(importRows) || importRows.length === 0) {
+      throw new ValidationError("بيانات المعاينة غير مكتملة");
+    }
+    const passportNumbers = importRows.filter((r: any) => r.passportNumber).map((r: any) => r.passportNumber);
+    const existingRows = passportNumbers.length > 0
+      ? await rawQuery<any>(`SELECT "passportNumber" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber" = ANY($3) AND "deletedAt" IS NULL`, [scope.companyId, seasonId, passportNumbers])
+      : [];
+    const existingSet = new Set(existingRows.map((r: any) => r.passportNumber));
+    const newRows = importRows.filter((r: any) => r.passportNumber && !existingSet.has(r.passportNumber));
+    const duplicateRows = importRows.filter((r: any) => r.passportNumber && existingSet.has(r.passportNumber));
+    const errorRows = importRows.filter((r: any) => !r.passportNumber || !r.fullName);
+    const nuskCodes = [...new Set(importRows.map((r: any) => r.nuskCode).filter(Boolean))];
+    const linkedAgents = nuskCodes.length > 0
+      ? await rawQuery<any>(`SELECT "nuskCode", name FROM umrah_sub_agents WHERE "companyId"=$1 AND "nuskCode" = ANY($2)`, [scope.companyId, nuskCodes])
+      : [];
+    const linkedSet = new Set(linkedAgents.map((a: any) => a.nuskCode));
+    const unlinkedSubAgents = nuskCodes.filter((c) => !linkedSet.has(c)).map((c) => ({ nuskCode: c }));
+    res.json({
+      totalRows: importRows.length,
+      newRecords: newRows.length,
+      duplicateRecords: duplicateRows.length,
+      errorRecords: errorRows.length,
+      unlinkedSubAgents,
+      sampleNew: newRows.slice(0, 5),
+      sampleDuplicate: duplicateRows.slice(0, 5),
+      sampleErrors: errorRows.slice(0, 5),
+    });
+  } catch (err) { handleRouteError(err, res, "Import preview error"); }
+});
+
+router.post("/import/mutamers", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const { seasonId, rows: importRows } = req.body;
     if (!seasonId || !Array.isArray(importRows) || importRows.length === 0) {
       throw new ValidationError("بيانات الاستيراد غير مكتملة");
     }
+    const importBody = { seasonId, rows: importRows, fileType: "mutamers", fileName: "import-mutamers" };
+    const fakeReq = { ...req, body: importBody };
+    // Reuse existing import logic via internal redirect
+    const result = await doImport(scope, importBody);
+    res.json(result);
+  } catch (err) { handleRouteError(err, res, "Import mutamers error"); }
+});
 
-    const { insertId: logId } = await rawExecute(
-      `INSERT INTO umrah_import_logs ("companyId","seasonId","userId","fileName","fileType","totalRows","newRecords","updatedRecords","duplicateRecords","errorRecords",errors,status)
-       VALUES ($1,$2,$3,$4,$5,$6,0,0,0,0,'[]','processing') RETURNING id`,
-      [scope.companyId, seasonId, scope.userId, fileName || "import", fileType || "excel", importRows.length]
-    );
-
-    const BATCH_SIZE = 100;
-    let newCount = 0, updateCount = 0, dupCount = 0, errCount = 0;
-    const errors: any[] = [];
-
-    for (let batchStart = 0; batchStart < importRows.length; batchStart += BATCH_SIZE) {
-      const batch = importRows.slice(batchStart, batchStart + BATCH_SIZE);
-
-      const passportNumbers = batch
-        .filter((r: any) => r.passportNumber)
-        .map((r: any) => r.passportNumber as string);
-
-      const existingRows = passportNumbers.length > 0
-        ? await rawQuery<any>(
-            `SELECT id, "passportNumber" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber" = ANY($3)`,
-            [scope.companyId, seasonId, passportNumbers]
-          )
-        : [];
-      const existingMap = new Map<string, number>(existingRows.map((r: any) => [r.passportNumber, r.id]));
-
-      for (let i = 0; i < batch.length; i++) {
-        const globalRow = batchStart + i;
-        const r = batch[i];
-        if (!r.passportNumber || !r.fullName) {
-          errCount++;
-          errors.push({ row: globalRow + 1, error: "بيانات ناقصة" });
-          continue;
-        }
-
-        if (existingMap.has(r.passportNumber)) {
-          const existingId = existingMap.get(r.passportNumber)!;
-          const sets: string[] = [];
-          const params: any[] = [];
-          for (const key of ["fullName","visaNumber","nationality","gender","phone","arrivalDate","departureDate","agentId","hotelName","roomNumber"]) {
-            if (r[key] !== undefined && r[key] !== null && r[key] !== "") {
-              params.push(r[key]);
-              sets.push(`"${key}"=$${params.length}`);
-            }
-          }
-          if (sets.length > 0) {
-            sets.push(`"updatedAt"=NOW()`);
-            params.push(existingId); params.push(scope.companyId);
-            await rawExecute(`UPDATE umrah_pilgrims SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
-            updateCount++;
-          } else {
-            dupCount++;
-          }
-        } else {
-          try {
-            await rawExecute(
-              `INSERT INTO umrah_pilgrims ("companyId","seasonId","agentId","fullName","passportNumber","visaNumber",nationality,gender,phone,"arrivalDate","departureDate","hotelName","roomNumber")
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-              [scope.companyId, seasonId, r.agentId || null, r.fullName, r.passportNumber, r.visaNumber || null, r.nationality || null, r.gender || null, r.phone || null, r.arrivalDate || null, r.departureDate || null, r.hotelName || null, r.roomNumber || null]
-            );
-            newCount++;
-          } catch (insertErr: any) {
-            errCount++;
-            errors.push({ row: globalRow + 1, error: insertErr?.message ?? "خطأ في الإدراج" });
-          }
-        }
-      }
-
-      const processed = Math.min(batchStart + BATCH_SIZE, importRows.length);
-      await rawExecute(
-        `UPDATE umrah_import_logs SET "newRecords"=$1,"updatedRecords"=$2,"duplicateRecords"=$3,"errorRecords"=$4,errors=$5,"processedRows"=$6 WHERE id=$7 AND "companyId"=$8`,
-        [newCount, updateCount, dupCount, errCount, JSON.stringify(errors), processed, logId, scope.companyId]
-      ).catch(console.error);
+router.post("/import/vouchers", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const { seasonId, rows: importRows } = req.body;
+    if (!seasonId || !Array.isArray(importRows) || importRows.length === 0) {
+      throw new ValidationError("بيانات الاستيراد غير مكتملة");
     }
+    const result = await doImport(scope, { seasonId, rows: importRows, fileType: "vouchers", fileName: "import-vouchers" });
+    res.json(result);
+  } catch (err) { handleRouteError(err, res, "Import vouchers error"); }
+});
 
-    await rawExecute(
-      `UPDATE umrah_import_logs SET "newRecords"=$1,"updatedRecords"=$2,"duplicateRecords"=$3,"errorRecords"=$4,errors=$5,"processedRows"=$6,status='completed' WHERE id=$7 AND "companyId"=$8`,
-      [newCount, updateCount, dupCount, errCount, JSON.stringify(errors), importRows.length, logId, scope.companyId]
+router.post("/sub-agents/link-by-nusk", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const { nuskCode, clientId } = req.body;
+    if (!nuskCode || !clientId) throw new ValidationError("رمز NUSK ومعرّف العميل مطلوبان");
+    const [existing] = await rawQuery<any>(
+      `SELECT id FROM umrah_sub_agents WHERE "companyId"=$1 AND "nuskCode"=$2`,
+      [scope.companyId, nuskCode]
     );
+    if (existing) {
+      await rawExecute(
+        `UPDATE umrah_sub_agents SET "clientId"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+        [clientId, existing.id, scope.companyId]
+      );
+    } else {
+      await rawExecute(
+        `INSERT INTO umrah_sub_agents ("companyId","nuskCode","clientId","name") VALUES ($1,$2,$3,$4)`,
+        [scope.companyId, nuskCode, clientId, `وكيل فرعي ${nuskCode}`]
+      );
+    }
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: existing?.id ?? 0, after: { nuskCode, clientId } }).catch(console.error);
+    res.json({ success: true, nuskCode, clientId });
+  } catch (err) { handleRouteError(err, res, "Link sub-agent error"); }
+});
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_import_logs", entityId: logId, after: { total: importRows.length, new: newCount, updated: updateCount } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.import.completed", entity: "umrah_import_logs", entityId: logId, details: JSON.stringify({ total: importRows.length, new: newCount, updated: updateCount, errors: errCount }) }).catch(console.error);
-    res.json({ importLogId: logId, total: importRows.length, new: newCount, updated: updateCount, duplicates: dupCount, errors: errCount, errorDetails: errors });
+async function doImport(scope: any, body: { seasonId: number; rows: any[]; fileType?: string; fileName?: string }) {
+  const { seasonId, rows: importRows, fileType, fileName } = body;
+  if (!seasonId || !Array.isArray(importRows) || importRows.length === 0) {
+    throw new ValidationError("بيانات الاستيراد غير مكتملة");
+  }
+
+  const { insertId: logId } = await rawExecute(
+    `INSERT INTO umrah_import_logs ("companyId","seasonId","userId","fileName","fileType","totalRows","newRecords","updatedRecords","duplicateRecords","errorRecords",errors,status)
+     VALUES ($1,$2,$3,$4,$5,$6,0,0,0,0,'[]','processing') RETURNING id`,
+    [scope.companyId, seasonId, scope.userId, fileName || "import", fileType || "excel", importRows.length]
+  );
+
+  const BATCH_SIZE = 100;
+  let newCount = 0, updateCount = 0, dupCount = 0, errCount = 0;
+  const errors: any[] = [];
+
+  for (let batchStart = 0; batchStart < importRows.length; batchStart += BATCH_SIZE) {
+    const batch = importRows.slice(batchStart, batchStart + BATCH_SIZE);
+    const passportNumbers = batch.filter((r: any) => r.passportNumber).map((r: any) => r.passportNumber as string);
+    const existingRows = passportNumbers.length > 0
+      ? await rawQuery<any>(`SELECT id, "passportNumber" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber" = ANY($3)`, [scope.companyId, seasonId, passportNumbers])
+      : [];
+    const existingMap = new Map<string, number>(existingRows.map((r: any) => [r.passportNumber, r.id]));
+
+    for (let i = 0; i < batch.length; i++) {
+      const globalRow = batchStart + i;
+      const r = batch[i];
+      if (!r.passportNumber || !r.fullName) { errCount++; errors.push({ row: globalRow + 1, error: "بيانات ناقصة" }); continue; }
+      if (existingMap.has(r.passportNumber)) {
+        const existingId = existingMap.get(r.passportNumber)!;
+        const sets: string[] = []; const params: any[] = [];
+        for (const key of ["fullName","visaNumber","nationality","gender","phone","arrivalDate","departureDate","agentId","hotelName","roomNumber"]) {
+          if (r[key] !== undefined && r[key] !== null && r[key] !== "") { params.push(r[key]); sets.push(`"${key}"=$${params.length}`); }
+        }
+        if (sets.length > 0) {
+          sets.push(`"updatedAt"=NOW()`); params.push(existingId); params.push(scope.companyId);
+          await rawExecute(`UPDATE umrah_pilgrims SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
+          updateCount++;
+        } else { dupCount++; }
+      } else {
+        try {
+          await rawExecute(
+            `INSERT INTO umrah_pilgrims ("companyId","seasonId","agentId","fullName","passportNumber","visaNumber",nationality,gender,phone,"arrivalDate","departureDate","hotelName","roomNumber") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+            [scope.companyId, seasonId, r.agentId || null, r.fullName, r.passportNumber, r.visaNumber || null, r.nationality || null, r.gender || null, r.phone || null, r.arrivalDate || null, r.departureDate || null, r.hotelName || null, r.roomNumber || null]
+          );
+          newCount++;
+        } catch (insertErr: any) { errCount++; errors.push({ row: globalRow + 1, error: insertErr?.message ?? "خطأ في الإدراج" }); }
+      }
+    }
+    await rawExecute(
+      `UPDATE umrah_import_logs SET "newRecords"=$1,"updatedRecords"=$2,"duplicateRecords"=$3,"errorRecords"=$4,errors=$5,"processedRows"=$6 WHERE id=$7 AND "companyId"=$8`,
+      [newCount, updateCount, dupCount, errCount, JSON.stringify(errors), Math.min(batchStart + BATCH_SIZE, importRows.length), logId, scope.companyId]
+    ).catch(console.error);
+  }
+
+  await rawExecute(
+    `UPDATE umrah_import_logs SET "newRecords"=$1,"updatedRecords"=$2,"duplicateRecords"=$3,"errorRecords"=$4,errors=$5,"processedRows"=$6,status='completed' WHERE id=$7 AND "companyId"=$8`,
+    [newCount, updateCount, dupCount, errCount, JSON.stringify(errors), importRows.length, logId, scope.companyId]
+  );
+  createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_import_logs", entityId: logId, after: { total: importRows.length, new: newCount, updated: updateCount } }).catch(console.error);
+  emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.import.completed", entity: "umrah_import_logs", entityId: logId, details: JSON.stringify({ total: importRows.length, new: newCount, updated: updateCount, errors: errCount }) }).catch(console.error);
+  return { importLogId: logId, batchId: logId, total: importRows.length, new: newCount, updated: updateCount, duplicates: dupCount, errors: errCount, errorDetails: errors };
+}
+
+router.post("/import", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const result = await doImport(scope, req.body);
+    res.json(result);
   } catch (err) { handleRouteError(err, res, "Import error"); }
 });
 
@@ -1043,6 +1108,26 @@ router.get("/agent-invoices", requirePermission("umrah:read"), async (req, res) 
     );
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List agent invoices error"); }
+});
+
+router.get("/invoices/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const [row] = await rawQuery(
+      `SELECT i.*, a.name as "agentName", s.title as "seasonTitle"
+       FROM umrah_agent_invoices i
+       LEFT JOIN umrah_agents a ON i."agentId"=a.id
+       LEFT JOIN umrah_seasons s ON i."seasonId"=s.id
+       WHERE i.id=$1 AND i."companyId"=$2`,
+      [req.params.id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الفاتورة غير موجودة");
+    const penalties = await rawQuery(
+      `SELECT * FROM umrah_penalties WHERE "invoiceId"=$1 AND "companyId"=$2 ORDER BY "createdAt" DESC`,
+      [req.params.id, scope.companyId]
+    );
+    res.json({ ...row, penalties });
+  } catch (err) { handleRouteError(err, res, "Get invoice error"); }
 });
 
 router.get("/transport", requirePermission("umrah:read"), async (req, res) => {
