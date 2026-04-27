@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import "@/styles/login.css";
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
@@ -42,6 +43,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function Login() {
   const { login, isAuthenticated } = useAuth();
+  const [, setLocation] = useLocation();
   const [currentView, setCurrentView] = useState<ViewType>("login");
 
   const [email, setEmail] = useState("");
@@ -60,9 +62,9 @@ export default function Login() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      window.location.href = "/dashboard";
+      setLocation("/dashboard");
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, setLocation]);
 
   useEffect(() => {
     fetch(`${BASE}/api/public/announcements`)
