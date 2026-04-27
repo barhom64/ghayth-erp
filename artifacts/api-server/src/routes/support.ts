@@ -12,6 +12,8 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { slaDeadlineForPriority, haversineKm, loadBalanceAssign } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { applyTransition, LifecycleError } from "../lib/lifecycleEngine.js";
+import type { ExtraValue } from "../lib/lifecycleEngine.js";
 const router = Router();
 router.use(authMiddleware);
 
@@ -411,25 +413,21 @@ const TICKET_TRANSITIONS: Record<string, readonly string[]> = {
 };
 
 router.patch("/tickets/:id", requirePermission("support:write"), async (req, res) => {
-  // Phase C — Support ticket update audit.
-  //   - state-machine guard on status changes (ConflictError on illegal
-  //     transitions instead of silent UPDATE)
-  //   - emits a separate event for each lifecycle transition (was
-  //     emitting only on resolve) so audit_logs sees every state change
-  //   - emits support.ticket.assigned when assignee changes
-  //   - emits support.ticket.updated on any non-status field change
   try {
     const scope = req.scope!;
     const ticketId = Number(req.params.id);
-
-    const [ticket] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
-    if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
-
     const b = req.body;
 
-    // State transition guard — if the caller is changing status, the
-    // requested value must be in the allowlist for the current state.
-    if (b.status !== undefined && b.status !== ticket.status) {
+    // Pre-read for transition validation and pre-update state snapshot.
+    const [ticket] = await rawQuery<any>(
+      `SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [ticketId, scope.companyId]
+    );
+    if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
+
+    const statusChanging = b.status !== undefined && b.status !== ticket.status;
+
+    if (statusChanging) {
       const allowed = TICKET_TRANSITIONS[ticket.status] ?? [];
       if (!allowed.includes(b.status)) {
         throw new ConflictError(
@@ -449,41 +447,31 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
       }
     }
 
-    const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
-    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); if (b.status === 'resolved') sets.push(`"resolvedAt"=NOW()`); }
-    if (b.assigneeId !== undefined) { params.push(b.assigneeId); sets.push(`"assigneeId"=$${params.length}`); }
-    if (b.priority !== undefined) { params.push(b.priority); sets.push(`priority=$${params.length}`); }
-    params.push(ticketId);
-    params.push(scope.companyId);
-    await rawExecute(`UPDATE support_tickets SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const action = statusChanging
+      ? (b.status === "closed"
+          ? "support.ticket.closed"
+          : b.status === "resolved"
+            ? "support.ticket.resolved"
+            : "support.ticket.status_changed")
+      : "support.ticket.updated";
 
-    // Emit a specific event per lifecycle transition so audit_logs +
-    // downstream listeners (notification engine, rules engine, BI) see
-    // every state change. Was previously only emitting on resolved,
-    // meaning "closed" and "field_visit" and reopens were all invisible.
-    if (b.status !== undefined && b.status !== ticket.status) {
-      const closedStatuses = ["closed"];
-      const action = closedStatuses.includes(b.status)
-        ? "support.ticket.closed"
-        : b.status === "resolved"
-        ? "support.ticket.resolved"
-        : "support.ticket.status_changed";
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action,
-        entity: "support_tickets",
-        entityId: ticketId,
-        before: { status: ticket.status },
-        after: { status: b.status },
-        details: JSON.stringify({ from: ticket.status, to: b.status }),
-      }).catch(console.error);
-    }
+    const setExtras: Record<string, ExtraValue> = {};
+    if (b.assigneeId !== undefined) setExtras.assigneeId = b.assigneeId;
+    if (b.priority !== undefined) setExtras.priority = b.priority;
+    if (statusChanging && b.status === "resolved") setExtras.resolvedAt = { raw: "NOW()" };
 
-    // Assignee change emits its own event so the new agent's inbox sees
-    // it and the audit trail can track re-assignment history.
+    const row = await applyTransition<any>({
+      entity: "support_tickets",
+      id: ticketId,
+      scope,
+      action,
+      ...(statusChanging ? { toState: b.status } : {}),
+      setExtras: Object.keys(setExtras).length > 0 ? setExtras : undefined,
+      extraWhere: '"deletedAt" IS NULL',
+      after: { status: b.status, assigneeId: b.assigneeId, priority: b.priority },
+    });
+
+    // Post-commit: assignee change event (separate from status lifecycle).
     if (b.assigneeId !== undefined && b.assigneeId !== ticket.assigneeId) {
       emitEvent({
         companyId: scope.companyId,
@@ -497,11 +485,11 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
       }).catch(console.error);
     }
 
+    // Post-commit: resolution side-effects (billing + survey).
     let surveyQueued = false;
-    if (b.status === 'resolved') {
+    if (statusChanging && b.status === "resolved") {
       const createdAt = new Date(ticket.createdAt);
       const resolutionTimeHours = (Date.now() - createdAt.getTime()) / (1000 * 60 * 60);
-
       if (ticket.assigneeId) {
         console.log(`[SUPPORT] Agent ${ticket.assigneeId} resolved ticket in ${resolutionTimeHours.toFixed(1)}h`);
       }
@@ -515,9 +503,6 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
         );
       }
 
-      // Actually queue the satisfaction survey (used to just be a console.log).
-      // A scheduledAt in the future lets the email_queue_worker deliver it
-      // when it becomes due; until then it sits in 'pending'.
       if (ticket.clientId) {
         try {
           const [client] = await rawQuery<any>(
@@ -545,17 +530,18 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
           console.error("[SURVEY] Failed to queue satisfaction survey:", e);
         }
       }
-
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1`, [ticketId]);
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "support_tickets", entityId: ticketId,
-      after: { status: b.status, assigneeId: b.assigneeId, priority: b.priority },
-    }).catch(console.error);
     res.json({ ...row, surveyQueued });
-  } catch (err) { handleRouteError(err, res, "Update ticket error:"); }
+  } catch (err) {
+    if (err instanceof LifecycleError) {
+      const typed = err.status === 404
+        ? new NotFoundError(err.message)
+        : new ConflictError(err.message, { field: err.field });
+      return handleRouteError(typed, res, "Update ticket error:");
+    }
+    handleRouteError(err, res, "Update ticket error:");
+  }
 });
 
 router.delete("/tickets/:id", requirePermission("support:delete"), async (req, res) => {
@@ -700,7 +686,7 @@ router.get("/kb/:id", requirePermission("support:read"), async (req, res) => {
     const id = Number(req.params.id);
     const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المقالة غير موجودة");
-    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1`, [id]).catch(console.error);
+    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]).catch(console.error);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "KB article error:"); }
 });
