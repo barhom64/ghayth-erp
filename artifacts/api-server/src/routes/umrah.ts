@@ -9,6 +9,61 @@ import {
   createAuditLog,
 } from "../lib/businessHelpers.js";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// LIFECYCLE STATE MACHINES — Umrah domain
+// ─────────────────────────────────────────────────────────────────────────────
+const PILGRIM_STATUSES = ["pending", "arrived", "active", "overstayed", "departed", "violated", "cancelled"] as const;
+const PILGRIM_TRANSITIONS: Record<string, readonly string[]> = {
+  pending:    ["arrived", "cancelled"],
+  arrived:    ["active", "departed", "cancelled"],
+  active:     ["departed", "overstayed", "violated"],
+  overstayed: ["departed", "violated"],
+  departed:   [],
+  violated:   [],
+  cancelled:  [],
+};
+
+const SEASON_STATUSES = ["open", "closed", "archived"] as const;
+const SEASON_TRANSITIONS: Record<string, readonly string[]> = {
+  open:     ["closed"],
+  closed:   ["archived"],
+  archived: [],
+};
+
+const TRANSPORT_STATUSES = ["scheduled", "in_progress", "completed", "cancelled"] as const;
+const TRANSPORT_TRANSITIONS: Record<string, readonly string[]> = {
+  scheduled:   ["in_progress", "cancelled"],
+  in_progress: ["completed", "cancelled"],
+  completed:   [],
+  cancelled:   [],
+};
+
+const AGENT_STATUSES = ["active", "inactive", "suspended", "blocked"] as const;
+const AGENT_TRANSITIONS: Record<string, readonly string[]> = {
+  active:    ["inactive", "suspended", "blocked"],
+  inactive:  ["active"],
+  suspended: ["active", "blocked"],
+  blocked:   [],
+};
+
+const PENALTY_STATUSES = ["pending", "invoiced", "paid", "waived"] as const;
+const PENALTY_TRANSITIONS: Record<string, readonly string[]> = {
+  pending:  ["invoiced", "waived"],
+  invoiced: ["paid", "waived"],
+  paid:     [],
+  waived:   [],
+};
+
+const AGENT_INVOICE_STATUSES = ["draft", "sent", "partially_paid", "paid", "overdue", "cancelled"] as const;
+const AGENT_INVOICE_TRANSITIONS: Record<string, readonly string[]> = {
+  draft:          ["sent", "cancelled"],
+  sent:           ["partially_paid", "paid", "overdue", "cancelled"],
+  partially_paid: ["paid", "overdue"],
+  overdue:        ["partially_paid", "paid", "cancelled"],
+  paid:           [],
+  cancelled:      [],
+};
+
 const router = Router();
 router.use(authMiddleware);
 
@@ -111,6 +166,19 @@ router.patch("/seasons/:id", requirePermission("umrah:write"), async (req, res):
     const scope = req.scope!;
     const { id } = req.params;
     const b = req.body;
+    if (b.status !== undefined) {
+      const [existing] = await rawQuery<any>(`SELECT status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+      if (!existing) throw new NotFoundError("الموسم غير موجود");
+      if (b.status !== existing.status) {
+        const allowed = SEASON_TRANSITIONS[existing.status] ?? [];
+        if (!allowed.includes(b.status)) {
+          throw new ConflictError(
+            `لا يمكن نقل الموسم من "${existing.status}" إلى "${b.status}"`,
+            { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد (حالة نهائية)"}` }
+          );
+        }
+      }
+    }
     if (b.status === "closed") {
       const open = await rawQuery(
         `SELECT COUNT(*) as c FROM umrah_pilgrims WHERE "seasonId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND status IN ('arrived','active','overstayed')`,
@@ -423,6 +491,21 @@ router.patch("/pilgrims/:id", requirePermission("umrah:write"), async (req, res)
   try {
     const scope = req.scope!;
     const b = req.body;
+
+    if (b.status !== undefined) {
+      const [existing] = await rawQuery<any>(`SELECT status FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [req.params.id, scope.companyId]);
+      if (!existing) throw new NotFoundError("المعتمر غير موجود");
+      if (b.status !== existing.status) {
+        const allowed = PILGRIM_TRANSITIONS[existing.status] ?? [];
+        if (!allowed.includes(b.status)) {
+          throw new ConflictError(
+            `لا يمكن نقل حالة المعتمر من "${existing.status}" إلى "${b.status}"`,
+            { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد (حالة نهائية)"}` }
+          );
+        }
+      }
+    }
+
     const params: any[] = [];
     const sets: string[] = [];
     for (const key of ["agentId","packageId","fullName","passportNumber","visaNumber","nationality","gender","dateOfBirth","phone","arrivalDate","departureDate","actualArrival","actualDeparture","status","hotelName","roomNumber","transportAssigned","notes"]) {
@@ -673,7 +756,7 @@ router.post("/run-penalty-engine", requirePermission("umrah:write"), async (req,
             [scope.companyId, p.id, p.agentId, p.seasonId, p.daysOver, amount, `غرامة تأخر ${p.daysOver} يوم — ${p.fullName}`]
           );
           await client.query(
-            `UPDATE umrah_pilgrims SET status='overstay_penalized' WHERE id=$1 AND "companyId"=$2 AND status='overstayed'`,
+            `UPDATE umrah_pilgrims SET status='violated' WHERE id=$1 AND "companyId"=$2 AND status='overstayed'`,
             [p.id, scope.companyId]
           );
         });
