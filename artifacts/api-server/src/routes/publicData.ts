@@ -13,7 +13,7 @@ const router = Router();
 
 const publicLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 30,
+  max: process.env.NODE_ENV === "production" ? 30 : 1000,
   standardHeaders: true,
   legacyHeaders: false,
   validate: { ip: false, trustProxy: false },
