@@ -16,11 +16,13 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
     const pageOffset = Number(off) || 0;
 
     let moduleFilter = "";
+    let moduleParamIndex = 0;
     const params: any[] = [cid];
 
     if (module && typeof module === "string") {
       params.push(module);
-      moduleFilter = ` AND module = $${params.length}`;
+      moduleParamIndex = params.length;
+      moduleFilter = ` AND module = $${moduleParamIndex}`;
     }
 
     const rows = await rawQuery<any>(
@@ -56,7 +58,7 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
         LEFT JOIN users u ON u.id = je."createdBy"
         LEFT JOIN employees e ON e.id = u."employeeId"
         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
-        ${module ? `AND 'finance' = $${params.indexOf(module) + 1}` : ""}
+        ${module ? `AND 'finance' = $${moduleParamIndex}` : ""}
 
         UNION ALL
 
@@ -77,7 +79,7 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
           'request' AS "entityType"
         FROM requests r
         WHERE (r."companyId" = $1 OR r."companyId" IS NULL)
-        ${module ? `AND 'requests' = $${params.indexOf(module) + 1}` : ""}
+        ${module ? `AND 'requests' = $${moduleParamIndex}` : ""}
 
         UNION ALL
 
@@ -97,7 +99,7 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
           'communication' AS "entityType"
         FROM communications_log cl
         WHERE cl."companyId" = $1
-        ${module ? `AND 'communications' = $${params.indexOf(module) + 1}` : ""}
+        ${module ? `AND 'communications' = $${moduleParamIndex}` : ""}
 
         UNION ALL
 
@@ -120,7 +122,7 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
         JOIN employees e ON e.id = lr."employeeId"
         LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
         WHERE lr."companyId" = $1
-        ${module ? `AND 'hr' = $${params.indexOf(module) + 1}` : ""}
+        ${module ? `AND 'hr' = $${moduleParamIndex}` : ""}
 
         UNION ALL
 
@@ -143,7 +145,7 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
         FROM invoices i
         LEFT JOIN clients c ON c.id = i."clientId"
         WHERE i."companyId" = $1 AND i."deletedAt" IS NULL
-        ${module ? `AND 'finance' = $${params.indexOf(module) + 1}` : ""}
+        ${module ? `AND 'finance' = $${moduleParamIndex}` : ""}
 
       ) AS combined
       ORDER BY "timestamp" DESC
@@ -155,15 +157,15 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
       `SELECT COUNT(*) AS total FROM (
         SELECT al.id FROM audit_logs al WHERE al."companyId" = $1${moduleFilter}
         UNION ALL
-        SELECT je.id FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL ${module ? `AND 'finance' = $${params.indexOf(module) + 1}` : ""}
+        SELECT je.id FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL ${module ? `AND 'finance' = $${moduleParamIndex}` : ""}
         UNION ALL
-        SELECT r.id FROM requests r WHERE (r."companyId" = $1 OR r."companyId" IS NULL) ${module ? `AND 'requests' = $${params.indexOf(module) + 1}` : ""}
+        SELECT r.id FROM requests r WHERE (r."companyId" = $1 OR r."companyId" IS NULL) ${module ? `AND 'requests' = $${moduleParamIndex}` : ""}
         UNION ALL
-        SELECT cl.id FROM communications_log cl WHERE cl."companyId" = $1 ${module ? `AND 'communications' = $${params.indexOf(module) + 1}` : ""}
+        SELECT cl.id FROM communications_log cl WHERE cl."companyId" = $1 ${module ? `AND 'communications' = $${moduleParamIndex}` : ""}
         UNION ALL
-        SELECT lr.id FROM hr_leave_requests lr WHERE lr."companyId" = $1 ${module ? `AND 'hr' = $${params.indexOf(module) + 1}` : ""}
+        SELECT lr.id FROM hr_leave_requests lr WHERE lr."companyId" = $1 ${module ? `AND 'hr' = $${moduleParamIndex}` : ""}
         UNION ALL
-        SELECT i.id FROM invoices i WHERE i."companyId" = $1 AND i."deletedAt" IS NULL ${module ? `AND 'finance' = $${params.indexOf(module) + 1}` : ""}
+        SELECT i.id FROM invoices i WHERE i."companyId" = $1 AND i."deletedAt" IS NULL ${module ? `AND 'finance' = $${moduleParamIndex}` : ""}
       ) AS combined`,
       params
     );
