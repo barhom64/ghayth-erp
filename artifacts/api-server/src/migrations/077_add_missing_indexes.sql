@@ -61,7 +61,7 @@ CREATE INDEX IF NOT EXISTS idx_purchase_orders_company ON purchase_orders("compa
 CREATE INDEX IF NOT EXISTS idx_purchase_orders_status ON purchase_orders(status);
 
 -- ── audit_logs ────────────────────────────────────────────────────
-CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs("entityType", "entityId");
+CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs("entity", "entityId");
 CREATE INDEX IF NOT EXISTS idx_audit_logs_company ON audit_logs("companyId");
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs("createdAt");
 
