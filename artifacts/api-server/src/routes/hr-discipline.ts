@@ -20,6 +20,7 @@ import {
   createNotification,
   emitEvent,
   getManagerAssignmentId,
+  todayISO,
 } from "../lib/businessHelpers.js";
 import {
   resolvePenalty,
@@ -1193,7 +1194,7 @@ router.post("/auto-detection/run", requirePermission("hr:update"), async (req, r
     if (!parsed_autoDetectionRunSchema.success) throw new ValidationError(parsed_autoDetectionRunSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_autoDetectionRunSchema.data;
     const { date } = body;
-    const targetDate = date ?? new Date().toISOString().split("T")[0]!;
+    const targetDate = date ?? todayISO()!;
 
     const result = await runAutoDetection(scope.companyId, targetDate);
 

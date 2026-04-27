@@ -10,7 +10,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { checkFinancialPeriodOpen, updateAccountBalances } from "../lib/businessHelpers.js";
+import { checkFinancialPeriodOpen, updateAccountBalances, todayISO } from "../lib/businessHelpers.js";
 
 export const financeAlgorithmsRouter = Router();
 financeAlgorithmsRouter.use(authMiddleware);
@@ -32,7 +32,7 @@ function assertFinanceRole(scope: any): void {
 financeAlgorithmsRouter.get("/ar-aging", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const asOfDate = (req.query.asOfDate as string) || new Date().toISOString().split("T")[0];
+    const asOfDate = (req.query.asOfDate as string) || todayISO();
 
     const invoices = await rawQuery<any>(
       `SELECT
@@ -121,7 +121,7 @@ financeAlgorithmsRouter.get("/ar-aging", requirePermission("finance:read"), asyn
 financeAlgorithmsRouter.get("/ap-aging", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const asOfDate = (req.query.asOfDate as string) || new Date().toISOString().split("T")[0];
+    const asOfDate = (req.query.asOfDate as string) || todayISO();
 
     const orders = await rawQuery<any>(
       `SELECT

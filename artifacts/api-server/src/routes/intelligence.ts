@@ -6,7 +6,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { requireRole } from "../middlewares/roleGuard.js";
 import { aiEngine } from "../lib/aiEngine.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { calculateEmployeeKPIs, getCompanyKPIs } from "../lib/kpiEngine.js";
 import { buildAllSchedules, buildEmployeeSchedule } from "../lib/scheduleBuilder.js";
 import { runSmartAlerts } from "../lib/smartAlerts.js";
@@ -150,7 +150,7 @@ router.get("/kpis/employee/:employeeId", requirePermission("admin:read"), async 
   try {
     const scope = req.scope!;
     const { employeeId } = req.params;
-    const date = (req.query.date as string) ?? new Date().toISOString().split("T")[0];
+    const date = (req.query.date as string) ?? todayISO();
     const metrics = await calculateEmployeeKPIs(scope.companyId, Number(employeeId), date);
     res.json({ employeeId: Number(employeeId), date, metrics });
   } catch (err) { handleRouteError(err, res, "Employee KPI error:"); }
@@ -160,7 +160,7 @@ router.get("/daily-schedule", requirePermission("admin:read"), async (req, res):
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const date = (req.query.date as string) ?? new Date().toISOString().split("T")[0];
+    const date = (req.query.date as string) ?? todayISO();
     const schedules = await buildAllSchedules(cid, date);
     res.json({ date, schedules });
   } catch (err) { handleRouteError(err, res, "Daily schedule error:"); }
@@ -170,7 +170,7 @@ router.get("/daily-schedule/employee/:employeeId", requirePermission("admin:read
   try {
     const scope = req.scope!;
     const { employeeId } = req.params;
-    const date = (req.query.date as string) ?? new Date().toISOString().split("T")[0];
+    const date = (req.query.date as string) ?? todayISO();
     const schedule = await buildEmployeeSchedule(scope.companyId, Number(employeeId), date);
     res.json(schedule);
   } catch (err) { handleRouteError(err, res, "Employee schedule error:"); }

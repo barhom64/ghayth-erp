@@ -4,6 +4,10 @@ import { ValidationError } from "./errorHandler.js";
 import { sendNotification } from "./notificationService.js";
 import { validateEventPayload, getEventDefinition } from "./eventCatalog.js";
 
+export function todayISO(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
 export function computeVat(baseAmount: number, vatRatePercent: number): number {
   return Math.round(baseAmount * (vatRatePercent / 100) * 100) / 100;
 }

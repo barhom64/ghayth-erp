@@ -31,9 +31,9 @@ const createSchema = z.object({
 
 // ── Generate outgoing/incoming reference ──
 async function generateRef(direction: "outgoing" | "incoming", companyId: number): Promise<string> {
-  const seq = direction === "outgoing" ? "correspondence_outgoing_seq" : "correspondence_incoming_seq";
   const prefix = direction === "outgoing" ? "OUT" : "IN";
-  const [row] = await rawQuery<any>(`SELECT nextval('${seq}') AS seq`);
+  const seqName = direction === "outgoing" ? "correspondence_outgoing_seq" : "correspondence_incoming_seq";
+  const [row] = await rawQuery<any>(`SELECT nextval($1::regclass) AS seq`, [seqName]);
   const year = new Date().getFullYear();
   return `${prefix}-${year}-${String(row.seq).padStart(4, "0")}`;
 }

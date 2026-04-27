@@ -4,7 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -410,7 +410,7 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const date = (req.query.date as string) || new Date().toISOString().split("T")[0];
+    const date = (req.query.date as string) || todayISO();
 
     const [attendance] = await rawQuery<any>(
       `SELECT
@@ -841,7 +841,7 @@ router.get("/reports/branch-performance", requirePermission("bi:read"), async (r
     const cid = scope.companyId;
     const { from, to } = req.query as any;
     const dateFrom = from || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
-    const dateTo = to || new Date().toISOString().split("T")[0];
+    const dateTo = to || todayISO();
 
     const branches = await rawQuery<any>(
       `SELECT b.id, b.name FROM branches b WHERE b."companyId" = $1 ORDER BY b.name`,
@@ -925,7 +925,7 @@ router.get("/reports/vendor-performance", requirePermission("bi:read"), async (r
     const cid = scope.companyId;
     const { from, to } = req.query as any;
     const dateFrom = from || new Date(new Date().getFullYear(), 0, 1).toISOString().split("T")[0];
-    const dateTo = to || new Date().toISOString().split("T")[0];
+    const dateTo = to || todayISO();
 
     const rows = await rawQuery<any>(
       `SELECT
@@ -1142,7 +1142,7 @@ router.get("/reports/training-roi", requirePermission("bi:read"), async (req, re
     const cid = scope.companyId;
     const { from, to } = req.query as any;
     const dateFrom = from || new Date(new Date().getFullYear(), 0, 1).toISOString().split("T")[0];
-    const dateTo = to || new Date().toISOString().split("T")[0];
+    const dateTo = to || todayISO();
 
     const [summary] = await rawQuery<any>(
       `SELECT

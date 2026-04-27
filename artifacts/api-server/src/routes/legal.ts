@@ -9,7 +9,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { z } from "zod";
@@ -984,7 +984,7 @@ router.post("/cases/:caseId/correspondence", requirePermission("legal:create"), 
     if (!lc) throw new NotFoundError("القضية غير موجودة");
     const { insertId } = await rawExecute(
       `INSERT INTO legal_correspondence ("caseId","companyId",direction,subject,parties,"correspondenceDate","documentRef",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [caseId, scope.companyId, b.direction || 'outgoing', b.subject, b.parties, b.correspondenceDate || new Date().toISOString().split('T')[0], b.documentRef || null, b.notes || null]
+      [caseId, scope.companyId, b.direction || 'outgoing', b.subject, b.parties, b.correspondenceDate || todayISO(), b.documentRef || null, b.notes || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM legal_correspondence WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 

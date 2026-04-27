@@ -9,7 +9,7 @@ import {
   NotFoundError,
   ForbiddenError,
 } from "../lib/errorHandler.js";
-import { createAuditLog, createNotification, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO } from "../lib/businessHelpers.js";
 
 const contractsRouter = Router();
 contractsRouter.use(authMiddleware);
@@ -418,7 +418,7 @@ contractsRouter.post("/:id/renew", requirePermission("hr:create"), async (req, r
     const [seqRow] = await rawQuery<any>(`SELECT nextval('contract_number_seq') AS seq`);
     const ref = `CTR-${new Date().getFullYear()}-${String(seqRow.seq).padStart(4, "0")}`;
 
-    const newStart = contract.endDate || new Date().toISOString().split("T")[0];
+    const newStart = contract.endDate || todayISO();
 
     const [newContract] = await rawQuery<any>(
       `INSERT INTO employee_contracts (

@@ -4,7 +4,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError, ValidationError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 
 // ── Zod validation schemas ──────────────────────────────────────────
@@ -161,7 +161,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
     } catch (_e) { console.error("OpsCenter: property failed:", _e); }
 
     try {
-      const today = new Date().toISOString().split("T")[0];
+      const today = todayISO();
       const [absent] = await rawQuery<any>(
         `SELECT
            (SELECT COUNT(*) FROM employee_assignments WHERE "companyId" = ANY($1::int[]) AND status='active') -
@@ -502,7 +502,7 @@ router.get("/daily-close/checklist", requirePermission("operations:read"), async
   try {
     const scope = req.scope!;
     const companies = scope.allowedCompanies;
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
     const { where, params } = buildFilter(scope, req);
 
     const items = await buildChecklistItems(scope, where, params, companies, today);
@@ -537,7 +537,7 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
       throw new ForbiddenError("غير مصرح — يتطلب صلاحية مدير على الأقل");
     }
 
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
     const userId = scope.userId;
     const cid = scope.companyId;
     const forceClose = req.body?.force === true;

@@ -17,6 +17,7 @@ import {
   createAuditLog,
   checkFinancialPeriodOpen,
   emitEvent,
+  todayISO,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
@@ -1771,7 +1772,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
     if (!Number.isFinite(amt) || amt <= 0) {
       throw new ValidationError("المبلغ يجب أن يكون أكبر من صفر", { field: "amount", fix: "أدخل قيمة موجبة" });
     }
-    const costDate = b.costDate || new Date().toISOString().split('T')[0];
+    const costDate = b.costDate || todayISO();
     const { insertId } = await rawExecute(
       `INSERT INTO project_costs ("projectId","companyId",description,amount,category,"costDate","enteredBy",notes)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,

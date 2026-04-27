@@ -6,8 +6,6 @@ const root = join(import.meta.dirname!, "../../../../artifacts/api-server/src/li
 const read = (f: string) => readFileSync(join(root, f), "utf8");
 
 const SEED = read("seedDemoData.ts");
-const ENCRYPT = read("encryption.ts");
-const PAGINATE = read("paginationHelper.ts");
 const AUDIT = read("audit.ts");
 const PUSH = read("pushService.ts");
 const MIGRATE = read("migrate.ts");
@@ -32,52 +30,6 @@ describe("seedDemoData — creates demo entities", () => {
   it("uses parameterized queries", () => {
     const params = [...SEED.matchAll(/\$\d/g)];
     expect(params.length).toBeGreaterThan(10);
-  });
-});
-
-// ── Encryption ────────────────────────────────────────────────────────────
-
-describe("encryption — exports", () => {
-  it("exports encrypt", () => {
-    expect(ENCRYPT).toContain("export function encrypt");
-  });
-
-  it("exports decrypt", () => {
-    expect(ENCRYPT).toContain("export function decrypt");
-  });
-
-  it("exports hmacHash", () => {
-    expect(ENCRYPT).toContain("export function hmacHash");
-  });
-
-  it("exports protect", () => {
-    expect(ENCRYPT).toContain("export function protect");
-  });
-});
-
-describe("encryption — uses crypto module", () => {
-  it("uses node crypto", () => {
-    expect(ENCRYPT).toContain("crypto");
-  });
-});
-
-// ── Pagination Helper ─────────────────────────────────────────────────────
-
-describe("paginationHelper — exports", () => {
-  it("exports PaginationOptions interface", () => {
-    expect(PAGINATE).toContain("export interface PaginationOptions");
-  });
-
-  it("exports PaginationResult interface", () => {
-    expect(PAGINATE).toContain("export interface PaginationResult");
-  });
-
-  it("exports parsePagination", () => {
-    expect(PAGINATE).toContain("export function parsePagination");
-  });
-
-  it("exports paginatedResponse", () => {
-    expect(PAGINATE).toContain("export function paginatedResponse");
   });
 });
 

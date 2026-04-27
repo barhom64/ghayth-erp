@@ -13,6 +13,7 @@ import {
   emitEvent,
   createAuditLog,
   getManagerAssignmentId,
+  todayISO,
 } from "../lib/businessHelpers.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -293,7 +294,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
     }
 
     const targetBranchId = branchId ?? scope.branchId;
-    const effectiveHireDate = hireDate || new Date().toISOString().split("T")[0];
+    const effectiveHireDate = hireDate || todayISO();
 
     // Step 1 audit — resolve department explicitly. If the caller passed a
     // `department` string that doesn't exist, we used to silently insert

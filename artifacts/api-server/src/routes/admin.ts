@@ -7,7 +7,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import rateLimit from "express-rate-limit";
 import { integrationService } from "../lib/integrationService.js";
 import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import crypto from "crypto";
 
 const router = Router();
@@ -1128,7 +1128,7 @@ router.get("/governance/system-guards", requirePermission("admin:read"), async (
       res.json({ allowed: true, violations: [], note: "no company scope" });
       return;
     }
-    const result = await checkSystemGuards(companyId, "all", { date: new Date().toISOString().split("T")[0] });
+    const result = await checkSystemGuards(companyId, "all", { date: todayISO() });
     res.json(result);
   } catch (err: any) {
     console.error("System guards error:", err?.message ?? err);

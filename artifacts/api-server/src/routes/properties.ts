@@ -12,9 +12,8 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
-import { eventBus } from "../lib/eventBus.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { propertiesEngine } from "../lib/engines/index.js";
@@ -1261,7 +1260,7 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
       throw new ValidationError("يجب تحديد سبب الإنهاء", { field: "reason", fix: "أدخل سبب إنهاء العقد" });
     }
 
-    const terminationDate = b.terminationDate || new Date().toISOString().split("T")[0];
+    const terminationDate = b.terminationDate || todayISO();
     const earlyFee = Number(b.earlyTerminationFee ?? contract.earlyTerminationFee ?? 0);
 
     await applyTransition({
@@ -1642,7 +1641,7 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
               "journalEntryId" = COALESCE("journalEntryId", $4),
               "updatedAt"  = NOW()
         WHERE id = $5`,
-      [paidAmount, b.paidDate || new Date().toISOString().split('T')[0], b.method || 'bank_transfer', journalEntryId, Number(id)]
+      [paidAmount, b.paidDate || todayISO(), b.method || 'bank_transfer', journalEntryId, Number(id)]
     );
 
     const [row] = await rawQuery<any>(`SELECT * FROM rent_payments WHERE id=$1`, [Number(id)]);
@@ -3127,7 +3126,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
     const receiptNumber = b.receiptNumber || `RCP-${Date.now().toString(36).toUpperCase()}`;
     await rawExecute(
       `UPDATE contract_payment_schedule SET "paidAmount"=$1, "paidDate"=$2, method=$3, status=$4, "receiptNumber"=$5, "updatedAt"=NOW() WHERE id=$6`,
-      [newPaid, b.paidDate || new Date().toISOString().split('T')[0], b.method || 'bank_transfer', newStatus, receiptNumber, installmentId]
+      [newPaid, b.paidDate || todayISO(), b.method || 'bank_transfer', newStatus, receiptNumber, installmentId]
     );
     if (paidAmount > 0) {
       const { propertiesEngine } = await import("../lib/engines/index.js");
@@ -3210,7 +3209,7 @@ router.post("/inspections", requirePermission("property:create"), async (req, re
        ("companyId","unitId",type,"scheduledDate","inspectorName",status,notes,findings,"conditionRating")
        VALUES ($1,$2,$3,$4,$5,'scheduled',$6,$7,$8)`,
       [scope.companyId, b.unitId, b.type,
-       b.scheduledDate || new Date().toISOString().split('T')[0],
+       b.scheduledDate || todayISO(),
        b.inspectorName || null, b.notes || null,
        b.findings ? JSON.stringify(b.findings) : null,
        b.conditionRating || null]
@@ -3385,7 +3384,7 @@ router.post("/deposits", requirePermission("property:create"), async (req, res) 
        ("companyId","contractId",amount,"receivedDate",status,notes,"refundAmount","refundDate","refundReason")
        VALUES ($1,$2,$3,$4,'held',$5,$6,$7,$8)`,
       [scope.companyId, b.contractId, b.amount,
-       b.receivedDate || new Date().toISOString().split('T')[0],
+       b.receivedDate || todayISO(),
        b.notes || null, b.refundAmount || null, b.refundDate || null, b.refundReason || null]
     );
 
@@ -3475,7 +3474,7 @@ router.patch("/deposits/:id/refund", requirePermission("property:update"), async
       reason: b.refundReason || undefined,
       setExtras: {
         refundAmount,
-        refundDate: b.refundDate || new Date().toISOString().split('T')[0],
+        refundDate: b.refundDate || todayISO(),
         refundReason: b.refundReason || null,
       },
       after: { refundAmount, reason: b.refundReason ?? null },

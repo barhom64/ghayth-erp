@@ -21,6 +21,7 @@ import {
   initiateApprovalChain,
   processApprovalStep,
   checkFinancialPeriodOpen,
+  todayISO,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
@@ -853,7 +854,7 @@ router.get("/attendance", requirePermission("hr:read"), async (req, res) => {
 router.get("/attendance/today-summary", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
     const rows = await rawQuery<any>(
       `SELECT ea.id AS "assignmentId", e.id AS "employeeId", e.name,
               a.status, a."checkIn", a."checkOut", COALESCE(a."lateMinutes", 0) AS "lateMinutes"
@@ -4586,7 +4587,7 @@ async function computeSystemEvaluation(companyId: number, employeeId: number): P
   overallScore: number;
   metrics: Record<string, number>;
 }> {
-  const today = new Date().toISOString().split("T")[0]!;
+  const today = todayISO()!;
   const { calculateEmployeeKPIs } = await import("../lib/kpiEngine.js");
   const kpiMetrics = await calculateEmployeeKPIs(companyId, employeeId, today);
 

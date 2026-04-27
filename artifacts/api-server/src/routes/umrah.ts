@@ -7,6 +7,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, Confl
 import {
   emitEvent,
   createAuditLog,
+  todayISO,
 } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 
@@ -795,7 +796,7 @@ router.get("/dashboard", requirePermission("umrah:read"), async (req, res) => {
 router.post("/run-daily-status", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
 
     const pendingToArrived = await rawQuery<any>(
       `SELECT id FROM umrah_pilgrims WHERE "companyId"=$1 AND status='pending' AND "arrivalDate" <= $2 AND ("departureDate" IS NULL OR "departureDate" >= $2) AND "deletedAt" IS NULL`,
@@ -856,7 +857,7 @@ router.post("/run-penalty-engine", requirePermission("umrah:write"), async (req,
   try {
     const scope = req.scope!;
     const { overstayDays = 3, dailyRate = 500 } = req.body;
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
     const overstayed = await rawQuery(
       `SELECT p.id, p."passportNumber", p."fullName", p."agentId", p."seasonId", p."departureDate",
         ($1::date - p."departureDate"::date) as "daysOver"

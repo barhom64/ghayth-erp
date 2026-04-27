@@ -10,9 +10,8 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createAuditLog, createNotification, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { eventBus } from "../lib/eventBus.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, markObligationMet, cancelObligation } from "../lib/obligationsEngine.js";
@@ -1220,7 +1219,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
 
     const { insertId } = await rawExecute(
       `INSERT INTO fleet_maintenance ("companyId","vehicleId",type,description,cost,"mileageAtService","serviceDate","performedBy",status,"nextServiceDate","nextServiceKm") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [scope.companyId, b.vehicleId, b.type, b.description, b.cost || 0, b.mileageAtService, b.serviceDate || new Date().toISOString().split('T')[0], assignedMechanic, b.status || 'in_progress', effectiveNextServiceDate, b.nextServiceKm ?? null]
+      [scope.companyId, b.vehicleId, b.type, b.description, b.cost || 0, b.mileageAtService, b.serviceDate || todayISO(), assignedMechanic, b.status || 'in_progress', effectiveNextServiceDate, b.nextServiceKm ?? null]
     );
 
     if (b.vehicleId) {
@@ -1249,7 +1248,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
         type: b.type,
         description: b.description,
         cost: b.cost || 0,
-        serviceDate: b.serviceDate || new Date().toISOString().split("T")[0],
+        serviceDate: b.serviceDate || todayISO(),
       },
     }).catch(console.error);
 
@@ -1666,7 +1665,7 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
 
     const costPerLiter = Number(b.costPerLiter || b.cost) || 0;
     const totalCost = liters * costPerLiter;
-    const fuelDate = b.fuelDate || b.date || new Date().toISOString().split('T')[0];
+    const fuelDate = b.fuelDate || b.date || todayISO();
     const mileageAtFuel = Number(b.mileageAtFuel || b.mileage) || null;
     const stationName = b.stationName || b.station || null;
     const { insertId } = await rawExecute(
@@ -2574,7 +2573,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
        ("companyId","vehicleId","driverId","violationType","violationDate","fineAmount","location","violationNumber",status,notes,"paidAt")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10)`,
       [scope.companyId, b.vehicleId, b.driverId || null, b.violationType,
-       b.violationDate || new Date().toISOString().split('T')[0],
+       b.violationDate || todayISO(),
        fineAmount, b.location || null, b.violationNumber || null,
        b.notes || null, null]
     );
