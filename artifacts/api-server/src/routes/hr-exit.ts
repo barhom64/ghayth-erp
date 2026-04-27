@@ -533,7 +533,6 @@ router.patch("/exit/:id/complete", requirePermission("hr:update"), async (req, r
       extraWhere: `"deletedAt" IS NULL`,
       after: { settlementPaid: true, exitNumber: item.exitNumber },
       onApply: async (_row, client) => {
-        // تعطيل التعيين inside the same transaction
         await client.query(
           `UPDATE employee_assignments SET status = 'terminated', "endDate" = CURRENT_DATE
            WHERE id = $1 AND "companyId" = $2`,
@@ -541,6 +540,17 @@ router.patch("/exit/:id/complete", requirePermission("hr:update"), async (req, r
         );
       },
     });
+
+    const eosAmount = Number(item.gratuityAmount || 0);
+    const remainingLeaveAmount = Number(item.leaveCompensation || 0);
+    const totalSettlement = Number(item.netSettlement || 0);
+    if (totalSettlement > 0) {
+      const { hrEngine } = await import("../lib/engines/index.js");
+      hrEngine.postExitSettlementGL(
+        { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
+        { id: item.id, employeeId: item.employeeId, eosAmount, remainingLeaveAmount, totalSettlement },
+      ).catch((e: unknown) => console.error("Exit settlement GL error:", e));
+    }
 
     res.json({ success: true, message: "تم إتمام نهاية الخدمة وتعطيل التعيين" });
   } catch (err) {

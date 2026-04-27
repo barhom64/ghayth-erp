@@ -95,8 +95,8 @@ export default function CorrespondencePage() {
     "/correspondence/stats/summary",
   );
 
-  const sendMut = useApiMutation<unknown, void>("", "POST", [["correspondence"]]);
-  const respondMut = useApiMutation<unknown, void>("", "POST", [["correspondence"]]);
+  const sendMut = useApiMutation<unknown, { id: number }>((b) => `/correspondence/${b.id}/send`, "POST", [["correspondence"]]);
+  const respondMut = useApiMutation<unknown, { id: number }>((b) => `/correspondence/${b.id}/respond`, "POST", [["correspondence"]]);
 
   const kpis = useMemo(() => [
     { label: "صادر", value: stats?.totalOutgoing ?? items.filter((i) => i.direction === "outgoing").length, icon: SendHorizonal, color: "text-blue-600 bg-blue-50" },
@@ -107,19 +107,17 @@ export default function CorrespondencePage() {
   ], [stats, items]);
 
   const handleSend = (id: number) => {
-    sendMut.mutate(undefined, {
+    sendMut.mutate({ id }, {
       onSuccess: () => toast({ title: "تم إرسال المراسلة بنجاح" }),
       onError: (err: any) => toast({ variant: "destructive", title: "حدث خطأ أثناء الإرسال", description: err?.message }),
-      endpoint: `/correspondence/${id}/send`,
-    } as any);
+    });
   };
 
   const handleRespond = (id: number) => {
-    respondMut.mutate(undefined, {
+    respondMut.mutate({ id }, {
       onSuccess: () => toast({ title: "تم إنشاء الرد بنجاح" }),
       onError: (err: any) => toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الرد", description: err?.message }),
-      endpoint: `/correspondence/${id}/respond`,
-    } as any);
+    });
   };
 
   if (isLoading) return <PageShell title="المراسلات"><LoadingSpinner /></PageShell>;
