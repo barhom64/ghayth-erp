@@ -98,6 +98,62 @@ class UmrahEngineImpl implements DomainEngine {
       ],
     });
   }
+
+  async postPenaltyGL(
+    ctx: UmrahGLContext,
+    penalty: { id: number; amount: number; pilgrimName: string; agentName?: string; type: string }
+  ) {
+    const [receivableCode, revenueCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_receivable", "debit", "1220"),
+      financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_revenue", "credit", "4210"),
+    ]);
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `UMRAH-PEN-${penalty.id}`,
+      description: `غرامة ${penalty.type} — ${penalty.pilgrimName}${penalty.agentName ? ` / ${penalty.agentName}` : ""}`,
+      type: "general",
+      sourceType: "umrah_penalty",
+      sourceId: penalty.id,
+      sourceKey: `umrah:penalty:${penalty.id}`,
+      guardTable: "umrah_penalties",
+      guardId: penalty.id,
+      lines: [
+        { accountCode: receivableCode, debit: penalty.amount, credit: 0, description: `ذمم غرامة — ${penalty.pilgrimName}` },
+        { accountCode: revenueCode, debit: 0, credit: penalty.amount, description: `إيراد غرامة ${penalty.type}` },
+      ],
+    });
+  }
+
+  async postPenaltyWaiverGL(
+    ctx: UmrahGLContext,
+    penalty: { id: number; amount: number; pilgrimName: string }
+  ) {
+    const [receivableCode, revenueCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_receivable", "debit", "1220"),
+      financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_revenue", "credit", "4210"),
+    ]);
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `UMRAH-PEN-WAIVE-${penalty.id}`,
+      description: `إعفاء غرامة — ${penalty.pilgrimName}`,
+      type: "general",
+      sourceType: "umrah_penalty_waiver",
+      sourceId: penalty.id,
+      sourceKey: `umrah:penalty_waiver:${penalty.id}`,
+      guardTable: "umrah_penalties",
+      guardId: penalty.id,
+      lines: [
+        { accountCode: revenueCode, debit: penalty.amount, credit: 0, description: `عكس إيراد غرامة — إعفاء` },
+        { accountCode: receivableCode, debit: 0, credit: penalty.amount, description: `إلغاء ذمم غرامة — إعفاء` },
+      ],
+    });
+  }
 }
 
 export const umrahEngine = new UmrahEngineImpl();

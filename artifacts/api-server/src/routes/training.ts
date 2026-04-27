@@ -4,6 +4,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { z } from "zod";
 
 /* ── Zod Schemas ────────────────────────────────────────────── */
@@ -152,14 +153,29 @@ router.patch("/programs/:id/approve", requirePermission("hr:update"), async (req
     const body = parsed_approveSchema.data;
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [program] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!program) throw new NotFoundError("البرنامج التدريبي غير موجود");
-    await rawExecute(`UPDATE training_programs SET status='approved' WHERE id=$1`, [id]);
-    try { await rawExecute(`INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('training_program',$1,'approved',$2,$3,$4)`, [id, body.notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "training_program.approved", entity: "training_programs", entityId: id, before: { status: program.status }, after: { status: "approved" } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.program.approved", entity: "training_programs", entityId: id, details: JSON.stringify({ previousStatus: program.status }) }).catch(console.error);
+    const row = await applyTransition({
+      entity: "training_programs",
+      id,
+      scope,
+      action: "training.program.approved",
+      toState: "approved",
+      reason: body.notes ?? undefined,
+      extraWhere: '"deletedAt" IS NULL',
+      onApply: async (_row, client) => {
+        try {
+          await client.query(
+            `INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('training_program',$1,'approved',$2,$3,$4)`,
+            [id, body.notes || null, scope.userId, scope.companyId]
+          );
+        } catch (e) { console.error(e); }
+      },
+    });
     res.json({ message: "تم اعتماد البرنامج التدريبي", status: "approved" });
-  } catch (err) { handleRouteError(err, res, "Training approve error:"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Training approve error:");
+  }
 });
 
 router.patch("/programs/:id/reject", requirePermission("hr:update"), async (req, res) => {
@@ -171,14 +187,30 @@ router.patch("/programs/:id/reject", requirePermission("hr:update"), async (req,
     const id = Number(req.params.id);
     const { notes } = body;
     if (!String(notes).trim()) throw new ValidationError("يجب ذكر سبب الرفض", { field: "notes" });
-    const [program] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!program) throw new NotFoundError("البرنامج التدريبي غير موجود");
-    await rawExecute(`UPDATE training_programs SET status='rejected' WHERE id=$1`, [id]);
-    try { await rawExecute(`INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('training_program',$1,'rejected',$2,$3,$4)`, [id, notes, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "training_program.rejected", entity: "training_programs", entityId: id, before: { status: program.status }, after: { status: "rejected" } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.program.rejected", entity: "training_programs", entityId: id, details: JSON.stringify({ previousStatus: program.status, notes }) }).catch(console.error);
+    const row = await applyTransition({
+      entity: "training_programs",
+      id,
+      scope,
+      action: "training.program.rejected",
+      toState: "rejected",
+      reason: notes,
+      extraWhere: '"deletedAt" IS NULL',
+      onApply: async (_row, client) => {
+        try {
+          await client.query(
+            `INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('training_program',$1,'rejected',$2,$3,$4)`,
+            [id, notes, scope.userId, scope.companyId]
+          );
+        } catch (e) { console.error(e); }
+      },
+      after: { notes },
+    });
     res.json({ message: "تم رفض البرنامج التدريبي", status: "rejected" });
-  } catch (err) { handleRouteError(err, res, "Training reject error:"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Training reject error:");
+  }
 });
 
 router.delete("/programs/:id", requirePermission("hr:delete"), async (req, res) => {

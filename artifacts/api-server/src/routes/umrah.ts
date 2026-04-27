@@ -767,10 +767,10 @@ router.post("/run-penalty-engine", requirePermission("umrah:write"), async (req,
     for (const p of overstayed) {
       if (Number(p.daysOver) >= overstayDays) {
         const amount = Number(p.daysOver) * dailyRate;
-        await withTransaction(async (client) => {
-          await client.query(
+        const penRows = await withTransaction(async (client) => {
+          const penRes = await client.query(
             `INSERT INTO umrah_penalties ("companyId","pilgrimId","agentId","seasonId",type,"daysOverstayed",amount,notes)
-             VALUES ($1,$2,$3,$4,'overstay',$5,$6,$7)`,
+             VALUES ($1,$2,$3,$4,'overstay',$5,$6,$7) RETURNING id`,
             [scope.companyId, p.id, p.agentId, p.seasonId, p.daysOver, amount, `غرامة تأخر ${p.daysOver} يوم — ${p.fullName}`]
           );
           await applyTransition({
@@ -782,7 +782,17 @@ router.post("/run-penalty-engine", requirePermission("umrah:write"), async (req,
             toState: "violated",
             extraWhere: `"deletedAt" IS NULL`,
           });
+          return penRes.rows;
         });
+        if (penRows[0]?.id) {
+          try {
+            const { umrahEngine } = await import("../lib/engines/index.js");
+            await umrahEngine.postPenaltyGL(
+              { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+              { id: penRows[0].id, amount, pilgrimName: p.fullName, agentName: undefined, type: "overstay" }
+            );
+          } catch { /* GL failure must not block penalty creation */ }
+        }
         created++;
       }
     }
@@ -826,6 +836,71 @@ router.get("/penalties/:id", requirePermission("umrah:read"), async (req, res) =
     if (!row) throw new NotFoundError("العقوبة غير موجودة");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Penalty detail error"); }
+});
+
+router.patch("/penalties/:id/waive", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { reason } = req.body;
+    if (!reason) throw new ValidationError("سبب الإعفاء مطلوب");
+    const [penalty] = await rawQuery<any>(`SELECT pen.*, p."fullName" as "pilgrimName" FROM umrah_penalties pen LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id WHERE pen.id=$1 AND pen."companyId"=$2`, [id, scope.companyId]);
+    if (!penalty) throw new NotFoundError("العقوبة غير موجودة");
+    await applyTransition({
+      entity: "umrah_penalties",
+      id,
+      scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+      action: "umrah.penalty.waived",
+      fromStates: ["pending", "invoiced"],
+      toState: "waived",
+      reason,
+      setExtras: { waivedBy: scope.userId, waivedAt: { raw: "NOW()" } },
+    });
+    if (Number(penalty.amount) > 0) {
+      try {
+        const { umrahEngine } = await import("../lib/engines/index.js");
+        await umrahEngine.postPenaltyWaiverGL(
+          { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+          { id, amount: Number(penalty.amount), pilgrimName: penalty.pilgrimName || "" }
+        );
+      } catch { /* GL failure must not block waiver */ }
+    }
+    const [row] = await rawQuery(`SELECT * FROM umrah_penalties WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    res.json(row);
+  } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
+    handleRouteError(err, res, "Waive penalty error");
+  }
+});
+
+router.post("/agent-invoices/:id/record-payment", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const { amount, paymentMethod, reference } = req.body;
+    if (!amount || Number(amount) <= 0) throw new ValidationError("مبلغ الدفع مطلوب");
+    const [invoice] = await rawQuery<any>(`SELECT * FROM umrah_agent_invoices WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
+    const paidSoFar = Number(invoice.paidAmount || 0) + Number(amount);
+    const newStatus = paidSoFar >= Number(invoice.total) ? "paid" : "partially_paid";
+    await applyTransition({
+      entity: "umrah_agent_invoices",
+      id,
+      scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+      action: `umrah.agent_invoice.${newStatus}`,
+      fromStates: ["sent", "partially_paid", "overdue"],
+      toState: newStatus,
+      setExtras: { paidAmount: paidSoFar },
+      after: { paymentAmount: Number(amount), paymentMethod, reference, paidSoFar },
+    });
+    const [row] = await rawQuery(`SELECT * FROM umrah_agent_invoices WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    res.json(row);
+  } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
+    handleRouteError(err, res, "Record payment error");
+  }
 });
 
 router.post("/agent-invoices/generate", requirePermission("umrah:write"), async (req, res): Promise<void> => {
@@ -973,6 +1048,79 @@ router.post("/transport", requirePermission("umrah:write"), async (req, res) => 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.created", entity: "umrah_transport", entityId: rows[0]?.id, details: JSON.stringify({ fromLocation: b.fromLocation, toLocation: b.toLocation, cost: b.cost }) }).catch(console.error);
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create transport error"); }
+});
+
+router.patch("/transport/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const b = req.body;
+    const [existing] = await rawQuery<any>(`SELECT * FROM umrah_transport WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!existing) throw new NotFoundError("رحلة النقل غير موجودة");
+    if (b.status !== undefined && b.status !== existing.status) {
+      const allowed = TRANSPORT_TRANSITIONS[existing.status] ?? [];
+      if (!allowed.includes(b.status)) {
+        throw new ConflictError(
+          `لا يمكن نقل حالة الرحلة من "${existing.status}" إلى "${b.status}"`,
+          { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد (حالة نهائية)"}` }
+        );
+      }
+    }
+    if (b.vehicleId && b.vehicleId !== existing.vehicleId) {
+      const [vehicle] = await rawQuery<any>(`SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2`, [b.vehicleId, scope.companyId]);
+      if (!vehicle) throw new ValidationError("المركبة غير موجودة في الأسطول");
+      if (vehicle.status === "maintenance") throw new ConflictError("المركبة قيد الصيانة");
+    }
+    if (b.driverId && b.driverId !== existing.driverId) {
+      const [driver] = await rawQuery<any>(`SELECT id, status, "licenseExpiry" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2`, [b.driverId, scope.companyId]);
+      if (!driver) throw new ValidationError("السائق غير موجود في الأسطول");
+      if (driver.status === "inactive") throw new ConflictError("السائق غير نشط");
+    }
+    const params: any[] = [];
+    const sets: string[] = [];
+    for (const key of ["seasonId","tripDate","fromLocation","toLocation","vehicleId","driverId","capacity","pilgrimCount","cost","status","notes"]) {
+      if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
+    }
+    sets.push(`"updatedAt"=NOW()`);
+    params.push(id); params.push(scope.companyId);
+    await rawExecute(`UPDATE umrah_transport SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
+    const [row] = await rawQuery(`SELECT * FROM umrah_transport WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_transport", entityId: id, after: b }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.updated", entity: "umrah_transport", entityId: id, details: JSON.stringify(b) }).catch(console.error);
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Update transport error"); }
+});
+
+router.post("/transport/:id/assign-pilgrims", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const transportId = Number(req.params.id);
+    const { pilgrimIds } = req.body;
+    if (!Array.isArray(pilgrimIds) || pilgrimIds.length === 0) {
+      throw new ValidationError("يجب تحديد معتمر واحد على الأقل");
+    }
+    const [transport] = await rawQuery<any>(`SELECT * FROM umrah_transport WHERE id=$1 AND "companyId"=$2`, [transportId, scope.companyId]);
+    if (!transport) throw new NotFoundError("رحلة النقل غير موجودة");
+    if (transport.status === "completed" || transport.status === "cancelled") {
+      throw new ConflictError("لا يمكن إضافة معتمرين لرحلة مكتملة أو ملغاة");
+    }
+    const newCount = (transport.pilgrimCount || 0) + pilgrimIds.length;
+    if (newCount > (transport.capacity || 45)) {
+      throw new ValidationError(`عدد المعتمرين (${newCount}) يتجاوز سعة المركبة (${transport.capacity || 45})`);
+    }
+    const placeholders = pilgrimIds.map((_: any, i: number) => `$${i + 4}`).join(",");
+    await rawExecute(
+      `UPDATE umrah_pilgrims SET "transportAssigned"=true, "updatedAt"=NOW() WHERE "companyId"=$1 AND "deletedAt" IS NULL AND id IN (${placeholders})`,
+      [scope.companyId, ...pilgrimIds]
+    );
+    await rawExecute(
+      `UPDATE umrah_transport SET "pilgrimCount"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+      [newCount, transportId, scope.companyId]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_transport", entityId: transportId, after: { assignedPilgrims: pilgrimIds.length, totalCount: newCount } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.pilgrims_assigned", entity: "umrah_transport", entityId: transportId, details: JSON.stringify({ pilgrimIds, count: pilgrimIds.length }) }).catch(console.error);
+    res.json({ transportId, assignedCount: pilgrimIds.length, totalPilgrimCount: newCount });
+  } catch (err) { handleRouteError(err, res, "Assign pilgrims to transport error"); }
 });
 
 router.get("/import-logs", requirePermission("umrah:read"), async (req, res) => {

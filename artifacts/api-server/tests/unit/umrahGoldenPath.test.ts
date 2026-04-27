@@ -38,18 +38,25 @@ describe("Umrah route structure", () => {
     expect(UMRAH_ROUTE).toContain('router.delete("/pilgrims/:id"');
   });
 
-  it("transport endpoints exist", () => {
+  it("transport CRUD endpoints exist", () => {
     expect(UMRAH_ROUTE).toContain('router.get("/transport"');
     expect(UMRAH_ROUTE).toContain('router.post("/transport"');
+    expect(UMRAH_ROUTE).toContain('router.patch("/transport/:id"');
+  });
+
+  it("transport pilgrim assignment endpoint exists", () => {
+    expect(UMRAH_ROUTE).toContain('"/transport/:id/assign-pilgrims"');
   });
 
   it("penalty endpoints exist", () => {
     expect(UMRAH_ROUTE).toContain('router.get("/penalties"');
+    expect(UMRAH_ROUTE).toContain('"/penalties/:id/waive"');
   });
 
   it("agent invoice endpoints exist", () => {
     expect(UMRAH_ROUTE).toContain('"/agent-invoices/generate"');
     expect(UMRAH_ROUTE).toContain('router.get("/agent-invoices"');
+    expect(UMRAH_ROUTE).toContain('"/agent-invoices/:id/record-payment"');
   });
 
   it("import and batch endpoints exist", () => {
@@ -284,6 +291,27 @@ describe("Umrah GL integration", () => {
     const endIdx = UMRAH_ROUTE.indexOf("router.", idx + 10);
     const section = UMRAH_ROUTE.slice(idx, endIdx);
     expect(section).toContain("postTransportExpenseGL");
+  });
+
+  it("penalty engine creates GL entries", () => {
+    const idx = UMRAH_ROUTE.indexOf('"/run-penalty-engine"');
+    const endIdx = UMRAH_ROUTE.indexOf("router.", idx + 10);
+    const section = UMRAH_ROUTE.slice(idx, endIdx);
+    expect(section).toContain("postPenaltyGL");
+  });
+
+  it("penalty waiver creates GL reversal", () => {
+    const idx = UMRAH_ROUTE.indexOf('"/penalties/:id/waive"');
+    const endIdx = UMRAH_ROUTE.indexOf("router.", idx + 10);
+    const section = UMRAH_ROUTE.slice(idx, endIdx);
+    expect(section).toContain("postPenaltyWaiverGL");
+  });
+
+  it("agent invoice payment uses applyTransition", () => {
+    const idx = UMRAH_ROUTE.indexOf('"/agent-invoices/:id/record-payment"');
+    const endIdx = UMRAH_ROUTE.indexOf("router.", idx + 10);
+    const section = UMRAH_ROUTE.slice(idx, endIdx);
+    expect(section).toContain("applyTransition");
   });
 });
 

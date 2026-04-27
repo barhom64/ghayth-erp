@@ -180,10 +180,11 @@ describe("Support SLA enforcement", () => {
 });
 
 describe("Support field visit contract", () => {
-  it("sets ticket status to field_visit", () => {
+  it("sets ticket status to field_visit via applyTransition", () => {
     const idx = SUPPORT_ROUTE.indexOf('"/tickets/:id/field-visit"');
     const section = SUPPORT_ROUTE.slice(idx, idx + 1000);
-    expect(section).toContain("status='field_visit'");
+    expect(section).toContain("applyTransition");
+    expect(section).toContain('"field_visit"');
   });
 
   it("calculates distance using haversine formula", () => {

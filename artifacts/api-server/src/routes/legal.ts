@@ -726,47 +726,32 @@ router.post("/cases/:id/close", requirePermission("legal:write"), async (req, re
     const scope = req.scope!;
     const id = Number(req.params.id);
     const b = req.body || {};
-    const [lc] = await rawQuery<any>(
-      `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    if (!lc) throw new NotFoundError("القضية غير موجودة");
-    if (lc.status === "closed") {
-      throw new ConflictError(
-        "القضية مغلقة بالفعل",
-        { field: "status", fix: "لا حاجة لإغلاق قضية مغلقة" }
-      );
-    }
     if (!b.closureReason || typeof b.closureReason !== "string" || !b.closureReason.trim()) {
       throw new ValidationError("سبب الإغلاق مطلوب", { field: "closureReason", fix: "أدخل سبب إغلاق القضية" });
     }
 
-    await rawExecute(
-      `UPDATE legal_cases SET status='closed', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
-      [id, scope.companyId]
-    );
-
-    // Cancel all open obligations tied to this case
-    await cancelObligation(scope.companyId, "legal_case", id);
-
-    await emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "legal.case.closed",
+    const updated = await applyTransition<any>({
       entity: "legal_cases",
-      entityId: id,
-      details: `إغلاق قضية ${lc.title}: ${b.closureReason}`,
+      id,
+      scope,
+      action: "legal.case.closed",
+      fromStates: ["open", "in_progress", "on_hold"],
+      toState: "closed",
+      reason: b.closureReason,
+      extraWhere: '"deletedAt" IS NULL',
+      onApply: async (_row, _client) => {
+        // Cancel all open obligations tied to this case
+        await cancelObligation(scope.companyId, "legal_case", id);
+      },
+      after: { reason: b.closureReason, outcome: b.outcome },
     });
-    await createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "close", entity: "legal_cases", entityId: id,
-      before: { status: lc.status },
-      after: { status: "closed", reason: b.closureReason, outcome: b.outcome },
-    }).catch(console.error);
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ ...updated, event: "legal.case.closed" });
-  } catch (err) { handleRouteError(err, res, "Close case error:"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Close case error:");
+  }
 });
 
 router.get("/cases/:caseId/sessions", requirePermission("legal:read"), async (req, res) => {
@@ -839,7 +824,16 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
     }
 
     if (legalCase.status === 'open') {
-      await rawExecute(`UPDATE legal_cases SET status='in_progress', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [caseId, scope.companyId]);
+      await applyTransition({
+        entity: "legal_cases",
+        id: caseId,
+        scope,
+        action: "legal.case.in_progress",
+        fromStates: ["open"],
+        toState: "in_progress",
+        extraWhere: '"deletedAt" IS NULL',
+        reason: `جلسة جديدة بتاريخ ${b.sessionDate}`,
+      });
     }
 
     // Register obligation for this hearing
