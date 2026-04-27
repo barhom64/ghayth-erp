@@ -19,6 +19,8 @@ import {
   computeVat,
   currentPeriod,
   currentYear,
+  generateRef,
+  toDateISO,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
@@ -360,7 +362,7 @@ journalRouter.patch("/expenses/:id", requirePermission("finance:update"), async 
     const { description } = req.body as any;
     const [existing] = await rawQuery<any>(`SELECT id, "createdAt" FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     if (!existing) throw new NotFoundError("المصروف غير موجود");
-    const expenseDate = new Date(existing.createdAt).toISOString().split("T")[0];
+    const expenseDate = toDateISO(existing.createdAt);
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, expenseDate);
     if (!periodCheck.open) {
       throw new ConflictError(`لا يمكن تعديل مصروف في فترة مالية مُقفلة: ${periodCheck.periodName ?? ""}`);
@@ -790,7 +792,7 @@ journalRouter.post("/journal", requirePermission("finance:create"), async (req, 
     if (Math.abs(totalDebit - totalCredit) > 0.01) throw new ValidationError(`القيد غير متوازن: مدين ${totalDebit.toFixed(2)} ≠ دائن ${totalCredit.toFixed(2)}`, { field: "lines", fix: "تأكد من تساوي المدين والدائن" });
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('journal_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
-    const ref = `JE-${currentYear()}-${String(seqRow.seq).padStart(5, "0")}`;
+    const ref = generateRef("JE", seqRow.seq, 5);
     const { insertId } = await rawExecute(
       `INSERT INTO journal_entries ("companyId","branchId",ref,description,status,"createdAt") VALUES ($1,$2,$3,$4,'posted',$5)`,
       [scope.companyId, scope.branchId, ref, description, date || new Date().toISOString()]
@@ -1093,7 +1095,7 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", requirePermission("
     if (force && missing.length > 0) {
       for (const p of missing) {
         const startDate = `${p}-01`;
-        const endDate = new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)), 0).toISOString().split("T")[0];
+        const endDate = toDateISO(new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)), 0));
         const [existing] = await rawQuery<any>(
           `SELECT id FROM financial_periods WHERE "companyId"=$1 AND to_char("startDate",'YYYY-MM')=$2 AND "deletedAt" IS NULL LIMIT 1`,
           [scope.companyId, p]

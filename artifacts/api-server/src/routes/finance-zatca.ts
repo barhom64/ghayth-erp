@@ -11,7 +11,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, toDateISO } from "../lib/businessHelpers.js";
 import crypto from "node:crypto";
 import QRCode from "qrcode";
 
@@ -385,7 +385,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), asy
       [Number(id)]
     );
 
-    const issueDate = new Date(invoice.createdAt).toISOString().split("T")[0];
+    const issueDate = toDateISO(invoice.createdAt);
     const issueTime = new Date(invoice.createdAt).toISOString().split("T")[1].substring(0, 8);
 
     let uuid = invoice.zatcaUuid;
@@ -480,7 +480,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
       [Number(id)]
     );
 
-    const issueDate = new Date(invoice.createdAt).toISOString().split("T")[0];
+    const issueDate = toDateISO(invoice.createdAt);
     const issueTime = new Date(invoice.createdAt).toISOString().split("T")[1].substring(0, 8);
     const uuid = invoice.zatcaUuid || crypto.randomUUID();
 
@@ -601,7 +601,7 @@ zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"
       throw new ValidationError("المصروف غير مربوط بالهيئة");
     }
 
-    const issueDate = new Date(expense.createdAt).toISOString().split("T")[0];
+    const issueDate = toDateISO(expense.createdAt);
     const uuid = expense.zatcaUuid || crypto.randomUUID();
 
     const sellerName = settings.organizationName || "المنشأة";

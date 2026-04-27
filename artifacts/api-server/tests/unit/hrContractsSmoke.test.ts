@@ -69,7 +69,7 @@ describe("Contract creation", () => {
 
   it("generates sequential contract reference number", () => {
     expect(CONTRACTS_ROUTE).toContain("contract_number_seq");
-    expect(CONTRACTS_ROUTE).toContain("CTR-");
+    expect(CONTRACTS_ROUTE).toContain('"CTR"');
   });
 
   it("creates contract with draft status", () => {

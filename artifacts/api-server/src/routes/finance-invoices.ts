@@ -23,6 +23,7 @@ import {
   todayISO,
   currentPeriod,
   currentYear,
+  toDateISO,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -324,7 +325,7 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
     }
 
     const invoiceDate = invoiceBodyDate
-      ? new Date(invoiceBodyDate).toISOString().split("T")[0]
+      ? toDateISO(invoiceBodyDate)
       : todayISO();
     const periodCheck = await checkFinancialPeriodOpen(effectiveCompanyId, invoiceDate);
     if (!periodCheck.open) {
@@ -356,7 +357,7 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
     if (!finalDueDate && parsedTerms != null) {
       const due = new Date();
       due.setDate(due.getDate() + parsedTerms);
-      finalDueDate = due.toISOString().split("T")[0];
+      finalDueDate = toDateISO(due);
     }
 
     let insertId!: number;
@@ -410,7 +411,7 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
         await client.query(
           `INSERT INTO collection_follow_ups ("companyId","invoiceId","scheduledDate",type,notes,status,"assignedTo")
            VALUES ($1,$2,$3,'collection_task',$4,'pending',$5)`,
-          [effectiveCompanyId, insertId, collectionDate.toISOString().split("T")[0],
+          [effectiveCompanyId, insertId, toDateISO(collectionDate),
             `مهمة تحصيل فاتورة ${ref} – بعد 30 يوم من تاريخ الاستحقاق`, scope.activeAssignmentId]
         );
       }

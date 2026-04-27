@@ -5,7 +5,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
-import { createAuditLog, createNotification, emitEvent, getLegalResponsible, currentPeriod, currentYear } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, getLegalResponsible, currentPeriod, currentYear, generateRef } from "../lib/businessHelpers.js";
 
 /* ── Zod Schemas ───────────────────────────────────────────────── */
 
@@ -232,7 +232,7 @@ router.post("/", requirePermission("requests:write"), async (req, res) => {
       ).map((a: any) => ({ name: a.name, size: a.size, type: a.type || "", dataUrl: a.dataUrl || "" }));
     }
     const [seqRow] = await rawQuery<any>(`SELECT nextval('request_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
-    const ref = `REQ-${currentYear()}-${String(seqRow.seq).padStart(4, "0")}`;
+    const ref = generateRef("REQ", seqRow.seq);
 
     const r = await rawExecute(
       `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments, ref, "requestDate", "branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,CURRENT_DATE,$12)`,

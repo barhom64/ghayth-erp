@@ -708,7 +708,7 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
          FROM employee_assignments WHERE id = $1`,
       [memo.assignmentId]
     );
-    if (!assignment) throw new Error("التعيين غير موجود");
+    if (!assignment) throw new NotFoundError("التعيين غير موجود");
 
     let appliedLabel = "";
     let baseAmount = 0;

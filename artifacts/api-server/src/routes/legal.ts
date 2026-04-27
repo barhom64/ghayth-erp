@@ -9,7 +9,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { z } from "zod";
@@ -902,7 +902,7 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
             subtotal: billingAmount,
             vatAmount,
             total: billingAmount + vatAmount,
-            dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+            dueDate: toDateISO(new Date(Date.now() + 30 * 86400000)),
             sourceType: "legal_sessions",
             sourceId: insertId,
           }

@@ -15,6 +15,7 @@ import {
   getManagerAssignmentId,
   todayISO,
   currentYear,
+  toDateISO,
 } from "../lib/businessHelpers.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -461,7 +462,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
       await client.query(
         `INSERT INTO employee_contracts ("companyId","employeeId","assignmentId","contractType","startDate","probationEndDate","probationStatus",status)
          VALUES ($1,$2,$3,$4,$5,$6,'active','active')`,
-        [scope.companyId, empId, assignmentId, contractType, effectiveHireDate, probEnd.toISOString().split("T")[0]]
+        [scope.companyId, empId, assignmentId, contractType, effectiveHireDate, toDateISO(probEnd)]
       );
 
       // ── Step 7: Create 4 onboarding tasks ──
@@ -477,7 +478,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         await client.query(
           `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status)
            VALUES ($1,$2,$3,$4,$5,'pending')`,
-          [scope.companyId, empId, assignmentId, taskTitle, dueDateOnboarding.toISOString().split("T")[0]]
+          [scope.companyId, empId, assignmentId, taskTitle, toDateISO(dueDateOnboarding)]
         );
       }
 
@@ -623,7 +624,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
       ...employee,
       assignmentId,
       onboardingTasksCreated: 4,
-      probationEndDate: (() => { const d = new Date(effectiveHireDate); d.setDate(d.getDate() + Number(probationDays)); return d.toISOString().split("T")[0]; })(),
+      probationEndDate: (() => { const d = new Date(effectiveHireDate); d.setDate(d.getDate() + Number(probationDays)); return toDateISO(d); })(),
       userAccount: userId ? {
         userId,
         email: email || null,

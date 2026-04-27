@@ -4,7 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, toDateISO } from "../lib/businessHelpers.js";
 import { z } from "zod";
 
 const dataRequestSchema = z.object({
@@ -174,14 +174,14 @@ router.post("/data-request", authMiddleware, requirePermission("admin:write"), a
         requesterName ?? scope.userName,
         requesterEmail ?? null,
         notes ?? null,
-        dueDate.toISOString().split("T")[0]
+        toDateISO(dueDate)
       ]
     );
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "create_data_request",
       entity: "data_access_requests", entityId: insertId,
-      after: { requestType, requesterName: requesterName ?? scope.userName, dueDate: dueDate.toISOString().split("T")[0] },
+      after: { requestType, requesterName: requesterName ?? scope.userName, dueDate: toDateISO(dueDate) },
     }).catch(console.error);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "pdpl.data_request.created", entity: "data_access_requests", entityId: insertId, details: JSON.stringify({ requestType, requesterName: requesterName ?? scope.userName }) }).catch(console.error);
 
@@ -189,7 +189,7 @@ router.post("/data-request", authMiddleware, requirePermission("admin:write"), a
       id: insertId,
       message: "تم استلام طلبك وسيتم الرد خلال 30 يوماً وفق متطلبات PDPL",
       requestType,
-      dueDate: dueDate.toISOString().split("T")[0]
+      dueDate: toDateISO(dueDate)
     });
   } catch (err) {
     handleRouteError(err, res, "Data request error:");
