@@ -18,6 +18,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { MultiExportButton } from "@/components/shared/export-buttons";
 import { PageShell } from "@/components/page-shell";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { ErrorState } from "@/components/shared/loading-error-states";
 
 function exportCSV(rows: any[], headers: string[], filename: string) {
   if (!rows.length) return;
@@ -141,11 +142,13 @@ function TrialBalanceNode({ node, level = 0 }: { node: any; level?: number }) {
 }
 
 function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; startDate?: string; endDate?: string }) {
-  const { data, isLoading } = useApiQuery<any>(["trial-balance", dateParams], `/finance/reports/trial-balance${dateParams ? `?${dateParams}` : ""}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["trial-balance", dateParams], `/finance/reports/trial-balance${dateParams ? `?${dateParams}` : ""}`);
   const rows = data?.data || [];
   const summary = data?.summary || {};
   const byType = data?.byType || {};
   const [viewMode, setViewMode] = useState<"tree" | "flat">("tree");
+
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const tree = useMemo(() => {
     if (!rows.length) return [];
@@ -304,12 +307,13 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
 }
 
 function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: string; startDate?: string; endDate?: string }) {
-  const { data, isLoading } = useApiQuery<any>(["income-statement", dateParams], `/finance/reports/income-statement${dateParams ? `?${dateParams}` : ""}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["income-statement", dateParams], `/finance/reports/income-statement${dateParams ? `?${dateParams}` : ""}`);
   const revenues = data?.revenues || [];
   const expenses = data?.expenses || [];
   const summary = data?.summary || {};
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const totalRevenue = Number(summary.totalRevenue || 0);
   const totalExpenses = Number(summary.totalExpenses || 0);
@@ -446,13 +450,14 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
 }
 
 function BalanceSheet({ dateParams }: { dateParams: string }) {
-  const { data, isLoading } = useApiQuery<any>(["balance-sheet", dateParams], `/finance/reports/balance-sheet${dateParams ? `?${dateParams}` : ""}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["balance-sheet", dateParams], `/finance/reports/balance-sheet${dateParams ? `?${dateParams}` : ""}`);
   const summary = data?.summary || {};
   const assets = data?.assets || [];
   const liabilities = data?.liabilities || [];
   const equity = data?.equity || [];
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const totalAssets = Number(summary.totalAssets || 0);
   const totalLiabilities = Number(summary.totalLiabilities || 0);
@@ -543,12 +548,13 @@ function BalanceSheet({ dateParams }: { dateParams: string }) {
 }
 
 function CashFlow({ dateParams }: { dateParams: string }) {
-  const { data, isLoading } = useApiQuery<any>(["cash-flow", dateParams], `/finance/reports/cash-flow${dateParams ? `?${dateParams}` : ""}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["cash-flow", dateParams], `/finance/reports/cash-flow${dateParams ? `?${dateParams}` : ""}`);
   const summary = data?.summary || {};
   const inflows = data?.inflows || [];
   const outflows = data?.outflows || [];
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const inflowColumns: DataTableColumn<any>[] = [
     { key: "description", header: "البيان", render: (f) => <span className="font-medium">{f.description || "-"}</span> },
@@ -626,9 +632,11 @@ function CashFlow({ dateParams }: { dateParams: string }) {
 function CashBankStatement({ dateParams }: { dateParams: string }) {
   const [accountCode, setAccountCode] = useState("1100");
   const params = `accountCode=${accountCode}${dateParams ? `&${dateParams}` : ""}`;
-  const { data, isLoading } = useApiQuery<any>(["cash-bank-statement", params], `/finance/reports/cash-bank-statement?${params}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["cash-bank-statement", params], `/finance/reports/cash-bank-statement?${params}`);
   const entries = data?.entries || [];
   const summary = data?.summary || {};
+
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const cashBankColumns: DataTableColumn<any>[] = [
     { key: "date", header: "التاريخ", render: (e) => <span className="text-xs text-gray-500">{e.date ? formatDateAr(e.date) : "-"}</span> },
@@ -697,12 +705,13 @@ function CashBankStatement({ dateParams }: { dateParams: string }) {
 }
 
 function CustodyAdvances({ dateParams }: { dateParams: string }) {
-  const { data, isLoading } = useApiQuery<any>(["custody-advances", dateParams], `/finance/reports/custody-advances${dateParams ? `?${dateParams}` : ""}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["custody-advances", dateParams], `/finance/reports/custody-advances${dateParams ? `?${dateParams}` : ""}`);
   const custodies = data?.custodies || [];
   const advances = data?.advances || [];
   const summary = data?.summary || {};
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const custodyColumns: DataTableColumn<any>[] = [
     { key: "ref", header: "المرجع", render: (c) => <span className="font-mono text-xs text-blue-600">{c.ref}</span> },
@@ -772,9 +781,11 @@ function CustodyAdvances({ dateParams }: { dateParams: string }) {
 function ExpensesAnalysis({ dateParams }: { dateParams: string }) {
   const [groupBy, setGroupBy] = useState("account");
   const params = `groupBy=${groupBy}${dateParams ? `&${dateParams}` : ""}`;
-  const { data, isLoading } = useApiQuery<any>(["expenses-analysis", params], `/finance/reports/expenses-analysis?${params}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["expenses-analysis", params], `/finance/reports/expenses-analysis?${params}`);
   const rows = data?.data || [];
   const summary = data?.summary || {};
+
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const expensesColumns: DataTableColumn<any>[] = [
     { key: "label", header: groupBy === "account" ? "الحساب" : groupBy === "branch" ? "الفرع" : "الموظف", searchable: true, render: (r) => <span className="font-medium">{r.label || "-"}</span> },
@@ -834,12 +845,13 @@ function ExpensesAnalysis({ dateParams }: { dateParams: string }) {
 }
 
 function RevenueAnalysis({ dateParams }: { dateParams: string }) {
-  const { data, isLoading } = useApiQuery<any>(["revenue-analysis", dateParams], `/finance/reports/revenue-analysis${dateParams ? `?${dateParams}` : ""}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["revenue-analysis", dateParams], `/finance/reports/revenue-analysis${dateParams ? `?${dateParams}` : ""}`);
   const byAccount = data?.byAccount || [];
   const byMonth = data?.byMonth || [];
   const summary = data?.summary || {};
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const byAccountColumns: DataTableColumn<any>[] = [
     {
@@ -917,9 +929,11 @@ function RevenueAnalysis({ dateParams }: { dateParams: string }) {
 function BudgetVariance() {
   const now = new Date();
   const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
-  const { data, isLoading } = useApiQuery<any>(["budget-variance", period], `/finance/reports/budget-variance?period=${period}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["budget-variance", period], `/finance/reports/budget-variance?period=${period}`);
   const rows = data?.data || [];
   const summary = data?.summary || {};
+
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const varianceColor = (v: number) => v >= 0 ? "#16a34a" : "#dc2626";
 
@@ -1018,11 +1032,13 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
 
   const enabled = !!entityId;
   const params = `entityType=${entityType}&entityId=${entityId}${dateParams ? `&${dateParams}` : ""}`;
-  const { data, isLoading } = useApiQuery<any>(
+  const { data, isLoading, isError } = useApiQuery<any>(
     ["entity-statement", params],
     `/finance/reports/entity-statement?${params}`,
     enabled
   );
+
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const rows = data?.rows || [];
   const summary = data?.summary || {};
