@@ -114,13 +114,15 @@ const createPilgrimSchema = z.object({
 });
 
 const createTransportSchema = z.object({
-  type: z.string().optional(),
-  provider: z.string().optional(),
-  pilgrimsCount: z.coerce.number().optional(),
-  vehicleNumber: z.string().optional(),
-  driverName: z.string().optional(),
-  departureDate: z.string().optional(),
-  arrivalDate: z.string().optional(),
+  seasonId: z.coerce.number().optional(),
+  tripDate: z.string(),
+  fromLocation: z.string(),
+  toLocation: z.string(),
+  vehicleId: z.coerce.number().optional(),
+  driverId: z.coerce.number().optional(),
+  capacity: z.coerce.number().optional(),
+  pilgrimCount: z.coerce.number().optional(),
+  cost: z.coerce.number().optional(),
   notes: z.string().optional(),
 });
 
@@ -1046,9 +1048,53 @@ router.get("/agent-invoices", requirePermission("umrah:read"), async (req, res) 
 router.get("/transport", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM umrah_transport WHERE "companyId"=$1 ORDER BY "tripDate" DESC`, [scope.companyId]);
+    const rows = await rawQuery(
+      `SELECT t.*, v."plateNumber" as "vehiclePlate", d.name as "driverName"
+       FROM umrah_transport t
+       LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId"
+       LEFT JOIN fleet_drivers d ON d.id = t."driverId"
+       WHERE t."companyId"=$1 ORDER BY t."tripDate" DESC`,
+      [scope.companyId]
+    );
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List transport error"); }
+});
+
+router.get("/transport/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const [row] = await rawQuery(
+      `SELECT t.*, v."plateNumber" as "vehiclePlate", v.make as "vehicleMake", v.model as "vehicleModel",
+              d.name as "driverName", d.phone as "driverPhone"
+       FROM umrah_transport t
+       LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId"
+       LEFT JOIN fleet_drivers d ON d.id = t."driverId"
+       WHERE t.id=$1 AND t."companyId"=$2`,
+      [req.params.id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("رحلة النقل غير موجودة");
+    const pilgrims = await rawQuery(
+      `SELECT id, "fullName", "passportNumber", nationality, status FROM umrah_pilgrims WHERE "companyId"=$1 AND "transportAssigned"=true AND "deletedAt" IS NULL ORDER BY "fullName"`,
+      [scope.companyId]
+    );
+    res.json({ ...row, pilgrims });
+  } catch (err) { handleRouteError(err, res, "Get transport error"); }
+});
+
+router.delete("/transport/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [existing] = await rawQuery<any>(`SELECT id, status FROM umrah_transport WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!existing) throw new NotFoundError("رحلة النقل غير موجودة");
+    if (existing.status === "in_progress") {
+      throw new ConflictError("لا يمكن حذف رحلة قيد التنفيذ");
+    }
+    await rawExecute(`DELETE FROM umrah_transport WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_transport", entityId: id }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.deleted", entity: "umrah_transport", entityId: id }).catch(console.error);
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Delete transport error"); }
 });
 
 router.post("/transport", requirePermission("umrah:write"), async (req, res) => {
@@ -1105,40 +1151,60 @@ router.patch("/transport/:id", requirePermission("umrah:write"), async (req, res
     const scope = req.scope!;
     const id = Number(req.params.id);
     const b = req.body;
-    const [existing] = await rawQuery<any>(`SELECT * FROM umrah_transport WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    if (!existing) throw new NotFoundError("رحلة النقل غير موجودة");
-    if (b.status !== undefined && b.status !== existing.status) {
-      const allowed = TRANSPORT_TRANSITIONS[existing.status] ?? [];
-      if (!allowed.includes(b.status)) {
-        throw new ConflictError(
-          `لا يمكن نقل حالة الرحلة من "${existing.status}" إلى "${b.status}"`,
-          { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد (حالة نهائية)"}` }
-        );
-      }
-    }
-    if (b.vehicleId && b.vehicleId !== existing.vehicleId) {
+    if (b.vehicleId) {
       const [vehicle] = await rawQuery<any>(`SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2`, [b.vehicleId, scope.companyId]);
       if (!vehicle) throw new ValidationError("المركبة غير موجودة في الأسطول");
       if (vehicle.status === "maintenance") throw new ConflictError("المركبة قيد الصيانة");
     }
-    if (b.driverId && b.driverId !== existing.driverId) {
+    if (b.driverId) {
       const [driver] = await rawQuery<any>(`SELECT id, status, "licenseExpiry" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2`, [b.driverId, scope.companyId]);
       if (!driver) throw new ValidationError("السائق غير موجود في الأسطول");
       if (driver.status === "inactive") throw new ConflictError("السائق غير نشط");
     }
-    const params: any[] = [];
-    const sets: string[] = [];
-    for (const key of ["seasonId","tripDate","fromLocation","toLocation","vehicleId","driverId","capacity","pilgrimCount","cost","status","notes"]) {
-      if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
+
+    if (b.status !== undefined) {
+      const fieldKeys = ["seasonId","tripDate","fromLocation","toLocation","vehicleId","driverId","capacity","pilgrimCount","cost","notes"] as const;
+      const setExtras: Record<string, any> = {};
+      for (const key of fieldKeys) { if (b[key] !== undefined) setExtras[key] = b[key]; }
+      const fromStates = Object.entries(TRANSPORT_TRANSITIONS)
+        .filter(([, targets]) => targets.includes(b.status))
+        .map(([from]) => from);
+
+      const row = await applyTransition({
+        entity: "umrah_transport",
+        id,
+        scope,
+        action: "umrah.transport.status_changed",
+        fromStates,
+        toState: b.status,
+        setExtras: Object.keys(setExtras).length > 0 ? setExtras : undefined,
+        skipUpdatedAt: true,
+      });
+      res.json(row);
+    } else {
+      const params: any[] = [];
+      const sets: string[] = [];
+      for (const key of ["seasonId","tripDate","fromLocation","toLocation","vehicleId","driverId","capacity","pilgrimCount","cost","notes"]) {
+        if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
+      }
+      if (sets.length === 0) {
+        const [row] = await rawQuery(`SELECT * FROM umrah_transport WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+        if (!row) throw new NotFoundError("رحلة النقل غير موجودة");
+        res.json(row); return;
+      }
+      params.push(id); params.push(scope.companyId);
+      await rawExecute(`UPDATE umrah_transport SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
+      const [row] = await rawQuery(`SELECT * FROM umrah_transport WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+      if (!row) throw new NotFoundError("رحلة النقل غير موجودة");
+      createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_transport", entityId: id, after: b }).catch(console.error);
+      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.updated", entity: "umrah_transport", entityId: id, details: JSON.stringify(b) }).catch(console.error);
+      res.json(row);
     }
-    sets.push(`"updatedAt"=NOW()`);
-    params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE umrah_transport SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
-    const [row] = await rawQuery(`SELECT * FROM umrah_transport WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_transport", entityId: id, after: b }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.updated", entity: "umrah_transport", entityId: id, details: JSON.stringify(b) }).catch(console.error);
-    res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update transport error"); }
+  } catch (err) {
+    const lr = lifecycleErrorResponse(err);
+    if (lr) { res.status(lr.status).json(lr.body); return; }
+    handleRouteError(err, res, "Update transport error");
+  }
 });
 
 router.post("/transport/:id/assign-pilgrims", requirePermission("umrah:write"), async (req, res): Promise<void> => {
@@ -1158,13 +1224,13 @@ router.post("/transport/:id/assign-pilgrims", requirePermission("umrah:write"), 
     if (newCount > (transport.capacity || 45)) {
       throw new ValidationError(`عدد المعتمرين (${newCount}) يتجاوز سعة المركبة (${transport.capacity || 45})`);
     }
-    const placeholders = pilgrimIds.map((_: any, i: number) => `$${i + 4}`).join(",");
+    const placeholders = pilgrimIds.map((_: any, i: number) => `$${i + 2}`).join(",");
     await rawExecute(
       `UPDATE umrah_pilgrims SET "transportAssigned"=true, "updatedAt"=NOW() WHERE "companyId"=$1 AND "deletedAt" IS NULL AND id IN (${placeholders})`,
       [scope.companyId, ...pilgrimIds]
     );
     await rawExecute(
-      `UPDATE umrah_transport SET "pilgrimCount"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+      `UPDATE umrah_transport SET "pilgrimCount"=$1 WHERE id=$2 AND "companyId"=$3`,
       [newCount, transportId, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_transport", entityId: transportId, after: { assignedPilgrims: pilgrimIds.length, totalCount: newCount } }).catch(console.error);

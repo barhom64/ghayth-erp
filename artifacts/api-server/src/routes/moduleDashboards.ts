@@ -214,7 +214,7 @@ router.get("/crm", async (req, res) => {
     const [opportunities, contacts, activities] = await Promise.all([
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'won') AS won, COUNT(*) FILTER (WHERE status = 'lost') AS lost, COALESCE(SUM(value), 0) AS "totalValue", COALESCE(SUM(value) FILTER (WHERE status = 'won'), 0) AS "wonValue" FROM crm_opportunities WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total FROM crm_contacts WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COUNT(*) FILTER (WHERE status = 'pending' OR status = 'planned') AS pending FROM crm_activities WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE a."completedAt" IS NOT NULL) AS completed, COUNT(*) FILTER (WHERE a."completedAt" IS NULL) AS pending FROM crm_activities a JOIN crm_opportunities o ON o.id = a."opportunityId" WHERE o."companyId" = $1 AND o."deletedAt" IS NULL`, [cid]),
     ]);
 
     const pipeline = await safeQuery(
