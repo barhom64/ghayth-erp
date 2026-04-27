@@ -137,7 +137,7 @@ class FleetEngineImpl implements DomainEngine {
     violation: { id: number; vehicleId?: number; amount: number }
   ) {
     const [payableCode, cashCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "credit", "2100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "debit", "2100"),
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
     ]);
 

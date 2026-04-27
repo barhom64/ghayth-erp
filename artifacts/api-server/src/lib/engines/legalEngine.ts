@@ -118,7 +118,7 @@ class LegalEngineImpl implements DomainEngine {
     const totalWithVat = session.billingAmount + session.vatAmount;
     const [feeExpenseCode, vatReceivableCode, apCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "legal_fee", "debit", "5400"),
-      financialEngine.resolveAccountCode(ctx.companyId, "legal_fee", "credit", "1400"),
+      financialEngine.resolveAccountCode(ctx.companyId, "vat_input", "debit", "1400"),
       financialEngine.resolveAccountCode(ctx.companyId, "legal_fee_payable", "credit", "2100"),
     ]);
 
