@@ -15,10 +15,10 @@ export default function AdminPostingFailures() {
   const [showResolved, setShowResolved] = useState(false);
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["posting-failures", String(showResolved)],
-    `/finance-hardening/posting-failures?resolved=${showResolved}`
+    `/finance/posting-failures?resolved=${showResolved}`
   );
   const resolveMutation = useApiMutation<any, any>(
-    (id: any) => `/finance-hardening/posting-failures/${id}/resolve`,
+    (id: any) => `/finance/posting-failures/${id}/resolve`,
     "PATCH",
     [["posting-failures"]],
   );
