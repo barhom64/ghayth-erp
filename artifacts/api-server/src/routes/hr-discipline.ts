@@ -21,6 +21,7 @@ import {
   emitEvent,
   getManagerAssignmentId,
   todayISO,
+  currentYear,
 } from "../lib/businessHelpers.js";
 import {
   resolvePenalty,
@@ -1084,7 +1085,7 @@ router.get("/employee/:employeeId/summary", requirePermission("hr:read"), async 
     if (!Number.isFinite(employeeId)) {
       throw new ValidationError("معرف الموظف غير صالح");
     }
-    const yearStart = `${new Date().getFullYear()}-01-01`;
+    const yearStart = `${currentYear()}-01-01`;
     const [stats] = await rawQuery<any>(
       `SELECT
          COUNT(*) FILTER (WHERE status NOT IN ('cancelled','rejected'))                    AS "totalActive",

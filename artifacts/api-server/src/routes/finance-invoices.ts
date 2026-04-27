@@ -21,6 +21,8 @@ import {
   computeVat,
   extractBaseFromGross,
   todayISO,
+  currentPeriod,
+  currentYear,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -341,7 +343,7 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('invoice_number_seq') AS seq`);
     const seqNum = Number(seqRow.seq);
-    const year = new Date().getFullYear();
+    const year = currentYear();
     const month = String(new Date().getMonth() + 1).padStart(2, "0");
     const ref = `INV-${year}${month}-${String(seqNum).padStart(4, "0")}`;
 
@@ -399,7 +401,7 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
 
       await client.query(
         `UPDATE budgets SET used = used + $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4`,
-        [baseAmount, effectiveCompanyId, invRevenueCode, new Date().toISOString().slice(0, 7)]
+        [baseAmount, effectiveCompanyId, invRevenueCode, currentPeriod()]
       ).catch(console.error);
 
       if (finalDueDate) {
@@ -957,7 +959,7 @@ invoicesRouter.get("/tax/summary", requirePermission("finance:read"), async (req
   try {
     const scope = req.scope!;
     const { period } = req.query as any;
-    const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
+    const targetPeriod = period ?? currentPeriod();
     const [outputVat] = await rawQuery<any>(`SELECT COALESCE(SUM("vatAmount"), 0) AS total FROM invoices WHERE "companyId" = $1 AND to_char("createdAt", 'YYYY-MM') = $2 AND "deletedAt" IS NULL`, [scope.companyId, targetPeriod]);
     const [inputVat] = await rawQuery<any>(`SELECT COALESCE(SUM(jl.debit), 0) AS total FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je.status = 'posted' WHERE je."companyId" = $1 AND jl."accountCode" = '2310' AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, targetPeriod]);
     const outputTotal = Number(outputVat?.total ?? 0);
@@ -1362,7 +1364,7 @@ invoicesRouter.post("/bad-debt/post", requirePermission("finance:create"), async
 
     const { period, asOf, rates, notes } = req.body as any;
 
-    const targetPeriod = period || new Date().toISOString().slice(0, 7);
+    const targetPeriod = period || currentPeriod();
     if (!/^\d{4}-\d{2}$/.test(targetPeriod)) {
       throw new ValidationError("صيغة الفترة غير صحيحة (YYYY-MM)");
     }
@@ -1941,7 +1943,7 @@ invoicesRouter.get("/dunning/history", requirePermission("finance:read"), async 
 invoicesRouter.get("/tax/declarations", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const currentYear = new Date().getFullYear();
+    const currentYear = currentYear();
     const declarations = [];
     for (let m = 1; m <= 12; m++) {
       const period = `${currentYear}-${String(m).padStart(2, "0")}`;

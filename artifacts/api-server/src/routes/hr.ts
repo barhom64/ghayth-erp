@@ -12,8 +12,8 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission, requireAnyPermission } from "../middlewares/permissionMiddleware.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import rateLimit from "express-rate-limit";
+import { haversineKm } from "../lib/algorithms.js";
 import {
-  haversineDistance,
   createNotification,
   emitEvent,
   createAuditLog,
@@ -22,6 +22,8 @@ import {
   processApprovalStep,
   checkFinancialPeriodOpen,
   todayISO,
+  currentPeriod,
+  currentYear,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
@@ -371,7 +373,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
 
     if (!isRemoteShift && lat !== undefined && lat !== null && lon !== undefined && lon !== null && assignment?.branchLat && assignment?.branchLon) {
       distanceMeters = Math.round(
-        haversineDistance(Number(lat), Number(lon), Number(assignment.branchLat), Number(assignment.branchLon))
+        haversineKm(Number(lat), Number(lon), Number(assignment.branchLat), Number(assignment.branchLon)) * 1000
       );
       isOutOfRange = distanceMeters > gpsRadius;
     }
@@ -661,7 +663,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
     let isCheckOutOutOfRange = false;
     if (lat !== undefined && lat !== null && lon !== undefined && lon !== null && assignment?.branchLat && assignment?.branchLon) {
       checkOutDistanceMeters = Math.round(
-        haversineDistance(Number(lat), Number(lon), Number(assignment.branchLat), Number(assignment.branchLon))
+        haversineKm(Number(lat), Number(lon), Number(assignment.branchLat), Number(assignment.branchLon)) * 1000
       );
       isCheckOutOutOfRange = checkOutDistanceMeters > gpsRadius;
       if (isCheckOutOutOfRange) {
@@ -813,7 +815,7 @@ router.get("/attendance", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { month } = req.query as { month?: string };
-    const monthStr = month ?? new Date().toISOString().slice(0, 7);
+    const monthStr = month ?? currentPeriod();
 
     const filters = parseScopeFilters(req);
     const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'a."companyId"', branchColumn: 'a."branchId"', enforceBranchScope: true });
@@ -917,7 +919,7 @@ router.get("/leave-balance", requirePermission("hr:read"), async (req, res) => {
     const scope = req.scope!;
     const { employeeId: qEmployeeId } = req.query as { employeeId?: string };
     const targetEmployeeId = qEmployeeId ? Number(qEmployeeId) : scope.employeeId;
-    const year = new Date().getFullYear();
+    const year = currentYear();
     const balancesFromTable = await rawQuery<any>(
       `SELECT lb.*, lt.name
        FROM hr_leave_balances lb
@@ -1229,7 +1231,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       );
       if (ass?.hireDate) {
         const hireDate = new Date(ass.hireDate);
-        const monthsOfService = (new Date().getFullYear() - hireDate.getFullYear()) * 12 + (new Date().getMonth() - hireDate.getMonth());
+        const monthsOfService = (currentYear() - hireDate.getFullYear()) * 12 + (new Date().getMonth() - hireDate.getMonth());
         if (monthsOfService < leaveType.minServiceMonths) {
           throw new ConflictError(
             `يشترط مدة خدمة لا تقل عن ${leaveType.minServiceMonths} شهر. مدة خدمتك: ${monthsOfService} شهر`,
@@ -2119,7 +2121,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
       });
     }
     const { month } = req.body as { month?: string };
-    const targetPeriod = month ?? new Date().toISOString().slice(0, 7);
+    const targetPeriod = month ?? currentPeriod();
 
     // P02-S5-CRIT — every other GL writer in this file (HR accruals at
     // hr.ts:5082, expense claims, etc.) and across the codebase
@@ -2611,7 +2613,7 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
       });
     }
 
-    const period = reqPeriod || new Date().toISOString().slice(0, 7);
+    const period = reqPeriod || currentPeriod();
     const incidentDate = reqIncidentDate || new Date().toISOString().slice(0, 10);
     const effectiveSeverity = severity ?? "medium";
     const effectiveDeduction = Number(deduction ?? 0);
@@ -2903,7 +2905,7 @@ router.post("/performance", requirePermission("hr:create"), async (req, res) => 
 router.get("/attendance-stats", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const month = (req.query.month as string) ?? new Date().toISOString().slice(0, 7);
+    const month = (req.query.month as string) ?? currentPeriod();
     const [present] = await rawQuery<any>(
       `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='present'`,
       [scope.companyId, month]
@@ -3290,7 +3292,7 @@ router.get("/payroll-summary", requirePermission("hr:read"), async (req, res) =>
   try {
     const scope = req.scope!;
     const { period } = req.query as { period?: string };
-    const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
+    const targetPeriod = period ?? currentPeriod();
 
     const lines = await rawQuery<any>(
       `SELECT pl.*, e.name AS "employeeName", e."empNumber", ea."jobTitle", ea."branchId", b.name AS "branchName"
@@ -3345,7 +3347,7 @@ router.get("/payroll-summary", requirePermission("hr:read"), async (req, res) =>
 router.get("/violations-stats", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const currentMonth = new Date().toISOString().slice(0, 7);
+    const currentMonth = currentPeriod();
     const [total] = await rawQuery<any>(
       `SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
     );
@@ -3601,7 +3603,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
     }
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('letter_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
-    const letterRef = `LTR-${new Date().getFullYear()}-${String(seqRow.seq).padStart(4, "0")}`;
+    const letterRef = `LTR-${currentYear()}-${String(seqRow.seq).padStart(4, "0")}`;
 
     const { insertId } = await rawExecute(
       `INSERT INTO official_letters ("companyId","employeeId",type,subject,content,status,"createdByAssignmentId",ref,"branchId")
@@ -3667,7 +3669,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
 router.get("/monthly-attendance", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const month = (req.query.month as string) ?? new Date().toISOString().slice(0, 7);
+    const month = (req.query.month as string) ?? currentPeriod();
     const rows = await rawQuery<any>(
       `SELECT ema.*, e.name AS "employeeName", e."empNumber"
        FROM employee_monthly_attendance ema
@@ -4379,7 +4381,7 @@ router.get("/stats", requirePermission("hr:read"), async (req, res) => {
 router.get("/deductions", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const month = (req.query.month as string) ?? new Date().toISOString().slice(0, 7);
+    const month = (req.query.month as string) ?? currentPeriod();
     const rows = await rawQuery<any>(
       `SELECT ad.*, e.name AS "employeeName"
        FROM attendance_deductions ad
@@ -6112,7 +6114,7 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
   try {
     const scope = req.scope!;
     const { period } = (req.body || {}) as { period?: string };
-    const targetPeriod = period || new Date().toISOString().slice(0, 7);
+    const targetPeriod = period || currentPeriod();
 
     if (!/^\d{4}-\d{2}$/.test(targetPeriod)) {
       throw new ValidationError("صيغة الفترة غير صحيحة (YYYY-MM)", { field: "period" });
@@ -6243,7 +6245,7 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
 router.get("/accruals/preview", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const period = (req.query.period as string) || new Date().toISOString().slice(0, 7);
+    const period = (req.query.period as string) || currentPeriod();
 
     if (!/^\d{4}-\d{2}$/.test(period)) {
       throw new ValidationError("صيغة الفترة غير صحيحة (YYYY-MM)", { field: "period" });
@@ -6316,7 +6318,7 @@ router.get("/turnover-report", requirePermission("hr:read"), async (req, res) =>
   try {
     const scope = req.scope!;
     const { year } = req.query as any;
-    const targetYear = year ? Number(year) : new Date().getFullYear();
+    const targetYear = year ? Number(year) : currentYear();
 
     const [totalActive] = await rawQuery<any>(
       `SELECT COUNT(DISTINCT "employeeId") AS count FROM employee_assignments
@@ -6676,7 +6678,7 @@ router.get("/excuse-requests", requirePermission("hr:read"), async (req, res) =>
   try {
     const scope = req.scope!;
     const { status, month } = req.query as any;
-    const targetMonth = month || new Date().toISOString().slice(0, 7);
+    const targetMonth = month || currentPeriod();
     let where = `e."companyId" = $1 AND TO_CHAR(e."excuseDate", 'YYYY-MM') = $2`;
     const params: any[] = [scope.companyId, targetMonth];
     if (status) {

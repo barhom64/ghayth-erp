@@ -12,7 +12,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
-import crypto from "crypto";
+import crypto from "node:crypto";
 import QRCode from "qrcode";
 
 export const zatcaRouter = Router();

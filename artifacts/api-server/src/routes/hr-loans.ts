@@ -23,10 +23,11 @@ import {
   getManagerAssignmentId,
   initiateApprovalChain,
   processApprovalStep,
+  currentPeriod,
 } from "../lib/businessHelpers.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
-import { generateSequentialNumber, nextPeriod as nextPeriodHelper, currentPeriod, advancePeriod as advancePeriodHelper } from "../lib/hrHelpers.js";
+import { generateSequentialNumber, nextPeriod as nextPeriodHelper, advancePeriod as advancePeriodHelper } from "../lib/hrHelpers.js";
 import { HR_TABLES, NUMBER_PREFIXES, LOAN_STATUS } from "../lib/hrEnums.js";
 
 const router = Router();

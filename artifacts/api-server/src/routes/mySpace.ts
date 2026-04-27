@@ -2,7 +2,7 @@ import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
-import { todayISO } from "../lib/businessHelpers.js";
+import { todayISO, currentPeriod, currentYear } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -11,7 +11,7 @@ router.get("/", async (req, res) => {
   try {
     const scope = req.scope!;
     const today = todayISO();
-    const year = new Date().getFullYear();
+    const year = currentYear();
     const period = today.slice(0, 7);
 
     const [attendance] = await rawQuery<any>(
@@ -573,7 +573,7 @@ router.get("/attendance", async (req, res) => {
   try {
     const scope = req.scope!;
     const { month } = req.query as Record<string, string>;
-    const monthStr = month ?? new Date().toISOString().slice(0, 7);
+    const monthStr = month ?? currentPeriod();
     const rows = await rawQuery<any>(
       `SELECT a.id, a.date, a."checkIn", a."checkOut", a."lateMinutes", a.status,
               COALESCE(a."overtimeMinutes", 0) AS "overtimeMinutes",

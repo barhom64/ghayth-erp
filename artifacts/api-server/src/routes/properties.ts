@@ -12,7 +12,7 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
@@ -2114,7 +2114,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
     let invoiceId: number | null = null;
     if (cost > 0 && !b.coveredByContract) {
       const monthNum = String(new Date().getMonth() + 1).padStart(2, "0");
-      const yearShort = String(new Date().getFullYear()).slice(2);
+      const yearShort = String(currentYear()).slice(2);
       const ref = `INV-MAINT-${yearShort}${monthNum}-${id}`;
       const vatAmount = cost * 0.15;
       const { propertiesEngine } = await import("../lib/engines/index.js");
@@ -2802,7 +2802,7 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
       if (updatedCost > 0) {
         try {
           const monthNum = String(new Date().getMonth() + 1).padStart(2, "0");
-          const yearShort = String(new Date().getFullYear()).slice(2);
+          const yearShort = String(currentYear()).slice(2);
           const ref = `INV-MAINT-${yearShort}${monthNum}-${id}`;
           const vatAmount = updatedCost * 0.15;
           const { propertiesEngine } = await import("../lib/engines/index.js");

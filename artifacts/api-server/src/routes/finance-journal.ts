@@ -17,6 +17,8 @@ import {
   reverseAccountBalances,
   checkFinancialPeriodOpen,
   computeVat,
+  currentPeriod,
+  currentYear,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
@@ -256,7 +258,7 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
       );
     }
 
-    const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
+    const targetPeriod = period ?? currentPeriod();
     const sourceAcct = sourceAccountCode || "1100";
 
     if (accountCode && amount) {
@@ -788,7 +790,7 @@ journalRouter.post("/journal", requirePermission("finance:create"), async (req, 
     if (Math.abs(totalDebit - totalCredit) > 0.01) throw new ValidationError(`القيد غير متوازن: مدين ${totalDebit.toFixed(2)} ≠ دائن ${totalCredit.toFixed(2)}`, { field: "lines", fix: "تأكد من تساوي المدين والدائن" });
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('journal_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
-    const ref = `JE-${new Date().getFullYear()}-${String(seqRow.seq).padStart(5, "0")}`;
+    const ref = `JE-${currentYear()}-${String(seqRow.seq).padStart(5, "0")}`;
     const { insertId } = await rawExecute(
       `INSERT INTO journal_entries ("companyId","branchId",ref,description,status,"createdAt") VALUES ($1,$2,$3,$4,'posted',$5)`,
       [scope.companyId, scope.branchId, ref, description, date || new Date().toISOString()]

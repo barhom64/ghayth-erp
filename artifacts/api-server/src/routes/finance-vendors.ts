@@ -8,7 +8,7 @@ import {
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog, currentPeriod } from "../lib/businessHelpers.js";
 import { applyTransition } from "../lib/lifecycleEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
@@ -193,7 +193,7 @@ vendorsRouter.get("/stats", requirePermission("finance:read"), async (req, res) 
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
     const { where, params, nextParamIndex } = buildScopedWhere(scope, filters);
-    const monthStart = new Date().toISOString().slice(0, 7) + "-01";
+    const monthStart = currentPeriod() + "-01";
     params.push(monthStart);
 
     const [stats] = await rawQuery<any>(

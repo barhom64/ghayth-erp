@@ -1,6 +1,6 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { sendPushToCompany } from "./pushService.js";
-import crypto from "crypto";
+import crypto from "node:crypto";
 
 export type EngineChannel = "in_app" | "email" | "sms" | "whatsapp" | "push" | "webhook";
 

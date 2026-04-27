@@ -8,7 +8,7 @@ import {
   ValidationError,
   NotFoundError,
 } from "../lib/errorHandler.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, currentYear } from "../lib/businessHelpers.js";
 
 const correspondenceRouter = Router();
 correspondenceRouter.use(authMiddleware);
@@ -34,7 +34,7 @@ async function generateRef(direction: "outgoing" | "incoming", companyId: number
   const prefix = direction === "outgoing" ? "OUT" : "IN";
   const seqName = direction === "outgoing" ? "correspondence_outgoing_seq" : "correspondence_incoming_seq";
   const [row] = await rawQuery<any>(`SELECT nextval($1::regclass) AS seq`, [seqName]);
-  const year = new Date().getFullYear();
+  const year = currentYear();
   return `${prefix}-${year}-${String(row.seq).padStart(4, "0")}`;
 }
 

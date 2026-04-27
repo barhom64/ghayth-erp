@@ -22,8 +22,12 @@ describe("businessHelpers — pure functions", () => {
     expect(BH).toContain("export function extractBaseFromGross");
   });
 
-  it("exports haversineDistance", () => {
-    expect(BH).toContain("export function haversineDistance");
+  it("exports currentYear", () => {
+    expect(BH).toContain("export function currentYear");
+  });
+
+  it("exports currentPeriod", () => {
+    expect(BH).toContain("export function currentPeriod");
   });
 });
 

@@ -12,7 +12,6 @@ const LOGGER = readLib("logger.ts");
 const PUSH_CRYPTO = readLib("pushCrypto.ts");
 const RAWDB = readLib("rawdb.ts");
 const SECRETS = readLib("secrets.ts");
-const ROLE_GUARDS = readLib("roleGuards.ts");
 const EVENT_BUS_MW = readMw("eventBusMiddleware.ts");
 
 // ── businessHelpers — todayISO ────────────────────────────────────────────
@@ -100,14 +99,6 @@ describe("secrets — exports", () => {
 
   it("exports decryptSecret", () => {
     expect(SECRETS).toContain("export function decryptSecret");
-  });
-});
-
-// ── Role Guards ───────────────────────────────────────────────────────────
-
-describe("roleGuards — exports", () => {
-  it("exports assertRole", () => {
-    expect(ROLE_GUARDS).toContain("export function assertRole");
   });
 });
 

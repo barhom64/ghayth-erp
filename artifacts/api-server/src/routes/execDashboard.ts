@@ -10,6 +10,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { currentPeriod } from "../lib/businessHelpers.js";
 import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 import { obligationSummary } from "../lib/obligationsEngine.js";
 
@@ -126,7 +127,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
 
     // ─── 7. BUDGET OVERAGES (current month) ───────────────────────────────
     const budgetOverages = await safe(async () => {
-      const period = new Date().toISOString().slice(0, 7);
+      const period = currentPeriod();
       const [y, m] = period.split("-").map(Number);
       const periodStart = `${y}-${String(m).padStart(2, "0")}-01`;
       const periodEnd = new Date(y, m, 0).toISOString().slice(0, 10);
@@ -218,7 +219,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
 
     // ─── 12. MONTH-TO-DATE FINANCIALS ─────────────────────────────────────
     const mtd = await safe(async () => {
-      const period = new Date().toISOString().slice(0, 7);
+      const period = currentPeriod();
       const [y, m] = period.split("-").map(Number);
       const start = `${y}-${String(m).padStart(2, "0")}-01`;
       const end = new Date(y, m, 0).toISOString().slice(0, 10);

@@ -10,7 +10,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createAuditLog, createNotification, emitEvent, todayISO } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO, currentYear } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -165,7 +165,7 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
     const plateNumber = b.plateNumber.trim();
     if (b.year !== undefined && b.year !== null) {
       const yr = Number(b.year);
-      const currentYear = new Date().getFullYear();
+      const currentYear = currentYear();
       if (!Number.isFinite(yr) || yr < 1950 || yr > currentYear + 1) {
         throw new ValidationError(`السنة غير صالحة — يجب أن تكون بين 1950 و${currentYear + 1}`, { field: "year", fix: "أدخل سنة صنع المركبة بصيغة صحيحة" });
       }

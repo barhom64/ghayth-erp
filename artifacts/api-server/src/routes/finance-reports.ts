@@ -10,6 +10,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { currentPeriod, currentYear } from "../lib/businessHelpers.js";
 
 export const reportsRouter = Router();
 reportsRouter.use(authMiddleware);
@@ -142,7 +143,7 @@ reportsRouter.get("/reports/cash-flow", requirePermission("finance:read"), async
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as any;
-    const from = startDate || new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10);
+    const from = startDate || new Date(currentYear(), 0, 1).toISOString().slice(0, 10);
     const to = endDate || new Date().toISOString().slice(0, 10);
 
     // Dynamically discover cash/bank accounts by type+code prefix (11xx or
@@ -861,7 +862,7 @@ reportsRouter.get("/reports/budget-variance", requirePermission("finance:read"),
     const scope = req.scope!;
     const { period, branchId } = req.query as any;
 
-    const targetPeriod = period || new Date().toISOString().slice(0, 7);
+    const targetPeriod = period || currentPeriod();
     const params: any[] = [scope.companyId, targetPeriod];
     const branchFilter = branchId ? ` AND b."branchId" = $${params.length + 1}` : "";
     if (branchId) params.push(branchId);

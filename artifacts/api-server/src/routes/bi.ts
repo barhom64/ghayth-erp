@@ -4,7 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
-import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, todayISO, currentYear } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -840,7 +840,7 @@ router.get("/reports/branch-performance", requirePermission("bi:read"), async (r
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to } = req.query as any;
-    const dateFrom = from || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
+    const dateFrom = from || new Date(currentYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
     const dateTo = to || todayISO();
 
     const branches = await rawQuery<any>(
@@ -924,7 +924,7 @@ router.get("/reports/vendor-performance", requirePermission("bi:read"), async (r
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to } = req.query as any;
-    const dateFrom = from || new Date(new Date().getFullYear(), 0, 1).toISOString().split("T")[0];
+    const dateFrom = from || new Date(currentYear(), 0, 1).toISOString().split("T")[0];
     const dateTo = to || todayISO();
 
     const rows = await rawQuery<any>(
@@ -1011,7 +1011,7 @@ router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) 
       const maintenanceCost = Number(r.maintenanceCost);
       const fuelCost = Number(r.fuelCost);
       const insuranceCost = Number(r.insuranceCost);
-      const yearsOld = r.year ? new Date().getFullYear() - Number(r.year) : 0;
+      const yearsOld = r.year ? currentYear() - Number(r.year) : 0;
       const depreciation = purchasePrice > 0 ? Math.round(purchasePrice * 0.2 * Math.min(yearsOld, 5)) : 0;
       const tco = purchasePrice + maintenanceCost + fuelCost + insuranceCost + depreciation;
       const odometer = Number(r.odometer ?? 0);
@@ -1041,7 +1041,7 @@ router.get("/reports/department-leave-balance", requirePermission("bi:read"), as
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const year = new Date().getFullYear();
+    const year = currentYear();
 
     const rows = await rawQuery<any>(
       `SELECT
@@ -1141,7 +1141,7 @@ router.get("/reports/training-roi", requirePermission("bi:read"), async (req, re
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to } = req.query as any;
-    const dateFrom = from || new Date(new Date().getFullYear(), 0, 1).toISOString().split("T")[0];
+    const dateFrom = from || new Date(currentYear(), 0, 1).toISOString().split("T")[0];
     const dateTo = to || todayISO();
 
     const [summary] = await rawQuery<any>(
