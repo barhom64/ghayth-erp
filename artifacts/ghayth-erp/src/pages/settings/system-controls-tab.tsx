@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 export function SystemControlsTab() {
-  const { data, refetch } = useApiQuery<any>(["system-controls"], "/settings/system-controls");
+  const { data, refetch, isLoading, isError, error } = useApiQuery<any>(["system-controls"], "/settings/system-controls");
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const controls = data?.data || {};
@@ -73,6 +74,9 @@ export function SystemControlsTab() {
       ]
     }
   ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
 
   return (
     <div className="space-y-4">
