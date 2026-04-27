@@ -12,6 +12,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   emitEvent,
+  createAuditLog,
   initiateApprovalChain,
   updateBudgetUsed,
   checkFinancialPeriodOpen,
