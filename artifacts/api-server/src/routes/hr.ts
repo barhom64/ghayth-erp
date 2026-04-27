@@ -24,6 +24,7 @@ import {
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
+import { applyTransition, LifecycleError } from "../lib/lifecycleEngine.js";
 import {
   computeLeaveImpact,
   computeTerminationImpact,
@@ -696,11 +697,11 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
 
     // ── Update attendance record ──
     await rawExecute(
-      `UPDATE attendance SET "checkOut" = $1, notes = COALESCE($2, notes), "checkOutLat" = $4, "checkOutLon" = $5, "overtimeMinutes" = $6 WHERE id = $3`,
+      `UPDATE attendance SET "checkOut" = $1, notes = COALESCE($2, notes), "checkOutLat" = $4, "checkOutLon" = $5, "overtimeMinutes" = $6 WHERE id = $3 AND "companyId" = $7`,
       [now.toISOString(), notes ?? null, existing.id,
         lat !== undefined && lat !== null ? Number(lat) : null,
         lon !== undefined && lon !== null ? Number(lon) : null,
-        overtimeMinutes]
+        overtimeMinutes, scope.companyId]
     );
 
     // ── Update monthly stats ──
@@ -724,8 +725,8 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
       if (approvedExcuse) {
         excusedEarlyLeave = true;
         await rawExecute(
-          `UPDATE hr_excuse_requests SET "updatedAt" = NOW() WHERE id = $1`,
-          [approvedExcuse.id]
+          `UPDATE hr_excuse_requests SET "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
+          [approvedExcuse.id, scope.companyId]
         );
       }
     }
@@ -1545,59 +1546,52 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
     const year = new Date(request.startDate).getFullYear();
 
     if (!approved) {
-      // Rejection: authorized role at current stage can reject
-      await rawExecute(
-        `UPDATE hr_leave_requests
-         SET status = 'rejected', "approvedBy" = $1, "approvedAt" = NOW(), "rejectedReason" = $2
-         WHERE id = $3 AND "companyId" = $4`,
-        [scope.activeAssignmentId, reason ?? null, Number(id), scope.companyId]
-      );
-      if (currentStage) {
-        await rawExecute(
-          `UPDATE leave_approval_stages
-           SET status = 'rejected', decision = $1, "decidedBy" = $2, "decidedAt" = NOW()
-           WHERE id = $3`,
-          [reason ?? "مرفوض", scope.activeAssignmentId, currentStage.id]
-        );
-      }
-
-      // Restore reserved balance
-      await rawExecute(
-        `UPDATE hr_leave_balances
-         SET reserved = reserved - $1
-         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-        [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
-      );
-
-      // Notify requester
       const [reqAssignment] = await rawQuery<any>(
         `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
         [request.employeeId, scope.companyId]
       );
-      if (reqAssignment) {
-        createNotification({
-          companyId: scope.companyId, assignmentId: reqAssignment.id,
+
+      await applyTransition({
+        entity: "hr_leave_requests",
+        id: Number(id),
+        scope,
+        action: "leave.rejected",
+        fromStates: ["pending"],
+        toState: "rejected",
+        reason: reason ?? undefined,
+        setExtras: {
+          approvedBy: scope.activeAssignmentId,
+          approvedAt: { raw: "NOW()" },
+          rejectedReason: reason ?? null,
+        },
+        after: { status: "rejected", reason },
+        notifications: reqAssignment ? [{
+          assignmentId: reqAssignment.id,
           type: "leave_rejected", title: "تم رفض طلب الإجازة",
           body: `تم رفض طلب الإجازة. السبب: ${reason ?? "لم يحدد"}`,
           priority: "high", refType: "leave_request", refId: Number(id),
-        }).catch(console.error);
-      }
-
-      try {
-        await rawExecute(
-          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'rejected',$2,$3,$4)`,
-          [Number(id), reason || null, scope.userId, scope.companyId]
-        );
-      } catch (e) { console.error("Failed to log approval action:", e); }
-
-      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.rejected",
-        entity: "hr_leave_requests", entityId: Number(id) }).catch(console.error);
-
-      createAuditLog({
-        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-        action: "update", entity: "hr_leave_requests", entityId: Number(id),
-        after: { status: "rejected", reason },
-      }).catch(console.error);
+        }] : [],
+        onApply: async (_row, client) => {
+          if (currentStage) {
+            await client.query(
+              `UPDATE leave_approval_stages
+               SET status = 'rejected', decision = $1, "decidedBy" = $2, "decidedAt" = NOW()
+               WHERE id = $3`,
+              [reason ?? "مرفوض", scope.activeAssignmentId, currentStage.id]
+            );
+          }
+          await client.query(
+            `UPDATE hr_leave_balances
+             SET reserved = reserved - $1
+             WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+            [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
+          );
+          await client.query(
+            `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'rejected',$2,$3,$4)`,
+            [Number(id), reason || null, scope.userId, scope.companyId]
+          ).catch(() => {});
+        },
+      });
 
       res.json({ message: "تم الرفض", status: "rejected" });
       return;
@@ -1608,60 +1602,46 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         throw new ValidationError("يجب ذكر سبب الإرجاع", { field: "reason" });
       }
 
-      await rawExecute(
-        `UPDATE hr_leave_requests SET status = 'returned', "rejectedReason" = $1 WHERE id = $2 AND "companyId" = $3`,
-        [reason, Number(id), scope.companyId]
-      );
-      if (currentStage) {
-        await rawExecute(
-          `UPDATE leave_approval_stages SET status = 'returned', decision = $1, "decidedBy" = $2, "decidedAt" = NOW() WHERE id = $3`,
-          [reason, scope.activeAssignmentId, currentStage.id]
-        );
-      }
-
-      // Returning the request puts it back in the employee's hands for
-      // amendments — release the reserved days so the balance correctly
-      // reflects availability while the request is being reworked. Without
-      // this, the employee can't re-submit because their reserved pool
-      // still counts the previous attempt.
-      await rawExecute(
-        `UPDATE hr_leave_balances
-         SET reserved = GREATEST(reserved - $1, 0)
-         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-        [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
-      );
-
       const [reqAssignment] = await rawQuery<any>(
         `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
         [request.employeeId, scope.companyId]
       );
-      if (reqAssignment) {
-        createNotification({
-          companyId: scope.companyId, assignmentId: reqAssignment.id,
+
+      await applyTransition({
+        entity: "hr_leave_requests",
+        id: Number(id),
+        scope,
+        action: "leave.returned",
+        fromStates: ["pending"],
+        toState: "returned",
+        reason,
+        setExtras: { rejectedReason: reason },
+        after: { status: "returned", reason },
+        notifications: reqAssignment ? [{
+          assignmentId: reqAssignment.id,
           type: "leave_returned", title: "تم إرجاع طلب الإجازة",
           body: `تم إرجاع طلب الإجازة للمراجعة. السبب: ${reason}`,
           priority: "medium", refType: "leave_request", refId: Number(id),
-        }).catch(console.error);
-      }
-
-      try {
-        await rawExecute(
-          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'returned',$2,$3,$4)`,
-          [Number(id), reason, scope.userId, scope.companyId]
-        );
-      } catch (e) { console.error("Failed to log approval action:", e); }
-
-      emitEvent({
-        companyId: scope.companyId, userId: scope.userId,
-        action: "leave.returned", entity: "hr_leave_requests", entityId: Number(id),
-        details: `طلب إجازة ${id} — إرجاع: ${reason}`,
-      }).catch(console.error);
-
-      createAuditLog({
-        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-        action: "update", entity: "hr_leave_requests", entityId: Number(id),
-        after: { status: "returned", reason },
-      }).catch(console.error);
+        }] : [],
+        onApply: async (_row, client) => {
+          if (currentStage) {
+            await client.query(
+              `UPDATE leave_approval_stages SET status = 'returned', decision = $1, "decidedBy" = $2, "decidedAt" = NOW() WHERE id = $3`,
+              [reason, scope.activeAssignmentId, currentStage.id]
+            );
+          }
+          await client.query(
+            `UPDATE hr_leave_balances
+             SET reserved = GREATEST(reserved - $1, 0)
+             WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+            [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
+          );
+          await client.query(
+            `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'returned',$2,$3,$4)`,
+            [Number(id), reason, scope.userId, scope.companyId]
+          ).catch(() => {});
+        },
+      });
 
       res.json({ message: "تم الإرجاع", status: "returned" });
       return;
@@ -1743,22 +1723,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
     }
 
     // Final approval (stage 2 HR or owner approving directly)
-    await rawExecute(
-      `UPDATE hr_leave_requests
-       SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW()
-       WHERE id = $2 AND "companyId" = $3`,
-      [scope.activeAssignmentId, Number(id), scope.companyId]
-    );
-    if (currentStage) {
-      await rawExecute(
-        `UPDATE leave_approval_stages
-         SET status = 'approved', decision = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
-         WHERE id = $2`,
-        [scope.activeAssignmentId, currentStage.id]
-      );
-    }
-
-    // ── Fetch ALL assignments first (needed for balance + attendance + tasks) ──
+    // Pre-fetch assignments needed for balance + attendance + tasks + notifications
     const allAssignments = await rawQuery<any>(
       `SELECT ea.id, ea."companyId", ea."branchId"
        FROM employee_assignments ea
@@ -1766,68 +1731,99 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
       [request.employeeId]
     );
 
-    // Confirm balance deduction: move from reserved to used across ALL companies
-    // Leave follows the person (not the assignment), so deduct from all companies
-    const allCompanyIds = [...new Set(allAssignments.map((a: any) => a.companyId))];
-    for (const cId of allCompanyIds) {
-      await rawExecute(
-        `UPDATE hr_leave_balances
-         SET used = used + $1, reserved = GREATEST(reserved - $1, 0)
-         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-        [request.days, cId, request.employeeId, request.leaveTypeId, year]
-      );
-    }
-
-    // Update approval_requests table
-    await rawExecute(
-      `UPDATE approval_requests SET status = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
-       WHERE "refType" = 'leave_request' AND "refId" = $2`,
-      [scope.activeAssignmentId, Number(id)]
-    );
     const leaveStart = new Date(request.startDate);
     const leaveEnd = new Date(request.endDate);
-    // Retroactive leave approval: if the employee was marked 'absent' on any
-    // day covered by the leave, remove those absence rows FIRST so the
-    // ON CONFLICT DO NOTHING insert can turn them into 'on_leave' and the
-    // next payroll run won't double-deduct (absence deduction + leave-used).
-    for (const asn of allAssignments) {
-      await rawExecute(
-        `DELETE FROM attendance
-         WHERE "assignmentId" = $1 AND date BETWEEN $2 AND $3 AND status = 'absent' AND "companyId" = $4`,
-        [asn.id, request.startDate, request.endDate, asn.companyId]
-      ).catch((e) => console.error("Failed to clear absent days for leave approval:", e));
-      // Also drop any stale absence-based payroll_deductions queued for those
-      // days so an already-generated deduction row doesn't still withhold pay.
-      await rawExecute(
-        `DELETE FROM payroll_deductions
-         WHERE "companyId" = $1 AND "employeeId" = $2 AND type = 'absence'
-           AND "effectiveDate" BETWEEN $3 AND $4
-           AND (status IS NULL OR status <> 'deducted_in_payroll')`,
-        [asn.companyId, request.employeeId, request.startDate, request.endDate]
-      ).catch((e) => console.error("Failed to clear pending absence deductions:", e));
-      for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
-        const dateStr = d.toISOString().split("T")[0];
-        await rawExecute(
-          `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
-           VALUES ($1,$2,$3,$4,'on_leave',$5)
-           ON CONFLICT DO NOTHING`,
-          [asn.id, asn.companyId, asn.branchId, dateStr, `إجازة معتمدة - طلب رقم ${id}`]
-        ).catch(console.error);
-      }
-    }
 
-    // ── Reassign tasks during leave period (per assignment's own company) ──
-    if (allAssignments.length > 0) {
-      const assignmentIds = allAssignments.map((a: any) => a.id);
-      for (const asn of allAssignments) {
-        const aId = asn.id;
-        const [managerAId] = await rawQuery<any>(
-          `SELECT ea.id FROM employee_assignments ea
-           WHERE ea."companyId" = $1 AND ea."branchId" = $2
-             AND ea.role IN ('branch_manager','hr_manager','general_manager','owner') AND ea.status = 'active' AND ea.id != $3
-           ORDER BY CASE ea.role WHEN 'branch_manager' THEN 1 WHEN 'hr_manager' THEN 2 WHEN 'general_manager' THEN 3 ELSE 4 END LIMIT 1`,
-          [asn.companyId, asn.branchId, aId]
+    await applyTransition({
+      entity: "hr_leave_requests",
+      id: Number(id),
+      scope,
+      action: "leave.approved",
+      fromStates: ["pending"],
+      toState: "approved",
+      reason: reason ?? undefined,
+      setExtras: {
+        approvedBy: scope.activeAssignmentId,
+        approvedAt: { raw: "NOW()" },
+      },
+      after: { status: "approved", affectedAssignments: allAssignments.length },
+      onApply: async (_row, client) => {
+        if (currentStage) {
+          await client.query(
+            `UPDATE leave_approval_stages
+             SET status = 'approved', decision = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
+             WHERE id = $2`,
+            [scope.activeAssignmentId, currentStage.id]
+          );
+        }
+
+        // Balance deduction across ALL companies
+        const allCompanyIds = [...new Set(allAssignments.map((a: any) => a.companyId))];
+        for (const cId of allCompanyIds) {
+          await client.query(
+            `UPDATE hr_leave_balances
+             SET used = used + $1, reserved = GREATEST(reserved - $1, 0)
+             WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+            [request.days, cId, request.employeeId, request.leaveTypeId, year]
+          );
+        }
+
+        await client.query(
+          `UPDATE approval_requests SET status = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
+           WHERE "refType" = 'leave_request' AND "refId" = $2`,
+          [scope.activeAssignmentId, Number(id)]
         );
+
+        // Retroactive attendance: clear absences, insert on_leave records
+        for (const asn of allAssignments) {
+          await client.query(
+            `DELETE FROM attendance
+             WHERE "assignmentId" = $1 AND date BETWEEN $2 AND $3 AND status = 'absent' AND "companyId" = $4`,
+            [asn.id, request.startDate, request.endDate, asn.companyId]
+          );
+          await client.query(
+            `DELETE FROM payroll_deductions
+             WHERE "companyId" = $1 AND "employeeId" = $2 AND type = 'absence'
+               AND "effectiveDate" BETWEEN $3 AND $4
+               AND (status IS NULL OR status <> 'deducted_in_payroll')`,
+            [asn.companyId, request.employeeId, request.startDate, request.endDate]
+          );
+          for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
+            const dateStr = d.toISOString().split("T")[0];
+            await client.query(
+              `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
+               VALUES ($1,$2,$3,$4,'on_leave',$5)
+               ON CONFLICT DO NOTHING`,
+              [asn.id, asn.companyId, asn.branchId, dateStr, `إجازة معتمدة - طلب رقم ${id}`]
+            );
+          }
+        }
+
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'approved',$2,$3,$4)`,
+          [Number(id), reason || null, scope.userId, scope.companyId]
+        ).catch(() => {});
+      },
+    });
+
+    // Post-commit: notifications + task reassignment + obligation (non-transactional)
+    for (const asn of allAssignments) {
+      createNotification({
+        companyId: asn.companyId, assignmentId: asn.id,
+        type: "leave_approved", title: "تمت الموافقة على طلب الإجازة",
+        body: `تمت الموافقة على إجازة ${request.leaveTypeName} من ${request.startDate} إلى ${request.endDate}`,
+        priority: "high", refType: "leave_request", refId: Number(id),
+      }).catch(console.error);
+    }
+    for (const asn of allAssignments) {
+      const aId = asn.id;
+      rawQuery<any>(
+        `SELECT ea.id FROM employee_assignments ea
+         WHERE ea."companyId" = $1 AND ea."branchId" = $2
+           AND ea.role IN ('branch_manager','hr_manager','general_manager','owner') AND ea.status = 'active' AND ea.id != $3
+         ORDER BY CASE ea.role WHEN 'branch_manager' THEN 1 WHEN 'hr_manager' THEN 2 WHEN 'general_manager' THEN 3 ELSE 4 END LIMIT 1`,
+        [asn.companyId, asn.branchId, aId]
+      ).then(async ([managerAId]) => {
         if (managerAId) {
           const { projectsEngine } = await import("../lib/engines/index.js");
           await projectsEngine.reassignTasks({
@@ -1836,23 +1832,8 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
             startDate: request.startDate,
             endDate: request.endDate,
           });
-        }
-      }
-    }
-
-    // ── Notify requester and all managers ──
-    for (const asn of allAssignments) {
-      createNotification({
-        companyId: asn.companyId, assignmentId: asn.id,
-        type: "leave_approved", title: "تمت الموافقة على طلب الإجازة",
-        body: `تمت الموافقة على إجازة ${request.leaveTypeName} من ${request.startDate} إلى ${request.endDate}`,
-        priority: "high", refType: "leave_request", refId: Number(id),
-      }).catch(console.error);
-
-      getManagerAssignmentId(asn.companyId, asn.branchId).then((mgr) => {
-        if (mgr && mgr !== scope.activeAssignmentId) {
           createNotification({
-            companyId: asn.companyId, assignmentId: mgr,
+            companyId: asn.companyId, assignmentId: managerAId.id,
             type: "leave_approved", title: "موظف في إجازة معتمدة",
             body: `تمت الموافقة على إجازة موظف من ${request.startDate} إلى ${request.endDate}. تم إعادة توزيع المهام.`,
             priority: "normal", refType: "leave_request", refId: Number(id),
@@ -1861,24 +1842,6 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
       }).catch(console.error);
     }
 
-    try {
-      await rawExecute(
-        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'approved',$2,$3,$4)`,
-        [Number(id), reason || null, scope.userId, scope.companyId]
-      );
-    } catch (e) { console.error("Failed to log approval action:", e); }
-
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.approved",
-      entity: "hr_leave_requests", entityId: Number(id),
-      details: JSON.stringify({ affectedAssignments: allAssignments.length }) }).catch(console.error);
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "hr_leave_requests", entityId: Number(id),
-      after: { status: "approved", affectedAssignments: allAssignments.length },
-    }).catch(console.error);
-
-    // Register return-to-work obligation (fires the day after the leave ends)
     try {
       const returnDate = new Date(leaveEnd);
       returnDate.setDate(returnDate.getDate() + 1);
@@ -3208,8 +3171,8 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       const target = entityUpdateMap[request.refType];
       if (target) {
         await rawExecute(
-          `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1`,
-          [request.refId]
+          `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1 AND "companyId" = $2`,
+          [request.refId, scope.companyId]
         );
       }
       const journalRefTypes = ["expense", "salary_advance", "custody"];
@@ -3225,8 +3188,8 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       const target = entityUpdateMap[request.refType];
       if (target) {
         await rawExecute(
-          `UPDATE ${target.table} SET ${target.column} = 'rejected' WHERE id = $1`,
-          [request.refId]
+          `UPDATE ${target.table} SET ${target.column} = 'rejected' WHERE id = $1 AND "companyId" = $2`,
+          [request.refId, scope.companyId]
         );
       }
       const journalRefTypes = ["expense", "salary_advance", "custody"];
@@ -3645,8 +3608,8 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
 
     if (approvalResult.requiresApproval) {
       await rawExecute(
-        `UPDATE official_letters SET status = 'pending_approval' WHERE id = $1`,
-        [insertId]
+        `UPDATE official_letters SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2`,
+        [insertId, scope.companyId]
       );
     }
 
@@ -3752,15 +3715,6 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
  * Use when leave is no longer needed (e.g. employee returned early, emergency).
  */
 router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async (req, res) => {
-  // P3.2 pilot — this endpoint is the unification plan's reference
-  // implementation for how a cancel handler should look after adoption:
-  //   - structured errors via the P0.3 TypedError hierarchy
-  //   - one thrown error per failure reason, no `res.status().json()` calls
-  //   - handleRouteError translates the TypedError to the exact
-  //     { error, code, field?, fix? } shape the frontend's
-  //     PageErrorBoundary + useApiMutation(.onFieldError) expect
-  // Leaves approve/reject untouched for now — they need a separate
-  // multi-stage refactor that's tracked under P3.x follow-ups.
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
@@ -3771,6 +3725,7 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
         fix: "أدخل سبب إلغاء الإجازة",
       });
     }
+
     const [request] = await rawQuery<any>(
       `SELECT lr.*, lt.name AS "leaveTypeName"
        FROM hr_leave_requests lr
@@ -3778,9 +3733,8 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
        WHERE lr.id = $1 AND lr."companyId" = $2`,
       [id, scope.companyId]
     );
-    if (!request) {
-      throw new NotFoundError("طلب الإجازة غير موجود");
-    }
+    if (!request) throw new NotFoundError("طلب الإجازة غير موجود");
+
     const isOwn = request.employeeId === scope.employeeId;
     if (!isOwn && !["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError(
@@ -3799,58 +3753,55 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
       );
     }
 
-    // Restore balance if was approved (used → 0, or reduce used by days)
-    if (request.status === "approved") {
-      const year = new Date(request.startDate).getFullYear();
-      await rawExecute(
-        `UPDATE hr_leave_balances
-           SET used = GREATEST(used - $1, 0)
-         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-        [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
-      );
-      // Clear attendance 'on_leave' records for future dates
-      await rawExecute(
-        `DELETE FROM attendance
-         WHERE "companyId" = $1 AND status = 'on_leave' AND notes LIKE $2
-           AND date >= CURRENT_DATE AND date BETWEEN $3 AND $4`,
-        [scope.companyId, `%طلب رقم ${id}%`, request.startDate, request.endDate]
-      ).catch(console.error);
-    } else if (request.status === "pending") {
-      // Release reserved balance
-      const year = new Date(request.startDate).getFullYear();
-      await rawExecute(
-        `UPDATE hr_leave_balances
-           SET reserved = GREATEST(reserved - $1, 0)
-         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-        [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
-      );
-    }
+    const prevStatus = request.status;
+    await applyTransition({
+      entity: "hr_leave_requests",
+      id,
+      scope,
+      action: "leave.cancelled",
+      fromStates: ["approved", "pending"],
+      toState: "cancelled",
+      reason: b.reason,
+      setExtras: {
+        rejectedReason: { raw: `COALESCE("rejectedReason",'') || ' | إلغاء: ' || '${b.reason.replace(/'/g, "''")}'` },
+      },
+      onApply: async (_row, client) => {
+        const year = new Date(request.startDate).getFullYear();
+        if (prevStatus === "approved") {
+          await client.query(
+            `UPDATE hr_leave_balances SET used = GREATEST(used - $1, 0)
+             WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+            [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
+          );
+          await client.query(
+            `DELETE FROM attendance
+             WHERE "companyId" = $1 AND status = 'on_leave' AND notes LIKE $2
+               AND date >= CURRENT_DATE AND date BETWEEN $3 AND $4`,
+            [scope.companyId, `%طلب رقم ${id}%`, request.startDate, request.endDate]
+          );
+        } else {
+          await client.query(
+            `UPDATE hr_leave_balances SET reserved = GREATEST(reserved - $1, 0)
+             WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+            [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
+          );
+        }
+      },
+      after: { status: "cancelled", reason: b.reason, previousStatus: prevStatus },
+    });
 
-    await rawExecute(
-      `UPDATE hr_leave_requests SET status = 'cancelled', "rejectedReason" = COALESCE("rejectedReason",'') || ' | إلغاء: ' || $1 WHERE id = $2`,
-      [b.reason, id]
-    );
-
-    // Cancel return-to-work obligation
     await cancelObligation(scope.companyId, "hr_leave_request", id);
 
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "hr_leave_requests", entityId: id,
-      before: { status: request.status, employeeId: request.employeeId, days: request.days },
-      after: { status: "cancelled", reason: b.reason },
-    }).catch(console.error);
-    await emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "leave.cancelled",
-      entity: "hr_leave_requests",
-      entityId: id,
-      details: `إلغاء إجازة #${id}: ${b.reason}`,
-    }).catch(console.error);
-
     res.json({ message: "تم إلغاء الإجازة", status: "cancelled", reason: b.reason });
-  } catch (err) { handleRouteError(err, res, "Cancel leave error:"); }
+  } catch (err) {
+    if (err instanceof LifecycleError) {
+      const typed = err.status === 404
+        ? new NotFoundError(err.message)
+        : new ConflictError(err.message, { field: err.field });
+      return handleRouteError(typed, res, "Cancel leave error:");
+    }
+    handleRouteError(err, res, "Cancel leave error:");
+  }
 });
 
 router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req, res) => {
@@ -4290,8 +4241,8 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
       );
     } else {
       await rawExecute(
-        `UPDATE official_letters SET status = $1 WHERE id = $2`,
-        [newStatus, Number(id)]
+        `UPDATE official_letters SET status = $1 WHERE id = $2 AND "companyId" = $3`,
+        [newStatus, Number(id), scope.companyId]
       );
     }
 
@@ -6848,42 +6799,55 @@ router.post("/excuse-requests", requirePermission("hr:create"), async (req, res)
 router.patch("/excuse-requests/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const excuseId = Number(req.params.id);
     const { approved, rejectionReason } = req.body as any;
-    const [excuse] = await rawQuery<any>(
-      `SELECT * FROM hr_excuse_requests WHERE id = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
-    );
-    if (!excuse) throw new NotFoundError("طلب الاستئذان غير موجود");
-    if (excuse.status !== "pending") throw new ConflictError("الطلب ليس في حالة انتظار");
 
     const newStatus = approved ? "approved" : "rejected";
     if (!approved && !rejectionReason) {
       throw new ValidationError("يجب ذكر سبب الرفض", { field: "rejectionReason" });
     }
 
-    await rawExecute(
-      `UPDATE hr_excuse_requests SET status = $1, "approvedBy" = $2, "approvedAt" = NOW(),
-       "rejectionReason" = $3, "updatedAt" = NOW() WHERE id = $4`,
-      [newStatus, scope.activeAssignmentId, rejectionReason || null, Number(id)]
+    const [excuse] = await rawQuery<any>(
+      `SELECT * FROM hr_excuse_requests WHERE id = $1 AND "companyId" = $2`,
+      [excuseId, scope.companyId]
     );
+    if (!excuse) throw new NotFoundError("طلب الاستئذان غير موجود");
 
-    createNotification({
-      companyId: scope.companyId, assignmentId: excuse.assignmentId,
-      type: `excuse_${newStatus}`, title: approved ? "تمت الموافقة على الاستئذان" : "تم رفض طلب الاستئذان",
-      body: approved ? `تمت الموافقة على استئذانك بتاريخ ${excuse.excuseDate}` : `تم رفض استئذانك: ${rejectionReason}`,
-      priority: "normal", refType: "hr_excuse_request", refId: Number(id),
-    }).catch(console.error);
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: newStatus, entity: "hr_excuse_requests", entityId: Number(id),
-      before: { status: "pending" }, after: { status: newStatus },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "excuse.approved", entity: "hr_excuse_requests", entityId: Number(id), details: JSON.stringify({ id: Number(id), status: newStatus }) }).catch(console.error);
+    const row = await applyTransition({
+      entity: "hr_excuse_requests",
+      id: excuseId,
+      scope,
+      action: `excuse.${newStatus}`,
+      fromStates: ["pending"],
+      toState: newStatus,
+      reason: rejectionReason || undefined,
+      setExtras: {
+        approvedBy: scope.activeAssignmentId ?? 0,
+        approvedAt: { raw: "NOW()" },
+        rejectionReason: rejectionReason || null,
+      },
+      after: { status: newStatus },
+      notifications: [{
+        assignmentId: excuse.assignmentId,
+        type: `excuse_${newStatus}`,
+        title: approved ? "تمت الموافقة على الاستئذان" : "تم رفض طلب الاستئذان",
+        body: approved ? `تمت الموافقة على استئذانك بتاريخ ${excuse.excuseDate}` : `تم رفض استئذانك: ${rejectionReason}`,
+        priority: "normal",
+        refType: "hr_excuse_request",
+        refId: excuseId,
+      }],
+    });
 
     res.json({ message: approved ? "تمت الموافقة على الاستئذان" : "تم رفض الاستئذان", status: newStatus });
-  } catch (err) { handleRouteError(err, res, "Approve excuse request error:"); }
+  } catch (err) {
+    if (err instanceof LifecycleError) {
+      const typed = err.status === 404
+        ? new NotFoundError(err.message)
+        : new ConflictError(err.message, { field: err.field });
+      return handleRouteError(typed, res, "Approve excuse request error:");
+    }
+    handleRouteError(err, res, "Approve excuse request error:");
+  }
 });
 
 export default router;

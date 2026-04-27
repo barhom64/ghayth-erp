@@ -102,13 +102,15 @@ router.use("/pdpl", pdplRouter);
 
 router.get("/settings/display", async (req, res) => {
   try {
-    const auth = req.headers.authorization;
+    const cookieToken: string | undefined = req.cookies?.erp_access;
+    const authHeader = req.headers.authorization;
+    const rawToken = cookieToken || (authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined);
     let companyId: number | null = null;
-    if (auth?.startsWith("Bearer ")) {
+    if (rawToken) {
       try {
         const jwt = await import("jsonwebtoken");
         const SECRET = process.env.JWT_SECRET;
-        const payload: any = jwt.default.verify(auth.slice(7), SECRET!);
+        const payload: any = jwt.default.verify(rawToken, SECRET!);
         if (payload?.companyId && payload?.type !== "client_portal") companyId = payload.companyId;
       } catch {}
     }

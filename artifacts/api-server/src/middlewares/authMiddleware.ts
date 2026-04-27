@@ -27,10 +27,11 @@ declare global {
 }
 
 export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const auth = req.headers.authorization;
-  if (!auth?.startsWith("Bearer ")) {
-    // 401 — no bearer token at all. Frontend reads `code: AUTH_MISSING` to
-    // trigger login redirect instead of showing a generic error page.
+  const cookieToken: string | undefined = req.cookies?.erp_access;
+  const authHeader = req.headers.authorization;
+  const token = cookieToken || (authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined);
+
+  if (!token) {
     res.status(401).json({
       error: "غير مصرح: لا يوجد توكن",
       code: "AUTH_MISSING",
@@ -38,8 +39,6 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     });
     return;
   }
-
-  const token = auth.slice(7);
 
   try {
     const payload = verifyToken(token);

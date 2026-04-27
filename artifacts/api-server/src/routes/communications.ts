@@ -56,7 +56,7 @@ async function matchSenderToEntity(phone: string, companyId: number): Promise<{ 
   const normalizedPhone = phone.replace(/\D/g, "").slice(-9);
 
   const clients = await rawQuery<{ id: number; name: string }>(
-    `SELECT id, name FROM clients WHERE "companyId"=$1 AND REPLACE(REPLACE(phone,'+',''),'-','') LIKE $2`,
+    `SELECT id, name FROM clients WHERE "companyId"=$1 AND REPLACE(REPLACE(phone,'+',''),'-','') LIKE $2 AND "deletedAt" IS NULL`,
     [companyId, `%${normalizedPhone}`]
   );
   if (clients.length > 0) {

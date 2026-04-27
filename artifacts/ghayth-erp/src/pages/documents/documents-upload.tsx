@@ -58,10 +58,10 @@ export default function DocumentsUpload() {
     }
     setUploading(true);
     try {
-      const token = localStorage.getItem("erp_token");
       const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       });
       if (!urlRes.ok) throw new Error("فشل في الحصول على رابط الرفع");

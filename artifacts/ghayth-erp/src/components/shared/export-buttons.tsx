@@ -7,10 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 async function authFetchBlob(endpoint: string, qs: string = ""): Promise<Blob> {
-  const token = localStorage.getItem("erp_token");
-  const headers: Record<string, string> = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const response = await fetch(`${BASE}/api${endpoint}${qs}`, { headers, credentials: "include" });
+  const response = await fetch(`${BASE}/api${endpoint}${qs}`, { credentials: "include" });
   if (!response.ok) {
     const text = await response.text().catch(() => response.statusText);
     throw new Error(text || `HTTP ${response.status}`);

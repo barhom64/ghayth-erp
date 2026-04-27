@@ -91,10 +91,7 @@ export default function Login() {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
-      if (data.refreshToken) {
-        localStorage.setItem("erp_refresh_token", data.refreshToken);
-      }
-      login(data.token, data.assignments);
+      login(data.assignments);
     } catch (err: any) {
       setLoginError(err.message || "بيانات الدخول غير صحيحة");
     } finally {

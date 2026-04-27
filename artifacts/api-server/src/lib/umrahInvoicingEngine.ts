@@ -51,7 +51,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
   const [subAgent] = await rawQuery<any>(
     `SELECT sa.*, c.name AS "clientName"
      FROM umrah_sub_agents sa
-     LEFT JOIN clients c ON c.id = sa."clientId"
+     LEFT JOIN clients c ON c.id = sa."clientId" AND c."deletedAt" IS NULL
      WHERE sa.id = $1 AND sa."companyId" = $2 AND sa."deletedAt" IS NULL`,
     [subAgentId, scope.companyId]
   );
@@ -205,16 +205,16 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     for (const v of violations) {
       await client.query(
         `UPDATE umrah_violations SET status = 'invoiced', "linkedInvoiceId" = $1, "updatedBy" = $2, "updatedAt" = NOW()
-         WHERE id = $3`,
-        [invoiceId, scope.userId, v.id]
+         WHERE id = $3 AND "companyId" = $4`,
+        [invoiceId, scope.userId, v.id, scope.companyId]
       );
     }
 
     for (const grp of groups) {
       await client.query(
         `UPDATE umrah_groups SET "salesInvoiceId" = $1, "updatedBy" = $2, "updatedAt" = NOW()
-         WHERE id = $3`,
-        [invoiceId, scope.userId, grp.id]
+         WHERE id = $3 AND "companyId" = $4`,
+        [invoiceId, scope.userId, grp.id, scope.companyId]
       );
     }
   });
@@ -336,13 +336,13 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
 
       if (newStatus === "paid") {
         await client.query(
-          `UPDATE umrah_sales_invoices SET "paidAmount" = $1, status = $2, "paidAt" = NOW(), "updatedAt" = NOW() WHERE id = $3`,
-          [newPaid, newStatus, inv.id]
+          `UPDATE umrah_sales_invoices SET "paidAmount" = $1, status = $2, "paidAt" = NOW(), "updatedAt" = NOW() WHERE id = $3 AND "companyId" = $4`,
+          [newPaid, newStatus, inv.id, scope.companyId]
         );
       } else {
         await client.query(
-          `UPDATE umrah_sales_invoices SET "paidAmount" = $1, status = $2, "updatedAt" = NOW() WHERE id = $3`,
-          [newPaid, newStatus, inv.id]
+          `UPDATE umrah_sales_invoices SET "paidAmount" = $1, status = $2, "updatedAt" = NOW() WHERE id = $3 AND "companyId" = $4`,
+          [newPaid, newStatus, inv.id, scope.companyId]
         );
       }
 

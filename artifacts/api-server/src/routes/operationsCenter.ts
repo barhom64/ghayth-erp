@@ -417,7 +417,7 @@ async function buildChecklistItems(scope: any, where: string, params: any[], com
 
     try {
       const [overdue] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM invoices WHERE ${where} AND status IN ('overdue') AND "dueDate" < CURRENT_DATE`,
+        `SELECT COUNT(*) AS total FROM invoices WHERE ${where} AND status IN ('overdue') AND "dueDate" < CURRENT_DATE AND "deletedAt" IS NULL`,
         params
       );
       const val = Number(overdue?.total ?? 0);

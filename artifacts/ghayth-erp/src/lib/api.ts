@@ -86,19 +86,12 @@ function inferCodeFromStatus(status: number): string {
   return "UNKNOWN";
 }
 
-function getToken() {
-  return localStorage.getItem("erp_token");
-}
-
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 let isRefreshing = false;
-let refreshPromise: Promise<string | null> | null = null;
+let refreshPromise: Promise<boolean> | null = null;
 
-async function tryRefreshToken(): Promise<string | null> {
-  const refreshToken = localStorage.getItem("erp_refresh_token");
-  if (!refreshToken) return null;
-
+async function tryRefreshToken(): Promise<boolean> {
   if (isRefreshing && refreshPromise) return refreshPromise;
 
   isRefreshing = true;
@@ -107,17 +100,11 @@ async function tryRefreshToken(): Promise<string | null> {
       const res = await fetch(`${BASE}/api/auth/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken }),
+        credentials: "include",
       });
-      if (!res.ok) return null;
-      const data = await res.json();
-      if (data.token) {
-        localStorage.setItem("erp_token", data.token);
-        return data.token;
-      }
-      return null;
+      return res.ok;
     } catch {
-      return null;
+      return false;
     } finally {
       isRefreshing = false;
       refreshPromise = null;
@@ -128,16 +115,14 @@ async function tryRefreshToken(): Promise<string | null> {
 }
 
 export async function apiFetch<T = any>(path: string, options?: RequestInit): Promise<T> {
-  const token = getToken();
   const headers: Record<string, string> = {
     ...(options?.headers as Record<string, string> || {}),
   };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
   if (options?.body && typeof options.body === "string") headers["Content-Type"] = "application/json";
 
   let res: Response;
   try {
-    res = await fetch(`${BASE}/api${path}`, { ...options, headers });
+    res = await fetch(`${BASE}/api${path}`, { ...options, headers, credentials: "include" });
   } catch (networkErr) {
     if (networkErr instanceof TypeError) {
       throw new Error("انقطع الاتصال بالخادم، يرجى التحقق من الإنترنت والمحاولة مجدداً");
@@ -146,13 +131,10 @@ export async function apiFetch<T = any>(path: string, options?: RequestInit): Pr
   }
 
   if (res.status === 401 && path !== "/auth/login" && path !== "/auth/refresh") {
-    const newToken = await tryRefreshToken();
-    if (newToken) {
-      headers["Authorization"] = `Bearer ${newToken}`;
-      res = await fetch(`${BASE}/api${path}`, { ...options, headers });
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      res = await fetch(`${BASE}/api${path}`, { ...options, headers, credentials: "include" });
     } else {
-      localStorage.removeItem("erp_token");
-      localStorage.removeItem("erp_refresh_token");
       localStorage.removeItem("erp_assignments");
       window.location.href = `${BASE}/login`;
       throw new Error("انتهت الجلسة، يرجى تسجيل الدخول مجدداً");

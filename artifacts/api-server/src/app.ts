@@ -1,6 +1,8 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import cookieParser from "cookie-parser";
+import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 import { randomUUID } from "node:crypto";
 import router from "./routes/index.js";
@@ -89,12 +91,34 @@ app.use(cors({
   },
   credentials: true,
 }));
+app.use(cookieParser());
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));
 
 app.use(eventBusMiddleware);
 app.use(auditMiddleware);
 app.use(activityTrackerMiddleware());
+
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة لاحقاً" },
+  validate: { ip: false, trustProxy: false },
+  skip: (req) => req.path === "/api/health",
+});
+app.use("/api", globalLimiter);
+
+const umrahLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "تم تجاوز الحد الأقصى لطلبات العمرة. يرجى المحاولة لاحقاً" },
+  validate: { ip: false, trustProxy: false },
+});
+app.use("/api/umrah", umrahLimiter);
 
 app.get("/api/health", async (_req, res) => {
   try {

@@ -91,9 +91,8 @@ function DocumentsList() {
 
   const handleDownload = async (docId: number, fileName: string) => {
     try {
-      const token = localStorage.getItem("erp_token");
       const res = await fetch(`${BASE}/api/documents/${docId}/download`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: "include",
       });
       if (!res.ok) throw new Error("فشل التنزيل");
       const blob = await res.blob();
