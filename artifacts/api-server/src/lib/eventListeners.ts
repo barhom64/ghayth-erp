@@ -86,11 +86,6 @@ export function registerEventListeners() {
     await logAudit("employee.updated", { ...payload, action: "update" });
   });
 
-  eventBus.on("employee.deleted", async (payload) => {
-    await logEvent("employee.deleted", payload);
-    await logAudit("employee.deleted", { ...payload, action: "delete" });
-  });
-
   eventBus.on("invoice.created", async (payload) => {
     await logEvent("invoice.created", payload);
     await logAudit("invoice.created", { ...payload, action: "create" });
@@ -303,10 +298,6 @@ export function registerEventListeners() {
     await logEvent("warehouse.product.updated", payload);
     await logAudit("warehouse.product.updated", { ...payload, action: "update", entity: "warehouse_product" });
   });
-  eventBus.on("warehouse.product.status_changed", async (payload) => {
-    await logEvent("warehouse.product.status_changed", payload);
-    await logAudit("warehouse.product.status_changed", { ...payload, action: "status_change", entity: "warehouse_product" });
-  });
   eventBus.on("warehouse.product.deleted", async (payload) => {
     await logEvent("warehouse.product.deleted", payload);
     await logAudit("warehouse.product.deleted", { ...payload, action: "delete", entity: "warehouse_product" });
@@ -314,11 +305,6 @@ export function registerEventListeners() {
   eventBus.on("warehouse.movement.created", async (payload) => {
     await logEvent("warehouse.movement.created", payload);
     await logAudit("warehouse.movement.created", { ...payload, action: "create" });
-  });
-
-  eventBus.on("payroll.processed", async (payload) => {
-    await logEvent("payroll.processed", payload);
-    await logAudit("payroll.processed", { ...payload, action: "create" });
   });
 
   eventBus.on("payroll.completed", async (payload) => {
@@ -407,11 +393,6 @@ export function registerEventListeners() {
   eventBus.on("purchase_request.rejected", async (payload) => {
     await logEvent("purchase_request.rejected", payload);
     await logAudit("purchase_request.rejected", { ...payload, action: "reject" });
-  });
-
-  eventBus.on("leave.stage1_approved", async (payload) => {
-    await logEvent("leave.stage1_approved", payload);
-    await logAudit("leave.stage1_approved", { ...payload, action: "approve" });
   });
 
   eventBus.on("leave.escalated", async (payload) => {
@@ -701,14 +682,6 @@ export function registerEventListeners() {
     await logEvent("invoice.debit_memo", payload);
     await logAudit("invoice.debit_memo", { ...payload, action: "debit_memo", entity: "invoice" });
   });
-  eventBus.on("voucher.deleted", async (payload) => {
-    await logEvent("voucher.deleted", payload);
-    await logAudit("voucher.deleted", { ...payload, action: "delete", entity: "voucher" });
-  });
-  eventBus.on("expense.deleted", async (payload) => {
-    await logEvent("expense.deleted", payload);
-    await logAudit("expense.deleted", { ...payload, action: "delete", entity: "expense" });
-  });
   eventBus.on("journal.posted", async (payload) => {
     await logEvent("journal.posted", payload);
     await logAudit("journal.posted", { ...payload, action: "post", entity: "journal_entry" });
@@ -927,10 +900,6 @@ export function registerEventListeners() {
   eventBus.on("deposit.received", async (payload) => {
     await logEvent("deposit.received", payload);
     await logAudit("deposit.received", { ...payload, action: "receive", entity: "deposit" });
-  });
-  eventBus.on("deposit.refunded", async (payload) => {
-    await logEvent("deposit.refunded", payload);
-    await logAudit("deposit.refunded", { ...payload, action: "refund", entity: "deposit" });
   });
   // Phase C.4 — missing property lifecycle listeners.
   // Before this block PATCH/DELETE on units / contracts / buildings / owners /

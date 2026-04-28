@@ -3047,15 +3047,14 @@ router.post("/approval-chain-definitions", requirePermission("hr:create"), async
       [scope.companyId, name, chainType, minAmount ?? 0, maxAmount ?? 999999999]
     );
 
-    if (Array.isArray(steps)) {
-      for (let i = 0; i < steps.length; i++) {
-        const step = steps[i];
-        await rawExecute(
-          `INSERT INTO approval_chain_steps ("chainId","stepOrder","requiredRole","timeoutHours","autoApproveOnTimeout")
-           VALUES ($1,$2,$3,$4,$5)`,
-          [chainId, i + 1, step.requiredRole ?? "branch_manager", step.timeoutHours ?? 48, step.autoApproveOnTimeout ?? false]
-        );
-      }
+    if (Array.isArray(steps) && steps.length > 0) {
+      const values = steps.map((_, i) => `($${i * 5 + 1},$${i * 5 + 2},$${i * 5 + 3},$${i * 5 + 4},$${i * 5 + 5})`).join(",");
+      const params = steps.flatMap((step, i) => [chainId, i + 1, step.requiredRole ?? "branch_manager", step.timeoutHours ?? 48, step.autoApproveOnTimeout ?? false]);
+      await rawExecute(
+        `INSERT INTO approval_chain_steps ("chainId","stepOrder","requiredRole","timeoutHours","autoApproveOnTimeout")
+         VALUES ${values}`,
+        params
+      );
     }
 
     createAuditLog({
@@ -4804,18 +4803,26 @@ router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, re
     // Register participants — validate each belongs to this company before inserting
     // validRoles must match the DB CHECK constraint: ('manager','peer')
     const validRoles = new Set(["manager", "peer"]);
-    for (const p of participants as Array<{ evaluatorId: number; evaluatorRole: string }>) {
-      if (!p.evaluatorId || !validRoles.has(p.evaluatorRole)) continue;
-      const [participantAssign] = await rawQuery<any>(
-        `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 LIMIT 1`,
-        [p.evaluatorId, scope.companyId]
+    const candidateParticipants = (participants as Array<{ evaluatorId: number; evaluatorRole: string }>)
+      .filter(p => p.evaluatorId && validRoles.has(p.evaluatorRole));
+    if (candidateParticipants.length > 0) {
+      const evalIds = candidateParticipants.map(p => p.evaluatorId);
+      const idPlaceholders = evalIds.map((_, i) => `$${i + 2}`).join(",");
+      const validAssignments = await rawQuery<any>(
+        `SELECT DISTINCT "employeeId" FROM employee_assignments WHERE "companyId"=$1 AND "employeeId" IN (${idPlaceholders})`,
+        [scope.companyId, ...evalIds]
       );
-      if (!participantAssign) continue; // silently skip cross-company IDs
-      await rawExecute(
-        `INSERT INTO evaluation_participants ("cycleId","companyId","evaluatorId","evaluatorRole")
-         VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
-        [cycleId, scope.companyId, p.evaluatorId, p.evaluatorRole]
-      );
+      const validIdSet = new Set(validAssignments.map((a: any) => a.employeeId));
+      const validParticipants = candidateParticipants.filter(p => validIdSet.has(p.evaluatorId));
+      if (validParticipants.length > 0) {
+        const values = validParticipants.map((_, i) => `($${i * 4 + 1},$${i * 4 + 2},$${i * 4 + 3},$${i * 4 + 4})`).join(",");
+        const params = validParticipants.flatMap(p => [cycleId, scope.companyId, p.evaluatorId, p.evaluatorRole]);
+        await rawExecute(
+          `INSERT INTO evaluation_participants ("cycleId","companyId","evaluatorId","evaluatorRole")
+           VALUES ${values} ON CONFLICT DO NOTHING`,
+          params
+        );
+      }
     }
 
     // Auto-generate system evaluation
