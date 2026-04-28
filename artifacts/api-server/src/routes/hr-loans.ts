@@ -24,6 +24,7 @@ import {
   initiateApprovalChain,
   processApprovalStep,
   currentPeriod,
+  roundTo2,
 } from "../lib/businessHelpers.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
@@ -223,7 +224,7 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
 
     const amount = b.amount;
     const installmentCount = b.installmentCount;
-    const installmentAmount = Math.round((amount / installmentCount) * 100) / 100;
+    const installmentAmount = roundTo2(amount / installmentCount);
 
     // التحقق من عدم وجود سلفة نشطة
     const [existing] = await rawQuery<any>(
@@ -422,7 +423,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
     for (let i = 1; i <= loan.installmentCount; i++) {
       const isLast = i === loan.installmentCount;
       const amt = isLast
-        ? Math.round((Number(loan.amount) - Number(loan.installmentAmount) * (loan.installmentCount - 1)) * 100) / 100
+        ? roundTo2(Number(loan.amount) - Number(loan.installmentAmount) * (loan.installmentCount - 1))
         : Number(loan.installmentAmount);
 
       await rawExecute(

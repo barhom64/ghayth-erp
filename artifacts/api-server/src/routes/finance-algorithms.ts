@@ -10,7 +10,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO } from "../lib/businessHelpers.js";
+import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 
 export const financeAlgorithmsRouter = Router();
 financeAlgorithmsRouter.use(authMiddleware);
@@ -621,10 +621,10 @@ function calcDepreciationAmount(asset: any, _period: string, opts?: { unitsThisP
 
   if (method === "declining_balance" || method === "declining_balance_200") {
     const annualRate = 2 / usefulLife;
-    monthlyAmount = Math.round(currentBookValue * (annualRate / 12) * 100) / 100;
+    monthlyAmount = roundTo2(currentBookValue * (annualRate / 12));
   } else if (method === "declining_balance_150") {
     const annualRate = 1.5 / usefulLife;
-    monthlyAmount = Math.round(currentBookValue * (annualRate / 12) * 100) / 100;
+    monthlyAmount = roundTo2(currentBookValue * (annualRate / 12));
   } else if (method === "sum_of_years_digits") {
     // SYD: weight of year n = (life - n + 1) / (life*(life+1)/2)
     // We need to know which year of the asset's life we're in.
@@ -634,14 +634,14 @@ function calcDepreciationAmount(asset: any, _period: string, opts?: { unitsThisP
     const yearIndex = Math.min(usefulLife - 1, Math.floor(monthsElapsed / 12));
     const weight = (usefulLife - yearIndex) / ((usefulLife * (usefulLife + 1)) / 2);
     const yearAmount = depreciable * weight;
-    monthlyAmount = Math.round((yearAmount / 12) * 100) / 100;
+    monthlyAmount = roundTo2(yearAmount / 12);
   } else if (method === "units_of_production") {
     const total = Number(asset.totalLifetimeUnits || 0);
     const units = Number(opts?.unitsThisPeriod || 0);
     if (total <= 0 || units <= 0) return 0;
-    monthlyAmount = Math.round(((depreciable * units) / total) * 100) / 100;
+    monthlyAmount = roundTo2((depreciable * units) / total);
   } else {
-    monthlyAmount = Math.round((depreciable / (usefulLife * 12)) * 100) / 100;
+    monthlyAmount = roundTo2(depreciable / (usefulLife * 12));
   }
 
   return Math.min(monthlyAmount, remainingDepreciable);
@@ -691,17 +691,17 @@ financeAlgorithmsRouter.get("/fixed-assets/:id/schedule", requirePermission("fin
       let monthlyDep: number;
       if (method === "declining_balance" || method === "declining_balance_200") {
         const annualRate = 2 / usefulLifeYears;
-        monthlyDep = Math.max(0, Math.round(bookValue * (annualRate / 12) * 100) / 100);
+        monthlyDep = Math.max(0, roundTo2(bookValue * (annualRate / 12)));
       } else if (method === "declining_balance_150") {
         const annualRate = 1.5 / usefulLifeYears;
-        monthlyDep = Math.max(0, Math.round(bookValue * (annualRate / 12) * 100) / 100);
+        monthlyDep = Math.max(0, roundTo2(bookValue * (annualRate / 12)));
       } else if (method === "sum_of_years_digits") {
         const yearIndex = Math.min(usefulLifeYears - 1, Math.floor(m / 12));
         const weight = (usefulLifeYears - yearIndex) / sydDenom;
         const yearAmount = depreciable * weight;
-        monthlyDep = Math.round((yearAmount / 12) * 100) / 100;
+        monthlyDep = roundTo2(yearAmount / 12);
       } else {
-        monthlyDep = Math.round((depreciable / usefulLifeMonths) * 100) / 100;
+        monthlyDep = roundTo2(depreciable / usefulLifeMonths);
       }
 
       if (bookValue - monthlyDep < salvageValue) {
@@ -958,7 +958,7 @@ financeAlgorithmsRouter.get("/inventory-costing/:productId", requirePermission("
     res.json({
       product,
       currentWaCost: currentWa,
-      currentStockValue: Math.round(currentWa * Number(product.currentStock) * 100) / 100,
+      currentStockValue: roundTo2(currentWa * Number(product.currentStock)),
       movements: waHistory,
     });
   } catch (err) {
@@ -1018,7 +1018,7 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", requirePermission("f
     if (!journalEntryId || Math.abs(Number(roundingAmount ?? 0)) === 0) {
       throw new ValidationError("معرف القيد وفرق التقريب مطلوبان");
     }
-    const diff = Math.round(Number(roundingAmount) * 100) / 100;
+    const diff = roundTo2(Number(roundingAmount));
     if (Math.abs(diff) > 0.05) {
       throw new ValidationError("فرق التقريب يتجاوز الحد المسموح (0.05 ﷼)");
     }
@@ -1211,9 +1211,9 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", requirePermission("financ
       const closing = rateMap[inv.currency] || 0;
       if (!closing) continue;
       const outstandingFc = Number(inv.total) - Number(inv.paidAmount ?? 0); // foreign currency
-      const bookedSar = Math.round(outstandingFc * booked * 100) / 100;
-      const revaluedSar = Math.round(outstandingFc * closing * 100) / 100;
-      const diff = Math.round((revaluedSar - bookedSar) * 100) / 100; // AR asset → gain if positive
+      const bookedSar = roundTo2(outstandingFc * booked);
+      const revaluedSar = roundTo2(outstandingFc * closing);
+      const diff = roundTo2(revaluedSar - bookedSar); // AR asset → gain if positive
       if (Math.abs(diff) < 0.01) continue;
       if (diff > 0) totalGain += diff; else totalLoss += -diff;
       details.push({
@@ -1236,10 +1236,10 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", requirePermission("financ
       const closing = rateMap[po.currency] || 0;
       if (!closing) continue;
       const outstandingFc = Number(po.total);
-      const bookedSar = Math.round(outstandingFc * booked * 100) / 100;
-      const revaluedSar = Math.round(outstandingFc * closing * 100) / 100;
+      const bookedSar = roundTo2(outstandingFc * booked);
+      const revaluedSar = roundTo2(outstandingFc * closing);
       // AP liability → loss if closing > booked (liability grew)
-      const diff = Math.round((revaluedSar - bookedSar) * 100) / 100;
+      const diff = roundTo2(revaluedSar - bookedSar);
       if (Math.abs(diff) < 0.01) continue;
       if (diff > 0) totalLoss += diff; else totalGain += -diff;
       details.push({
@@ -1261,9 +1261,9 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", requirePermission("financ
       period,
       periodEnd,
       rates: rateMap,
-      totalGain: Math.round(totalGain * 100) / 100,
-      totalLoss: Math.round(totalLoss * 100) / 100,
-      netImpact: Math.round((totalGain - totalLoss) * 100) / 100,
+      totalGain: roundTo2(totalGain),
+      totalLoss: roundTo2(totalLoss),
+      netImpact: roundTo2(totalGain - totalLoss),
       lineCount: details.length,
       details,
     });
@@ -1343,7 +1343,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:
       if (!closing) continue;
       const booked = Number(inv.exchangeRate) || 1;
       const outstandingFc = Number(inv.total) - Number(inv.paidAmount ?? 0);
-      const diff = Math.round(outstandingFc * (closing - booked) * 100) / 100;
+      const diff = roundTo2(outstandingFc * (closing - booked));
       if (Math.abs(diff) < 0.01) continue;
       arDiff += diff;
       details.push({ kind: "AR", refId: inv.id, refNumber: inv.invoiceNumber, currency: inv.currency, diff });
@@ -1353,14 +1353,14 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:
       if (!closing) continue;
       const booked = Number(po.exchangeRate) || 1;
       const outstandingFc = Number(po.total);
-      const diff = Math.round(outstandingFc * (closing - booked) * 100) / 100;
+      const diff = roundTo2(outstandingFc * (closing - booked));
       if (Math.abs(diff) < 0.01) continue;
       apDiff += diff;
       details.push({ kind: "AP", refId: po.id, refNumber: po.poNumber, currency: po.currency, diff });
     }
 
-    arDiff = Math.round(arDiff * 100) / 100;
-    apDiff = Math.round(apDiff * 100) / 100;
+    arDiff = roundTo2(arDiff);
+    apDiff = roundTo2(apDiff);
 
     if (arDiff === 0 && apDiff === 0) {
       throw new ValidationError("لا توجد فروق إعادة تقييم لهذه الفترة");

@@ -12,7 +12,7 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2 } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
@@ -851,7 +851,7 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
     });
 
     if (installmentCount && installmentCount > 0 && totalContractValue > 0) {
-      const installmentAmount = Math.round((totalContractValue / installmentCount) * 100) / 100;
+      const installmentAmount = roundTo2(totalContractValue / installmentCount);
       const freqMonths = frequency === 'quarterly' ? 3 : frequency === 'semi_annual' ? 6 : frequency === 'annual' ? 12 : 1;
       for (let i = 0; i < installmentCount; i++) {
         const dueDate = new Date(startDate);
@@ -860,7 +860,7 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
         const dueDateStr = toDateISO(dueDate);
         const isLast = i === installmentCount - 1;
         const amt = isLast ? totalContractValue - (installmentAmount * (installmentCount - 1)) : installmentAmount;
-        const rounded = Math.round(amt * 100) / 100;
+        const rounded = roundTo2(amt);
         // Write to both contract_payment_schedule (legacy) and rent_payments (runtime table the queries read from)
         await rawExecute(
           `INSERT INTO contract_payment_schedule ("companyId","contractId","installmentNumber","dueDate",amount,status) VALUES ($1,$2,$3,$4,$5,'pending')`,
@@ -1167,7 +1167,7 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
         const freq = contract.paymentFrequency || "monthly";
         const freqMonths = freq === "quarterly" ? 3 : freq === "semi_annual" ? 6 : freq === "annual" ? 12 : 1;
         const installmentCount = Math.ceil(renewalMonths / freqMonths);
-        const installmentAmount = Math.round((newTotal / installmentCount) * 100) / 100;
+        const installmentAmount = roundTo2(newTotal / installmentCount);
         const maxRes = await client.query(
           `SELECT COALESCE(MAX("installmentNumber"),0) AS max FROM contract_payment_schedule WHERE "contractId"=$1`,
           [id]
@@ -1182,7 +1182,7 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
           await client.query(
             `INSERT INTO contract_payment_schedule ("companyId","contractId","installmentNumber","dueDate",amount,status)
              VALUES ($1,$2,$3,$4,$5,'pending')`,
-            [scope.companyId, id, startNum + i + 1, toDateISO(dueDate), Math.round(amt * 100) / 100]
+            [scope.companyId, id, startNum + i + 1, toDateISO(dueDate), roundTo2(amt)]
           );
         }
       },

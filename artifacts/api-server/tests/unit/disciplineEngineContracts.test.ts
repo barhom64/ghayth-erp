@@ -62,7 +62,7 @@ describe("parsePenaltyLabel percentage handling", () => {
     const idx = ENGINE_SRC.indexOf("pctMatch");
     const section = ENGINE_SRC.slice(idx, idx + 300);
     expect(section).toContain("safeWage * pct");
-    expect(section).toContain("/ 100 * 100) / 100");
+    expect(section).toContain("roundTo2(");
   });
 });
 
@@ -336,7 +336,7 @@ describe("resolvePenalty contracts", () => {
   it("totalDeduction = base + extra, rounded to 2 decimals", () => {
     const idx = ENGINE_SRC.indexOf("function resolvePenalty");
     const section = ENGINE_SRC.slice(idx, idx + 3500);
-    expect(section).toContain("Math.round((baseDeductionAmount + extraDeductionAmount) * 100) / 100");
+    expect(section).toContain("roundTo2(baseDeductionAmount + extraDeductionAmount)");
   });
 
   it("includes human-readable reason with article ref and occurrence number", () => {

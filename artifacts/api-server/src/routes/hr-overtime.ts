@@ -23,6 +23,7 @@ import {
   getManagerAssignmentId,
   initiateApprovalChain,
   processApprovalStep,
+  roundTo2,
 } from "../lib/businessHelpers.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { generateSequentialNumber, calcHourlyRate as calcHourlyRateHelper } from "../lib/hrHelpers.js";
@@ -236,7 +237,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
 
     const hourlyRate = calcHourlyRate(Number(emp.salary || 0));
     const multiplier = Number(b.multiplier || 1.5);
-    const totalAmount = Math.round(hourlyRate * multiplier * hours * 100) / 100;
+    const totalAmount = roundTo2(hourlyRate * multiplier * hours);
 
     // التحقق من عدم التكرار
     const [existing] = await rawQuery<any>(

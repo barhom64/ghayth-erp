@@ -1,4 +1,5 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
+import { roundTo2 } from "./businessHelpers.js";
 
 export interface ClientRFM {
   clientId: number;
@@ -95,7 +96,7 @@ export async function calculateClientRFM(companyId: number, clientId: number): P
     recencyDays: recency,
     frequencyCount: freq,
     monetaryValue: monetary,
-    rfmScore: Math.round(rfmScore * 100) / 100,
+    rfmScore: roundTo2(rfmScore),
     segment,
     churnRisk,
     churnScore,

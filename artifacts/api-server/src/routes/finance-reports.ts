@@ -10,7 +10,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { currentPeriod, currentYear, toDateISO, todayISO } from "../lib/businessHelpers.js";
+import { currentPeriod, currentYear, toDateISO, todayISO, roundTo2 } from "../lib/businessHelpers.js";
 
 export const reportsRouter = Router();
 reportsRouter.use(authMiddleware);
@@ -263,33 +263,33 @@ reportsRouter.get("/reports/cash-flow", requirePermission("finance:read"), async
 
     res.json({
       period: { from, to },
-      openingCash: Math.round(openingCash * 100) / 100,
-      closingCash: Math.round(closingCash * 100) / 100,
+      openingCash: roundTo2(openingCash),
+      closingCash: roundTo2(closingCash),
       sections: {
         operating: {
-          inflows: Math.round(sections.operating.inflows * 100) / 100,
-          outflows: Math.round(sections.operating.outflows * 100) / 100,
-          net: Math.round(operating * 100) / 100,
+          inflows: roundTo2(sections.operating.inflows),
+          outflows: roundTo2(sections.operating.outflows),
+          net: roundTo2(operating),
           items: sections.operating.items,
         },
         investing: {
-          inflows: Math.round(sections.investing.inflows * 100) / 100,
-          outflows: Math.round(sections.investing.outflows * 100) / 100,
-          net: Math.round(investing * 100) / 100,
+          inflows: roundTo2(sections.investing.inflows),
+          outflows: roundTo2(sections.investing.outflows),
+          net: roundTo2(investing),
           items: sections.investing.items,
         },
         financing: {
-          inflows: Math.round(sections.financing.inflows * 100) / 100,
-          outflows: Math.round(sections.financing.outflows * 100) / 100,
-          net: Math.round(financing * 100) / 100,
+          inflows: roundTo2(sections.financing.inflows),
+          outflows: roundTo2(sections.financing.outflows),
+          net: roundTo2(financing),
           items: sections.financing.items,
         },
       },
-      netChange: Math.round(netChange * 100) / 100,
+      netChange: roundTo2(netChange),
       summary: {
-        totalInflow: Math.round((sections.operating.inflows + sections.investing.inflows + sections.financing.inflows) * 100) / 100,
-        totalOutflow: Math.round((sections.operating.outflows + sections.investing.outflows + sections.financing.outflows) * 100) / 100,
-        netCashFlow: Math.round(netChange * 100) / 100,
+        totalInflow: roundTo2(sections.operating.inflows + sections.investing.inflows + sections.financing.inflows),
+        totalOutflow: roundTo2(sections.operating.outflows + sections.investing.outflows + sections.financing.outflows),
+        netCashFlow: roundTo2(netChange),
       },
     });
   } catch (err) {
@@ -472,7 +472,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", requirePermission("fi
     let running = openingBalance;
     const movements = all.map((m: any) => {
       running += Number(m.debit) - Number(m.credit);
-      return { ...m, runningBalance: Math.round(running * 100) / 100 };
+      return { ...m, runningBalance: roundTo2(running) };
     });
 
     // Aging of OPEN invoices as of asOf (based on dueDate or invoice date +30)
@@ -501,28 +501,27 @@ reportsRouter.get("/reports/customer-statement/:clientId", requirePermission("fi
 
     const totalDebit = movements.reduce((s, m) => s + Number(m.debit), 0);
     const totalCredit = movements.reduce((s, m) => s + Number(m.credit), 0);
-    const endingBalance = Math.round((openingBalance + totalDebit - totalCredit) * 100) / 100;
+    const endingBalance = roundTo2(openingBalance + totalDebit - totalCredit);
 
     res.json({
       client,
       period: { from, to: asOf },
-      openingBalance: Math.round(openingBalance * 100) / 100,
+      openingBalance: roundTo2(openingBalance),
       movements,
       endingBalance,
       totals: {
-        totalDebit: Math.round(totalDebit * 100) / 100,
-        totalCredit: Math.round(totalCredit * 100) / 100,
+        totalDebit: roundTo2(totalDebit),
+        totalCredit: roundTo2(totalCredit),
         movementCount: movements.length,
       },
       aging: {
-        current: Math.round(buckets.current * 100) / 100,
-        "1-30": Math.round(buckets.d30 * 100) / 100,
-        "31-60": Math.round(buckets.d60 * 100) / 100,
-        "61-90": Math.round(buckets.d90 * 100) / 100,
-        "90+": Math.round(buckets.d90plus * 100) / 100,
-        total: Math.round(
-          (buckets.current + buckets.d30 + buckets.d60 + buckets.d90 + buckets.d90plus) * 100
-        ) / 100,
+        current: roundTo2(buckets.current),
+        "1-30": roundTo2(buckets.d30),
+        "31-60": roundTo2(buckets.d60),
+        "61-90": roundTo2(buckets.d90),
+        "90+": roundTo2(buckets.d90plus),
+        total: roundTo2(
+          (buckets.current + buckets.d30 + buckets.d60 + buckets.d90 + buckets.d90plus)),
       },
     });
   } catch (err) {
@@ -577,7 +576,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", requirePermission("fi
     let running = openingBalance;
     const movements = pos.map((m: any) => {
       running += Number(m.debit) - Number(m.credit);
-      return { ...m, runningBalance: Math.round(running * 100) / 100 };
+      return { ...m, runningBalance: roundTo2(running) };
     });
 
     // Aging of open POs
@@ -605,28 +604,27 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", requirePermission("fi
 
     const totalDebit = movements.reduce((s, m) => s + Number(m.debit), 0);
     const totalCredit = movements.reduce((s, m) => s + Number(m.credit), 0);
-    const endingBalance = Math.round((openingBalance + totalDebit - totalCredit) * 100) / 100;
+    const endingBalance = roundTo2(openingBalance + totalDebit - totalCredit);
 
     res.json({
       supplier,
       period: { from, to: asOf },
-      openingBalance: Math.round(openingBalance * 100) / 100,
+      openingBalance: roundTo2(openingBalance),
       movements,
       endingBalance,
       totals: {
-        totalDebit: Math.round(totalDebit * 100) / 100,
-        totalCredit: Math.round(totalCredit * 100) / 100,
+        totalDebit: roundTo2(totalDebit),
+        totalCredit: roundTo2(totalCredit),
         movementCount: movements.length,
       },
       aging: {
-        current: Math.round(buckets.current * 100) / 100,
-        "1-30": Math.round(buckets.d30 * 100) / 100,
-        "31-60": Math.round(buckets.d60 * 100) / 100,
-        "61-90": Math.round(buckets.d90 * 100) / 100,
-        "90+": Math.round(buckets.d90plus * 100) / 100,
-        total: Math.round(
-          (buckets.current + buckets.d30 + buckets.d60 + buckets.d90 + buckets.d90plus) * 100
-        ) / 100,
+        current: roundTo2(buckets.current),
+        "1-30": roundTo2(buckets.d30),
+        "31-60": roundTo2(buckets.d60),
+        "61-90": roundTo2(buckets.d90),
+        "90+": roundTo2(buckets.d90plus),
+        total: roundTo2(
+          (buckets.current + buckets.d30 + buckets.d60 + buckets.d90 + buckets.d90plus)),
       },
     });
   } catch (err) {

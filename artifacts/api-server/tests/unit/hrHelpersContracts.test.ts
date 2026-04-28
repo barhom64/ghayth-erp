@@ -71,7 +71,7 @@ describe("calcHourlyRate contracts", () => {
   it("rounds to 2 decimal places", () => {
     const idx = HELPERS_SRC.indexOf("function calcHourlyRate");
     const section = HELPERS_SRC.slice(idx, idx + 200);
-    expect(section).toContain("* 100) / 100");
+    expect(section).toContain("roundTo2(");
   });
 });
 
@@ -93,7 +93,7 @@ describe("calcOvertimeAmount contracts", () => {
   it("rounds to 2 decimal places", () => {
     const idx = HELPERS_SRC.indexOf("function calcOvertimeAmount");
     const section = HELPERS_SRC.slice(idx, idx + 300);
-    expect(section).toContain("* 100) / 100");
+    expect(section).toContain("roundTo2(");
   });
 });
 
@@ -115,7 +115,7 @@ describe("yearsOfService contracts", () => {
   it("rounds to 2 decimal places", () => {
     const idx = HELPERS_SRC.indexOf("function yearsOfService");
     const section = HELPERS_SRC.slice(idx, idx + 300);
-    expect(section).toContain("* 100) / 100");
+    expect(section).toContain("roundTo2(");
   });
 
   it("accepts both string and Date inputs", () => {
@@ -145,7 +145,7 @@ describe("calcGratuity contracts", () => {
     const section = HELPERS_SRC.slice(idx, idx + 500);
     expect(section).toContain("first5Years,");
     expect(section).toContain("after5Years,");
-    expect(section).toContain("total: Math.round((first5Years + after5Years) * 100) / 100");
+    expect(section).toContain("total: roundTo2(first5Years + after5Years)");
   });
 });
 

@@ -1137,37 +1137,43 @@ router.get("/governance/system-guards", requirePermission("admin:read"), async (
 });
 
 router.get("/governance/domain-registry", requirePermission("admin:read"), async (_req, res) => {
-  res.json({ domains: DOMAIN_REGISTRY, stats: getSystemStats() });
+  try {
+    res.json({ domains: DOMAIN_REGISTRY, stats: getSystemStats() });
+  } catch (err) { handleRouteError(err, res, "Domain registry error:"); }
 });
 
 router.get("/governance/gl-reconciliation", requirePermission("admin:read"), async (req, res) => {
-  const companyId = (req as any).companyId;
-  const mismatches = await rawQuery<any>(
-    `SELECT
-       coa.code,
-       coa.name,
-       coa."currentBalance" AS stored_balance,
-       COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)::numeric(15,2) AS computed_balance,
-       (coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0))::numeric(15,2) AS drift
-     FROM chart_of_accounts coa
-     LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
-       AND jl."journalId" IN (SELECT id FROM journal_entries WHERE "companyId" = $1 AND "deletedAt" IS NULL)
-     WHERE coa."companyId" = $1 AND coa."deletedAt" IS NULL AND coa."allowPosting" = true
-     GROUP BY coa.code, coa.name, coa."currentBalance"
-     HAVING ABS(coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)) > 0.01
-     ORDER BY ABS(coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)) DESC
-     LIMIT 50`,
-    [companyId]
-  );
-  res.json({
-    healthy: mismatches.length === 0,
-    driftCount: mismatches.length,
-    mismatches,
-  });
+  try {
+    const companyId = (req as any).companyId;
+    const mismatches = await rawQuery<any>(
+      `SELECT
+         coa.code,
+         coa.name,
+         coa."currentBalance" AS stored_balance,
+         COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)::numeric(15,2) AS computed_balance,
+         (coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0))::numeric(15,2) AS drift
+       FROM chart_of_accounts coa
+       LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
+         AND jl."journalId" IN (SELECT id FROM journal_entries WHERE "companyId" = $1 AND "deletedAt" IS NULL)
+       WHERE coa."companyId" = $1 AND coa."deletedAt" IS NULL AND coa."allowPosting" = true
+       GROUP BY coa.code, coa.name, coa."currentBalance"
+       HAVING ABS(coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)) > 0.01
+       ORDER BY ABS(coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)) DESC
+       LIMIT 50`,
+      [companyId]
+    );
+    res.json({
+      healthy: mismatches.length === 0,
+      driftCount: mismatches.length,
+      mismatches,
+    });
+  } catch (err) { handleRouteError(err, res, "GL reconciliation error:"); }
 });
 
 router.get("/governance/lifecycle-machines", requirePermission("admin:read"), async (_req, res) => {
-  res.json({ machines: STATE_MACHINES, total: STATE_MACHINES.length });
+  try {
+    res.json({ machines: STATE_MACHINES, total: STATE_MACHINES.length });
+  } catch (err) { handleRouteError(err, res, "Lifecycle machines error:"); }
 });
 
 router.get("/governance/event-dlq", requirePermission("admin:read"), async (req, res) => {

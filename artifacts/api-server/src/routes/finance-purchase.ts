@@ -17,6 +17,7 @@ import {
   updateBudgetUsed,
   checkFinancialPeriodOpen,
   computeVat,
+  roundTo2,
   currentYear,
   generateRef,
   todayISO,
@@ -639,11 +640,11 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
       const item = poItemMap.get(l.poItemId)!;
       subtotal += l.receivedQty * Number(item.unitPrice);
     }
-    subtotal = Math.round(subtotal * 100) / 100;
+    subtotal = roundTo2(subtotal);
     const poSubtotal = Number(po.totalAmount) - Number(po.vatAmount ?? 0);
     const vatRatio = poSubtotal > 0 ? Number(po.vatAmount ?? 0) / poSubtotal : 0;
-    const vatAmount = Math.round(subtotal * vatRatio * 100) / 100;
-    const grnTotal = Math.round((subtotal + vatAmount) * 100) / 100;
+    const vatAmount = roundTo2(subtotal * vatRatio);
+    const grnTotal = roundTo2(subtotal + vatAmount);
 
     // Create GRN header
     const [grnSeq] = await rawQuery<any>(
@@ -661,7 +662,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
     // Insert GRN lines + update PO items cumulative receivedQty
     for (const l of inputLines) {
       const item = poItemMap.get(l.poItemId)!;
-      const lineTotal = Math.round(l.receivedQty * Number(item.unitPrice) * 100) / 100;
+      const lineTotal = roundTo2(l.receivedQty * Number(item.unitPrice));
       await rawExecute(
         `INSERT INTO goods_receipt_items ("grnId","poItemId","itemName","receivedQty","unitPrice","lineTotal",notes)
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
@@ -827,7 +828,7 @@ purchaseRouter.get("/purchase-orders/:id/match", requirePermission("finance:read
     let canInvoiceTotal = 0;
     const lines = items.map((it: any) => {
       const canInvoiceQty = Math.max(0, Number(it.receivedQty) - Number(it.invoicedQty));
-      const canInvoiceAmount = Math.round(canInvoiceQty * Number(it.unitPrice) * 100) / 100;
+      const canInvoiceAmount = roundTo2(canInvoiceQty * Number(it.unitPrice));
       canInvoiceTotal += canInvoiceAmount;
       return {
         ...it,
@@ -840,7 +841,7 @@ purchaseRouter.get("/purchase-orders/:id/match", requirePermission("finance:read
     res.json({
       po,
       lines,
-      canInvoiceTotal: Math.round(canInvoiceTotal * 100) / 100,
+      canInvoiceTotal: roundTo2(canInvoiceTotal),
     });
   } catch (err) {
     handleRouteError(err, res, "Three-way match error:");
@@ -890,7 +891,7 @@ purchaseRouter.get("/payment-run/pending", requirePermission("finance:read"), as
     }
     res.json({
       data: rows,
-      totalDue: Math.round(totalDue * 100) / 100,
+      totalDue: roundTo2(totalDue),
       byVendor: Array.from(byVendor.values()),
     });
   } catch (err) {
@@ -932,7 +933,7 @@ purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"),
       throw new ValidationError(`بعض الأوامر ليست في حالة قابلة للدفع: ${invalid.map((p: any) => p.ref).join(", ")}`);
     }
 
-    const totalPayment = Math.round(pos.reduce((sum: number, p: any) => sum + Number(p.totalAmount), 0) * 100) / 100;
+    const totalPayment = roundTo2(pos.reduce((sum: number, p: any) => sum + Number(p.totalAmount), 0));
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [apAccount, cashAccount] = await Promise.all([

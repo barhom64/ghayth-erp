@@ -1,5 +1,5 @@
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
-import { createJournalEntry, createGuardedJournalEntry, getAccountCodeFromMapping, emitEvent, createAuditLog, currentYear, currentMonthPadded } from "./businessHelpers.js";
+import { createJournalEntry, createGuardedJournalEntry, getAccountCodeFromMapping, emitEvent, createAuditLog, currentYear, currentMonthPadded, roundTo2 } from "./businessHelpers.js";
 import { NotFoundError, ConflictError, ValidationError } from "./errorHandler.js";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -158,7 +158,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     [scope.companyId]
   );
   const vatRate = vatSetting ? Number(vatSetting.value) : 0;
-  const vatAmount = Math.round(subtotal * (vatRate / 100) * 100) / 100;
+  const vatAmount = roundTo2(subtotal * (vatRate / 100));
   const total = subtotal + penaltiesTotal + vatAmount;
 
   const [seqRow] = await rawQuery<any>(`SELECT nextval('umrah_sales_invoice_seq') AS seq`);
@@ -323,7 +323,7 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
       if (invRemaining <= 0) continue;
 
       const allocAmount = Math.min(remaining, invRemaining);
-      remaining = Math.round((remaining - allocAmount) * 100) / 100;
+      remaining = roundTo2(remaining - allocAmount);
 
       await client.query(
         `INSERT INTO umrah_payment_allocations ("paymentId","invoiceId",amount)
@@ -331,7 +331,7 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
         [paymentId, inv.id, allocAmount]
       );
 
-      const newPaid = Math.round((Number(inv.paidAmount) + allocAmount) * 100) / 100;
+      const newPaid = roundTo2(Number(inv.paidAmount) + allocAmount);
       const newStatus = newPaid >= Number(inv.total) - 0.01 ? "paid" : "partially_paid";
 
       if (newStatus === "paid") {
@@ -481,7 +481,7 @@ function buildDetailedStatement(
   });
 
   for (const item of all) {
-    balance = Math.round((balance + item.entry.debit - item.entry.credit) * 100) / 100;
+    balance = roundTo2(balance + item.entry.debit - item.entry.credit);
     entries.push({ ...item.entry, balance });
   }
 
@@ -546,7 +546,7 @@ function buildSummaryStatement(
   });
 
   for (const item of allEntries) {
-    balance = Math.round((balance + item.entry.amount) * 100) / 100;
+    balance = roundTo2(balance + item.entry.amount);
     entries.push({ ...item.entry, balance });
   }
 

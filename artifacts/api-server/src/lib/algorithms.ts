@@ -21,34 +21,6 @@ export function haversineDistance(
 
 export const haversineKm = haversineDistance;
 
-export function estimateTravelTime(distanceKm: number, avgSpeedKmh: number = 40): number {
-  if (distanceKm <= 0 || avgSpeedKmh <= 0) return 0;
-  return (distanceKm / avgSpeedKmh) * 60;
-}
-
-export function fieldTaskDistance(
-  fromLat: number,
-  fromLon: number,
-  toLat: number,
-  toLon: number
-): { distanceKm: number; travelMinutes: number } {
-  const distanceKm = haversineDistance(fromLat, fromLon, toLat, toLon);
-  const travelMinutes = estimateTravelTime(distanceKm, 40);
-  return { distanceKm: Math.round(distanceKm * 100) / 100, travelMinutes: Math.round(travelMinutes) };
-}
-
-const TASK_TYPE_DEFAULTS: Record<string, number> = {
-  maintenance: 90,
-  inspection: 45,
-  installation: 120,
-  delivery: 30,
-  visit: 60,
-  session: 180,
-  collection: 45,
-  repair: 90,
-  survey: 60,
-};
-
 export function movingAverage(values: number[], periods?: number): number {
   if (values.length === 0) return 0;
   const p = periods ?? values.length;
@@ -56,45 +28,6 @@ export function movingAverage(values: number[], periods?: number): number {
   const totalWeight = window.reduce((sum, _, i) => sum + (i + 1), 0);
   const weightedSum = window.reduce((sum, val, i) => sum + val * (i + 1), 0);
   return totalWeight > 0 ? weightedSum / totalWeight : 0;
-}
-
-export async function estimateTaskDuration(
-  companyId: number,
-  taskType: string,
-  employeeId?: number
-): Promise<number> {
-  const defaultDuration = TASK_TYPE_DEFAULTS[taskType?.toLowerCase()] ?? 60;
-
-  try {
-    const conditions = [`t."companyId" = $1`, `t.status = 'completed'`];
-    const params: any[] = [companyId];
-
-    if (taskType) {
-      params.push(taskType);
-      conditions.push(`LOWER(t.type) = LOWER($${params.length})`);
-    }
-    if (employeeId) {
-      params.push(employeeId);
-      conditions.push(`t."assignedTo" = $${params.length}`);
-    }
-
-    const rows = await rawQuery<{ duration: number }>(
-      `SELECT EXTRACT(EPOCH FROM (t."completedAt" - t."scheduledStart")) / 60 AS duration
-       FROM tasks t
-       WHERE ${conditions.join(" AND ")}
-         AND t."completedAt" IS NOT NULL AND t."scheduledStart" IS NOT NULL
-       ORDER BY t."completedAt" DESC
-       LIMIT 30`,
-      params
-    );
-
-    if (rows.length < 3) return defaultDuration;
-
-    const durations = rows.map((r) => Math.max(1, Number(r.duration)));
-    return Math.round(movingAverage(durations, 30));
-  } catch {
-    return defaultDuration;
-  }
 }
 
 export interface Resource {

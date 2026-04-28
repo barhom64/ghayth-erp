@@ -10,7 +10,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { currentPeriod, toDateISO } from "../lib/businessHelpers.js";
+import { currentPeriod, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 import { obligationSummary } from "../lib/obligationsEngine.js";
 
@@ -46,7 +46,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
         [companyId]
       );
       const total = rows.reduce((s: number, r: any) => s + Number(r.currentBalance ?? 0), 0);
-      return { total: Math.round(total * 100) / 100, accounts: rows };
+      return { total: roundTo2(total), accounts: rows };
     }, { total: 0, accounts: [] });
 
     // ─── 2. AR AGING ───────────────────────────────────────────────────────
@@ -155,7 +155,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
             accountCode: r.accountCode,
             accountName: r.accountName,
             budget,
-            actual: Math.round(actual * 100) / 100,
+            actual: roundTo2(actual),
             pct: budget > 0 ? Math.round((actual / budget) * 10000) / 100 : 0,
           };
         })
