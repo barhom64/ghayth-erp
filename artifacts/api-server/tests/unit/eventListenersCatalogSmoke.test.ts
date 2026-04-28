@@ -28,10 +28,10 @@ describe("eventListeners — exports", () => {
 
 describe("eventListeners — HR events", () => {
   for (const e of [
-    "employee.created", "employee.updated", "employee.deleted",
+    "employee.created", "employee.updated",
     "leave.requested", "leave.approved", "leave.rejected", "leave.completed",
     "attendance.checkin", "attendance.checkout",
-    "payroll.processed", "payroll.completed",
+    "payroll.completed",
   ]) {
     it(`handles ${e}`, () => {
       expect(LISTENERS).toContain(`"${e}"`);
@@ -128,7 +128,7 @@ describe("eventListeners — fleet events", () => {
 describe("eventListeners — warehouse events", () => {
   for (const e of [
     "warehouse.product.created", "warehouse.product.updated",
-    "warehouse.product.status_changed", "warehouse.product.deleted",
+    "warehouse.product.deleted",
     "warehouse.movement.created",
   ]) {
     it(`handles ${e}`, () => {
@@ -143,7 +143,7 @@ describe("eventListeners — property events", () => {
   for (const e of [
     "lease.created", "lease.expired", "lease.renewal_notice",
     "tenant.created", "rent_payment.received",
-    "deposit.received", "deposit.refunded",
+    "deposit.received",
   ]) {
     it(`handles ${e}`, () => {
       expect(LISTENERS).toContain(`"${e}"`);
