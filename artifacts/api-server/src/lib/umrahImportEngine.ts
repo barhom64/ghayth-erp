@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
-import { emitEvent, createAuditLog, createJournalEntry, getAccountCodeFromMapping } from "./businessHelpers.js";
+import { emitEvent, createAuditLog, createJournalEntry, getAccountCodeFromMapping, toDateISO } from "./businessHelpers.js";
 import { ValidationError } from "./errorHandler.js";
 import type pg from "pg";
 
@@ -168,7 +168,7 @@ function parseWorkbook(buffer: Buffer, headerMap: Record<string, string>, fileTy
     for (const { idx, field } of colMap) {
       let val: any = dataRow[idx];
       if (val instanceof Date) {
-        val = val.toISOString().split("T")[0];
+        val = toDateISO(val);
       } else {
         val = String(val ?? "").trim();
       }

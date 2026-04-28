@@ -16,6 +16,10 @@ export function currentPeriod(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
+export function currentMonthPadded(): string {
+  return String(new Date().getMonth() + 1).padStart(2, "0");
+}
+
 export function toDateISO(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
   return d.toISOString().split("T")[0];

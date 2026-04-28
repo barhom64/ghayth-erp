@@ -12,7 +12,7 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
@@ -2113,7 +2113,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
 
     let invoiceId: number | null = null;
     if (cost > 0 && !b.coveredByContract) {
-      const monthNum = String(new Date().getMonth() + 1).padStart(2, "0");
+      const monthNum = currentMonthPadded();
       const yearShort = String(currentYear()).slice(2);
       const ref = `INV-MAINT-${yearShort}${monthNum}-${id}`;
       const vatAmount = cost * 0.15;
@@ -2451,7 +2451,7 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
               code: `BLDG-${insertId}`,
               name: b.name,
               description: `أصل ثابت — مبنى ${b.name}${b.city ? ` — ${b.city}` : ""}`,
-              purchaseDate: b.purchaseDate || new Date().toISOString().slice(0, 10),
+              purchaseDate: b.purchaseDate || todayISO(),
               purchaseCost: Number(b.purchasePrice),
               salvageValue: salvage,
               usefulLifeYears: usefulYears,
@@ -2801,7 +2801,7 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
       const updatedCost = Number(b.actualCost ?? existing.actualCost ?? 0);
       if (updatedCost > 0) {
         try {
-          const monthNum = String(new Date().getMonth() + 1).padStart(2, "0");
+          const monthNum = currentMonthPadded();
           const yearShort = String(currentYear()).slice(2);
           const ref = `INV-MAINT-${yearShort}${monthNum}-${id}`;
           const vatAmount = updatedCost * 0.15;

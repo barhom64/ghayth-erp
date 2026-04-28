@@ -19,6 +19,8 @@ import {
   computeVat,
   currentYear,
   generateRef,
+  todayISO,
+  toDateISO,
 } from "../lib/businessHelpers.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -909,7 +911,7 @@ purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"),
     const parsed = executePaymentRunSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { poIds, paymentDate, method = "bank_transfer", reference, bankAccount } = parsed.data as any;
-    const payDate = paymentDate || new Date().toISOString().slice(0, 10);
+    const payDate = paymentDate || todayISO();
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, payDate);
     if (!periodCheck.open) {
       throw new ConflictError(`لا يمكن تنفيذ دفعات في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);

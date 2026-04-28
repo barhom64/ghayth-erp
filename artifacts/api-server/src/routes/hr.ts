@@ -2616,7 +2616,7 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
     }
 
     const period = reqPeriod || currentPeriod();
-    const incidentDate = reqIncidentDate || new Date().toISOString().slice(0, 10);
+    const incidentDate = reqIncidentDate || todayISO();
     const effectiveSeverity = severity ?? "medium";
     const effectiveDeduction = Number(deduction ?? 0);
 

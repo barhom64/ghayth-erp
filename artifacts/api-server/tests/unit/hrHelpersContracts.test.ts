@@ -171,25 +171,16 @@ describe("generateSequentialNumber contracts", () => {
     expect(section).toContain('"companyId" = $1');
   });
 
-  it("defaults year to current year", () => {
-    expect(HELPERS_SRC).toContain("year: number = new Date().getFullYear()");
+  it("defaults year to currentYear() from businessHelpers", () => {
+    expect(HELPERS_SRC).toContain("year: number = currentYear()");
   });
 });
 
-// ─── actionOk helper ───────────────────────────────────────────────────────
+// ─── actionOk removed (moved to unused) ────────────────────────────────────
 
-describe("actionOk contracts", () => {
-  it("returns {success: true} with message", () => {
-    const idx = HELPERS_SRC.indexOf("function actionOk");
-    const section = HELPERS_SRC.slice(idx, idx + 200);
-    expect(section).toContain("success: true");
-    expect(section).toContain("message");
-  });
-
-  it("conditionally includes data when provided", () => {
-    const idx = HELPERS_SRC.indexOf("function actionOk");
-    const section = HELPERS_SRC.slice(idx, idx + 200);
-    expect(section).toContain("data ? { data } : {}");
+describe("actionOk removed from hrHelpers", () => {
+  it("no longer exports actionOk", () => {
+    expect(HELPERS_SRC).not.toContain("function actionOk");
   });
 });
 

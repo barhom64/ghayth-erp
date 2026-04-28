@@ -1,6 +1,6 @@
 import { eventBus, registerCrossDomainHandler, type EventPayload } from "./eventBus.js";
 import { pool, rawQuery, rawExecute } from "./rawdb.js";
-import { createNotification, getManagerAssignmentId, createJournalEntry, getAccountCodeFromMapping } from "./businessHelpers.js";
+import { createNotification, getManagerAssignmentId, createJournalEntry, getAccountCodeFromMapping, todayISO, toDateISO, currentYear } from "./businessHelpers.js";
 import { computeDiff } from "./auditDiff.js";
 import { calculateAllForCompany } from "./umrahCommissionEngine.js";
 import { registerObligation, markObligationMet } from "./obligationsEngine.js";
@@ -801,7 +801,7 @@ export function registerEventListeners() {
       try {
         const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
         const month = Number(details.month) || new Date().getMonth() + 1;
-        const year = Number(details.year) || new Date().getFullYear();
+        const year = Number(details.year) || currentYear();
         const results = await calculateAllForCompany(payload.companyId, month, year, (payload.userId as number) || 0);
         if (results.length > 0) {
           const total = results.reduce((s, r) => s + r.finalAmount, 0);
@@ -1575,7 +1575,7 @@ export function registerEventListeners() {
         subtotal,
         total,
         vatAmount,
-        payload.dueDate ?? new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0],
+        payload.dueDate ?? toDateISO(new Date(Date.now() + 14 * 86400000)),
         payload.userId ?? 0,
       ]
     );
@@ -1604,7 +1604,7 @@ export function registerEventListeners() {
         payload.name,
         payload.description ?? "",
         payload.category ?? "أخرى",
-        payload.purchaseDate ?? new Date().toISOString().slice(0, 10),
+        payload.purchaseDate ?? todayISO(),
         Number(payload.purchaseCost ?? 0),
         Number(payload.salvageValue ?? 0),
         Number(payload.usefulLifeYears ?? 5),

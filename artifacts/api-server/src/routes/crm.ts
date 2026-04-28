@@ -9,7 +9,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, currentMonthPadded } from "../lib/businessHelpers.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -668,7 +668,7 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
       console.error("Failed to request legal contract for deal-won:", contractErr);
     }
 
-    const monthNum = String(new Date().getMonth() + 1).padStart(2, "0");
+    const monthNum = currentMonthPadded();
     const yearShort = String(currentYear()).slice(2);
     const invoiceRef = `INV-CRM-${yearShort}${monthNum}-${opp.id}`;
     const vatAmount = dealValue * 0.15;

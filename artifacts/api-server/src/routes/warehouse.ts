@@ -17,6 +17,7 @@ import {
   createAuditLog,
   emitEvent,
   todayISO,
+  toDateISO,
 } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
@@ -139,7 +140,7 @@ async function postInventoryMovementGl(params: {
       return null;
     }
 
-    const today = (params.date ?? new Date().toISOString().slice(0, 10))
+    const today = (params.date ?? todayISO())
       .toString()
       .slice(0, 10);
     const period = await checkFinancialPeriodOpen(params.companyId, today);

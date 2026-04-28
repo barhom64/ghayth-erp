@@ -14,7 +14,7 @@
 
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { ensureInquiryMemoForViolation, type IncidentType } from "./disciplineEngine.js";
-import { createNotification, getManagerAssignmentId, emitEvent } from "./businessHelpers.js";
+import { createNotification, getManagerAssignmentId, emitEvent, todayISO } from "./businessHelpers.js";
 import { eventBus } from "./eventBus.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ export async function runAutoDetection(
   companyId: number,
   targetDate?: string
 ): Promise<AutoDetectionResult> {
-  const date = targetDate ?? new Date().toISOString().split("T")[0]!;
+  const date = targetDate ?? todayISO();
   const period = date.slice(0, 7); // YYYY-MM
   const settings = await getAutoDetectionSettings(companyId);
 

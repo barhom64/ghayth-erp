@@ -1,5 +1,5 @@
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
-import { createJournalEntry, createGuardedJournalEntry, getAccountCodeFromMapping, emitEvent, createAuditLog } from "./businessHelpers.js";
+import { createJournalEntry, createGuardedJournalEntry, getAccountCodeFromMapping, emitEvent, createAuditLog, currentYear, currentMonthPadded } from "./businessHelpers.js";
 import { NotFoundError, ConflictError, ValidationError } from "./errorHandler.js";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -163,8 +163,8 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
 
   const [seqRow] = await rawQuery<any>(`SELECT nextval('umrah_sales_invoice_seq') AS seq`);
   const seqNum = Number(seqRow.seq);
-  const year = new Date().getFullYear();
-  const month = String(new Date().getMonth() + 1).padStart(2, "0");
+  const year = currentYear();
+  const month = currentMonthPadded();
   const ref = `UINV-${year}${month}-${String(seqNum).padStart(4, "0")}`;
 
   let invoiceId!: number;
@@ -271,8 +271,8 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
 
   const [seqRow] = await rawQuery<any>(`SELECT nextval('umrah_payment_seq') AS seq`);
   const seqNum = Number(seqRow.seq);
-  const year = new Date().getFullYear();
-  const month = String(new Date().getMonth() + 1).padStart(2, "0");
+  const year = currentYear();
+  const month = currentMonthPadded();
   const payRef = `UPAY-${year}${month}-${String(seqNum).padStart(4, "0")}`;
 
   let paymentId!: number;

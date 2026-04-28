@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { rawQuery } from "./rawdb.js";
+import { currentYear } from "./businessHelpers.js";
 
 // ─── توليد رقم متسلسل سنوي ─────────────────────────────────────────────────
 // مثال: generateSequentialNumber("hr_employee_loans", 1, "LN") → "LN-2026-0001"
@@ -12,7 +13,7 @@ export async function generateSequentialNumber(
   tableName: string,
   companyId: number,
   prefix: string,
-  year: number = new Date().getFullYear(),
+  year: number = currentYear(),
 ): Promise<string> {
   const [row] = await rawQuery<{ cnt: string }>(
     `SELECT COUNT(*)::int AS cnt FROM ${tableName}
@@ -85,22 +86,4 @@ export function calcGratuity(monthlySalary: number, years: number): {
     after5Years,
     total: Math.round((first5Years + after5Years) * 100) / 100,
   };
-}
-
-// ─── شكل الاستجابة الموحّد للقوائم ─────────────────────────────────────────
-export interface ListResponse<T> {
-  data: T[];
-  stats?: Record<string, any>;
-  total: number;
-}
-
-// ─── شكل الاستجابة الموحّد للإجراءات (موافقة/رفض/إنشاء) ──────────────────
-export interface ActionResponse {
-  success: true;
-  message: string;
-  data?: Record<string, any>;
-}
-
-export function actionOk(message: string, data?: Record<string, any>): ActionResponse {
-  return { success: true, message, ...(data ? { data } : {}) };
 }

@@ -1,4 +1,5 @@
 import { rawQuery } from "./rawdb.js";
+import { todayISO } from "./businessHelpers.js";
 
 // ─── System Governor — حاكم النظام ──────────────────────────────────────
 // Central control layer that can HALT operations based on business conditions.
@@ -147,7 +148,7 @@ export function requireGuards(scope: GuardScope = "financial") {
     const companyId = (req as any).scope?.companyId;
     if (!companyId) return next();
     const result = await checkSystemGuards(companyId, scope, {
-      date: new Date().toISOString().split("T")[0],
+      date: todayISO(),
       entity: req.path.split("/")[1],
     });
     if (!result.allowed) {
