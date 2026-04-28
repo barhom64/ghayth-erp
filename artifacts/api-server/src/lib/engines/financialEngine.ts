@@ -18,6 +18,7 @@ import {
   getAccountCodeFromMapping,
   validateBudget,
   updateBudgetUsed,
+  todayISO,
   type JournalEntryLine,
 } from "../businessHelpers.js";
 import { eventBus } from "../eventBus.js";
@@ -84,7 +85,7 @@ class FinancialEngineImpl implements DomainEngine {
 
     const periodCheck = await checkFinancialPeriodOpen(
       request.companyId,
-      new Date().toISOString().split("T")[0]
+      todayISO()
     );
     if (!periodCheck.open) {
       throw new Error(
@@ -145,7 +146,7 @@ class FinancialEngineImpl implements DomainEngine {
     companyId: number,
     date?: string
   ): Promise<{ open: boolean; periodName?: string }> {
-    const targetDate = date ?? new Date().toISOString().split("T")[0];
+    const targetDate = date ?? todayISO();
     return checkFinancialPeriodOpen(companyId, targetDate);
   }
 

@@ -20,6 +20,7 @@ import {
   todayISO,
   currentYear,
   toDateISO,
+  currentMonthPadded,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
@@ -821,7 +822,7 @@ router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update
         const allPhases = await rawQuery<any>(`SELECT id FROM project_phases WHERE "projectId"=$1`, [projectId]);
         const phaseWeight = allPhases.length > 0 ? 1 / allPhases.length : 0.25;
         const milestoneAmount = Number(project.budget) * phaseWeight;
-        const monthNum = String(new Date().getMonth() + 1).padStart(2, "0");
+        const monthNum = currentMonthPadded();
         const yearShort = String(currentYear()).slice(2);
         const ref = `INV-MS-${yearShort}${monthNum}-${phaseId}`;
         const vatAmount = milestoneAmount * 0.15;
@@ -1878,7 +1879,7 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
     let journalEntryId: number | null = null;
     if (totalWip > 0) {
       try {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = todayISO();
         const period = await checkFinancialPeriodOpen(scope.companyId, today);
         if (!period.open) {
           console.warn(

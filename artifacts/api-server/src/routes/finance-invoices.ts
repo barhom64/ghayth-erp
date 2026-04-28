@@ -24,6 +24,7 @@ import {
   currentPeriod,
   currentYear,
   toDateISO,
+  currentMonthPadded,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -345,7 +346,7 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
     const [seqRow] = await rawQuery<any>(`SELECT nextval('invoice_number_seq') AS seq`);
     const seqNum = Number(seqRow.seq);
     const year = currentYear();
-    const month = String(new Date().getMonth() + 1).padStart(2, "0");
+    const month = currentMonthPadded();
     const ref = `INV-${year}${month}-${String(seqNum).padStart(4, "0")}`;
 
     const vatAmount = validatedLines.length > 0
@@ -1011,8 +1012,8 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
     }
 
     const memoDateStr = memoDate
-      ? new Date(memoDate).toISOString().slice(0, 10)
-      : new Date().toISOString().slice(0, 10);
+      ? toDateISO(memoDate)
+      : todayISO();
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, memoDateStr);
     if (!periodCheck.open) {
       throw new ConflictError(`لا يمكن إصدار إشعار دائن في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
@@ -1159,8 +1160,8 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
 
     const chargeAmount = Math.round(Number(amount) * 100) / 100;
     const memoDateStr = memoDate
-      ? new Date(memoDate).toISOString().slice(0, 10)
-      : new Date().toISOString().slice(0, 10);
+      ? toDateISO(memoDate)
+      : todayISO();
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, memoDateStr);
     if (!periodCheck.open) {
       throw new ConflictError(`لا يمكن إصدار إشعار مدين في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
@@ -1309,7 +1310,7 @@ invoicesRouter.get("/invoices/:id/memos", requirePermission("finance:read"), asy
 invoicesRouter.get("/bad-debt/preview", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const asOf = (req.query.asOf as string) || new Date().toISOString().slice(0, 10);
+    const asOf = (req.query.asOf as string) || todayISO();
     const rates = {
       current: Number(req.query.rateCurrent ?? 0),
       d30: Number(req.query.rate30 ?? 0.05),
@@ -1487,7 +1488,7 @@ invoicesRouter.post("/customer-advances", requirePermission("finance:create"), a
     if (!parsedAdvance.success) throw new ValidationError(parsedAdvance.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { clientId, amount, method = "bank_transfer", reference, notes, receivedDate } = parsedAdvance.data;
 
-    const recvDate = receivedDate || new Date().toISOString().slice(0, 10);
+    const recvDate = receivedDate || todayISO();
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, recvDate);
     if (!periodCheck.open) {
       throw new ConflictError(`لا يمكن تسجيل دفعة مقدمة في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
@@ -1773,7 +1774,7 @@ invoicesRouter.get("/dunning/preview", requirePermission("finance:read"), async 
     const scope = req.scope!;
     await ensureDunningTables();
     const minDays = Number(req.query.minDaysPastDue ?? 1);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayISO();
 
     const rows = await rawQuery<any>(
       `SELECT i.id, i.ref AS "invoiceNumber", i."createdAt"::date AS "invoiceDate", i."dueDate",
@@ -1856,7 +1857,7 @@ invoicesRouter.post("/dunning/send", requirePermission("finance:create"), async 
       throw new ValidationError("invoiceIds مطلوبة (قائمة معرفات الفواتير)");
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayISO();
     const results: any[] = [];
 
     for (const invId of invoiceIds) {
@@ -1944,10 +1945,10 @@ invoicesRouter.get("/dunning/history", requirePermission("finance:read"), async 
 invoicesRouter.get("/tax/declarations", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const currentYear = currentYear();
+    const thisYear = currentYear();
     const declarations = [];
     for (let m = 1; m <= 12; m++) {
-      const period = `${currentYear}-${String(m).padStart(2, "0")}`;
+      const period = `${thisYear}-${String(m).padStart(2, "0")}`;
       const [stats] = await rawQuery<any>(`SELECT COALESCE(SUM("vatAmount"), 0) AS "outputVat", COUNT(*) AS "invoiceCount" FROM invoices WHERE "companyId" = $1 AND to_char("createdAt", 'YYYY-MM') = $2 AND "deletedAt" IS NULL`, [scope.companyId, period]);
       if (Number(stats?.invoiceCount ?? 0) > 0) {
         declarations.push({ period, outputVat: Number(stats.outputVat), inputVat: 0, netVat: Number(stats.outputVat), invoiceCount: Number(stats.invoiceCount), status: m < new Date().getMonth() + 1 ? "submitted" : "pending" });

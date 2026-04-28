@@ -1,4 +1,5 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
+import { todayISO } from "./businessHelpers.js";
 
 export interface KPISnapshot {
   companyId: number;
@@ -204,7 +205,7 @@ export async function getCompanyKPIs(companyId: number): Promise<{
   avgClientSatisfaction: number;
   taskCompletionRate: number;
 }> {
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayISO();
   const [supResp] = await rawQuery<any>(
     `SELECT COUNT(*) FILTER (WHERE "firstResponseAt" IS NOT NULL)::float / NULLIF(COUNT(*), 0) * 100 AS rate
      FROM support_tickets WHERE "companyId"=$1 AND "createdAt"::date >= CURRENT_DATE - INTERVAL '30 days'`,

@@ -1,5 +1,5 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
-import { createNotification, getManagerAssignmentId } from "./businessHelpers.js";
+import { createNotification, getManagerAssignmentId, currentYear, toDateISO } from "./businessHelpers.js";
 import { eventBus } from "./eventBus.js";
 
 async function logAutomation(params: {
@@ -404,7 +404,7 @@ export async function proactiveAnnualPerformanceReview(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let created = 0;
   const currentMonth = new Date().getMonth() + 1;
-  const currentYear = new Date().getFullYear();
+  const curYear = currentYear();
   if (currentMonth !== 1 && currentMonth !== 7) return "Not review month (Jan/Jul)";
   for (const company of companies) {
     if (!(await isRuleActive("annual_performance_review", company.id))) continue;
@@ -420,7 +420,7 @@ export async function proactiveAnnualPerformanceReview(): Promise<string> {
              AND EXTRACT(YEAR FROM al."createdAt") = $2
              AND EXTRACT(MONTH FROM al."createdAt") = $3
          )`,
-      [company.id, currentYear, currentMonth]
+      [company.id, curYear, currentMonth]
     );
     for (const emp of employees) {
       const managerId = await getManagerAssignmentId(company.id, emp.branchId ?? 0);
@@ -528,7 +528,7 @@ export async function proactiveVehicleBreakdown(payload: {
       const [maint] = await rawQuery<any>(
         `INSERT INTO fleet_maintenance ("companyId","vehicleId",type,description,cost,"serviceDate",status,"nextServiceDate")
          VALUES ($1,$2,'breakdown',$3,0,CURRENT_DATE,'pending',$4) RETURNING id`,
-        [payload.companyId, payload.vehicleId, payload.description || `عطل تلقائي — ${payload.plateNumber}`, nextServiceDate.toISOString().split('T')[0]]
+        [payload.companyId, payload.vehicleId, payload.description || `عطل تلقائي — ${payload.plateNumber}`, toDateISO(nextServiceDate)]
       );
       maintenanceId = maint?.id ?? null;
     } catch (err) {

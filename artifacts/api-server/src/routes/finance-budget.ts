@@ -12,7 +12,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
-import { emitEvent, createAuditLog, currentPeriod, currentYear } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog, currentPeriod, currentYear, toDateISO } from "../lib/businessHelpers.js";
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
@@ -491,7 +491,7 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
     }
     const [y, m] = period.split("-").map(Number);
     const periodStart = `${y}-${String(m).padStart(2, "0")}-01`;
-    const periodEnd = new Date(y, m, 0).toISOString().slice(0, 10);
+    const periodEnd = toDateISO(new Date(y, m, 0));
 
     const rows = await rawQuery<any>(
       `SELECT b."accountCode", coa.name AS "accountName", coa.type AS "accountType",
@@ -575,12 +575,12 @@ budgetRouter.get("/budget/:id", requirePermission("finance:read"), async (req, r
 budgetRouter.get("/fiscal-periods", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const currentYear = currentYear();
+    const thisYear = currentYear();
     const currentMonth = new Date().getMonth() + 1;
 
     const periods = [];
     for (let m = 1; m <= 12; m++) {
-      const period = `${currentYear}-${String(m).padStart(2, "0")}`;
+      const period = `${thisYear}-${String(m).padStart(2, "0")}`;
       const [stats] = await rawQuery<any>(
         `SELECT COUNT(*) AS entries,
                 COALESCE(SUM(jl.debit), 0) AS "totalDebit"
@@ -592,7 +592,7 @@ budgetRouter.get("/fiscal-periods", requirePermission("finance:read"), async (re
 
       periods.push({
         period,
-        name: new Date(currentYear, m - 1).toLocaleDateString("ar-SA", { month: "long", year: "numeric" }),
+        name: new Date(thisYear, m - 1).toLocaleDateString("ar-SA", { month: "long", year: "numeric" }),
         entries: Number(stats?.entries ?? 0),
         totalAmount: Number(stats?.totalDebit ?? 0),
         status: m < currentMonth ? "closed" : m === currentMonth ? "active" : "future",

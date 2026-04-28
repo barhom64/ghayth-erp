@@ -1,5 +1,6 @@
 import { pool } from "./rawdb.js";
 import { hashPassword } from "./auth.js";
+import { currentYear, todayISO } from "./businessHelpers.js";
 import type pg from "pg";
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@ghayth.com";
@@ -91,7 +92,7 @@ async function createUserIfNotExists(
     `SELECT nextval('employee_number_seq') AS seq`,
   );
   const seq = Number(seqRes.rows[0].seq);
-  const yearStr = new Date().getFullYear().toString();
+  const yearStr = String(currentYear());
   const empNumber = `EMP-${yearStr}-${String(seq).padStart(3, "0")}`;
 
   const empRes = await client.query(
@@ -104,7 +105,7 @@ async function createUserIfNotExists(
   console.log(`[Bootstrap] Created employee "${user.name}" (id=${employeeId}, empNumber=${empNumber})`);
 
   // 2. Create employee_assignment
-  const hireDate = new Date().toISOString().split("T")[0];
+  const hireDate = todayISO();
   const assignRes = await client.query(
     `INSERT INTO employee_assignments ("employeeId", "companyId", "branchId", "jobTitle", role, salary, "hireDate", "isPrimary", status)
      VALUES ($1, $2, $3, $4, $5, $6, $7, true, 'active')

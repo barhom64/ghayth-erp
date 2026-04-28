@@ -10,7 +10,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { currentPeriod } from "../lib/businessHelpers.js";
+import { currentPeriod, toDateISO } from "../lib/businessHelpers.js";
 import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 import { obligationSummary } from "../lib/obligationsEngine.js";
 
@@ -130,7 +130,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
       const period = currentPeriod();
       const [y, m] = period.split("-").map(Number);
       const periodStart = `${y}-${String(m).padStart(2, "0")}-01`;
-      const periodEnd = new Date(y, m, 0).toISOString().slice(0, 10);
+      const periodEnd = toDateISO(new Date(y, m, 0));
       const rows = await rawQuery<any>(
         `SELECT b."accountCode", coa.name AS "accountName", b.amount AS "budget",
                 COALESCE((
@@ -222,7 +222,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
       const period = currentPeriod();
       const [y, m] = period.split("-").map(Number);
       const start = `${y}-${String(m).padStart(2, "0")}-01`;
-      const end = new Date(y, m, 0).toISOString().slice(0, 10);
+      const end = toDateISO(new Date(y, m, 0));
       const [revenue] = await rawQuery<any>(
         `SELECT COALESCE(SUM(jl.credit - jl.debit), 0) AS v
          FROM journal_lines jl

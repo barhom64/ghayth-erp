@@ -165,9 +165,9 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
     const plateNumber = b.plateNumber.trim();
     if (b.year !== undefined && b.year !== null) {
       const yr = Number(b.year);
-      const currentYear = currentYear();
-      if (!Number.isFinite(yr) || yr < 1950 || yr > currentYear + 1) {
-        throw new ValidationError(`السنة غير صالحة — يجب أن تكون بين 1950 و${currentYear + 1}`, { field: "year", fix: "أدخل سنة صنع المركبة بصيغة صحيحة" });
+      const thisYear = currentYear();
+      if (!Number.isFinite(yr) || yr < 1950 || yr > thisYear + 1) {
+        throw new ValidationError(`السنة غير صالحة — يجب أن تكون بين 1950 و${thisYear + 1}`, { field: "year", fix: "أدخل سنة صنع المركبة بصيغة صحيحة" });
       }
     }
 
@@ -226,7 +226,7 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
               code: `VEH-${insertId}`,
               name: vName,
               description: `أصل ثابت — مركبة ${vName}`,
-              purchaseDate: b.purchaseDate || new Date().toISOString().slice(0, 10),
+              purchaseDate: b.purchaseDate || todayISO(),
               purchaseCost: Number(b.purchasePrice),
               salvageValue: salvage,
               usefulLifeYears: usefulYears,

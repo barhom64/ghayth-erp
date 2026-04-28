@@ -8,7 +8,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog, toDateISO, todayISO } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
@@ -29,7 +29,7 @@ export function computeNextRunDate(fromDate: string | Date, frequency: Recurring
     case "yearly": d.setFullYear(d.getFullYear() + 1); break;
     default: d.setMonth(d.getMonth() + 1);
   }
-  return d.toISOString().slice(0, 10);
+  return toDateISO(d);
 }
 
 recurringRouter.get("/recurring-journals", requirePermission("finance:read"), async (req, res) => {
@@ -285,7 +285,7 @@ export async function runRecurringJournal(params: {
     const lines = typeof recurring.templateLines === "string"
       ? JSON.parse(recurring.templateLines)
       : recurring.templateLines;
-    const ref = `${recurring.templateRef || `REC-${recurring.id}`}-${new Date().toISOString().slice(0, 10)}`;
+    const ref = `${recurring.templateRef || `REC-${recurring.id}`}-${todayISO()}`;
     const description = recurring.templateDescription || recurring.description || recurring.name;
 
     const { financialEngine } = await import("../lib/engines/index.js");
@@ -302,7 +302,7 @@ export async function runRecurringJournal(params: {
       lines,
     });
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayISO();
     const next = computeNextRunDate(today, recurring.frequency);
     await rawExecute(
       `UPDATE recurring_journals
@@ -324,7 +324,7 @@ export async function runRecurringJournal(params: {
       `INSERT INTO recurring_journal_runs
          ("companyId","recurringJournalId","runDate",status,error,"triggeredBy")
        VALUES ($1,$2,$3,'failed',$4,$5)`,
-      [companyId, recurring.id, new Date().toISOString().slice(0, 10), msg, triggeredBy]
+      [companyId, recurring.id, todayISO(), msg, triggeredBy]
     ).catch(console.error);
     return { success: false, error: msg };
   }

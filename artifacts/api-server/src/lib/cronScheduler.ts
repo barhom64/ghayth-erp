@@ -9,9 +9,12 @@ import {
   getDirectorAssignmentId,
   getCfoAssignmentId,
   getLegalResponsible,
-  haversineDistance,
   emitEvent,
   createAuditLog,
+  todayISO,
+  toDateISO,
+  currentYear,
+  currentPeriod,
 } from "./businessHelpers.js";
 import { broadcastAlert } from "./notificationService.js";
 import { processFallbackChains } from "./notificationEngine.js";
@@ -429,7 +432,7 @@ async function leaveEscalationCheck(): Promise<string> {
       const leaveEnd = new Date(stage.endDate);
       for (const asn of allAssignments) {
         for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
-          const dateStr = d.toISOString().split("T")[0];
+          const dateStr = toDateISO(d);
           await rawExecute(
             `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
              VALUES ($1,$2,$3,$4,'on_leave',$5) ON CONFLICT DO NOTHING`,
@@ -707,7 +710,7 @@ async function reconcileAttendance(): Promise<string> {
   let total = 0;
   for (const company of companies) {
     // Skip absent-marking if today is a public holiday for this company
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
     const [holiday] = await rawQuery<any>(
       `SELECT id FROM public_holidays WHERE "companyId"=$1 AND $2::date BETWEEN "startDate"::date AND "endDate"::date`,
       [company.id, today]
@@ -752,7 +755,7 @@ async function reconcileAttendance(): Promise<string> {
 }
 
 async function dailyKpiSnapshot(): Promise<string> {
-  const today = new Date().toISOString().split("T")[0]!;
+  const today = todayISO();
   const saved = await saveAllCompaniesKPISnapshots(today);
   return `Saved KPI snapshots for ${saved} employees`;
 }
@@ -928,7 +931,7 @@ async function dailyDeductionCheck(): Promise<string> {
 
       // 2) تسجيل مخالفة + فتح محضر استفسار (idempotent) بموجب لائحة الانضباط
       try {
-        const period = new Date().toISOString().slice(0, 7);
+        const period = currentPeriod();
         const { rows: existingViolation } = await pool.query(
           `SELECT id FROM employee_violations
             WHERE "companyId" = $1 AND "assignmentId" = $2 AND type = 'absence'
@@ -1656,7 +1659,7 @@ async function monthlyInventoryAudit(): Promise<string> {
 
 async function yearlyLeaveBalanceRenewal(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
-  const year = new Date().getFullYear();
+  const year = currentYear();
   let renewed = 0;
   for (const company of companies) {
     const balances = await rawQuery<any>(
@@ -2074,8 +2077,7 @@ async function weeklyLogsArchiving(): Promise<string> {
 }
 
 async function monthlyAutoDepreciation(): Promise<string> {
-  const now = new Date();
-  const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const period = currentPeriod();
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let processed = 0;
   let totalDepreciated = 0;
@@ -2607,7 +2609,7 @@ async function dailyDunningAutoSend(): Promise<string> {
       await rawExecute(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "lastDunningAt" TIMESTAMP`);
 
       // Find overdue invoices needing dunning
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayISO();
       const rows = await rawQuery<any>(
         `SELECT i.id, i."invoiceNumber", i."dueDate", i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
                 i."clientId", COALESCE(i."lastDunningStage",0) AS "lastStage", i."lastDunningAt",
@@ -2742,14 +2744,14 @@ async function dailyBudgetVarianceAlert(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(
     `SELECT id FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
   );
-  const period = new Date().toISOString().slice(0, 7);
+  const period = currentPeriod();
   let alerted = 0;
 
   for (const c of companies) {
     try {
       const [y, m] = period.split("-").map(Number);
       const periodStart = `${y}-${String(m).padStart(2, "0")}-01`;
-      const periodEnd = new Date(y, m, 0).toISOString().slice(0, 10);
+      const periodEnd = toDateISO(new Date(y, m, 0));
 
       // Find budgets near or over limit
       const overBudget = await rawQuery<any>(

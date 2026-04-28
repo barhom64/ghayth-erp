@@ -9,7 +9,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { z } from "zod";
@@ -889,7 +889,7 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
       const [vatSetting] = await rawQuery<any>(`SELECT value FROM system_settings WHERE "companyId" = $1 AND key = 'vat_rate' LIMIT 1`, [scope.companyId]);
       const vatRate = vatSetting ? Number(vatSetting.value) / 100 : 0.15;
       const vatAmount = billingAmount * vatRate;
-      const monthNum = String(new Date().getMonth() + 1).padStart(2, "0");
+      const monthNum = currentMonthPadded();
       const yearShort = String(currentYear()).slice(2);
       const ref = `INV-LEGAL-${yearShort}${monthNum}-${insertId}`;
       const { legalEngine } = await import("../lib/engines/index.js");

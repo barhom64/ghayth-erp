@@ -1,5 +1,5 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
-import { createNotification } from "./businessHelpers.js";
+import { createNotification, todayISO } from "./businessHelpers.js";
 
 interface AuditViolation {
   type: string;
@@ -263,7 +263,7 @@ export async function runSelfAudit(companyId: number): Promise<{ total: number; 
     }
   }
 
-  const today = new Date().toISOString().split("T")[0]!;
+  const today = todayISO();
   const byType: Record<string, number> = {};
 
   for (const v of allViolations) {

@@ -1161,7 +1161,7 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", requirePermission("financ
 
     // Period-end date = last day of month
     const [y, m] = period.split("-").map(Number);
-    const periodEnd = new Date(y, m, 0).toISOString().slice(0, 10);
+    const periodEnd = toDateISO(new Date(y, m, 0));
 
     // Open foreign-currency invoices
     const openInvoices = await rawQuery<any>(
@@ -1283,7 +1283,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:
     }
     await ensureFxTables();
     const [yPeriod, mPeriod] = period.split("-").map(Number);
-    const periodEndDate = new Date(yPeriod, mPeriod, 0).toISOString().slice(0, 10);
+    const periodEndDate = toDateISO(new Date(yPeriod, mPeriod, 0));
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, periodEndDate);
     if (!periodCheck.open) {
       throw new ValidationError(`لا يمكن الترحيل — الفترة ${periodCheck.periodName ?? period} مقفلة`);
@@ -1299,7 +1299,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:
 
     // Reuse preview logic by calling it inline via the same query shape
     const [y, m] = period.split("-").map(Number);
-    const periodEnd = new Date(y, m, 0).toISOString().slice(0, 10);
+    const periodEnd = toDateISO(new Date(y, m, 0));
 
     const openInvoices = await rawQuery<any>(
       `SELECT id, "invoiceNumber", currency, "exchangeRate", total, "paidAmount"
@@ -1472,8 +1472,8 @@ financeAlgorithmsRouter.get("/treasury", requirePermission("finance:read"), asyn
     const bankBalances = cashAccounts.filter((a: any) => a.code?.startsWith("11") && !a.code?.startsWith("110")).reduce((s: number, a: any) => s + Number(a.currentBalance ?? 0), 0);
     const receivables = cashAccounts.filter((a: any) => a.code?.startsWith("12")).reduce((s: number, a: any) => s + Number(a.currentBalance ?? 0), 0);
 
-    const today = new Date().toISOString().slice(0, 10);
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const today = todayISO();
+    const thirtyDaysAgo = toDateISO(new Date(Date.now() - 30 * 86400000));
 
     const recentMovements = await rawQuery<any>(
       `SELECT je.id, je.ref, je.description, je.type, je."createdAt",

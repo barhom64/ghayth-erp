@@ -1,4 +1,5 @@
 import { pool } from "./rawdb.js";
+import { toDateISO } from "./businessHelpers.js";
 
 const isDev = process.env.NODE_ENV === "development";
 const seedEnabled = process.env.SEED_DEMO_DATA === "true";
@@ -76,7 +77,7 @@ export async function seedDemoData(): Promise<void> {
       const empId = empRes.rows[0].id;
       employeeIds.push(empId);
 
-      const hireDate = new Date(2023, i % 12, (i * 3 + 1) % 28 + 1).toISOString().split("T")[0];
+      const hireDate = toDateISO(new Date(2023, i % 12, (i * 3 + 1) % 28 + 1));
       const salary = emp.role.includes("manager") || emp.role === "general_manager" ? 15000 + i * 1000 : 7000 + i * 500;
 
       const assignRes = await client.query(
@@ -156,7 +157,7 @@ export async function seedDemoData(): Promise<void> {
     for (let i = 0; i < taskData.length; i++) {
       const task = taskData[i];
       const assignmentId = assignmentIds.length ? assignmentIds[i % assignmentIds.length] : null;
-      const scheduledDate = new Date(Date.now() + (i - 5) * 86400000).toISOString().split("T")[0];
+      const scheduledDate = toDateISO(new Date(Date.now() + (i - 5) * 86400000));
       await client.query(
         `INSERT INTO tasks ("companyId", "branchId", "assignmentId", title, type, priority, status, "scheduledStart")
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -239,8 +240,8 @@ export async function seedDemoData(): Promise<void> {
     for (let i = 0; i < contractData.length; i++) {
       const c = contractData[i];
       const ref = `CTR-${String(i + 1).padStart(4, "0")}`;
-      const startDate = new Date(2024, i * 2, 1).toISOString().split("T")[0];
-      const endDate = new Date(2025, i * 2, 1).toISOString().split("T")[0];
+      const startDate = toDateISO(new Date(2024, i * 2, 1));
+      const endDate = toDateISO(new Date(2025, i * 2, 1));
       await client.query(
         `INSERT INTO legal_contracts ("companyId",ref,title,"contractType","partyName",value,status,"startDate","endDate")
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
@@ -298,7 +299,7 @@ export async function seedDemoData(): Promise<void> {
       const date = new Date(today);
       date.setDate(date.getDate() - dayOffset);
       if (date.getDay() === 5 || date.getDay() === 6) continue;
-      const dateStr = date.toISOString().split("T")[0];
+      const dateStr = toDateISO(date);
 
       for (let empIdx = 0; empIdx < Math.min(assignmentIds.length, 15); empIdx++) {
         const status = attStatuses[(empIdx + dayOffset) % attStatuses.length];
@@ -334,8 +335,8 @@ export async function seedDemoData(): Promise<void> {
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
            ON CONFLICT DO NOTHING`,
           [companyId, employeeIds[i], leaveTypeId,
-            startDate.toISOString().split("T")[0],
-            endDate.toISOString().split("T")[0],
+            toDateISO(startDate),
+            toDateISO(endDate),
             days,
             i % 2 === 0 ? "ظروف شخصية" : "موعد طبي",
             leaveStatus]
@@ -361,7 +362,7 @@ export async function seedDemoData(): Promise<void> {
           subtotal, total, vatAmount,
           invStatuses[i] === "paid" ? total : invStatuses[i] === "partial" ? Math.round(total * 0.4) : 0,
           invStatuses[i],
-          dueDate.toISOString().split("T")[0]]
+          toDateISO(dueDate)]
       );
     }
 

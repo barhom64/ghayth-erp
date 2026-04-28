@@ -1,5 +1,5 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
-import { createNotification, getAssignmentIdByRole, createAuditLog, emitEvent } from "./businessHelpers.js";
+import { createNotification, getAssignmentIdByRole, createAuditLog, emitEvent, toDateISO, currentPeriod } from "./businessHelpers.js";
 
 async function handleLeaveApproval(refId: number, approvedBy?: number | null): Promise<void> {
   await rawExecute(
@@ -40,7 +40,7 @@ async function handleLeaveApproval(refId: number, approvedBy?: number | null): P
   const leaveEnd = new Date(request.endDate);
   for (const asn of allAssignments) {
     for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
-      const dateStr = d.toISOString().split("T")[0];
+      const dateStr = toDateISO(d);
       await rawExecute(
         `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
          VALUES ($1,$2,$3,$4,'on_leave',$5)
@@ -249,7 +249,7 @@ async function validatePreApproval(
   }
 
   if (data._budgetAccountCode && data._budgetAmount) {
-    const period = new Date().toISOString().slice(0, 7);
+    const period = currentPeriod();
     const [budget] = await rawQuery<any>(
       `SELECT amount, used FROM budgets WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3`,
       [companyId, data._budgetAccountCode, period]

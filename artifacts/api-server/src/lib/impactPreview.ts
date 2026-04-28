@@ -1,4 +1,5 @@
 import { rawQuery } from "./rawdb.js";
+import { currentPeriod, todayISO } from "./businessHelpers.js";
 
 export interface ImpactItem {
   category: string;
@@ -239,7 +240,7 @@ export async function computeViolationImpact(
     [assignmentId, employeeId]
   );
 
-  const period = new Date().toISOString().slice(0, 7);
+  const period = currentPeriod();
   const [monthCount] = await rawQuery<any>(
     `SELECT COUNT(*) AS cnt FROM employee_violations
      WHERE "assignmentId" = $1 AND period = $2`,
@@ -308,7 +309,7 @@ export async function computeEmployeeOperationalStatus(
   color: string;
   reason: string;
 }> {
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayISO();
   const period = today.slice(0, 7);
 
   const [onLeave] = await rawQuery<any>(

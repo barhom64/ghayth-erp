@@ -10,6 +10,7 @@
 // ============================================================================
 
 import { rawQuery, rawExecute } from "./rawdb.js";
+import { currentYear } from "./businessHelpers.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -324,7 +325,7 @@ export async function getDailyWage(assignmentId: number): Promise<number> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function generateMemoNumber(companyId: number): Promise<string> {
-  const year = new Date().getFullYear();
+  const year = currentYear();
   const [row] = await rawQuery<{ cnt: string }>(
     `SELECT COUNT(*)::int AS cnt
        FROM hr_inquiry_memos
