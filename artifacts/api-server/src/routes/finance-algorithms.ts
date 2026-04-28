@@ -10,7 +10,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
+import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO, roundTo2, roundTo4, generateTimeRef } from "../lib/businessHelpers.js";
 
 export const financeAlgorithmsRouter = Router();
 financeAlgorithmsRouter.use(authMiddleware);
@@ -262,7 +262,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/import", requirePermission("f
       throw new ValidationError("لا توجد بيانات في الكشف البنكي");
     }
 
-    const batchId = `BANK-${Date.now().toString(36).toUpperCase()}`;
+    const batchId = generateTimeRef("BANK");
     let imported = 0;
 
     await withTransaction(async (client) => {
@@ -939,7 +939,7 @@ financeAlgorithmsRouter.get("/inventory-costing/:productId", requirePermission("
         const waCost = runningQty > 0 ? runningValue / runningQty : cost;
         waHistory.push({
           date: mv.date, type: mv.type, quantity: qty, unitCost: cost,
-          totalCost: addValue, runningQty, runningValue, waCost: Math.round(waCost * 10000) / 10000,
+          totalCost: addValue, runningQty, runningValue, waCost: roundTo4(waCost),
         });
       } else if (isOut) {
         const waCost = runningQty > 0 ? runningValue / runningQty : 0;
@@ -948,12 +948,12 @@ financeAlgorithmsRouter.get("/inventory-costing/:productId", requirePermission("
         runningValue = runningQty * waCost;
         waHistory.push({
           date: mv.date, type: mv.type, quantity: -qty, unitCost: waCost,
-          totalCost: -cogsValue, runningQty, runningValue, waCost: Math.round(waCost * 10000) / 10000,
+          totalCost: -cogsValue, runningQty, runningValue, waCost: roundTo4(waCost),
         });
       }
     }
 
-    const currentWa = runningQty > 0 ? Math.round((runningValue / runningQty) * 10000) / 10000 : 0;
+    const currentWa = runningQty > 0 ? roundTo4(runningValue / runningQty) : 0;
 
     res.json({
       product,

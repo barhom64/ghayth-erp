@@ -60,13 +60,8 @@ describe("Communications endpoints exist", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("Communications permissions", () => {
-  it("authMiddleware is applied and webhook routes come before it", () => {
-    const authIdx = COMM_ROUTE.indexOf("router.use(authMiddleware)");
-    expect(authIdx).toBeGreaterThan(-1);
-    const whatsappWebhookIdx = COMM_ROUTE.indexOf('router.get("/whatsapp/webhook"');
-    const pbxIncomingIdx = COMM_ROUTE.indexOf('router.post("/pbx/incoming"');
-    expect(whatsappWebhookIdx).toBeLessThan(authIdx);
-    expect(pbxIncomingIdx).toBeLessThan(authIdx);
+  it("relies on global authMiddleware from index.ts", () => {
+    expect(COMM_ROUTE).not.toContain("router.use(authMiddleware)");
   });
 
   it("GET /log requires communications:read", () => {

@@ -12,7 +12,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
-import { emitEvent, createAuditLog, currentPeriod, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog, currentPeriod, currentYear, toDateISO, roundTo2, validateBudget } from "../lib/businessHelpers.js";
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
@@ -129,32 +129,37 @@ budgetRouter.post("/budget/validate", requirePermission("finance:create"), async
       });
     }
 
-    const targetPeriod = period ?? currentPeriod();
-    const [budget] = await rawQuery<any>(
-      `SELECT amount, used FROM budgets
-       WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3`,
-      [scope.companyId, accountCode, targetPeriod]
-    );
+    const result = await validateBudget({
+      companyId: scope.companyId,
+      accountCode,
+      amount: Number(amount),
+      period,
+      role: scope.role,
+    });
 
-    if (!budget) {
-      res.json({ status: "no_budget", message: "لا توجد ميزانية محددة لهذا الحساب", canProceed: true });
-      return;
+    const response: Record<string, any> = {
+      status: result.status,
+      message: result.status === "no_budget"
+        ? "لا توجد ميزانية محددة لهذا الحساب"
+        : result.message,
+      canProceed: result.canProceed,
+    };
+
+    if (result.status !== "no_budget") {
+      response.utilization = result.utilization;
+      response.requiresApproval = result.requiresApproval;
     }
 
-    const budgetAmount = Number(budget.amount);
-    const usedAmount = Number(budget.used);
-    const newUsed = usedAmount + Number(amount);
-    const utilization = budgetAmount > 0 ? (newUsed / budgetAmount) * 100 : 0;
-
-    if (utilization <= 80) {
-      res.json({ status: "auto_approved", message: "الميزانية متاحة – موافقة تلقائية", utilization: Math.round(utilization), canProceed: true, requiresApproval: false });
-    } else if (utilization <= 99) {
-      res.json({ status: "warning_cfo", message: "تحذير: استخدام الميزانية 80-99%. يتطلب موافقة المدير المالي", utilization: Math.round(utilization), canProceed: true, requiresApproval: true, approvalLevel: "cfo" });
-    } else if (utilization <= 110) {
-      res.json({ status: "blocked_gm", message: "تجاوز الميزانية 100-110%. يتطلب موافقة المدير العام فقط", utilization: Math.round(utilization), canProceed: true, requiresApproval: true, approvalLevel: "gm", note: "حظر – يتطلب موافقة المدير العام حصراً" });
-    } else {
-      res.json({ status: "rejected", message: "تجاوز الميزانية أكثر من 110% – رفض نهائي", utilization: Math.round(utilization), canProceed: false, requiresApproval: false, blocked: true });
+    if (result.status === "warning_cfo") {
+      response.approvalLevel = "cfo";
+    } else if (result.status === "blocked_gm") {
+      response.approvalLevel = "gm";
+      response.note = "حظر – يتطلب موافقة المدير العام حصراً";
+    } else if (result.status === "rejected") {
+      response.blocked = true;
     }
+
+    res.json(response);
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }

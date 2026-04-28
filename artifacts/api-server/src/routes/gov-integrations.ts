@@ -1,7 +1,6 @@
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import dns from "node:dns/promises";
@@ -46,7 +45,6 @@ function isPrivateIP(ip: string): boolean {
 }
 
 const router = Router();
-router.use(authMiddleware);
 
 const GOV_ADMIN_ROLES = ["owner", "admin", "general_manager", "hr_manager", "operations"];
 const GOV_READ_ROLES = [...GOV_ADMIN_ROLES, "finance_manager", "branch_manager", "supervisor"];

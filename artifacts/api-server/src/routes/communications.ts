@@ -1,8 +1,7 @@
-import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError, IntegrationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, IntegrationError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { sendNotification } from "../lib/notificationService.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -376,8 +375,6 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
     handleRouteError(err, res, "[PBX] Status update error:");
   }
 });
-
-router.use(authMiddleware);
 
 router.get("/log", requirePermission("communications:read"), async (req, res): Promise<void> => {
   try {

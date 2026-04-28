@@ -49,8 +49,8 @@ describe("Employees — endpoint registration", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("Employees — permissions", () => {
-  it("applies authMiddleware globally on the router", () => {
-    expect(SRC).toContain("router.use(authMiddleware)");
+  it("relies on global authMiddleware from index.ts", () => {
+    expect(SRC).not.toContain("router.use(authMiddleware)");
   });
 
   it("GET / and GET /:id require hr:read", () => {

@@ -1,7 +1,6 @@
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
@@ -15,7 +14,6 @@ const preferencesSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/", requirePermission("notifications:read"), async (req, res) => {
   try {

@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError } from "../lib/errorHandler.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
@@ -17,7 +16,6 @@ import {
 } from "../lib/umrahCommissionEngine.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 // ============================================================================
 // SUB-AGENTS

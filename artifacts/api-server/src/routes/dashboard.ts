@@ -1,12 +1,10 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { todayISO } from "../lib/businessHelpers.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 function buildFilter(scope: any, req: any, opts: { branchColumn?: string } = {}) {
   const filters = parseScopeFilters(req);

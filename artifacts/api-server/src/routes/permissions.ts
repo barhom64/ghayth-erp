@@ -2,13 +2,11 @@ import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
 import { auditLog } from "../lib/audit.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 const rolePermissionSchema = z.object({
   role: z.string().min(1, "الدور مطلوب"),

@@ -7,15 +7,13 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, currentMonthPadded } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, currentMonthPadded, generateTimeRef } from "../lib/businessHelpers.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 const STAGE_ORDER = ['lead', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost'];
 
@@ -655,7 +653,7 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
       crmEngine.requestLegalContractCreation(
         { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
         {
-          ref: `CTR-CRM-${Date.now().toString(36).toUpperCase()}`,
+          ref: generateTimeRef("CTR-CRM"),
           title: `عقد خدمات - ${opp.title}`,
           contractType: "service",
           partyName: opp.contactName || 'عميل',

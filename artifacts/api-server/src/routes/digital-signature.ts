@@ -1,9 +1,8 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
+import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
+import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import { z } from "zod";
@@ -22,7 +21,6 @@ const verifySignatureSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 function generateOTP(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -113,7 +111,7 @@ router.post("/verify", requirePermission("documents:write"), async (req, res: Re
 
     await rawExecute(`UPDATE digital_signature_otps SET used=true, "usedAt"=NOW() WHERE id=$1`, [record.id]);
 
-    const signatureRef = `SIG-${Date.now().toString(36).toUpperCase()}`;
+    const signatureRef = generateTimeRef("SIG");
     await rawExecute(
       `INSERT INTO digital_signature_logs ("companyId","userId","documentId","entityType","entityId",action,"signatureRef","ipAddress","deviceFingerprint","userAgent","otpRef") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       [scope.companyId, scope.userId, String(entityId), entityType, String(entityId), action, signatureRef, ip, deviceFingerprint, userAgent, record.id]

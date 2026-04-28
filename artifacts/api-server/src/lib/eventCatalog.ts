@@ -299,17 +299,6 @@ export const EVENT_CATALOG: EventDefinition[] = [
     consumers: ["leadScoreEngine", "followUpScheduler"],
     sideEffects: ["obligation_register", "audit"],
   },
-  {
-    name: "crm.opportunity.won",
-    label: "فوز بصفقة",
-    domain: "crm",
-    description: "تُصدر عند إغلاق فرصة بنجاح",
-    payload: { opportunityId: "number", amount: "number" },
-    consumers: ["invoiceGenerator", "execDashboard"],
-    sideEffects: ["audit", "notification"],
-    critical: true,
-  },
-
   // ─── SUPPORT ─────────────────────────────────────────────────────────────
   {
     name: "support.ticket.created",
@@ -896,6 +885,8 @@ export const EVENT_CATALOG: EventDefinition[] = [
   { name: "finance_project.created", label: "إنشاء مشروع مالي", domain: "finance", description: "تُصدر عند إنشاء مشروع مالي", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "fiscal.year_end_closed", label: "year_end_closed سنة مالية", domain: "finance", description: "تُصدر عند year_end_closed سنة مالية", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"], critical: true },
   { name: "fiscal_period.created", label: "إنشاء فترة مالية", domain: "finance", description: "تُصدر عند إنشاء فترة مالية", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"], critical: true },
+  { name: "fiscal_period.closed", label: "إقفال فترة مالية", domain: "finance", description: "تُصدر عند إقفال فترة مالية", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"], critical: true },
+  { name: "fiscal_period.reopened", label: "إعادة فتح فترة مالية", domain: "finance", description: "تُصدر عند إعادة فتح فترة مالية", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"], critical: true },
   { name: "impact.previewed", label: "معاينة أثر مالي", domain: "finance", description: "تُصدر عند معاينة أثر مالي", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "intercompany.created", label: "إنشاء عملية بين شركات", domain: "finance", description: "تُصدر عند إنشاء عملية بين شركات", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "invoice.approved", label: "اعتماد فاتورة", domain: "finance", description: "تُصدر عند اعتماد فاتورة", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"], critical: true },

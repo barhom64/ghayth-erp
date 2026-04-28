@@ -2,7 +2,6 @@ import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHa
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { requireRole } from "../middlewares/roleGuard.js";
 import { aiEngine } from "../lib/aiEngine.js";
@@ -78,7 +77,6 @@ const smartAssignSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/alerts", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {

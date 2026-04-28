@@ -2,7 +2,6 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
@@ -67,7 +66,6 @@ const createSubsidiaryAccountSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 

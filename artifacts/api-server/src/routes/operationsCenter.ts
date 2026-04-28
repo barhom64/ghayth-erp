@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError, ValidationError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
@@ -14,7 +13,6 @@ const dailyCloseExecuteSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 function buildFilter(scope: any, req: any) {
   const filters = parseScopeFilters(req);

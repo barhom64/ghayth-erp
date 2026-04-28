@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError } from "../lib/errorHandler.js";
 import {
   emitEvent,
   createAuditLog,
   todayISO,
+  generateTimeRef,
 } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 
@@ -67,7 +67,6 @@ const AGENT_INVOICE_TRANSITIONS: Record<string, readonly string[]> = {
 };
 
 const router = Router();
-router.use(authMiddleware);
 
 const createSeasonSchema = z.object({
   title: z.string().min(1, "اسم الموسم مطلوب"),
@@ -1036,7 +1035,7 @@ router.post("/agent-invoices/generate", requirePermission("umrah:write"), async 
     const subtotal = servicesTotal + penaltiesTotal;
     const commission = subtotal * (Number(agent?.profitMargin || 0) / 100);
     const total = subtotal - commission;
-    const ref = `UMRAH-INV-${Date.now().toString(36).toUpperCase()}`;
+    const ref = generateTimeRef("UMRAH-INV");
     const rows = await rawQuery(
       `INSERT INTO umrah_agent_invoices ("companyId","agentId","seasonId",ref,type,"pilgrimCount","penaltiesTotal","servicesTotal",subtotal,commission,total,status)
        VALUES ($1,$2,$3,$4,'sales',$5,$6,$7,$8,$9,$10,'draft') RETURNING *`,

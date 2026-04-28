@@ -9,10 +9,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2 } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2, generateTimeRef } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
@@ -140,7 +139,6 @@ const updateContractSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LIFECYCLE STATE MACHINES — Phase C.4 Property audit
@@ -830,7 +828,7 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
       else installmentCount = contractMonths;
     }
 
-    const contractNumber = b.contractNumber || `RC-${Date.now().toString(36).toUpperCase()}`;
+    const contractNumber = b.contractNumber || generateTimeRef("RC");
 
     const { insertId } = await rawExecute(
       `INSERT INTO rental_contracts ("companyId","unitId","tenantId","tenantName","tenantPhone","tenantEmail","tenantIdNumber","startDate","endDate","monthlyRent","depositAmount","paymentDay",notes,status,
@@ -3123,7 +3121,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
     if (!existing) throw new NotFoundError("القسط غير موجود");
     const newPaid = Number(existing.paidAmount || 0) + paidAmount;
     const newStatus = newPaid >= Number(existing.amount) ? 'paid' : 'partial';
-    const receiptNumber = b.receiptNumber || `RCP-${Date.now().toString(36).toUpperCase()}`;
+    const receiptNumber = b.receiptNumber || generateTimeRef("RCP");
     await rawExecute(
       `UPDATE contract_payment_schedule SET "paidAmount"=$1, "paidDate"=$2, method=$3, status=$4, "receiptNumber"=$5, "updatedAt"=NOW() WHERE id=$6`,
       [newPaid, b.paidDate || todayISO(), b.method || 'bank_transfer', newStatus, receiptNumber, installmentId]

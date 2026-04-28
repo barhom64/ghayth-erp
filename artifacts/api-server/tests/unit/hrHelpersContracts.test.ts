@@ -186,45 +186,19 @@ describe("actionOk removed from hrHelpers", () => {
 
 // ─── hrEnums consistency validation ────────────────────────────────────────
 
-describe("hrEnums _VALUES match their constant keys", () => {
-  it("LOAN_STATUS_VALUES uses Object.values(LOAN_STATUS)", () => {
-    expect(ENUMS_SRC).toContain("LOAN_STATUS_VALUES = Object.values(LOAN_STATUS)");
-  });
-
-  it("LOAN_TYPE_VALUES uses Object.values(LOAN_TYPES)", () => {
-    expect(ENUMS_SRC).toContain("LOAN_TYPE_VALUES = Object.values(LOAN_TYPES)");
-  });
-
-  it("EXIT_STATUS_VALUES uses Object.values(EXIT_STATUS)", () => {
-    expect(ENUMS_SRC).toContain("EXIT_STATUS_VALUES = Object.values(EXIT_STATUS)");
-  });
-
-  it("EXIT_TYPE_VALUES uses Object.values(EXIT_TYPES)", () => {
-    expect(ENUMS_SRC).toContain("EXIT_TYPE_VALUES = Object.values(EXIT_TYPES)");
-  });
-
-  it("OVERTIME_STATUS_VALUES uses Object.values(OVERTIME_STATUS)", () => {
-    expect(ENUMS_SRC).toContain("OVERTIME_STATUS_VALUES = Object.values(OVERTIME_STATUS)");
-  });
-
-  it("DISCIPLINE_STATUS_VALUES uses Object.values(DISCIPLINE_STATUS)", () => {
-    expect(ENUMS_SRC).toContain("DISCIPLINE_STATUS_VALUES = Object.values(DISCIPLINE_STATUS)");
-  });
-
-  it("INCIDENT_TYPE_VALUES uses Object.values(INCIDENT_TYPES)", () => {
-    expect(ENUMS_SRC).toContain("INCIDENT_TYPE_VALUES = Object.values(INCIDENT_TYPES)");
-  });
-
-  it("LEAVE_STATUS_VALUES uses Object.values(LEAVE_STATUS)", () => {
-    expect(ENUMS_SRC).toContain("LEAVE_STATUS_VALUES = Object.values(LEAVE_STATUS)");
-  });
-
-  it("LEAVE_TYPE_VALUES uses Object.values(LEAVE_TYPES)", () => {
-    expect(ENUMS_SRC).toContain("LEAVE_TYPE_VALUES = Object.values(LEAVE_TYPES)");
-  });
-
-  it("ATTENDANCE_STATUS_VALUES uses Object.values(ATTENDANCE_STATUS)", () => {
-    expect(ENUMS_SRC).toContain("ATTENDANCE_STATUS_VALUES = Object.values(ATTENDANCE_STATUS)");
+describe("hrEnums no longer exports dead _VALUES/_LABELS derivatives", () => {
+  it("removed _VALUES and _LABELS dead exports", () => {
+    expect(ENUMS_SRC).not.toContain("LOAN_STATUS_VALUES");
+    expect(ENUMS_SRC).not.toContain("LOAN_STATUS_LABELS");
+    expect(ENUMS_SRC).not.toContain("LOAN_TYPE_VALUES");
+    expect(ENUMS_SRC).not.toContain("EXIT_STATUS_VALUES");
+    expect(ENUMS_SRC).not.toContain("EXIT_TYPE_VALUES");
+    expect(ENUMS_SRC).not.toContain("OVERTIME_STATUS_VALUES");
+    expect(ENUMS_SRC).not.toContain("DISCIPLINE_STATUS_VALUES");
+    expect(ENUMS_SRC).not.toContain("INCIDENT_TYPE_VALUES");
+    expect(ENUMS_SRC).not.toContain("LEAVE_STATUS_VALUES");
+    expect(ENUMS_SRC).not.toContain("LEAVE_TYPE_VALUES");
+    expect(ENUMS_SRC).not.toContain("ATTENDANCE_STATUS_VALUES");
   });
 });
 

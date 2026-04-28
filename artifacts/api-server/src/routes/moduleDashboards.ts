@@ -1,12 +1,10 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { todayISO, currentPeriod } from "../lib/businessHelpers.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 const safeQuery = async <T = any>(sql: string, params: any[] = [], fallback: T[] = []): Promise<T[]> => {
   try {

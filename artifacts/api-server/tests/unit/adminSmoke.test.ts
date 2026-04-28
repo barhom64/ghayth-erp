@@ -227,8 +227,8 @@ describe("admin — role permissions CRUD", () => {
 });
 
 describe("admin — security patterns", () => {
-  it("uses authMiddleware globally", () => {
-    expect(SRC).toContain("router.use(authMiddleware)");
+  it("relies on global authMiddleware from index.ts", () => {
+    expect(SRC).not.toContain("router.use(authMiddleware)");
   });
 
   it("uses parameterized queries throughout", () => {

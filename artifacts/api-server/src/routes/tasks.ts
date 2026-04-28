@@ -2,7 +2,6 @@ import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHa
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { loadBalanceAssign } from "../lib/algorithms.js";
@@ -38,7 +37,6 @@ const updateTaskSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/", requirePermission("tasks:read"), async (req, res) => {
   try {

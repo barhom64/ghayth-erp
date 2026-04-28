@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
@@ -155,7 +154,6 @@ async function validateRequestTransition(
 }
 
 const router = Router();
-router.use(authMiddleware);
 
 async function logCommunication(companyId: number, direction: string, subject: string, body: string, relatedType: string, relatedId: number) {
   try {

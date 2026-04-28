@@ -15,17 +15,6 @@ export const LOAN_STATUS = {
   CANCELLED: "cancelled",
 } as const;
 
-export const LOAN_STATUS_VALUES = Object.values(LOAN_STATUS);
-
-export const LOAN_STATUS_LABELS: Record<string, string> = {
-  [LOAN_STATUS.PENDING]: "بانتظار الموافقة",
-  [LOAN_STATUS.APPROVED]: "معتمد",
-  [LOAN_STATUS.ACTIVE]: "نشطة",
-  [LOAN_STATUS.COMPLETED]: "مكتملة",
-  [LOAN_STATUS.REJECTED]: "مرفوضة",
-  [LOAN_STATUS.CANCELLED]: "ملغية",
-};
-
 // ── أنواع السلف (يقابل LOAN_TYPES في الفرونت) ─────────────────────
 export const LOAN_TYPES = {
   SALARY_ADVANCE: "salary_advance",
@@ -36,8 +25,6 @@ export const LOAN_TYPES = {
   EDUCATION: "education",
 } as const;
 
-export const LOAN_TYPE_VALUES = Object.values(LOAN_TYPES);
-
 // ── حالات نهاية الخدمة ─────────────────────────────────────────────
 export const EXIT_STATUS = {
   PENDING: "pending",
@@ -46,8 +33,6 @@ export const EXIT_STATUS = {
   REJECTED: "rejected",
   CANCELLED: "cancelled",
 } as const;
-
-export const EXIT_STATUS_VALUES = Object.values(EXIT_STATUS);
 
 // ── أنواع نهاية الخدمة (يقابل EXIT_TYPES في الفرونت) ──────────────
 export const EXIT_TYPES = {
@@ -59,8 +44,6 @@ export const EXIT_TYPES = {
   MUTUAL: "mutual",
 } as const;
 
-export const EXIT_TYPE_VALUES = Object.values(EXIT_TYPES);
-
 // ── حالات طلبات الوقت الإضافي ──────────────────────────────────────
 export const OVERTIME_STATUS = {
   PENDING: "pending",
@@ -69,8 +52,6 @@ export const OVERTIME_STATUS = {
   REJECTED: "rejected",
   CANCELLED: "cancelled",
 } as const;
-
-export const OVERTIME_STATUS_VALUES = Object.values(OVERTIME_STATUS);
 
 // ── حالات محاضر التحقيق ─────────────────────────────────────────────
 export const DISCIPLINE_STATUS = {
@@ -85,8 +66,6 @@ export const DISCIPLINE_STATUS = {
   CANCELLED: "cancelled",
 } as const;
 
-export const DISCIPLINE_STATUS_VALUES = Object.values(DISCIPLINE_STATUS);
-
 // ── أنواع الوقائع (يقابل INCIDENT_LABELS في الفرونت) ──────────────
 export const INCIDENT_TYPES = {
   LATE: "late",
@@ -98,8 +77,6 @@ export const INCIDENT_TYPES = {
   CUSTOM: "custom",
 } as const;
 
-export const INCIDENT_TYPE_VALUES = Object.values(INCIDENT_TYPES);
-
 // ── حالات طلبات الإجازة ────────────────────────────────────────────
 export const LEAVE_STATUS = {
   PENDING: "pending",
@@ -108,8 +85,6 @@ export const LEAVE_STATUS = {
   RETURNED: "returned",
   CANCELLED: "cancelled",
 } as const;
-
-export const LEAVE_STATUS_VALUES = Object.values(LEAVE_STATUS);
 
 // ── أنواع الإجازات (يقابل LEAVE_TYPES في الفرونت) ─────────────────
 export const LEAVE_TYPES = {
@@ -122,8 +97,6 @@ export const LEAVE_TYPES = {
   EMERGENCY: "emergency",
 } as const;
 
-export const LEAVE_TYPE_VALUES = Object.values(LEAVE_TYPES);
-
 // ── حالات الحضور ────────────────────────────────────────────────────
 export const ATTENDANCE_STATUS = {
   PRESENT: "present",
@@ -132,8 +105,6 @@ export const ATTENDANCE_STATUS = {
   LEAVE: "leave",
   HOLIDAY: "holiday",
 } as const;
-
-export const ATTENDANCE_STATUS_VALUES = Object.values(ATTENDANCE_STATUS);
 
 // ── مستويات العقوبات (يقابل PENALTY_LEVELS في الفرونت) ────────────
 export const PENALTY_LEVELS = {

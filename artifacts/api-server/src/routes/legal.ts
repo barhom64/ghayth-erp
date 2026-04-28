@@ -6,7 +6,6 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded } from "../lib/businessHelpers.js";
@@ -15,7 +14,6 @@ import { registerObligation, cancelObligation, markObligationMet } from "../lib/
 import { z } from "zod";
 
 const router = Router();
-router.use(authMiddleware);
 
 const createContractSchema = z.object({
   title: z.string().min(1, "عنوان العقد مطلوب"),

@@ -1,10 +1,8 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/overrides/report", async (req, res) => {
   try {

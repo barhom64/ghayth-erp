@@ -1,6 +1,5 @@
 import { Router, type Request, type Response } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { Readable } from "stream";
@@ -101,7 +100,6 @@ const patchDocumentSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 const objectStorageService = new ObjectStorageService();
 

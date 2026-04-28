@@ -1,9 +1,8 @@
-import { handleRouteError, ValidationError, ForbiddenError, NotFoundError, ConflictError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, ForbiddenError, NotFoundError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, pool } from "../lib/rawdb.js";
 import { hashPassword } from "../lib/auth.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import rateLimit from "express-rate-limit";
 import { integrationService } from "../lib/integrationService.js";
 import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
@@ -11,7 +10,6 @@ import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import crypto from "node:crypto";
 
 const router = Router();
-router.use(authMiddleware);
 
 const createUserSchema = z.object({
   email: z.string().min(1, "البريد الإلكتروني مطلوب"),
