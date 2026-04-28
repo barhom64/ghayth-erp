@@ -1392,7 +1392,7 @@ router.get("/violations/:id", requirePermission("umrah:read"), async (req, res):
        WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`,
       [Number(req.params.id), scope.companyId]
     );
-    if (!row) { res.status(404).json({ error: "المخالفة غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("المخالفة غير موجودة");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get violation error"); }
 });
@@ -1431,7 +1431,7 @@ router.patch("/violations/:id", requirePermission("umrah:write"), async (req, re
       `UPDATE umrah_violations SET ${sets.join(",")} WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL RETURNING *`,
       params
     );
-    if (!row) { res.status(404).json({ error: "المخالفة غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("المخالفة غير موجودة");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update violation error"); }
 });
@@ -1444,7 +1444,7 @@ router.delete("/violations/:id", requirePermission("umrah:write"), async (req, r
       `UPDATE umrah_violations SET "deletedAt"=NOW(), "updatedBy"=$3 WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL RETURNING id`,
       [id, scope.companyId, scope.userId]
     );
-    if (!row) { res.status(404).json({ error: "المخالفة غير موجودة" }); return; }
+    if (!row) throw new NotFoundError("المخالفة غير موجودة");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_violations", entityId: id }).catch(console.error);
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete violation error"); }

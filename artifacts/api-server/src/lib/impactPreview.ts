@@ -1,5 +1,6 @@
 import { rawQuery } from "./rawdb.js";
 import { currentPeriod, todayISO } from "./businessHelpers.js";
+import { NotFoundError } from "./errorHandler.js";
 
 export interface ImpactItem {
   category: string;
@@ -383,7 +384,7 @@ export async function getPropertyUnitStatusImpact(
     `SELECT * FROM property_units WHERE id=$1 AND "companyId"=$2`,
     [unitId, companyId]
   );
-  if (!unit) throw new Error("الوحدة غير موجودة");
+  if (!unit) throw new NotFoundError("الوحدة غير موجودة");
 
   const fromStatus = unit.status;
   const impacts: StatusImpactItem[] = [];
@@ -540,7 +541,7 @@ export async function getVehicleStatusImpact(
     `SELECT v.*, d.name AS "driverName" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id=v."assignedDriverId" WHERE v.id=$1 AND v."companyId"=$2`,
     [vehicleId, companyId]
   );
-  if (!vehicle) throw new Error("المركبة غير موجودة");
+  if (!vehicle) throw new NotFoundError("المركبة غير موجودة");
 
   const fromStatus = vehicle.status;
   const impacts: StatusImpactItem[] = [];

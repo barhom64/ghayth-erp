@@ -19,22 +19,26 @@ eventsRouter.use(authMiddleware);
 // ─────────────────────────────────────────────────────────────────────────────
 
 eventsRouter.get("/catalog", (req, res) => {
-  const { domain, critical } = req.query as { domain?: string; critical?: string };
-  let result = EVENT_CATALOG;
-  if (domain) result = listEventsByDomain(domain as EventDomain);
-  if (critical === "true") result = result.filter((e) => e.critical === true);
-  res.json({
-    total: result.length,
-    countByDomain: countEventsByDomain(),
-    criticalCount: listCriticalEvents().length,
-    events: result,
-  });
+  try {
+    const { domain, critical } = req.query as { domain?: string; critical?: string };
+    let result = EVENT_CATALOG;
+    if (domain) result = listEventsByDomain(domain as EventDomain);
+    if (critical === "true") result = result.filter((e) => e.critical === true);
+    res.json({
+      total: result.length,
+      countByDomain: countEventsByDomain(),
+      criticalCount: listCriticalEvents().length,
+      events: result,
+    });
+  } catch (err) { handleRouteError(err, res, "Event catalog error:"); }
 });
 
 eventsRouter.get("/catalog/:name", (req, res) => {
-  const def = getEventDefinition(req.params.name);
-  if (!def) throw new NotFoundError("الحدث غير موجود في الفهرس");
-  res.json({ data: def });
+  try {
+    const def = getEventDefinition(req.params.name);
+    if (!def) throw new NotFoundError("الحدث غير موجود في الفهرس");
+    res.json({ data: def });
+  } catch (err) { handleRouteError(err, res, "Event catalog detail error:"); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

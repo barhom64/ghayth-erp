@@ -5152,7 +5152,7 @@ router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create
     // Prevent duplicate submissions from the same person per cycle per manager
     // We store a one-way hash (HMAC) that uniquely identifies this reviewer-cycle-manager
     // pair without revealing the reviewer's identity
-    const crypto = await import("crypto");
+    const crypto = await import("node:crypto");
     const secret = process.env.JWT_SECRET;
     if (!secret) {
       throw new IntegrationError("خطأ في إعداد النظام: JWT_SECRET غير مضبوط", {

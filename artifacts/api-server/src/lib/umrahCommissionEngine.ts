@@ -1,5 +1,6 @@
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
 import { emitEvent, createGuardedJournalEntry, getAccountCodeFromMapping } from "./businessHelpers.js";
+import { NotFoundError } from "./errorHandler.js";
 
 type QueryFn = (sql: string, params: any[]) => Promise<{ rows: any[] }>;
 
@@ -73,7 +74,7 @@ export async function calculateCommissionForPlan(
     `SELECT * FROM employee_commission_plans WHERE id = $1 AND "companyId" = $2 AND status = 'active' AND "deletedAt" IS NULL`,
     [planId, companyId ?? 0]
   );
-  if (!plan) throw new Error("الخطة غير موجودة أو غير مفعّلة");
+  if (!plan) throw new NotFoundError("الخطة غير موجودة أو غير مفعّلة");
 
   const tiers = await rawQuery<CommissionTier>(
     `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 ORDER BY "tierOrder"`,
@@ -170,7 +171,7 @@ export async function simulateCommission(
     `SELECT * FROM employee_commission_plans WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
     [planId, companyId ?? 0]
   );
-  if (!plan) throw new Error("الخطة غير موجودة");
+  if (!plan) throw new NotFoundError("الخطة غير موجودة");
 
   const tiers = await rawQuery<CommissionTier>(
     `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 ORDER BY "tierOrder"`,
