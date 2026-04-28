@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import { rawQuery, rawExecute, pool } from "./rawdb.js";
+import { logger } from "./logger.js";
 import { saveAllCompaniesKPISnapshots } from "./kpiEngine.js";
 import { runSmartAlertsAllCompanies } from "./smartAlerts.js";
 import { runSelfAuditAllCompanies } from "./selfAuditEngine.js";
@@ -116,7 +117,7 @@ async function runJob(def: CronJobDef): Promise<void> {
 
   const acquired = await acquireCronLock(def.name);
   if (!acquired) {
-    console.log(`[CRON] ${def.name}: skipped — already running on another instance`);
+    logger.debug({ job: def.name }, "CRON job skipped — already running on another instance");
     return;
   }
 
@@ -125,7 +126,7 @@ async function runJob(def: CronJobDef): Promise<void> {
     const result = await def.handler();
     const duration = Date.now() - start;
     await logCronJob(def.name, "success", duration, result);
-    console.log(`[CRON] ${def.name}: ${result} (${duration}ms)`);
+    logger.info({ job: def.name, result, duration }, "CRON job completed");
   } catch (err) {
     const duration = Date.now() - start;
     const errMsg = err instanceof Error ? err.message : String(err);
@@ -3084,13 +3085,13 @@ export async function startCronScheduler(): Promise<void> {
         timezone: tz,
       });
       scheduledTasks.push(task);
-      console.log(`[CRON] Scheduled: ${def.name} (${def.schedule})`);
+      logger.info({ job: def.name, schedule: def.schedule }, "CRON job scheduled");
     } catch (err) {
       console.error(`[CRON] Failed to schedule ${def.name}:`, err);
     }
   }
 
-  console.log(`[CRON] Scheduler started with ${scheduledTasks.length} jobs`);
+  logger.info({ jobCount: scheduledTasks.length }, "CRON scheduler started");
 }
 
 export async function triggerJobByName(jobName: string): Promise<{ success: boolean; result?: string; error?: string }> {
@@ -3116,11 +3117,11 @@ export function stopCronScheduler(): void {
     task.stop();
   }
   scheduledTasks.length = 0;
-  console.log("[CRON] Scheduler stopped");
+  logger.info("CRON scheduler stopped");
 }
 
 export async function reloadCronScheduler(): Promise<void> {
-  console.log("[CRON] Reloading scheduler with updated timezone...");
+  logger.info("CRON scheduler reloading with updated timezone");
   stopCronScheduler();
   await startCronScheduler();
 }

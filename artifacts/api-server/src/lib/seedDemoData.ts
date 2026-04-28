@@ -1,5 +1,6 @@
 import { pool } from "./rawdb.js";
 import { toDateISO, roundTo2 } from "./businessHelpers.js";
+import { logger } from "./logger.js";
 
 const isDev = process.env.NODE_ENV === "development";
 const seedEnabled = process.env.SEED_DEMO_DATA === "true";
@@ -367,7 +368,7 @@ export async function seedDemoData(): Promise<void> {
     }
 
     await client.query("COMMIT");
-    console.log("[SeedDemo] Demo data inserted successfully for company", companyId);
+    logger.info({ companyId }, "Demo data inserted successfully");
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;

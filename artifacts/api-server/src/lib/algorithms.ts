@@ -40,7 +40,7 @@ export interface Resource {
   rating?: number;
 }
 
-export interface LoadBalanceOptions {
+interface LoadBalanceOptions {
   targetLat?: number;
   targetLon?: number;
   maxWorkload?: number;

@@ -880,7 +880,6 @@ export const EVENT_CATALOG: EventDefinition[] = [
   { name: "cost_center.updated", label: "تحديث مركز تكلفة", domain: "finance", description: "تُصدر عند تحديث مركز تكلفة", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "daily_close.executed", label: "تنفيذ إقفال يومي", domain: "finance", description: "تُصدر عند تنفيذ إقفال يومي", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["gl_post","audit","notification"], critical: true },
   { name: "deposit.received", label: "استلام وديعة", domain: "finance", description: "تُصدر عند استلام وديعة", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["gl_post","audit","notification"] },
-  { name: "deposit.refunded", label: "استرداد وديعة", domain: "finance", description: "تُصدر عند استرداد وديعة", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["gl_post","audit","notification"] },
   { name: "expense.created", label: "إنشاء مصروف", domain: "finance", description: "تُصدر عند إنشاء مصروف", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "finance_project.created", label: "إنشاء مشروع مالي", domain: "finance", description: "تُصدر عند إنشاء مشروع مالي", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "fiscal.year_end_closed", label: "year_end_closed سنة مالية", domain: "finance", description: "تُصدر عند year_end_closed سنة مالية", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"], critical: true },
@@ -1325,7 +1324,6 @@ export const EVENT_CATALOG: EventDefinition[] = [
   { name: "fleet.vehicle.breakdown", label: "عطل مركبة", domain: "fleet", description: "تُصدر عند اكتشاف عطل في مركبة", payload: { vehicleId: "number", reason: "string" }, consumers: ["maintenanceWorkflow", "execDashboard"], sideEffects: ["notification", "audit"], critical: true },
   { name: "hr.auto_detection.completed", label: "اكتمال كشف تلقائي", domain: "hr", description: "تُصدر بعد انتهاء محرك الكشف التلقائي عن المخالفات", payload: { companyId: "number", detected: "number" }, consumers: ["hrNotifier"], sideEffects: ["notification", "audit"] },
   { name: "company.created", label: "إنشاء شركة", domain: "admin", description: "تُصدر عند إنشاء شركة جديدة في النظام", payload: { companyId: "number", name: "string" }, consumers: ["onboardingEngine"], sideEffects: ["audit", "notification"], critical: true },
-  { name: "maintenance.completed", label: "اكتمال صيانة عقارية", domain: "property", description: "تُصدر عند اكتمال طلب صيانة عقارية", payload: { maintenanceId: "number", propertyId: "number" }, consumers: ["propertyManager"], sideEffects: ["notification", "audit"] },
   { name: "journal.entry.created", label: "إنشاء قيد محاسبي", domain: "finance", description: "تُصدر بعد ترحيل قيد يومية جديد", payload: { journalId: "number", sourceKey: "string", total: "number" }, consumers: ["glReconciler", "budgetValidator"], sideEffects: ["audit"], critical: true },
 ];
 

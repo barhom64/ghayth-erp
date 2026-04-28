@@ -1,6 +1,7 @@
 import { pool } from "./rawdb.js";
 import { hashPassword } from "./auth.js";
 import { currentYear, todayISO } from "./businessHelpers.js";
+import { logger } from "./logger.js";
 import type pg from "pg";
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@ghayth.com";
@@ -83,7 +84,7 @@ async function createUserIfNotExists(
     [user.email],
   );
   if (existing.length > 0) {
-    console.log(`[Bootstrap] User "${user.email}" already exists — skipping`);
+    logger.info({ email: user.email }, "Bootstrap user already exists — skipping");
     return false;
   }
 
@@ -102,7 +103,7 @@ async function createUserIfNotExists(
     [user.name, user.phone, user.email, empNumber, user.nationalId, user.gender, user.nationality],
   );
   const employeeId = empRes.rows[0].id;
-  console.log(`[Bootstrap] Created employee "${user.name}" (id=${employeeId}, empNumber=${empNumber})`);
+  logger.info({ name: user.name, employeeId, empNumber }, "Bootstrap created employee");
 
   // 2. Create employee_assignment
   const hireDate = todayISO();
@@ -113,7 +114,7 @@ async function createUserIfNotExists(
     [employeeId, companyId, branchId, user.jobTitle, user.assignmentRole, 0, hireDate],
   );
   const assignmentId = assignRes.rows[0].id;
-  console.log(`[Bootstrap] Created employee_assignment (id=${assignmentId}) for "${user.email}"`);
+  logger.info({ assignmentId, email: user.email }, "Bootstrap created employee_assignment");
 
   // 3. Create user with hashed password
   const passwordHash = await hashPassword(user.password);
@@ -124,7 +125,7 @@ async function createUserIfNotExists(
     [user.email, passwordHash, employeeId, user.userRole],
   );
   const userId = userRes.rows[0].id;
-  console.log(`[Bootstrap] Created user (id=${userId}) for "${user.email}"`);
+  logger.info({ userId, email: user.email }, "Bootstrap created user");
 
   // 4. Create user_role
   const rd = user.roleDefinition;
@@ -134,7 +135,7 @@ async function createUserIfNotExists(
      ON CONFLICT ("userId", "roleKey", "companyId") DO NOTHING`,
     [userId, rd.roleKey, rd.label, rd.level, JSON.stringify(rd.modules), companyId],
   );
-  console.log(`[Bootstrap] Assigned role "${rd.roleKey}" (level=${rd.level}) to user "${user.email}"`);
+  logger.info({ roleKey: rd.roleKey, level: rd.level, email: user.email }, "Bootstrap assigned role to user");
 
   return true;
 }
@@ -145,7 +146,7 @@ export async function bootstrapAdminUser(): Promise<void> {
     `SELECT id FROM companies WHERE id = 1 LIMIT 1`,
   );
   if (companies.length === 0) {
-    console.log("[Bootstrap] Company id=1 does not exist — skipping admin bootstrap (company bootstrap creates the company first)");
+    logger.info("Company id=1 does not exist — skipping admin bootstrap (company bootstrap creates the company first)");
     return;
   }
   const companyId = companies[0].id;
@@ -156,7 +157,7 @@ export async function bootstrapAdminUser(): Promise<void> {
     [companyId],
   );
   if (branches.length === 0) {
-    console.log("[Bootstrap] No branch found for company id=1 — skipping admin bootstrap");
+    logger.info("No branch found for company id=1 — skipping admin bootstrap");
     return;
   }
   const branchId = branches[0].id;
@@ -171,9 +172,9 @@ export async function bootstrapAdminUser(): Promise<void> {
     await client.query("COMMIT");
 
     if (adminCreated || fleetCreated) {
-      console.log("[Bootstrap] Admin bootstrap completed successfully");
+      logger.info("Admin bootstrap completed successfully");
     } else {
-      console.log("[Bootstrap] All bootstrap users already exist — nothing to do");
+      logger.info("All bootstrap users already exist — nothing to do");
     }
   } catch (err) {
     await client.query("ROLLBACK");

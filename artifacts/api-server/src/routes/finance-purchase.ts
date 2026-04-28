@@ -8,6 +8,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
@@ -1168,10 +1169,10 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
         [pr.supplierId, scope.companyId]
       );
       if (supplier?.email) {
-        console.log(`[P2P] Supplier email → ${supplier.email} for PO ${poRef}`);
+        logger.info({ supplierEmail: supplier.email, poRef }, "P2P supplier email notification");
       }
       if (supplier?.phone) {
-        console.log(`[P2P] Supplier SMS → ${supplier.phone} for PO ${poRef}`);
+        logger.info({ supplierPhone: supplier.phone, poRef }, "P2P supplier SMS notification");
       }
     }
 

@@ -8,6 +8,7 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { logger } from "../lib/logger.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
@@ -1750,7 +1751,7 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
         action = 'زيارة ميدانية للمستأجر';
       } else if (targetStage === 'notification') {
         action = 'إشعار رسمي للمستأجر';
-        console.log(`[SMS] تذكير متأخرات: ${payment.tenantName} — ${payment.tenantPhone} — مبلغ ${payment.amount} ريال`);
+        logger.info({ tenantName: payment.tenantName, tenantPhone: payment.tenantPhone, amount: payment.amount }, "Late rent SMS reminder notification");
       } else if (targetStage === 'alert') {
         action = 'تنبيه بالتأخر';
       }
@@ -1921,7 +1922,7 @@ router.post("/maintenance-requests", requirePermission("property:create"), async
     }
 
     if (b.tenantPhone) {
-      console.log(`[SMS] بلاغ صيانة #${insertId} — SMS للمستأجر ${b.tenantName}: تم استلام بلاغك وسيتم التواصل معك خلال ${estimatedDuration} يوم`);
+      logger.info({ maintenanceId: insertId, tenantName: b.tenantName, estimatedDuration }, "Maintenance request SMS sent to tenant");
     }
 
     createAuditLog({
@@ -2191,7 +2192,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
       }
     } catch (taskErr) { console.error("Failed to create follow-up task:", taskErr); }
 
-    console.log(`[SURVEY] Maintenance #${id} completed — follow-up task #${followUpTaskId} created for ${mr.tenantName}`);
+    logger.info({ maintenanceId: id, followUpTaskId, tenantName: mr.tenantName }, "Maintenance completed — follow-up survey task created");
 
     if (mr.unitId) {
       try {

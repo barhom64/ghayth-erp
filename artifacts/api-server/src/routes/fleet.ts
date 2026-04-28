@@ -7,6 +7,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { logger } from "../lib/logger.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
@@ -926,7 +927,7 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
         }
       } catch (notifErr) { console.error("Trip notification error:", notifErr); }
 
-      console.log(`[SMS] رحلة جديدة #${insertId} — SMS للعميل ${b.clientId || 'N/A'}`);
+      logger.info({ tripId: insertId, clientId: b.clientId || "N/A" }, "New trip SMS notification for client");
     }
 
     createAuditLog({

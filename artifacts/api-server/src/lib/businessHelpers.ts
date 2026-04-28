@@ -482,9 +482,9 @@ export async function reverseAccountBalances(
   }
 }
 
-export type ApprovalChainType = "leaves" | "purchases" | "expenses" | "advances" | "letters" | "procurement" | "loans" | "overtime" | "exit";
+type ApprovalChainType = "leaves" | "purchases" | "expenses" | "advances" | "letters" | "procurement" | "loans" | "overtime" | "exit";
 
-export interface ApprovalChainResult {
+interface ApprovalChainResult {
   requiresApproval: boolean;
   chainId: number | null;
   approvalRequestId: number | null;
