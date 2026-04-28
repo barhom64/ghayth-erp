@@ -4,7 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
-import { createAuditLog, emitEvent, todayISO, currentYear, toDateISO } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -1029,7 +1029,7 @@ router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) 
         depreciation,
         tco,
         odometer,
-        costPerKm: odometer > 0 ? Math.round((tco / odometer) * 100) / 100 : 0,
+        costPerKm: odometer > 0 ? roundTo2(tco / odometer) : 0,
       };
     });
 

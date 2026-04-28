@@ -12,7 +12,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
-import { emitEvent, createAuditLog, currentPeriod, currentYear, toDateISO } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog, currentPeriod, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
@@ -338,7 +338,7 @@ budgetRouter.post("/budget/approval-requests", requirePermission("finance:create
       throw new ConflictError("تجاوز 110% — مرفوض نهائياً ولا يمكن اعتماده", {
         field: "requestedAmount",
         fix: "قلّل المبلغ المطلوب أو زِد سقف الميزانية أولاً",
-        meta: { utilizationAfter: Math.round(utilAfter * 100) / 100, capPct: 110 },
+        meta: { utilizationAfter: roundTo2(utilAfter), capPct: 110 },
       });
     }
 
@@ -354,7 +354,7 @@ budgetRouter.post("/budget/approval-requests", requirePermission("finance:create
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING *`,
       [scope.companyId, scope.branchId ?? null, accountCode, period, Number(requestedAmount),
-       budgetAmount, Math.round(utilBefore * 100) / 100, Math.round(utilAfter * 100) / 100,
+       budgetAmount, roundTo2(utilBefore), roundTo2(utilAfter),
        level, sourceType ?? null, sourceId ?? null, reason ?? null, scope.activeAssignmentId]
     );
 
@@ -522,7 +522,7 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
       if (r.accountType === "revenue" || r.accountType === "liability" || r.accountType === "equity") {
         actualAmount = -actualAmount;
       }
-      const variance = Math.round((budgetAmount - actualAmount) * 100) / 100;
+      const variance = roundTo2(budgetAmount - actualAmount);
       const variancePct = budgetAmount > 0 ? Math.round((variance / budgetAmount) * 10000) / 100 : 0;
       totalBudget += budgetAmount;
       totalActual += actualAmount;
@@ -536,7 +536,7 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
         accountName: r.accountName,
         accountType: r.accountType,
         budgetAmount,
-        actualAmount: Math.round(actualAmount * 100) / 100,
+        actualAmount: roundTo2(actualAmount),
         variance,
         variancePct,
         utilizationPct: budgetAmount > 0 ? Math.round((actualAmount / budgetAmount) * 10000) / 100 : 0,
@@ -546,9 +546,9 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
 
     res.json({
       period,
-      totalBudget: Math.round(totalBudget * 100) / 100,
-      totalActual: Math.round(totalActual * 100) / 100,
-      totalVariance: Math.round((totalBudget - totalActual) * 100) / 100,
+      totalBudget: roundTo2(totalBudget),
+      totalActual: roundTo2(totalActual),
+      totalVariance: roundTo2(totalBudget - totalActual),
       lines,
     });
   } catch (err) {

@@ -15,6 +15,7 @@ import {
   toDateISO,
   currentYear,
   currentPeriod,
+  roundTo2,
 } from "./businessHelpers.js";
 import { broadcastAlert } from "./notificationService.js";
 import { processFallbackChains } from "./notificationEngine.js";
@@ -1333,7 +1334,7 @@ async function monthlyRentPenalties(): Promise<string> {
 
       let actionLabel = targetStage;
       if (targetStage === 'penalty_applied') {
-        const lateFee = Math.round(Number(p.amount) * 0.02 * 100) / 100;
+        const lateFee = roundTo2(Number(p.amount) * 0.02);
         await rawExecute(`UPDATE rent_payments SET amount = amount + $1, "updatedAt"=NOW() WHERE id = $2`, [lateFee, p.id]);
         actionLabel = `غرامة تأخير ${lateFee}`;
         penalties++;
@@ -2118,9 +2119,9 @@ async function monthlyAutoDepreciation(): Promise<string> {
       if (!usefulLife || usefulLife <= 0) continue;
 
       if (asset.depreciationMethod === "declining_balance") {
-        depAmount = Math.max(0, Math.round(currentBookValue * (2 / usefulLife / 12) * 100) / 100);
+        depAmount = Math.max(0, roundTo2(currentBookValue * (2 / usefulLife / 12)));
       } else {
-        depAmount = Math.max(0, Math.round((purchaseCost - salvageValue) / (usefulLife * 12) * 100) / 100);
+        depAmount = Math.max(0, roundTo2((purchaseCost - salvageValue) / (usefulLife * 12)));
       }
 
       if (currentBookValue - depAmount < salvageValue) {
@@ -2640,7 +2641,7 @@ async function dailyDunningAutoSend(): Promise<string> {
           if (hoursSince < 24) { totalSkipped++; continue; }
         }
 
-        const outstanding = Math.round((Number(r.total) - Number(r.paidAmount)) * 100) / 100;
+        const outstanding = roundTo2(Number(r.total) - Number(r.paidAmount));
         await rawExecute(
           `INSERT INTO dunning_letters ("companyId","invoiceId","clientId",stage,"daysPastDue","outstandingAmount","sentVia")
            VALUES ($1,$2,$3,$4,$5,$6,'auto')`,

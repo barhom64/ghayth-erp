@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { rawQuery } from "./rawdb.js";
-import { currentYear } from "./businessHelpers.js";
+import { currentYear, roundTo2 } from "./businessHelpers.js";
 
 // ─── توليد رقم متسلسل سنوي ─────────────────────────────────────────────────
 // مثال: generateSequentialNumber("hr_employee_loans", 1, "LN") → "LN-2026-0001"
@@ -49,7 +49,7 @@ export function advancePeriod(period: string, count: number): string {
 // ─── معدل الساعة وفق نظام العمل السعودي (المادة 98) ──────────────────────
 // الراتب الشهري / 30 يوم / 8 ساعات
 export function calcHourlyRate(monthlySalary: number): number {
-  return Math.round((monthlySalary / 30 / 8) * 100) / 100;
+  return roundTo2(monthlySalary / 30 / 8);
 }
 
 // ─── قيمة الوقت الإضافي ─────────────────────────────────────────────────────
@@ -59,7 +59,7 @@ export function calcOvertimeAmount(
   hours: number,
   multiplier: number = 1.5,
 ): number {
-  return Math.round(calcHourlyRate(monthlySalary) * hours * multiplier * 100) / 100;
+  return roundTo2(calcHourlyRate(monthlySalary) * hours * multiplier);
 }
 
 // ─── سنوات الخدمة بين تاريخين ──────────────────────────────────────────────
@@ -67,7 +67,7 @@ export function yearsOfService(startDate: string | Date, endDate: string | Date)
   const start = new Date(startDate);
   const end = new Date(endDate);
   const ms = end.getTime() - start.getTime();
-  return Math.round((ms / (1000 * 60 * 60 * 24 * 365.25)) * 100) / 100;
+  return roundTo2(ms / (1000 * 60 * 60 * 24 * 365.25));
 }
 
 // ─── مكافأة نهاية الخدمة وفق نظام العمل السعودي (المادة 84) ──────────────
@@ -79,11 +79,11 @@ export function calcGratuity(monthlySalary: number, years: number): {
 } {
   const first5 = Math.min(years, 5);
   const after5 = Math.max(0, years - 5);
-  const first5Years = Math.round(monthlySalary * 0.5 * first5 * 100) / 100;
-  const after5Years = Math.round(monthlySalary * 1 * after5 * 100) / 100;
+  const first5Years = roundTo2(monthlySalary * 0.5 * first5);
+  const after5Years = roundTo2(monthlySalary * 1 * after5);
   return {
     first5Years,
     after5Years,
-    total: Math.round((first5Years + after5Years) * 100) / 100,
+    total: roundTo2(first5Years + after5Years),
   };
 }

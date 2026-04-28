@@ -1,5 +1,5 @@
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
-import { emitEvent, createGuardedJournalEntry, getAccountCodeFromMapping } from "./businessHelpers.js";
+import { emitEvent, createGuardedJournalEntry, getAccountCodeFromMapping, roundTo2 } from "./businessHelpers.js";
 import { NotFoundError } from "./errorHandler.js";
 
 type QueryFn = (sql: string, params: any[]) => Promise<{ rows: any[] }>;
@@ -274,8 +274,8 @@ async function compute(
   if (hasViolations && plan.violationBlocksCommission) finalAmount = 0;
   if (isExcludedMonth) finalAmount = 0;
 
-  finalAmount = Math.round(finalAmount * 100) / 100;
-  commissionAmount = Math.round(commissionAmount * 100) / 100;
+  finalAmount = roundTo2(finalAmount);
+  commissionAmount = roundTo2(commissionAmount);
 
   const completedTiers = plan.partialTiersAllowed
     ? tiers.filter((t) => totalMutamers >= t.fromCount).length

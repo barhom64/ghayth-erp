@@ -6,6 +6,7 @@
 import { financialEngine } from "./financialEngine.js";
 import { rawQuery, rawExecute } from "../rawdb.js";
 import { registerCrossDomainHandler } from "../eventBus.js";
+import { roundTo2 } from "../businessHelpers.js";
 import type { DomainEngine } from "./domainEngineBase.js";
 
 interface HRGLContext {
@@ -257,7 +258,7 @@ class HREngineImpl implements DomainEngine {
     const lines = [
       { accountCode: salaryExpenseCode, debit: payroll.totalGross, credit: 0 },
       { accountCode: overtimeExpenseCode, debit: payroll.totalOvertime, credit: 0 },
-      { accountCode: gosiExpenseCode, debit: Math.round(payroll.totalGosiEmployer * 100) / 100, credit: 0 },
+      { accountCode: gosiExpenseCode, debit: roundTo2(payroll.totalGosiEmployer), credit: 0 },
       { accountCode: bankCode, debit: 0, credit: payroll.totalBankPayout },
       { accountCode: gosiPayableCode, debit: 0, credit: payroll.totalGosiPayable },
       { accountCode: deductionsPayableCode, debit: 0, credit: payroll.totalOtherDeductions },
@@ -299,9 +300,9 @@ class HREngineImpl implements DomainEngine {
 
     const jlLines = [
       { accountCode: salaryExpenseCode, debit: payroll.totalGross, credit: 0, description: "مصاريف رواتب" },
-      { accountCode: gosiExpenseCode, debit: Math.round(payroll.totalGosiEmployer * 100) / 100, credit: 0, description: "تأمينات اجتماعية صاحب عمل" },
+      { accountCode: gosiExpenseCode, debit: roundTo2(payroll.totalGosiEmployer), credit: 0, description: "تأمينات اجتماعية صاحب عمل" },
       { accountCode: bankCode, debit: 0, credit: payroll.totalBankPayout, description: "صرف رواتب — بنك" },
-      { accountCode: gosiPayableCode, debit: 0, credit: Math.round(payroll.totalGosiPayable * 100) / 100, description: "تأمينات اجتماعية مستحقة" },
+      { accountCode: gosiPayableCode, debit: 0, credit: roundTo2(payroll.totalGosiPayable), description: "تأمينات اجتماعية مستحقة" },
     ].filter(l => l.debit > 0 || l.credit > 0);
 
     const totalJeDebit = jlLines.reduce((s, l) => s + l.debit, 0);

@@ -1,5 +1,5 @@
 import { rawQuery } from "./rawdb.js";
-import { currentPeriod, todayISO } from "./businessHelpers.js";
+import { currentPeriod, todayISO, roundTo2 } from "./businessHelpers.js";
 import { NotFoundError } from "./errorHandler.js";
 
 export interface ImpactItem {
@@ -75,7 +75,7 @@ export async function computeLeaveImpact(
   const salary = Number(employee?.salary ?? 0);
   if (!leaveType?.isPaid && salary > 0) {
     const dailySalary = salary / 30;
-    const deduction = Math.round(dailySalary * days * 100) / 100;
+    const deduction = roundTo2(dailySalary * days);
     items.push({
       category: "المالية",
       label: "خصم من الراتب",
@@ -146,7 +146,7 @@ export async function computeTerminationImpact(
     const hireDate = new Date(employee.hireDate);
     const today = new Date();
     const yearsOfService = (today.getTime() - hireDate.getTime()) / (365.25 * 24 * 3600 * 1000);
-    const gratuity = Math.round(salary / 12 * yearsOfService * 100) / 100;
+    const gratuity = roundTo2(salary / 12 * yearsOfService);
     items.push({
       category: "المالية",
       label: "مكافأة نهاية الخدمة المقدرة",

@@ -2,8 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   haversineDistance,
   haversineKm,
-  estimateTravelTime,
-  fieldTaskDistance,
   movingAverage,
   selectLeastLoadedResource,
   criticalPathLength,
@@ -37,39 +35,11 @@ describe("haversineDistance", () => {
   });
 });
 
-describe("estimateTravelTime", () => {
-  it("returns 0 for non-positive distance", () => {
-    expect(estimateTravelTime(0, 40)).toBe(0);
-    expect(estimateTravelTime(-5, 40)).toBe(0);
-  });
-
-  it("returns 0 for non-positive speed", () => {
-    expect(estimateTravelTime(10, 0)).toBe(0);
-    expect(estimateTravelTime(10, -20)).toBe(0);
-  });
-
-  it("computes minutes from km / kmh", () => {
-    // 40 km at 40 km/h = 60 minutes
-    expect(estimateTravelTime(40, 40)).toBe(60);
-    // 20 km at 80 km/h = 15 minutes
-    expect(estimateTravelTime(20, 80)).toBe(15);
-  });
-
-  it("defaults speed to 40 km/h", () => {
-    expect(estimateTravelTime(40)).toBe(60);
-  });
-});
-
-describe("fieldTaskDistance", () => {
-  it("returns rounded distance + minutes", () => {
-    const result = fieldTaskDistance(24.7136, 46.6753, 24.7200, 46.6800);
-    expect(result.distanceKm).toBeGreaterThan(0);
-    expect(result.distanceKm).toBeLessThan(2);
-    expect(result.travelMinutes).toBeGreaterThanOrEqual(0);
-    // Distance rounds to 2dp
-    expect(result.distanceKm).toBe(Math.round(result.distanceKm * 100) / 100);
-    // Travel minutes are integer
-    expect(Number.isInteger(result.travelMinutes)).toBe(true);
+describe("removed dead exports", () => {
+  it("estimateTravelTime and fieldTaskDistance are no longer exported", async () => {
+    const mod = await import("../../src/lib/algorithms.js");
+    expect(mod).not.toHaveProperty("estimateTravelTime");
+    expect(mod).not.toHaveProperty("fieldTaskDistance");
   });
 });
 

@@ -20,6 +20,7 @@ import {
   reverseAccountBalances,
   computeVat,
   extractBaseFromGross,
+  roundTo2,
   todayISO,
   currentPeriod,
   currentYear,
@@ -309,11 +310,11 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
         if (!line.quantity || line.quantity <= 0) {
           throw new ValidationError("الكمية يجب أن تكون أكبر من صفر", { field: "lines.quantity", fix: "أدخل كمية موجبة لكل بند" });
         }
-        const lineTotal = Math.round(Number(line.quantity) * Number(line.unitPrice) * 100) / 100;
+        const lineTotal = roundTo2(Number(line.quantity) * Number(line.unitPrice));
         const lineVatRate = line.vatRate != null ? Number(line.vatRate) : Number(vatRate);
         const lineVat = line.vatAmount != null
-          ? Math.round(Number(line.vatAmount) * 100) / 100
-          : Math.round(lineTotal * (lineVatRate / 100) * 100) / 100;
+          ? roundTo2(Number(line.vatAmount))
+          : roundTo2(lineTotal * (lineVatRate / 100));
         baseAmount += lineTotal;
         validatedLines.push({ description: line.description ?? "", quantity: Number(line.quantity), unitPrice: Number(line.unitPrice), lineTotal, vatAmount: lineVat, lineGross: lineTotal + lineVat });
       }
@@ -350,9 +351,9 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
     const ref = `INV-${year}${month}-${String(seqNum).padStart(4, "0")}`;
 
     const vatAmount = validatedLines.length > 0
-      ? Math.round(validatedLines.reduce((sum, l) => sum + l.vatAmount, 0) * 100) / 100
+      ? roundTo2(validatedLines.reduce((sum, l) => sum + l.vatAmount, 0))
       : computeVat(baseAmount, Number(vatRate));
-    const total = Math.round((baseAmount + vatAmount) * 100) / 100;
+    const total = roundTo2(baseAmount + vatAmount);
 
     let finalDueDate = dueDate ?? null;
     if (!finalDueDate && parsedTerms != null) {
@@ -1005,8 +1006,8 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
     if (!invoice) {
       throw new NotFoundError("الفاتورة غير موجودة");
     }
-    const creditAmount = Math.round(Number(amount) * 100) / 100;
-    const openBalance = Math.round((Number(invoice.total) - Number(invoice.paidAmount)) * 100) / 100;
+    const creditAmount = roundTo2(Number(amount));
+    const openBalance = roundTo2(Number(invoice.total) - Number(invoice.paidAmount));
     if (creditAmount > openBalance + 0.01) {
       throw new ValidationError(`المبلغ (${creditAmount}) يتجاوز الرصيد المفتوح (${openBalance})`);
     }
@@ -1024,7 +1025,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
     const net = vatIncluded
       ? extractBaseFromGross(creditAmount, vatRate)
       : creditAmount;
-    const vat = Math.round((creditAmount - net) * 100) / 100;
+    const vat = roundTo2(creditAmount - net);
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [salesReturnsCode, vatPayableCode, arCode] = await Promise.all([
@@ -1158,7 +1159,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
       throw new NotFoundError("الفاتورة غير موجودة");
     }
 
-    const chargeAmount = Math.round(Number(amount) * 100) / 100;
+    const chargeAmount = roundTo2(Number(amount));
     const memoDateStr = memoDate
       ? toDateISO(memoDate)
       : todayISO();
@@ -1171,7 +1172,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
     const net = vatIncluded
       ? extractBaseFromGross(chargeAmount, vatRate)
       : chargeAmount;
-    const vat = Math.round((chargeAmount - net) * 100) / 100;
+    const vat = roundTo2(chargeAmount - net);
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [arCode, revenueCode, vatPayableCode] = await Promise.all([
@@ -1344,15 +1345,13 @@ invoicesRouter.get("/bad-debt/preview", requirePermission("finance:read"), async
     }
 
     const provision = {
-      current: Math.round(buckets.current * rates.current * 100) / 100,
-      d30: Math.round(buckets.d30 * rates.d30 * 100) / 100,
-      d60: Math.round(buckets.d60 * rates.d60 * 100) / 100,
-      d90: Math.round(buckets.d90 * rates.d90 * 100) / 100,
-      d90plus: Math.round(buckets.d90plus * rates.d90plus * 100) / 100,
+      current: roundTo2(buckets.current * rates.current),
+      d30: roundTo2(buckets.d30 * rates.d30),
+      d60: roundTo2(buckets.d60 * rates.d60),
+      d90: roundTo2(buckets.d90 * rates.d90),
+      d90plus: roundTo2(buckets.d90plus * rates.d90plus),
     };
-    const totalProvision = Math.round(
-      (provision.current + provision.d30 + provision.d60 + provision.d90 + provision.d90plus) * 100
-    ) / 100;
+    const totalProvision = roundTo2(provision.current + provision.d30 + provision.d60 + provision.d90 + provision.d90plus);
 
     res.json({ asOf, rates, buckets, provision, totalProvision, invoiceCount: invoices.length });
   } catch (err) {
@@ -1494,7 +1493,7 @@ invoicesRouter.post("/customer-advances", requirePermission("finance:create"), a
       throw new ConflictError(`لا يمكن تسجيل دفعة مقدمة في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
     }
 
-    const amt = Math.round(Number(amount) * 100) / 100;
+    const amt = roundTo2(Number(amount));
 
     let advanceId: number | null = null;
     const advRef = reference || `ADV-${Date.now()}`;
@@ -1581,7 +1580,7 @@ invoicesRouter.post("/customer-advances/:id/apply", requirePermission("finance:c
     if (!invoiceId || !amount || Number(amount) <= 0) {
       throw new ValidationError("الفاتورة والمبلغ مطلوبان");
     }
-    const applyAmt = Math.round(Number(amount) * 100) / 100;
+    const applyAmt = roundTo2(Number(amount));
 
     let advance: any;
     try {
@@ -1808,7 +1807,7 @@ invoicesRouter.get("/dunning/preview", requirePermission("finance:read"), async 
         const hoursSince = (Date.now() - lastAt.getTime()) / 36e5;
         if (hoursSince < 24) continue;
       }
-      const outstanding = Math.round((Number(r.total) - Number(r.paidAmount)) * 100) / 100;
+      const outstanding = roundTo2(Number(r.total) - Number(r.paidAmount));
       eligible.push({
         invoiceId: r.id,
         invoiceNumber: r.invoiceNumber,
@@ -1838,7 +1837,7 @@ invoicesRouter.get("/dunning/preview", requirePermission("finance:read"), async 
         4: eligible.filter(e => e.proposedStage === 4).length,
         5: eligible.filter(e => e.proposedStage === 5).length,
       },
-      totalOutstanding: Math.round(eligible.reduce((s, e) => s + e.outstanding, 0) * 100) / 100,
+      totalOutstanding: roundTo2(eligible.reduce((s, e) => s + e.outstanding, 0)),
       invoices: eligible,
     });
   } catch (err) {
@@ -1881,7 +1880,7 @@ invoicesRouter.post("/dunning/send", requirePermission("finance:create"), async 
       const stg = stageFromDaysPastDue(days);
       if (!stg) { results.push({ invoiceId: invId, status: "skipped", reason: "not_past_due" }); continue; }
 
-      const outstanding = Math.round((Number(inv.total) - Number(inv.paidAmount)) * 100) / 100;
+      const outstanding = roundTo2(Number(inv.total) - Number(inv.paidAmount));
       if (outstanding <= 0) { results.push({ invoiceId: invId, status: "skipped", reason: "fully_paid" }); continue; }
 
       const letter = composeDunningLetter({

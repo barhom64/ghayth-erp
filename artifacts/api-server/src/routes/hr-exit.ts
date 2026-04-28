@@ -23,6 +23,7 @@ import {
   initiateApprovalChain,
   processApprovalStep,
   getManagerAssignmentId,
+  roundTo2,
 } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
@@ -237,7 +238,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
       }
       // 10+ سنوات: كامل المكافأة
     }
-    gratuity = Math.round(gratuity * 100) / 100;
+    gratuity = roundTo2(gratuity);
 
     // رصيد الإجازات
     const [lb] = await rawQuery<any>(
@@ -247,7 +248,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
     ).catch(() => [{ balance: 0 }]);
     const leaveBalance = Number(lb?.balance ?? 0);
     const dailyRate = salary / 30;
-    const leaveCompensation = Math.round(leaveBalance * dailyRate * 100) / 100;
+    const leaveCompensation = roundTo2(leaveBalance * dailyRate);
 
     // خصم السلف المتبقية
     const [loans] = await rawQuery<any>(
@@ -259,9 +260,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
     const loanDeductions = Number(loans?.remaining ?? 0);
     const otherDeductions = Number(b.otherDeductions || 0);
 
-    const netSettlement = Math.round(
-      (gratuity + leaveCompensation - loanDeductions - otherDeductions) * 100
-    ) / 100;
+    const netSettlement = roundTo2(gratuity + leaveCompensation - loanDeductions - otherDeductions);
 
     const exitNumber = await generateExitNumber(scope.companyId);
 

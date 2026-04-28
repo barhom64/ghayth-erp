@@ -26,6 +26,7 @@ import {
   currentYear,
   generateRef,
   toDateISO,
+  roundTo2,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
@@ -434,7 +435,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     if (exceedsThreshold && assignment?.salary) {
       const dailySalary = Number(assignment.salary) / 30;
       const minuteRate = dailySalary / 480;
-      deductionAmount = Math.round(minuteRate * lateMinutes * 100) / 100;
+      deductionAmount = roundTo2(minuteRate * lateMinutes);
     }
 
     const { insertId: attendanceId } = await rawExecute(
@@ -681,7 +682,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
     // ── Calculate worked time ──
     const checkInTime = new Date(existing.checkIn);
     const workedMs = now.getTime() - checkInTime.getTime();
-    const workedHours = Math.round((workedMs / 3600000) * 100) / 100;
+    const workedHours = roundTo2(workedMs / 3600000);
 
     // ── Calculate overtime: compare actual checkout vs shift end ──
     let overtimeMinutes = 0;
@@ -740,7 +741,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
     if (earlyDepartureMinutes > 0 && !excusedEarlyLeave) {
       const dailySalary = Number(assignment?.salary ?? 0) / 30;
       const minuteRate = dailySalary / 480;
-      const earlyDeductionAmount = Math.round(minuteRate * earlyDepartureMinutes * 100) / 100;
+      const earlyDeductionAmount = roundTo2(minuteRate * earlyDepartureMinutes);
 
       const { insertId: earlyViolationId } = await rawExecute(
         `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
@@ -2345,9 +2346,9 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
           const compValue = Number(comp.value);
           let amount = 0;
           if (calcType === "percentage") {
-            amount = Math.round(basic * (compValue / 100) * 100) / 100;
+            amount = roundTo2(basic * (compValue / 100));
           } else {
-            amount = Math.round(compValue * 100) / 100;
+            amount = roundTo2(compValue);
           }
           if (compName.includes("سكن") || compName.toLowerCase().includes("housing")) {
             housingAllowance = amount;
@@ -2364,22 +2365,22 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
 
       const lateDeduction = lateMap.get(aId) ?? 0;
       const absentDays = absenceMap.get(aId) ?? 0;
-      const absenceDeduction = Math.round((absentDays * (basic / 30)) * 100) / 100;
+      const absenceDeduction = roundTo2(absentDays * (basic / 30));
       const violationDeduction = (penaltyMap.get(aId) ?? 0) + (violationMap.get(aId) ?? 0);
       const loanDeduction = loanMap.get(aId) ?? 0;
-      const gosiEmployee = Math.round(basic * GOSI_EMPLOYEE_RATE * 100) / 100;
-      const gosiEmployer = Math.round(basic * GOSI_EMPLOYER_RATE * 100) / 100;
+      const gosiEmployee = roundTo2(basic * GOSI_EMPLOYEE_RATE);
+      const gosiEmployer = roundTo2(basic * GOSI_EMPLOYER_RATE);
       totalGosiEmployer += gosiEmployer;
       const overtimeMinutes = overtimeMap.get(aId) ?? 0;
-      const overtimeHours = Math.round((overtimeMinutes / 60) * 100) / 100;
+      const overtimeHours = roundTo2(overtimeMinutes / 60);
       const hourlyRate = basic / (30 * 8);
-      const attendanceOt = Math.round(overtimeHours * hourlyRate * 1.5 * 100) / 100;
+      const attendanceOt = roundTo2(overtimeHours * hourlyRate * 1.5);
       const hrOtAmount = hrOtMap.get(aId) ?? 0;
       // استخدام الأعلى بين وقت الحضور ومبلغ طلبات OT المعتمدة (لتجنب الاحتساب المزدوج)
       const overtime = Math.max(attendanceOt, hrOtAmount);
 
       const totalDeductions = lateDeduction + absenceDeduction + violationDeduction + loanDeduction + gosiEmployee;
-      const net = Math.max(0, Math.round((gross + overtime - totalDeductions) * 100) / 100);
+      const net = Math.max(0, roundTo2(gross + overtime - totalDeductions));
       totalNet += net;
 
       lines.push({
@@ -2390,18 +2391,18 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
       });
     }
 
-    const totalGross = Math.round(lines.reduce((s, l) => s + l.gross, 0) * 100) / 100;
-    const totalGosiEmployee = Math.round(lines.reduce((s, l) => s + l.gosiEmployee, 0) * 100) / 100;
-    const totalOvertime = Math.round(lines.reduce((s, l) => s + l.overtime, 0) * 100) / 100;
-    const totalOtherDeductions = Math.round(lines.reduce((s, l) => s + l.lateDeduction + l.absenceDeduction + l.violationDeduction + l.loanDeduction, 0) * 100) / 100;
-    const totalBankPayout = Math.round(totalNet * 100) / 100;
-    const totalGosiPayable = Math.round((totalGosiEmployer + totalGosiEmployee) * 100) / 100;
+    const totalGross = roundTo2(lines.reduce((s, l) => s + l.gross, 0));
+    const totalGosiEmployee = roundTo2(lines.reduce((s, l) => s + l.gosiEmployee, 0));
+    const totalOvertime = roundTo2(lines.reduce((s, l) => s + l.overtime, 0));
+    const totalOtherDeductions = roundTo2(lines.reduce((s, l) => s + l.lateDeduction + l.absenceDeduction + l.violationDeduction + l.loanDeduction, 0));
+    const totalBankPayout = roundTo2(totalNet);
+    const totalGosiPayable = roundTo2(totalGosiEmployer + totalGosiEmployee);
 
     const runId = await withTransaction(async (client) => {
       const runResult = await client.query(
         `INSERT INTO payroll_runs ("companyId", period, status, "totalNet", "runBy")
          VALUES ($1,$2,'completed',$3,$4) RETURNING id`,
-        [scope.companyId, targetPeriod, Math.round(totalNet * 100) / 100, scope.activeAssignmentId]
+        [scope.companyId, targetPeriod, roundTo2(totalNet), scope.activeAssignmentId]
       );
       const newRunId = runResult.rows[0].id;
 
@@ -2526,8 +2527,8 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
 
     res.status(201).json({
       id: runId, month: targetPeriod,
-      totalAmount: Math.round(totalNet * 100) / 100,
-      totalGosiEmployer: Math.round(totalGosiEmployer * 100) / 100,
+      totalAmount: roundTo2(totalNet),
+      totalGosiEmployer: roundTo2(totalGosiEmployer),
       assignmentCount: lines.length,
       employeeCount: empAgg.size,
       gosiEmployeeRate: GOSI_EMPLOYEE_RATE,
@@ -6084,7 +6085,7 @@ router.get("/gratuity/:employeeId", requirePermission("hr:read"), async (req, re
       else reductionFactor = 0; // Less than 2 years = no gratuity for resignation
     }
 
-    const finalGratuity = Math.round(gratuity * reductionFactor * 100) / 100;
+    const finalGratuity = roundTo2(gratuity * reductionFactor);
 
     res.json({
       employeeName: assignment.employeeName,
@@ -6092,14 +6093,14 @@ router.get("/gratuity/:employeeId", requirePermission("hr:read"), async (req, re
       monthlySalary,
       startDate: toDateISO(startDate),
       endDate: toDateISO(endDate),
-      yearsOfService: Math.round(yearsOfService * 100) / 100,
+      yearsOfService: roundTo2(yearsOfService),
       terminationType: type,
-      gratuityBeforeReduction: Math.round(gratuity * 100) / 100,
+      gratuityBeforeReduction: roundTo2(gratuity),
       reductionFactor,
       finalGratuity,
       breakdown: {
-        first5Years: Math.min(yearsOfService, 5) > 0 ? Math.round((monthlySalary / 2) * Math.min(yearsOfService, 5) * 100) / 100 : 0,
-        above5Years: yearsOfService > 5 ? Math.round(monthlySalary * (yearsOfService - 5) * 100) / 100 : 0,
+        first5Years: Math.min(yearsOfService, 5) > 0 ? roundTo2((monthlySalary / 2) * Math.min(yearsOfService, 5)) : 0,
+        above5Years: yearsOfService > 5 ? roundTo2(monthlySalary * (yearsOfService - 5)) : 0,
       },
     });
   } catch (err) { handleRouteError(err, res, "Gratuity calculation error:"); }
@@ -6168,7 +6169,7 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
 
       const dailyRate = salary / 30;
       const monthlyLeaveDays = DEFAULT_ANNUAL_LEAVE_DAYS / 12;
-      const leaveAccrual = Math.round(dailyRate * monthlyLeaveDays * 100) / 100;
+      const leaveAccrual = roundTo2(dailyRate * monthlyLeaveDays);
 
       const startDate = new Date(emp.contractStart || emp.startDate);
       const yearsOfService = (periodEnd.getTime() - startDate.getTime()) / (365.25 * 24 * 3600 * 1000);
@@ -6180,7 +6181,7 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
       } else {
         monthlyEosAccrual = salary / 12;
       }
-      monthlyEosAccrual = Math.round(monthlyEosAccrual * 100) / 100;
+      monthlyEosAccrual = roundTo2(monthlyEosAccrual);
 
       totalLeaveAccrual += leaveAccrual;
       totalEosAccrual += monthlyEosAccrual;
@@ -6192,8 +6193,8 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
       });
     }
 
-    totalLeaveAccrual = Math.round(totalLeaveAccrual * 100) / 100;
-    totalEosAccrual = Math.round(totalEosAccrual * 100) / 100;
+    totalLeaveAccrual = roundTo2(totalLeaveAccrual);
+    totalEosAccrual = roundTo2(totalEosAccrual);
 
     if (totalLeaveAccrual <= 0 && totalEosAccrual <= 0) {
       throw new ValidationError("لا توجد مبالغ استحقاق لاحتسابها");
@@ -6279,19 +6280,18 @@ router.get("/accruals/preview", requirePermission("hr:read"), async (req, res) =
       const salary = Number(emp.salary) || 0;
       const dailyRate = salary / 30;
       const monthlyLeaveDays = DEFAULT_ANNUAL_LEAVE_DAYS / 12;
-      const leaveAccrual = Math.round(dailyRate * monthlyLeaveDays * 100) / 100;
+      const leaveAccrual = roundTo2(dailyRate * monthlyLeaveDays);
       const startDate = new Date(emp.contractStart || emp.startDate);
       const yearsOfService = (periodEnd.getTime() - startDate.getTime()) / (365.25 * 24 * 3600 * 1000);
-      const monthlyEosAccrual = Math.round(
-        (yearsOfService > 5 ? salary / 12 : salary / 24) * 100
-      ) / 100;
+      const monthlyEosAccrual = roundTo2(
+        (yearsOfService > 5 ? salary / 12 : salary / 24));
       totalLeaveAccrual += leaveAccrual;
       totalEosAccrual += monthlyEosAccrual;
       return {
         employeeId: emp.employeeId,
         employeeName: emp.employeeName,
         salary,
-        yearsOfService: Math.round(yearsOfService * 100) / 100,
+        yearsOfService: roundTo2(yearsOfService),
         leaveAccrual,
         eosAccrual: monthlyEosAccrual,
       };
@@ -6302,9 +6302,9 @@ router.get("/accruals/preview", requirePermission("hr:read"), async (req, res) =
       alreadyPosted: !!existing,
       existingJournalId: existing?.id ?? null,
       employeeCount: employees.length,
-      totalLeaveAccrual: Math.round(totalLeaveAccrual * 100) / 100,
-      totalEosAccrual: Math.round(totalEosAccrual * 100) / 100,
-      total: Math.round((totalLeaveAccrual + totalEosAccrual) * 100) / 100,
+      totalLeaveAccrual: roundTo2(totalLeaveAccrual),
+      totalEosAccrual: roundTo2(totalEosAccrual),
+      total: roundTo2(totalLeaveAccrual + totalEosAccrual),
       rows,
     });
   } catch (err) {
@@ -6346,7 +6346,7 @@ router.get("/turnover-report", requirePermission("hr:read"), async (req, res) =>
     const totalTerminated = terminated.length;
     const totalActiveCount = Number(totalActive?.count || 0);
     const avgHeadcount = Math.max(1, totalActiveCount + totalTerminated);
-    const turnoverRate = Math.round((totalTerminated / avgHeadcount) * 100 * 100) / 100;
+    const turnoverRate = roundTo2((totalTerminated / avgHeadcount) * 100);
 
     // Breakdown by reason
     const byReason: Record<string, number> = {};

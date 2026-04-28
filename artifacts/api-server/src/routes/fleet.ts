@@ -10,7 +10,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -2780,7 +2780,7 @@ router.get("/vehicles/:id/tco", requirePermission("fleet:read"), async (req, res
       ? (Date.now() - new Date(vehicle.purchaseDate).getTime()) / (365.25 * 24 * 3600 * 1000)
       : 1;
     const annualDepreciation = purchasePrice > 0 ? purchasePrice * 0.2 : 0;
-    const totalDepreciation = Math.round(annualDepreciation * yearsSincePurchase * 100) / 100;
+    const totalDepreciation = roundTo2(annualDepreciation * yearsSincePurchase);
 
     const fuelTotal = Number(fuelCost.total);
     const maintenanceTotal = Number(maintenanceCost.total);
@@ -2788,17 +2788,17 @@ router.get("/vehicles/:id/tco", requirePermission("fleet:read"), async (req, res
     const finesTotal = Number(trafficFines?.total || 0);
     const totalCost = purchasePrice + fuelTotal + maintenanceTotal + insuranceTotal + finesTotal;
     const totalKm = Number(tripRevenue.totalKm) || Number(vehicle.currentMileage) || 1;
-    const costPerKm = totalKm > 0 ? Math.round((totalCost / totalKm) * 100) / 100 : 0;
+    const costPerKm = totalKm > 0 ? roundTo2(totalCost / totalKm) : 0;
 
     res.json({
       vehicleId, plateNumber: vehicle.plateNumber, make: vehicle.make, model: vehicle.model, year: vehicle.year,
       purchasePrice, totalDepreciation,
       fuelCost: fuelTotal, maintenanceCost: maintenanceTotal,
       insuranceCost: insuranceTotal, trafficFines: finesTotal,
-      totalCost: Math.round(totalCost * 100) / 100,
+      totalCost: roundTo2(totalCost),
       totalKm, costPerKm,
       totalTrips: Number(tripRevenue.trips),
-      yearsSincePurchase: Math.round(yearsSincePurchase * 100) / 100,
+      yearsSincePurchase: roundTo2(yearsSincePurchase),
       breakdown: {
         purchase: purchasePrice,
         depreciation: totalDepreciation,
