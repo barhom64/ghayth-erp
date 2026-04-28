@@ -3,7 +3,6 @@ import {
   ValidationError,
   NotFoundError,
   ForbiddenError,
-  IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";

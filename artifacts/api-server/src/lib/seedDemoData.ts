@@ -1,5 +1,5 @@
 import { pool } from "./rawdb.js";
-import { toDateISO } from "./businessHelpers.js";
+import { toDateISO, roundTo2 } from "./businessHelpers.js";
 
 const isDev = process.env.NODE_ENV === "development";
 const seedEnabled = process.env.SEED_DEMO_DATA === "true";
@@ -350,7 +350,7 @@ export async function seedDemoData(): Promise<void> {
       dueDate.setDate(dueDate.getDate() + (i * 7) - 20);
       const total = 5000 + i * 3000;
       const invStatuses = ["paid", "pending_approval", "overdue", "partial", "draft", "paid", "sent", "sent"];
-      const subtotal = Math.round(total / 1.15);
+      const subtotal = roundTo2(total / 1.15);
       const vatAmount = total - subtotal;
 
       await client.query(
@@ -360,7 +360,7 @@ export async function seedDemoData(): Promise<void> {
         [companyId, clientIds[i], ref,
           `فاتورة مبيعات - ${clientData[i]?.name || "عميل"}`,
           subtotal, total, vatAmount,
-          invStatuses[i] === "paid" ? total : invStatuses[i] === "partial" ? Math.round(total * 0.4) : 0,
+          invStatuses[i] === "paid" ? total : invStatuses[i] === "partial" ? roundTo2(total * 0.4) : 0,
           invStatuses[i],
           toDateISO(dueDate)]
       );

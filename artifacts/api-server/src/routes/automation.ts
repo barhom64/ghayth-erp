@@ -1,13 +1,11 @@
 import { handleRouteError, NotFoundError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { triggerJobByName } from "../lib/cronScheduler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/cron-jobs", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {

@@ -9,7 +9,6 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { criticalPathLength } from "../lib/algorithms.js";
 import {
@@ -135,7 +134,6 @@ const createCostSchema = z.object({
 const closeProjectSchema = z.object({});
 
 const router = Router();
-router.use(authMiddleware);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LIFECYCLE STATE MACHINES — Phase C.5 Projects audit

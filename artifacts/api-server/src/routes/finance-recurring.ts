@@ -298,7 +298,7 @@ export async function runRecurringJournal(params: {
       type: "recurring",
       sourceType: "recurring_journal",
       sourceId: recurring.id,
-      sourceKey: `finance:recurring:${recurring.id}:${new Date().toISOString().slice(0,10)}`,
+      sourceKey: `finance:recurring:${recurring.id}:${todayISO()}`,
       lines,
     });
 

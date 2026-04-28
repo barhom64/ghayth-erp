@@ -1,12 +1,10 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 interface ImpactItem {
   type: "financial" | "administrative" | "reporting";

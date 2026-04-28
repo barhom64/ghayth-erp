@@ -7,7 +7,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   handleRouteError,
@@ -32,7 +31,6 @@ import { generateSequentialNumber, nextPeriod as nextPeriodHelper, advancePeriod
 import { HR_TABLES, NUMBER_PREFIXES, LOAN_STATUS } from "../lib/hrEnums.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 // ─── إنشاء جدول السلف (إذا لم يكن موجوداً) ─────────────────────────────────
 async function ensureLoanTables(): Promise<void> {

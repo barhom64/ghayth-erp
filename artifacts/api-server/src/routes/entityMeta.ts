@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -22,7 +21,6 @@ const bulkActionSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/comments/:entityType/:entityId", requirePermission("operations:read"), async (req, res) => {
   try {

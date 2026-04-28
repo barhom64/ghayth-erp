@@ -7,15 +7,13 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { slaDeadlineForPriority, haversineKm, loadBalanceAssign } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, LifecycleError, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import type { ExtraValue } from "../lib/lifecycleEngine.js";
 const router = Router();
-router.use(authMiddleware);
 
 const createTicketSchema = z.object({
   title: z.string().optional(),
@@ -123,7 +121,7 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
       }
     }
 
-    const ref = `TKT-${Date.now().toString(36).toUpperCase()}`;
+    const ref = generateTimeRef("TKT");
 
     const aiDetectedPriority = detectPriority(`${title} ${b.description || ''}`);
     const priority = b.priority || aiDetectedPriority;

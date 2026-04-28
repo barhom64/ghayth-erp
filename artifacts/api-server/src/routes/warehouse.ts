@@ -8,7 +8,6 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { movingAverage } from "../lib/algorithms.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -18,11 +17,13 @@ import {
   emitEvent,
   todayISO,
   toDateISO,
+  roundTo2,
+  roundTo4,
+  generateTimeRef,
 } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WAREHOUSE STATE MACHINES — Phase C.8 Warehouse audit
@@ -81,7 +82,7 @@ async function updateWeightedAverageCost(
       const newTotalQty = prevQty + movQty;
       const newWa =
         newTotalQty > 0
-          ? Math.round((newTotalValue / newTotalQty) * 10000) / 10000
+          ? roundTo4(newTotalValue / newTotalQty)
           : movCost;
       await rawExecute(
         `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2`,
@@ -131,8 +132,7 @@ async function postInventoryMovementGl(params: {
 }): Promise<number | null> {
   try {
     const totalValue =
-      Math.round(Math.abs(params.quantity) * Math.abs(params.unitCost) * 100) /
-      100;
+      roundTo2(Math.abs(params.quantity) * Math.abs(params.unitCost));
     // Transfers are internal — no GL impact.
     if (params.trigger === "transfer") return null;
     if (totalValue <= 0) {
@@ -591,7 +591,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
       }
 
       if (b.type === 'in') {
-        const batchNum = `BATCH-${Date.now().toString(36).toUpperCase()}`;
+        const batchNum = generateTimeRef("BATCH");
         await client.query(
           `INSERT INTO warehouse_stock_batches ("productId","batchNumber",quantity,"unitCost","receivedDate") VALUES ($1,$2,$3,$4,NOW())`,
           [b.productId, batchNum, b.quantity, b.unitCost || 0]
@@ -615,7 +615,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
         const prevCost = Number(product.costPrice ?? 0);
         const newTotalValue = prevStock * prevCost + incomingQty * incomingCost;
         const newTotalQty = prevStock + incomingQty;
-        const newWaCost = newTotalQty > 0 ? Math.round((newTotalValue / newTotalQty) * 10000) / 10000 : incomingCost;
+        const newWaCost = newTotalQty > 0 ? roundTo4(newTotalValue / newTotalQty) : incomingCost;
         await client.query(
           `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2`,
           [newWaCost, b.productId]
@@ -759,7 +759,7 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
   );
   const supplierId = preferredSupplier[0]?.id || null;
   const estimatedTotal = reorderQty * estimatedUnitCost;
-  const ref = `PR-AUTO-${Date.now().toString(36).toUpperCase()}`;
+  const ref = generateTimeRef("PR-AUTO");
 
   const { insertId: prId } = await rawExecute(
     `INSERT INTO purchase_requests ("companyId","supplierId",ref,status,"totalAmount","requestedBy",notes) VALUES ($1,$2,$3,'pending_approval',$4,$5,$6)`,
@@ -787,7 +787,7 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
       throw new ValidationError("الكمية يجب أن تكون أكبر من صفر", { field: "quantity", fix: "أدخل كمية موجبة" });
     }
 
-    const transferRef = `TRANSFER-${Date.now().toString(36).toUpperCase()}`;
+    const transferRef = generateTimeRef("TRANSFER");
     const fromLocation = b.fromLocation || b.fromWarehouseId ? `مستودع-${b.fromWarehouseId}` : 'المستودع الرئيسي';
     const toLocation = b.toLocation || b.toWarehouseId ? `مستودع-${b.toWarehouseId}` : 'المستودع الفرعي';
 

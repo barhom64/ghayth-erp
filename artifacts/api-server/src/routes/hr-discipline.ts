@@ -7,7 +7,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   handleRouteError,
@@ -44,7 +43,6 @@ import {
 } from "../lib/lifecycleEngine.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers

@@ -1,7 +1,6 @@
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   resolveSettings,
@@ -114,7 +113,6 @@ publicRouter.get("/display", async (_req, res) => {
 
 const router = Router();
 router.use(publicRouter);
-router.use(authMiddleware);
 
 router.get("/resolve", requirePermission("settings:read"), async (req, res) => {
   try {

@@ -8,7 +8,6 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission, requireAnyPermission } from "../middlewares/permissionMiddleware.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import rateLimit from "express-rate-limit";
@@ -213,7 +212,6 @@ const delegationSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 const checkInLimiter = rateLimit({
   windowMs: 60 * 1000,

@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -60,7 +59,6 @@ const patchEnrollmentSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/programs", requirePermission("hr:read"), async (req, res) => {
   try {

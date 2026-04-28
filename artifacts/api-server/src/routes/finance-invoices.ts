@@ -1415,9 +1415,9 @@ invoicesRouter.post("/bad-debt/post", requirePermission("finance:create"), async
       else if (d <= 90) buckets.d90 += amt;
       else buckets.d90plus += amt;
     }
-    const total = Math.round(
-      (buckets.current * r.current + buckets.d30 * r.d30 + buckets.d60 * r.d60 + buckets.d90 * r.d90 + buckets.d90plus * r.d90plus) * 100
-    ) / 100;
+    const total = roundTo2(
+      buckets.current * r.current + buckets.d30 * r.d30 + buckets.d60 * r.d60 + buckets.d90 * r.d90 + buckets.d90plus * r.d90plus
+    );
 
     if (total <= 0) {
       throw new ValidationError("لا يوجد مبلغ لمخصص الديون المشكوك فيها");

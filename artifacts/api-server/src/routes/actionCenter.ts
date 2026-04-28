@@ -1,12 +1,10 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 import { todayISO } from "../lib/businessHelpers.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/", async (req, res) => {
   try {

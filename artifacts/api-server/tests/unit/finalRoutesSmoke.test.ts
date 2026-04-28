@@ -130,8 +130,8 @@ describe("obligations — endpoints", () => {
 // ── Rules ─────────────────────────────────────────────────────────────────
 
 describe("rules — endpoints", () => {
-  it("uses authMiddleware", () => {
-    expect(RULES).toContain("authMiddleware");
+  it("relies on global authMiddleware from index.ts", () => {
+    expect(RULES).not.toContain("authMiddleware");
   });
 
   it("GET / requires admin:write", () => {
@@ -177,8 +177,8 @@ describe("rules — endpoints", () => {
 // ── Search ────────────────────────────────────────────────────────────────
 
 describe("search — endpoints", () => {
-  it("uses authMiddleware", () => {
-    expect(SEARCH).toContain("authMiddleware");
+  it("relies on global authMiddleware from index.ts", () => {
+    expect(SEARCH).not.toContain("authMiddleware");
   });
 
   it("GET / requires operations:read", () => {

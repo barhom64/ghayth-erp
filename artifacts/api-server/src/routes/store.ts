@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import {
@@ -61,7 +60,6 @@ const updateStoreOrderSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/products", requirePermission("store:read"), async (req, res) => {
   try {

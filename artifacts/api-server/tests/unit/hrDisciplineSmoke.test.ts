@@ -17,8 +17,8 @@ describe("Discipline route structure", () => {
     expect(DISCIPLINE_ROUTE).toContain("export default router");
   });
 
-  it("uses authMiddleware on all routes", () => {
-    expect(DISCIPLINE_ROUTE).toContain("router.use(authMiddleware)");
+  it("relies on global authMiddleware from index.ts", () => {
+    expect(DISCIPLINE_ROUTE).not.toContain("router.use(authMiddleware)");
   });
 
   it("imports applyTransition from lifecycleEngine", () => {

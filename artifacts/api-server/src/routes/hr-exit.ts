@@ -7,7 +7,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   handleRouteError,
@@ -31,7 +30,6 @@ import { generateSequentialNumber } from "../lib/hrHelpers.js";
 import { HR_TABLES, NUMBER_PREFIXES } from "../lib/hrEnums.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 // ─── إنشاء الجداول ─────────────────────────────────────────────────────────
 async function ensureExitTables(): Promise<void> {

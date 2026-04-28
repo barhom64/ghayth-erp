@@ -3,8 +3,8 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
-import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError, isTypedError } from "../lib/errorHandler.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, isTypedError } from "../lib/errorHandler.js";
+import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 
@@ -484,7 +484,7 @@ protectedRouter.post("/tickets", withPortalScope(async (req, res) => {
     const body = parsed_portalCreateTicketSchema.data;
     const { title, description, category, invoiceId, contractId } = body;
     const priority = body.priority ?? "medium";
-    const ref = `TKT-${Date.now().toString(36).toUpperCase()}`;
+    const ref = generateTimeRef("TKT");
     assertPortalScopeInParams(scope, [clientId, companyId]);
     const { supportEngine } = await import("../lib/engines/index.js");
     const { insertId } = await supportEngine.createPortalTicket({
@@ -571,7 +571,7 @@ protectedRouter.post("/invoices/:id/pay", withPortalScope(async (req, res) => {
     if (invoice.status === 'paid') throw new ValidationError("الفاتورة مدفوعة بالكامل مسبقاً");
 
     const payAmt = Math.min(Number(amount), Number(invoice.total) - Number(invoice.paidAmount));
-    const paymentRef = transactionRef || `PAY-PORTAL-${Date.now().toString(36).toUpperCase()}`;
+    const paymentRef = transactionRef || generateTimeRef("PAY-PORTAL");
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const { newPaid, newStatus } = await financialEngine.recordInvoicePayment({

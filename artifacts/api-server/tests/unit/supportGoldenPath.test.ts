@@ -98,8 +98,8 @@ describe("Support ticket creation contract", () => {
     expect(SUPPORT_ROUTE).toContain("createTicketSchema.safeParse");
   });
 
-  it("generates TKT- reference code", () => {
-    expect(SUPPORT_ROUTE).toContain("TKT-");
+  it("generates TKT- reference code via generateTimeRef", () => {
+    expect(SUPPORT_ROUTE).toContain('generateTimeRef("TKT")');
   });
 
   it("auto-detects priority from text keywords", () => {

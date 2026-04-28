@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -39,7 +38,6 @@ const patchRuleSchema = z.object({
 const toggleRuleSchema = z.object({}).optional();
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/", requirePermission("admin:write"), async (req, res) => {
   try {

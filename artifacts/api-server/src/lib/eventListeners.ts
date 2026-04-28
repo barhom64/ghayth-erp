@@ -215,14 +215,14 @@ export function registerEventListeners() {
     await logAudit("crm.opportunity.created", { ...payload, action: "create" });
   });
 
-  eventBus.on("crm.opportunity.won", async (payload) => {
-    await logEvent("crm.opportunity.won", payload);
-    await logAudit("crm.opportunity.won", { ...payload, action: "update" });
+  eventBus.on("crm.deal.won", async (payload) => {
+    await logEvent("crm.deal.won", payload);
+    await logAudit("crm.deal.won", { ...payload, action: "update" });
   });
 
-  eventBus.on("crm.opportunity.lost", async (payload) => {
-    await logEvent("crm.opportunity.lost", payload);
-    await logAudit("crm.opportunity.lost", { ...payload, action: "update" });
+  eventBus.on("crm.deal.lost", async (payload) => {
+    await logEvent("crm.deal.lost", payload);
+    await logAudit("crm.deal.lost", { ...payload, action: "update" });
   });
 
   eventBus.on("task.created", async (payload) => {
@@ -729,13 +729,13 @@ export function registerEventListeners() {
     await logEvent("fiscal.year_end_closed", payload);
     await logAudit("fiscal.year_end_closed", { ...payload, action: "close", entity: "fiscal_year" });
   });
-  eventBus.on("fiscal_period.close", async (payload) => {
-    await logEvent("fiscal_period.close", payload);
-    await logAudit("fiscal_period.close", { ...payload, action: "close", entity: "fiscal_period" });
+  eventBus.on("fiscal_period.closed", async (payload) => {
+    await logEvent("fiscal_period.closed", payload);
+    await logAudit("fiscal_period.closed", { ...payload, action: "close", entity: "fiscal_period" });
   });
-  eventBus.on("fiscal_period.reopen", async (payload) => {
-    await logEvent("fiscal_period.reopen", payload);
-    await logAudit("fiscal_period.reopen", { ...payload, action: "reopen", entity: "fiscal_period" });
+  eventBus.on("fiscal_period.reopened", async (payload) => {
+    await logEvent("fiscal_period.reopened", payload);
+    await logAudit("fiscal_period.reopened", { ...payload, action: "reopen", entity: "fiscal_period" });
   });
   eventBus.on("payment_run.executed", async (payload) => {
     await logEvent("payment_run.executed", payload);

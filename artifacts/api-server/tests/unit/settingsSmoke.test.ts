@@ -76,14 +76,12 @@ describe("Settings endpoint registration", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("Settings permissions", () => {
-  it("authMiddleware is applied to the router", () => {
-    expect(SETTINGS_ROUTE).toContain("router.use(authMiddleware)");
+  it("relies on global authMiddleware from index.ts", () => {
+    expect(SETTINGS_ROUTE).not.toContain("router.use(authMiddleware)");
   });
 
-  it("display endpoint is on publicRouter before authMiddleware", () => {
-    const authIdx = SETTINGS_ROUTE.indexOf("router.use(authMiddleware)");
-    const displayIdx = SETTINGS_ROUTE.indexOf('publicRouter.get("/display"');
-    expect(displayIdx).toBeLessThan(authIdx);
+  it("display endpoint is on publicRouter (no per-file authMiddleware needed)", () => {
+    expect(SETTINGS_ROUTE).toContain('publicRouter.get("/display"');
   });
 
   it("read endpoints require settings:read", () => {

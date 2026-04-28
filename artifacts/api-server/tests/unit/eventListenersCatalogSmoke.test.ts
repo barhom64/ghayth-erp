@@ -72,7 +72,7 @@ describe("eventListeners — procurement events", () => {
 
 describe("eventListeners — CRM events", () => {
   for (const e of [
-    "crm.opportunity.created", "crm.opportunity.won", "crm.opportunity.lost",
+    "crm.opportunity.created", "crm.deal.won", "crm.deal.lost",
   ]) {
     it(`handles ${e}`, () => {
       expect(LISTENERS).toContain(`"${e}"`);

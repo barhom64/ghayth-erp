@@ -1,13 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 const createDashboardSchema = z.object({
   title: z.string().min(1, "عنوان لوحة القيادة مطلوب"),

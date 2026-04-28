@@ -56,8 +56,8 @@ describe("Workflow endpoint registration", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("Workflow permissions", () => {
-  it("all routes go through authMiddleware", () => {
-    expect(WF_ROUTE).toContain("router.use(authMiddleware)");
+  it("relies on global authMiddleware from index.ts", () => {
+    expect(WF_ROUTE).not.toContain("router.use(authMiddleware)");
   });
 
   it("write actions (submit, approve, reject, refer, escalate, return) require admin:write", () => {

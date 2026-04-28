@@ -7,7 +7,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   handleRouteError,
@@ -30,7 +29,6 @@ import { generateSequentialNumber, calcHourlyRate as calcHourlyRateHelper } from
 import { HR_TABLES, NUMBER_PREFIXES } from "../lib/hrEnums.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 // ─── إنشاء الجدول ──────────────────────────────────────────────────────────
 async function ensureOvertimeTable(): Promise<void> {

@@ -7,7 +7,6 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
@@ -89,7 +88,6 @@ const createInsuranceSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LIFECYCLE STATE MACHINES — Phase C.3 Fleet audit

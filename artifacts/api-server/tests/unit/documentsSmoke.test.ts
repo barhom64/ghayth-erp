@@ -13,9 +13,9 @@ const SRC = readFileSync(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("Documents — endpoint registration", () => {
-  it("exports a default router with global authMiddleware", () => {
+  it("exports a default router (global authMiddleware in index.ts)", () => {
     expect(SRC).toContain("export default router");
-    expect(SRC).toContain("router.use(authMiddleware)");
+    expect(SRC).not.toContain("router.use(authMiddleware)");
   });
 
   it("registers all CRUD endpoints for documents", () => {

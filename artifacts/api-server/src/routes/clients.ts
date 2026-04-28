@@ -2,8 +2,7 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError } from 
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { hashPassword } from "../lib/auth.js";
@@ -22,7 +21,6 @@ const createClientSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/", requirePermission("crm:read"), async (req, res) => {
   try {
@@ -287,7 +285,7 @@ router.post("/auto-create", requirePermission("crm:create"), async (req, res) =>
     }
 
     const clientName = name || `عميل ${phone.slice(-4)}`;
-    const code = `CLT-${Date.now().toString(36).toUpperCase()}`;
+    const code = generateTimeRef("CLT");
 
     const { insertId } = await rawExecute(
       `INSERT INTO clients (name, phone, classification, source, code, "companyId", "isBlacklisted")

@@ -29,8 +29,16 @@ export function generateRef(prefix: string, seq: number | string, pad = 4): stri
   return `${prefix}-${currentYear()}-${String(seq).padStart(pad, "0")}`;
 }
 
+export function generateTimeRef(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36).toUpperCase()}`;
+}
+
 export function roundTo2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+export function roundTo4(value: number): number {
+  return Math.round(value * 10000) / 10000;
 }
 
 export function computeVat(baseAmount: number, vatRatePercent: number): number {
@@ -284,7 +292,7 @@ export async function createJournalEntry(params: {
 
   const totalDebit = params.lines.reduce((s, l) => s + Number(l.debit), 0);
   const totalCredit = params.lines.reduce((s, l) => s + Number(l.credit), 0);
-  const imbalance = Math.round((totalDebit - totalCredit) * 10000) / 10000;
+  const imbalance = roundTo4(totalDebit - totalCredit);
   if (Math.abs(imbalance) > 0.001 && Math.abs(imbalance) <= 0.05) {
     let [roundingAcc] = await rawQuery<any>(
       `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' LIMIT 1`,
