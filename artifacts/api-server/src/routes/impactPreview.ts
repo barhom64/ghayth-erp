@@ -1,10 +1,21 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 const router = Router();
+
+// ============================================================================
+// ZOD SCHEMAS
+// ============================================================================
+
+const impactPreviewSchema = z.object({
+  entityType: z.string().min(1, "نوع الكيان مطلوب"),
+  entityId: z.union([z.coerce.number(), z.string().min(1)]),
+  action: z.string().optional(),
+});
 
 interface ImpactItem {
   type: "financial" | "administrative" | "reporting";
@@ -16,10 +27,14 @@ interface ImpactItem {
 router.post("/", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { entityType, entityId, action } = req.body;
-    if (!entityType || !entityId) {
-      throw new ValidationError("entityType and entityId are required");
+    const parsed = impactPreviewSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
     }
+    const { entityType, entityId, action } = parsed.data;
 
     const impacts: ImpactItem[] = [];
 

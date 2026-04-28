@@ -8,6 +8,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
@@ -453,8 +454,8 @@ invoicesRouter.post("/invoices/:id/send", requirePermission("finance:create"), a
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
 
     const channels: string[] = [];
-    if (invoice.clientEmail) { channels.push("email"); console.log(`[INVOICE-SEND] Email PDF → ${invoice.clientEmail} for ${invoice.ref}`); }
-    if (invoice.clientPhone) { channels.push("whatsapp"); console.log(`[INVOICE-SEND] WhatsApp link → ${invoice.clientPhone} for ${invoice.ref}`); }
+    if (invoice.clientEmail) { channels.push("email"); logger.info({ clientEmail: invoice.clientEmail, ref: invoice.ref }, "Invoice email PDF notification"); }
+    if (invoice.clientPhone) { channels.push("whatsapp"); logger.info({ clientPhone: invoice.clientPhone, ref: invoice.ref }, "Invoice WhatsApp link notification"); }
 
     // Atomic draft→sent transition via the shared lifecycle engine. The
     // engine writes the event_log row + audit_logs row + bus emission, so

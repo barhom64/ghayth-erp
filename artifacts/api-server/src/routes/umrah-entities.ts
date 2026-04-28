@@ -18,6 +18,153 @@ import {
 const router = Router();
 
 // ============================================================================
+// ZOD SCHEMAS
+// ============================================================================
+
+const createSubAgentSchema = z.object({
+  nuskCode: z.string().min(1, "رمز نسك مطلوب"),
+  name: z.string().min(1, "الاسم مطلوب"),
+  agentId: z.coerce.number().optional(),
+  clientId: z.coerce.number().optional(),
+  paymentTerms: z.string().optional(),
+  defaultPricePerMutamer: z.coerce.number().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  country: z.string().optional(),
+  isActive: z.boolean().optional(),
+  notes: z.string().optional(),
+});
+
+const updateSubAgentSchema = z.object({
+  nuskCode: z.string().min(1).optional(),
+  name: z.string().min(1).optional(),
+  agentId: z.coerce.number().nullable().optional(),
+  clientId: z.coerce.number().nullable().optional(),
+  paymentTerms: z.string().optional(),
+  defaultPricePerMutamer: z.coerce.number().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  email: z.string().nullable().optional(),
+  country: z.string().nullable().optional(),
+  isActive: z.boolean().optional(),
+  notes: z.string().nullable().optional(),
+});
+
+const linkSubAgentSchema = z.object({
+  clientId: z.coerce.number().optional(),
+  createNew: z.boolean().optional(),
+  clientName: z.string().optional(),
+  clientPhone: z.string().optional(),
+});
+
+const linkByNuskSchema = z.object({
+  nuskCode: z.string().min(1, "رمز نسك مطلوب"),
+  clientId: z.coerce.number({ required_error: "معرف العميل مطلوب" }),
+});
+
+const linkClientSchema = z.object({
+  clientId: z.coerce.number({ required_error: "معرف العميل مطلوب" }),
+});
+
+const createPricingSchema = z.object({
+  agentId: z.coerce.number({ required_error: "الوكيل مطلوب" }),
+  pricePerMutamer: z.coerce.number({ required_error: "السعر مطلوب" }),
+  validFrom: z.string().min(1, "تاريخ البدء مطلوب"),
+  validTo: z.string().min(1, "تاريخ الانتهاء مطلوب"),
+  subAgentId: z.coerce.number().optional(),
+  seasonId: z.coerce.number().optional(),
+  includesHotel: z.boolean().optional(),
+  includesTransport: z.boolean().optional(),
+  notes: z.string().optional(),
+});
+
+const updatePricingSchema = z.object({
+  subAgentId: z.coerce.number().nullable().optional(),
+  agentId: z.coerce.number().optional(),
+  seasonId: z.coerce.number().nullable().optional(),
+  pricePerMutamer: z.coerce.number().optional(),
+  includesHotel: z.boolean().optional(),
+  includesTransport: z.boolean().optional(),
+  validFrom: z.string().optional(),
+  validTo: z.string().optional(),
+  notes: z.string().nullable().optional(),
+});
+
+const commissionTierSchema = z.object({
+  fromCount: z.coerce.number(),
+  toCount: z.coerce.number().nullable().optional(),
+  bonusPerUnit: z.coerce.number(),
+  isCumulative: z.boolean().optional(),
+});
+
+const createCommissionPlanSchema = z.object({
+  employeeId: z.coerce.number({ required_error: "الموظف مطلوب" }),
+  seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
+  planName: z.string().min(1, "اسم الخطة مطلوب"),
+  assignmentId: z.coerce.number().optional(),
+  baseSalary: z.coerce.number().optional(),
+  commissionType: z.string().optional(),
+  percentageRate: z.coerce.number().nullable().optional(),
+  fixedAmount: z.coerce.number().nullable().optional(),
+  conditionType: z.string().optional(),
+  minProfitPerVisa: z.coerce.number().nullable().optional(),
+  minSalesPercent: z.coerce.number().nullable().optional(),
+  minAvgPrice: z.coerce.number().nullable().optional(),
+  excludedMonths: z.array(z.coerce.number()).optional(),
+  tierUnit: z.coerce.number().optional(),
+  partialTiersAllowed: z.boolean().optional(),
+  violationBlocksCommission: z.boolean().optional(),
+  notes: z.string().nullable().optional(),
+  tiers: z.array(commissionTierSchema).optional(),
+});
+
+const updateCommissionPlanSchema = z.object({
+  planName: z.string().min(1).optional(),
+  baseSalary: z.coerce.number().optional(),
+  commissionType: z.string().optional(),
+  percentageRate: z.coerce.number().nullable().optional(),
+  fixedAmount: z.coerce.number().nullable().optional(),
+  conditionType: z.string().optional(),
+  minProfitPerVisa: z.coerce.number().nullable().optional(),
+  minSalesPercent: z.coerce.number().nullable().optional(),
+  minAvgPrice: z.coerce.number().nullable().optional(),
+  excludedMonths: z.array(z.coerce.number()).optional(),
+  tierUnit: z.coerce.number().optional(),
+  partialTiersAllowed: z.boolean().optional(),
+  violationBlocksCommission: z.boolean().optional(),
+  status: z.string().optional(),
+  notes: z.string().nullable().optional(),
+  tiers: z.array(commissionTierSchema).optional(),
+});
+
+const simulateCommissionSchema = z.object({
+  month: z.coerce.number({ required_error: "الشهر مطلوب" }),
+  year: z.coerce.number({ required_error: "السنة مطلوبة" }),
+});
+
+const generateInvoiceSchema = z.object({
+  subAgentId: z.coerce.number({ required_error: "الوكيل الفرعي مطلوب" }),
+  groupIds: z.array(z.coerce.number()).min(1, "المجموعات مطلوبة"),
+  seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
+});
+
+const updateInvoiceSchema = z.object({
+  status: z.string().optional(),
+  notes: z.string().nullable().optional(),
+  dueDate: z.string().nullable().optional(),
+});
+
+const createPaymentSchema = z.object({
+  subAgentId: z.coerce.number({ required_error: "الوكيل الفرعي مطلوب" }),
+  sarAmount: z.coerce.number({ required_error: "المبلغ مطلوب" }),
+  amount: z.coerce.number().optional(),
+  currency: z.string().optional(),
+  exchangeRate: z.coerce.number().optional(),
+  method: z.string().optional(),
+  reference: z.string().optional(),
+  invoiceIds: z.array(z.coerce.number()).optional(),
+});
+
+// ============================================================================
 // SUB-AGENTS
 // ============================================================================
 
@@ -40,8 +187,14 @@ router.get("/sub-agents", requirePermission("umrah:read"), async (req, res) => {
 router.post("/sub-agents", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
-    if (!b.nuskCode || !b.name) throw new ValidationError("رمز نسك والاسم مطلوبان");
+    const parsed = createSubAgentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
+    }
+    const b = parsed.data;
     const rows = await rawQuery(
       `INSERT INTO umrah_sub_agents
        ("companyId","branchId","nuskCode",name,"agentId","clientId","paymentTerms",
@@ -92,7 +245,14 @@ router.get("/sub-agents/unlinked", requirePermission("umrah:read"), async (req, 
 router.patch("/sub-agents/:id", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = updateSubAgentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
+    }
+    const b = parsed.data as Record<string, any>;
     const params: any[] = [];
     const sets: string[] = [];
     for (const key of ["nuskCode","name","agentId","clientId","paymentTerms","defaultPricePerMutamer","phone","email","country","isActive","notes"]) {
@@ -127,7 +287,14 @@ router.delete("/sub-agents/:id", requirePermission("umrah:write"), async (req, r
 router.put("/sub-agents/:id/link", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { clientId, createNew, clientName, clientPhone } = req.body;
+    const parsed = linkSubAgentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
+    }
+    const { clientId, createNew, clientName, clientPhone } = parsed.data;
 
     let finalClientId = clientId;
 
@@ -170,8 +337,14 @@ router.put("/sub-agents/:id/link", requirePermission("umrah:write"), async (req,
 router.post("/sub-agents/link-by-nusk", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { nuskCode, clientId } = req.body;
-    if (!nuskCode || !clientId) throw new ValidationError("رمز نسك ومعرف العميل مطلوبان");
+    const parsed = linkByNuskSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
+    }
+    const { nuskCode, clientId } = parsed.data;
     await rawExecute(
       `UPDATE umrah_sub_agents SET "clientId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
        WHERE "companyId"=$3 AND "nuskCode"=$4 AND "deletedAt" IS NULL`,
@@ -186,8 +359,14 @@ router.post("/sub-agents/link-by-nusk", requirePermission("umrah:write"), async 
 router.post("/sub-agents/:id/link-client", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { clientId } = req.body;
-    if (!clientId) throw new ValidationError("معرف العميل مطلوب");
+    const parsed = linkClientSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
+    }
+    const { clientId } = parsed.data;
     await rawExecute(
       `UPDATE umrah_sub_agents SET "clientId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
        WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
@@ -224,10 +403,14 @@ router.get("/pricing", requirePermission("umrah:read"), async (req, res) => {
 router.post("/pricing", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
-    if (!b.agentId || !b.pricePerMutamer || !b.validFrom || !b.validTo) {
-      throw new ValidationError("الوكيل والسعر والفترة مطلوبة");
+    const parsed = createPricingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
     }
+    const b = parsed.data;
     const overlap = await rawQuery(
       `SELECT id FROM umrah_pricing
        WHERE "companyId" = $1 AND "agentId" = $2 AND "deletedAt" IS NULL
@@ -257,7 +440,14 @@ router.post("/pricing", requirePermission("umrah:write"), async (req, res) => {
 router.patch("/pricing/:id", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = updatePricingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
+    }
+    const b = parsed.data as Record<string, any>;
     const params: any[] = [];
     const sets: string[] = [];
     for (const key of ["subAgentId","agentId","seasonId","pricePerMutamer","includesHotel","includesTransport","validFrom","validTo","notes"]) {
@@ -430,8 +620,14 @@ router.get("/commission-plans/:id", requirePermission("umrah:read"), async (req,
 router.post("/commission-plans", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
-    if (!b.employeeId || !b.seasonId || !b.planName) throw new ValidationError("الموظف والموسم واسم الخطة مطلوبة");
+    const parsed = createCommissionPlanSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
+    }
+    const b = parsed.data;
 
     const result = await withTransaction(async (client) => {
       const planRes = await client.query(
@@ -476,7 +672,14 @@ router.post("/commission-plans", requirePermission("umrah:write"), async (req, r
 router.patch("/commission-plans/:id", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = updateCommissionPlanSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
+    }
+    const b = parsed.data as Record<string, any>;
 
     await withTransaction(async (client) => {
       const params: any[] = [];
@@ -532,8 +735,14 @@ router.patch("/commission-plans/:id", requirePermission("umrah:write"), async (r
 
 router.post("/commission-plans/:id/simulate", requirePermission("umrah:read"), async (req, res) => {
   try {
-    const { month, year } = req.body;
-    if (!month || !year) throw new ValidationError("الشهر والسنة مطلوبان");
+    const parsed = simulateCommissionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
+    }
+    const { month, year } = parsed.data;
     const scope = req.scope!;
     const result = await simulateCommission(Number(req.params.id), month, year, scope.companyId);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission.simulated", entity: "employee_commission_plans", entityId: Number(req.params.id), details: JSON.stringify({ month, year }) }).catch(console.error);
@@ -545,8 +754,14 @@ router.post("/commission-plans/:id/simulate", requirePermission("umrah:read"), a
 router.post("/commission-plans/:id/calculate", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { month, year } = req.body;
-    if (!month || !year) throw new ValidationError("الشهر والسنة مطلوبان");
+    const parsed = simulateCommissionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
+    }
+    const { month, year } = parsed.data;
     const result = await calculateCommissionForPlan(Number(req.params.id), month, year, scope.userId, scope.companyId);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission.calculated", entity: "employee_commission_plans", entityId: Number(req.params.id), details: JSON.stringify({ month, year }) }).catch(console.error);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_commissions", entityId: Number(req.params.id), after: { month, year } }).catch(console.error);
@@ -639,10 +854,14 @@ router.get("/invoices", requirePermission("umrah:read"), async (req, res) => {
 router.post("/invoices/generate", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { subAgentId, groupIds, seasonId } = req.body;
-    if (!subAgentId || !Array.isArray(groupIds) || !seasonId) {
-      throw new ValidationError("الوكيل الفرعي والمجموعات والموسم مطلوبة");
+    const parsed = generateInvoiceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
     }
+    const { subAgentId, groupIds, seasonId } = parsed.data;
     const result = await generateSalesInvoice(
       { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       { subAgentId, groupIds, seasonId }
@@ -656,7 +875,14 @@ router.post("/invoices/generate", requirePermission("umrah:write"), async (req, 
 router.patch("/invoices/:id", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const parsed = updateInvoiceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
+    }
+    const b = parsed.data as Record<string, any>;
     const params: any[] = [];
     const sets: string[] = [];
     for (const key of ["status","notes","dueDate"]) {
@@ -706,8 +932,14 @@ router.get("/payments", requirePermission("umrah:read"), async (req, res) => {
 router.post("/payments", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
-    if (!b.subAgentId || !b.sarAmount) throw new ValidationError("الوكيل الفرعي والمبلغ مطلوبان");
+    const parsed = createPaymentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
+    }
+    const b = parsed.data;
     const result = await registerPayment(
       { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       {

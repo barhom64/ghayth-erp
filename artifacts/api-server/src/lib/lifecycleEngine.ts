@@ -166,7 +166,7 @@ export async function applyTransition<TRow = any>(
 
     if (toState !== undefined) {
       const currentStatus = (existing[statusCol] as string) ?? "*";
-      if (!isValidTransition(entity, currentStatus, toState)) {
+      if (!isValidTransition(entity, currentStatus, toState, statusCol)) {
         console.warn(`[lifecycle] transition not in state machine: ${entity} ${currentStatus} → ${toState}`);
       }
     }
@@ -336,7 +336,7 @@ export const STATE_MACHINES: StateMachine[] = [
     label: "فاتورة مبيعات",
     transitions: {
       draft: ["approved", "rejected", "returned", "sent", "cancelled"],
-      approved: ["sent", "cancelled", "rejected"],
+      approved: ["sent", "posted", "cancelled", "rejected"],
       returned: ["draft", "approved", "cancelled"],
       rejected: ["draft", "cancelled"],
       sent: ["partial", "paid", "overdue", "cancelled"],
@@ -353,10 +353,17 @@ export const STATE_MACHINES: StateMachine[] = [
     label: "أمر شراء",
     transitions: {
       draft: ["pending_approval", "approved", "cancelled"],
+      pending: ["pending_approval", "confirmed"],
       pending_approval: ["approved", "rejected", "returned"],
-      approved: ["partially_received", "received", "cancelled"],
-      partially_received: ["received"],
-      received: ["paid"],
+      approved: ["partially_received", "received", "sent", "cancelled"],
+      sent: ["confirmed", "partially_received", "received", "cancelled"],
+      confirmed: ["partially_received", "received", "cancelled"],
+      partially_received: ["received", "invoice_matched", "invoice_mismatch"],
+      partial_received: ["received", "invoice_matched", "invoice_mismatch"],
+      received: ["invoice_matched", "invoice_mismatch", "paid"],
+      invoice_matched: ["paid", "payment_scheduled"],
+      invoice_mismatch: ["invoice_matched", "cancelled"],
+      payment_scheduled: ["paid"],
       rejected: ["draft"],
       returned: ["draft", "pending_approval", "approved", "cancelled"],
       paid: [],
@@ -379,12 +386,25 @@ export const STATE_MACHINES: StateMachine[] = [
     label: "قيد يومية",
     statusColumn: "status",
     transitions: {
-      draft: ["pending_approval", "posted"],
-      pending_approval: ["posted", "rejected", "returned"],
+      draft: ["pending_approval", "posted", "approved", "rejected", "returned"],
+      pending_approval: ["posted", "approved", "rejected", "returned"],
+      approved: ["posted", "rejected"],
       posted: ["reversed"],
       rejected: ["draft"],
-      returned: ["draft", "pending_approval"],
+      returned: ["draft", "pending_approval", "approved"],
       reversed: [],
+    },
+  },
+  {
+    entity: "journal_entries",
+    label: "قيد يومية — اعتماد يدوي",
+    statusColumn: "approvalStatus",
+    transitions: {
+      draft: ["pending_review"],
+      pending_review: ["approved", "rejected"],
+      approved: ["posted", "rejected"],
+      rejected: ["draft"],
+      posted: [],
     },
   },
   {
@@ -413,8 +433,9 @@ export const STATE_MACHINES: StateMachine[] = [
     entity: "hr_leave_requests",
     label: "طلب إجازة",
     transitions: {
-      pending: ["approved", "rejected"],
+      pending: ["approved", "rejected", "returned", "cancelled"],
       approved: ["cancelled", "completed"],
+      returned: ["pending", "draft"],
       rejected: [],
       cancelled: [],
       completed: [],
@@ -451,6 +472,7 @@ export const STATE_MACHINES: StateMachine[] = [
     entity: "fleet_trips",
     label: "رحلة أسطول",
     transitions: {
+      planned: ["scheduled", "in_progress", "cancelled"],
       scheduled: ["in_progress", "cancelled"],
       in_progress: ["completed", "cancelled"],
       completed: [],
@@ -633,16 +655,22 @@ export const STATE_MACHINES: StateMachine[] = [
   },
 ];
 
-const _smIndex = new Map<string, StateMachine>(
-  STATE_MACHINES.map((sm) => [sm.entity, sm])
-);
-
-export function getStateMachine(entity: string): StateMachine | undefined {
-  return _smIndex.get(entity);
+function _smKey(entity: string, statusColumn?: string): string {
+  return statusColumn && statusColumn !== "status"
+    ? `${entity}::${statusColumn}`
+    : entity;
 }
 
-export function isValidTransition(entity: string, from: string, to: string): boolean {
-  const sm = _smIndex.get(entity);
+const _smIndex = new Map<string, StateMachine>(
+  STATE_MACHINES.map((sm) => [_smKey(sm.entity, sm.statusColumn), sm])
+);
+
+export function getStateMachine(entity: string, statusColumn?: string): StateMachine | undefined {
+  return _smIndex.get(_smKey(entity, statusColumn)) ?? _smIndex.get(entity);
+}
+
+export function isValidTransition(entity: string, from: string, to: string, statusColumn?: string): boolean {
+  const sm = getStateMachine(entity, statusColumn);
   if (!sm) return true;
   const allowed = sm.transitions[from] ?? sm.transitions["*"];
   if (!allowed) return false;

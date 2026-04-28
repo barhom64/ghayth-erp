@@ -7,6 +7,7 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { logger } from "../lib/logger.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { slaDeadlineForPriority, haversineKm, loadBalanceAssign } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
@@ -236,7 +237,7 @@ router.post("/tickets/check-sla", requirePermission("support:read"), async (req,
       [scope.companyId]
     );
     for (const ticket of breached) {
-      console.log(`[SLA BREACH] Ticket ${ticket.ref} — escalating to critical priority`);
+      logger.info({ ticketRef: ticket.ref }, "SLA breach — escalating to critical priority");
       try {
         await rawExecute(
           `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND priority != 'critical'`,
@@ -324,7 +325,7 @@ router.post("/tickets/:id/replies", requirePermission("support:create"), async (
           refType: "support_tickets",
           refId: Number(ticketId),
         });
-        console.log(`[SLA ESCALATION] Ticket ${ticket.ref} breached SLA — priority escalated to critical, notification created`);
+        logger.info({ ticketRef: ticket.ref }, "SLA escalation — priority escalated to critical, notification created");
       } catch (slaErr) {
         console.error("Failed to handle SLA breach:", slaErr);
       }
@@ -494,7 +495,7 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
       const createdAt = new Date(ticket.createdAt);
       const resolutionTimeHours = (Date.now() - createdAt.getTime()) / (1000 * 60 * 60);
       if (ticket.assigneeId) {
-        console.log(`[SUPPORT] Agent ${ticket.assigneeId} resolved ticket in ${resolutionTimeHours.toFixed(1)}h`);
+        logger.info({ assigneeId: ticket.assigneeId, resolutionTimeHours: resolutionTimeHours.toFixed(1) }, "Support agent resolved ticket");
       }
 
       const billableAmount = Number(b.billableAmount || 0);

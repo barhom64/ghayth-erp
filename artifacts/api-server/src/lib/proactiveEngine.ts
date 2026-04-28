@@ -1,6 +1,7 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { createNotification, getManagerAssignmentId, currentYear, toDateISO } from "./businessHelpers.js";
 import { eventBus } from "./eventBus.js";
+import { logger } from "./logger.js";
 
 async function logAutomation(params: {
   companyId: number | null;
@@ -566,7 +567,7 @@ let proactiveListenersRegistered = false;
 
 export function registerProactiveEventListeners(): void {
   if (proactiveListenersRegistered) {
-    console.log("[ProactiveEngine] Event listeners already registered, skipping");
+    logger.debug("ProactiveEngine event listeners already registered, skipping");
     return;
   }
   proactiveListenersRegistered = true;
@@ -587,7 +588,7 @@ export function registerProactiveEventListeners(): void {
     }
   });
 
-  console.log("[ProactiveEngine] Event listeners registered");
+  logger.info("ProactiveEngine event listeners registered");
 }
 
 export async function runAllProactiveChecks(): Promise<string> {

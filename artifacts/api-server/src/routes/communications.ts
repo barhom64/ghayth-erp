@@ -1,5 +1,6 @@
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, IntegrationError } from "../lib/errorHandler.js";
 import { Router } from "express";
+import { logger } from "../lib/logger.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -77,7 +78,7 @@ async function matchSenderToEntity(phone: string, companyId: number): Promise<{ 
 
 async function sendWhatsAppMessage(to: string, message: string): Promise<boolean> {
   if (!WA_ACCESS_TOKEN || !WA_PHONE_ID) {
-    console.log(`[WhatsApp] Would send to ${to}: ${message}`);
+    logger.info({ to, message }, "WhatsApp stub — no credentials configured");
     return false;
   }
 

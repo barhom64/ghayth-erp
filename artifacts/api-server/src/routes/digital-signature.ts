@@ -3,6 +3,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { logger } from "../lib/logger.js";
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import { z } from "zod";
@@ -64,7 +65,7 @@ router.post("/request-otp", requirePermission("documents:write"), async (req, re
       [scope.companyId, scope.userId, String(entityId), entityType, String(entityId), action, otp, expiresAt.toISOString(), ip, deviceFingerprint, userAgent]
     );
 
-    console.log(`[DIGITAL_SIGNATURE] OTP requested by user ${scope.userId} for ${entityType}#${entityId} action=${action} IP=${ip}`);
+    logger.info({ userId: scope.userId, entityType, entityId, action, ip }, "Digital signature OTP requested");
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "request_otp",

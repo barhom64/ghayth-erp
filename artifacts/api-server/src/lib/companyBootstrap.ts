@@ -1,4 +1,5 @@
 import { pool } from "./rawdb.js";
+import { logger } from "./logger.js";
 import type pg from "pg";
 
 async function exec(client: pg.PoolClient, sql: string, params: any[] = []) {
@@ -23,7 +24,7 @@ export async function bootstrapCompany(companyId: number, companyName: string) {
     await createDefaultSettings(client, companyId, companyName);
 
     await client.query("COMMIT");
-    console.log(`[CompanyBootstrap] Company ${companyId} bootstrapped with all defaults`);
+    logger.info({ companyId }, "Company bootstrapped with all defaults");
     return { branchId };
   } catch (err) {
     await client.query("ROLLBACK");

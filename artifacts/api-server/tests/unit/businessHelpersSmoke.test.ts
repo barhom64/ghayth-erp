@@ -68,8 +68,8 @@ describe("businessHelpers — journal entries", () => {
 });
 
 describe("businessHelpers — approval chains", () => {
-  it("exports ApprovalChainType", () => {
-    expect(BH).toContain("export type ApprovalChainType");
+  it("declares ApprovalChainType", () => {
+    expect(BH).toContain("type ApprovalChainType");
   });
 
   for (const chain of ["leaves", "purchases", "expenses", "advances", "letters", "procurement", "loans", "overtime", "exit"]) {

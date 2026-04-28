@@ -1,5 +1,6 @@
 import { eventBus, registerCrossDomainHandler, type EventPayload } from "./eventBus.js";
 import { pool, rawQuery, rawExecute } from "./rawdb.js";
+import { logger } from "./logger.js";
 import { createNotification, getManagerAssignmentId, createJournalEntry, getAccountCodeFromMapping, todayISO, toDateISO, currentYear } from "./businessHelpers.js";
 import { computeDiff } from "./auditDiff.js";
 import { calculateAllForCompany } from "./umrahCommissionEngine.js";
@@ -241,11 +242,6 @@ export function registerEventListeners() {
   eventBus.on("task.completed", async (payload) => {
     await logEvent("task.completed", payload);
     await logAudit("task.completed", { ...payload, action: "update" });
-  });
-
-  eventBus.on("maintenance.completed", async (payload) => {
-    await logEvent("maintenance.completed", payload);
-    await logAudit("maintenance.completed", { ...payload, action: "maintenance_completed" });
   });
 
   eventBus.on("support.ticket.created", async (payload) => {
@@ -741,7 +737,7 @@ export function registerEventListeners() {
           [payload.entityId, payload.companyId]
         );
         if (result.affectedRows > 0) {
-          console.log(`[EventReaction] Suspended ${result.affectedRows} commission plan(s) for terminated employee #${payload.entityId}`);
+          logger.info({ affectedRows: result.affectedRows, employeeId: payload.entityId }, "Suspended commission plans for terminated employee");
         }
       } catch (err) {
         await rawExecute(
@@ -778,7 +774,7 @@ export function registerEventListeners() {
         const results = await calculateAllForCompany(payload.companyId, month, year, (payload.userId as number) || 0);
         if (results.length > 0) {
           const total = results.reduce((s, r) => s + r.finalAmount, 0);
-          console.log(`[EventReaction] Payroll run triggered commission calc: ${results.length} plans, total ${total} SAR`);
+          logger.info({ planCount: results.length, totalSAR: total }, "Payroll run triggered commission calculation");
           const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
           if (mgr) {
             await createNotification({
@@ -1644,5 +1640,5 @@ export function registerEventListeners() {
     );
   });
 
-  console.log("[EventSystem] All event listeners registered successfully");
+  logger.info("All event listeners registered successfully");
 }

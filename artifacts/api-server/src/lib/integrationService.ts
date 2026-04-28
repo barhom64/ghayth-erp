@@ -1,4 +1,5 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
+import { logger } from "./logger.js";
 
 export interface SendOptions {
   companyId: number;
@@ -111,7 +112,7 @@ export async function sendViaIntegration(options: SendOptions): Promise<{ succes
       null, companyId, channel, recipient, subject, body,
       "pending", "No active integration configured for this channel"
     );
-    console.log(`[Integration] No active ${channel} integration for company ${companyId}. Logged as pending #${logId}`);
+    logger.info({ channel, companyId, logId }, "No active integration for company — logged as pending");
     return { success: false, logId, error: "No active integration" };
   }
 
@@ -125,11 +126,11 @@ export async function sendViaIntegration(options: SendOptions): Promise<{ succes
       result = await sendWebhook(integration.config, body, metadata);
       break;
     case "sms":
-      console.log(`[Integration] SMS to ${recipient}: ${body}`);
+      logger.info({ recipient, body }, "Integration SMS stub — not yet implemented");
       result = { success: false, error: "SMS integration not yet implemented" };
       break;
     case "whatsapp":
-      console.log(`[Integration] WhatsApp to ${recipient}: ${body}`);
+      logger.info({ recipient, body }, "Integration WhatsApp stub — not yet implemented");
       result = { success: false, error: "WhatsApp integration not yet implemented" };
       break;
     default:

@@ -1,6 +1,7 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { createNotification, getManagerAssignmentId, getDirectorAssignmentId } from "./businessHelpers.js";
 import { eventBus, type EventPayload } from "./eventBus.js";
+import { logger } from "./logger.js";
 
 interface BusinessRule {
   id: number;
@@ -264,7 +265,7 @@ export async function evaluateRulesForEvent(eventName: string, payload: EventPay
 
         const result = await executeAction(rule, payload, templateData);
         await logRuleExecution(rule, payload, result, "success");
-        console.log(`[RulesEngine] Rule "${rule.name}" fired: ${result}`);
+        logger.info({ ruleName: rule.name, result }, "Business rule fired");
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         await logRuleExecution(rule, payload, errMsg, "error");
@@ -318,5 +319,5 @@ export function registerRulesEngineListener() {
     });
   }
 
-  console.log("[RulesEngine] Business rules engine registered for", trackedEvents.length, "events");
+  logger.info({ eventCount: trackedEvents.length }, "Business rules engine registered");
 }

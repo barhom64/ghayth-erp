@@ -1,10 +1,34 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 const router = Router();
+
+// ============================================================================
+// ZOD SCHEMAS
+// ============================================================================
+
+const createCostCenterSchema = z.object({
+  code: z.string().optional(),
+  name: z.string().min(1, "اسم مركز التكلفة مطلوب"),
+  type: z.string().optional(),
+  parentId: z.coerce.number().nullable().optional(),
+  relatedEntityType: z.string().nullable().optional(),
+  relatedEntityId: z.coerce.number().nullable().optional(),
+  allocatedAmount: z.coerce.number().optional(),
+});
+
+const updateCostCenterSchema = z.object({
+  name: z.string().min(1).optional(),
+  code: z.string().nullable().optional(),
+  type: z.string().optional(),
+  parentId: z.coerce.number().nullable().optional(),
+  allocatedAmount: z.coerce.number().optional(),
+  status: z.string().optional(),
+});
 
 router.get("/cost-centers", requirePermission("finance:read"), async (req, res) => {
   try {
@@ -42,8 +66,14 @@ router.get("/cost-centers/:id", requirePermission("finance:read"), async (req, r
 router.post("/cost-centers", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { code, name, type, parentId, relatedEntityType, relatedEntityId, allocatedAmount } = req.body;
-    if (!name) throw new ValidationError("اسم مركز التكلفة مطلوب", { field: "name" });
+    const parsed = createCostCenterSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
+    }
+    const { code, name, type, parentId, relatedEntityType, relatedEntityId, allocatedAmount } = parsed.data;
 
     const [existing] = code
       ? await rawQuery<any>(
@@ -76,7 +106,14 @@ router.patch("/cost-centers/:id", requirePermission("finance:update"), async (re
     );
     if (!existing) throw new NotFoundError("مركز التكلفة غير موجود");
 
-    const { name, code, type, parentId, allocatedAmount, status } = req.body;
+    const parsed = updateCostCenterSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("بيانات غير صالحة", {
+        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
+        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
+      });
+    }
+    const { name, code, type, parentId, allocatedAmount, status } = parsed.data;
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
