@@ -29,12 +29,16 @@ export function generateRef(prefix: string, seq: number | string, pad = 4): stri
   return `${prefix}-${currentYear()}-${String(seq).padStart(pad, "0")}`;
 }
 
+export function roundTo2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 export function computeVat(baseAmount: number, vatRatePercent: number): number {
-  return Math.round(baseAmount * (vatRatePercent / 100) * 100) / 100;
+  return roundTo2(baseAmount * (vatRatePercent / 100));
 }
 
 export function extractBaseFromGross(grossAmount: number, vatRatePercent: number): number {
-  return Math.round((grossAmount / (1 + vatRatePercent / 100)) * 100) / 100;
+  return roundTo2(grossAmount / (1 + vatRatePercent / 100));
 }
 
 export async function createNotification(params: {
@@ -687,7 +691,7 @@ export async function validateBudget(params: {
   requiresApproval: boolean;
   approvalLevel?: string;
 }> {
-  const targetPeriod = params.period ?? new Date().toISOString().slice(0, 7);
+  const targetPeriod = params.period ?? currentPeriod();
   const [budget] = await rawQuery<any>(
     `SELECT amount, used FROM budgets
      WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3`,
@@ -734,7 +738,7 @@ export async function updateBudgetUsed(params: {
   amount: number;
   period?: string;
 }): Promise<void> {
-  const targetPeriod = params.period ?? new Date().toISOString().slice(0, 7);
+  const targetPeriod = params.period ?? currentPeriod();
   await rawExecute(
     `UPDATE budgets SET used = used + $1
      WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4`,

@@ -141,12 +141,7 @@ router.post("/:id/approve", requirePermission("admin:write"), async (req, res) =
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "approve" } }).catch(console.error);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.approved", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ notes: body.notes }) }).catch(console.error);
     res.json(result);
-  } catch (e: any) {
-    const code = e.message.includes("غير موجودة") ? 404 :
-                 e.message.includes("شروط غير مستوفاة") ? 422 :
-                 e.message.includes("انتقال غير مصرح") ? 409 : 400;
-    res.status(code).json({ error: e.message });
-  }
+  } catch (err) { handleRouteError(err, res, "Workflow approve error:"); }
 });
 
 router.post("/:id/reject", requirePermission("admin:write"), async (req, res) => {
@@ -167,11 +162,7 @@ router.post("/:id/reject", requirePermission("admin:write"), async (req, res) =>
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "reject" } }).catch(console.error);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.rejected", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ notes: body.notes }) }).catch(console.error);
     res.json(result);
-  } catch (e: any) {
-    const code = e.message.includes("غير موجودة") ? 404 :
-                 e.message.includes("انتقال غير مصرح") ? 409 : 400;
-    res.status(code).json({ error: e.message });
-  }
+  } catch (err) { handleRouteError(err, res, "Workflow reject error:"); }
 });
 
 router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => {
@@ -195,11 +186,7 @@ router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "refer", referredTo } }).catch(console.error);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "refer", referredTo }) }).catch(console.error);
     res.json(result);
-  } catch (e: any) {
-    const code = e.message.includes("غير موجودة") ? 404 :
-                 e.message.includes("انتقال غير مصرح") ? 409 : 400;
-    res.status(code).json({ error: e.message });
-  }
+  } catch (err) { handleRouteError(err, res, "Workflow refer error:"); }
 });
 
 router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) => {
@@ -220,11 +207,7 @@ router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "escalate" } }).catch(console.error);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "escalate" }) }).catch(console.error);
     res.json(result);
-  } catch (e: any) {
-    const code = e.message.includes("غير موجودة") ? 404 :
-                 e.message.includes("انتقال غير مصرح") ? 409 : 400;
-    res.status(code).json({ error: e.message });
-  }
+  } catch (err) { handleRouteError(err, res, "Workflow escalate error:"); }
 });
 
 router.post("/:id/return", requirePermission("admin:write"), async (req, res) => {
@@ -245,11 +228,7 @@ router.post("/:id/return", requirePermission("admin:write"), async (req, res) =>
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "return" } }).catch(console.error);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "return" }) }).catch(console.error);
     res.json(result);
-  } catch (e: any) {
-    const code = e.message.includes("غير موجودة") ? 404 :
-                 e.message.includes("انتقال غير مصرح") ? 409 : 400;
-    res.status(code).json({ error: e.message });
-  }
+  } catch (err) { handleRouteError(err, res, "Workflow return error:"); }
 });
 
 router.get("/:id/timeline", requirePermission("admin:read"), async (req, res) => {
@@ -257,9 +236,7 @@ router.get("/:id/timeline", requirePermission("admin:read"), async (req, res) =>
     const scope = req.scope!;
     const result = await getTimeline(Number(req.params.id), scope.companyId);
     res.json(result);
-  } catch (e: any) {
-    res.status(e.message.includes("غير موجودة") ? 404 : 500).json({ error: e.message });
-  }
+  } catch (err) { handleRouteError(err, res, "Workflow timeline error:"); }
 });
 
 router.get("/timeline/:refTable/:refId", requirePermission("admin:read"), async (req, res) => {

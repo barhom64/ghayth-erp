@@ -1,5 +1,6 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { createNotification, getAssignmentIdByRole, createAuditLog, emitEvent, toDateISO, currentPeriod } from "./businessHelpers.js";
+import { NotFoundError, ValidationError, ForbiddenError } from "./errorHandler.js";
 
 async function handleLeaveApproval(refId: number, approvedBy?: number | null): Promise<void> {
   await rawExecute(
@@ -211,7 +212,7 @@ function isTransitionAllowed(from: string, to: string): boolean {
   return allowed.includes(to);
 }
 
-interface ValidationError {
+interface WorkflowValidationIssue {
   code: string;
   message: string;
 }
@@ -220,8 +221,8 @@ async function validatePreApproval(
   instance: any,
   companyId: number,
   currentAttachments?: any[],
-): Promise<ValidationError[]> {
-  const errors: ValidationError[] = [];
+): Promise<WorkflowValidationIssue[]> {
+  const errors: WorkflowValidationIssue[] = [];
 
   const data = typeof instance.data === "string" ? JSON.parse(instance.data || "{}") : (instance.data || {});
 
@@ -380,7 +381,7 @@ export async function submitWorkflow(params: SubmitParams) {
     }
   }
   if (firstStep && !currentAssignee) {
-    throw new Error(
+    throw new ValidationError(
       "لا يوجد مسؤول معتمد لاستلام الطلب — الرجاء تعيين مدير فرع أو مدير موارد بشرية قبل تقديم الطلبات"
     );
   }
@@ -435,12 +436,12 @@ export async function rejectWorkflow(params: ActionParams) {
 }
 
 export async function referWorkflow(params: ActionParams) {
-  if (!params.referredTo) throw new Error("يجب تحديد الشخص المحال إليه");
+  if (!params.referredTo) throw new ValidationError("يجب تحديد الشخص المحال إليه");
   const [targetAssignment] = await rawQuery<any>(
     `SELECT id FROM employee_assignments WHERE id = $1 AND "companyId" = $2 AND status = 'active'`,
     [params.referredTo, params.companyId]
   );
-  if (!targetAssignment) throw new Error("الشخص المحال إليه غير موجود أو غير نشط في نفس الشركة");
+  if (!targetAssignment) throw new NotFoundError("الشخص المحال إليه غير موجود أو غير نشط في نفس الشركة");
   return processAction({ ...params, action: "refer" });
 }
 
@@ -463,7 +464,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
     `SELECT * FROM workflow_instances WHERE id = $1 AND "companyId" = $2`,
     [instanceId, companyId]
   );
-  if (!instance) throw new Error("المعاملة غير موجودة");
+  if (!instance) throw new NotFoundError("المعاملة غير موجودة");
 
   const targetStatus = ACTION_TO_STATUS[action];
   if (targetStatus && targetStatus !== "__same__") {
@@ -472,13 +473,13 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         instance.definitionId &&
         (instance.status === "pending" || instance.status === "in_review");
       if (!nextStepExists || (instance.status !== "pending" && instance.status !== "in_review")) {
-        throw new Error(`لا يمكن الانتقال من "${instance.status}" إلى "${targetStatus}" — انتقال غير مصرح`);
+        throw new ValidationError(`لا يمكن الانتقال من "${instance.status}" إلى "${targetStatus}" — انتقال غير مصرح`);
       }
     }
   }
 
   if (instance.status !== "pending" && instance.status !== "in_review" && instance.status !== "escalated") {
-    throw new Error("المعاملة ليست في حالة تسمح بهذا الإجراء");
+    throw new ValidationError("المعاملة ليست في حالة تسمح بهذا الإجراء");
   }
 
   const privilegedRoles = ["owner", "general_manager", "hr_manager", "finance_manager"];
@@ -491,15 +492,15 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
 
   if (!instance.currentAssignee) {
     if (!actorAssignment || !privilegedRoles.includes(actorAssignment.role)) {
-      throw new Error("المعاملة غير مسندة لأحد — يلزم دور إداري للتدخل");
+      throw new ForbiddenError("المعاملة غير مسندة لأحد — يلزم دور إداري للتدخل");
     }
     isOverride = true;
     if (!overrideReason && !notes) {
-      throw new Error("يجب تحديد سبب التدخل في معاملة غير مسندة");
+      throw new ValidationError("يجب تحديد سبب التدخل في معاملة غير مسندة");
     }
   } else if (instance.currentAssignee !== actionBy) {
     if (!actorAssignment || !privilegedRoles.includes(actorAssignment.role)) {
-      throw new Error("غير مصرح لك باتخاذ هذا الإجراء على هذه المعاملة");
+      throw new ForbiddenError("غير مصرح لك باتخاذ هذا الإجراء على هذه المعاملة");
     }
     isOverride = true;
     if (!overrideReason && !notes) {
@@ -821,7 +822,7 @@ export async function getTimeline(instanceId: number, companyId: number) {
     `SELECT * FROM workflow_instances WHERE id = $1 AND "companyId" = $2`,
     [instanceId, companyId]
   );
-  if (!instance) throw new Error("المعاملة غير موجودة");
+  if (!instance) throw new NotFoundError("المعاملة غير موجودة");
 
   const actions = await rawQuery<any>(
     `SELECT wsa.*, u.email AS "actionByEmail"

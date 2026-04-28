@@ -309,12 +309,10 @@ describe("Workflow lifecycle and audit", () => {
     expect(section).toContain("workflow.definition.deleted");
   });
 
-  it("approve handler maps error messages to HTTP 404, 422, 409 status codes", () => {
+  it("approve handler delegates errors to handleRouteError", () => {
     const idx = WF_ROUTE.indexOf('"/:id/approve"');
     const section = WF_ROUTE.slice(idx, idx + 3000);
-    expect(section).toMatch(/404/);
-    expect(section).toMatch(/422/);
-    expect(section).toMatch(/409/);
+    expect(section).toContain("handleRouteError");
   });
 
   it("list instances limits results to 200 rows", () => {

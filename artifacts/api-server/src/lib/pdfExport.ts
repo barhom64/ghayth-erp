@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import { rawQuery } from "./rawdb.js";
+import { NotFoundError } from "./errorHandler.js";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -146,7 +147,7 @@ export async function exportInvoicePdf(companyId: number, invoiceId: number): Pr
      WHERE i.id = $1 AND i."companyId" = $2`,
     [invoiceId, companyId]
   );
-  if (!invoice) throw new Error("Invoice not found");
+  if (!invoice) throw new NotFoundError("Invoice not found");
 
   const lines = await rawQuery<any>(
     `SELECT description, quantity, "unitPrice", "lineTotal", "vatAmount", "lineGross"
@@ -220,7 +221,7 @@ export async function exportPurchaseOrderPdf(companyId: number, poId: number): P
      WHERE po.id = $1 AND po."companyId" = $2`,
     [poId, companyId]
   );
-  if (!po) throw new Error("Purchase order not found");
+  if (!po) throw new NotFoundError("Purchase order not found");
 
   const lines = await rawQuery<any>(
     `SELECT description, quantity, "unitPrice", "totalPrice"
@@ -274,7 +275,7 @@ export async function exportVoucherPdf(companyId: number, voucherId: number): Pr
      WHERE v.id = $1 AND v."companyId" = $2`,
     [voucherId, companyId]
   );
-  if (!voucher) throw new Error("Voucher not found");
+  if (!voucher) throw new NotFoundError("Voucher not found");
 
   const typeLabel = voucher.type === "receipt" ? "سند قبض / Receipt Voucher" : "سند صرف / Payment Voucher";
 
@@ -319,7 +320,7 @@ export async function exportPayrollSlipPdf(companyId: number, payrollId: number)
      WHERE pr.id = $1 AND pr."companyId" = $2`,
     [payrollId, companyId]
   );
-  if (!record) throw new Error("Payroll record not found");
+  if (!record) throw new NotFoundError("Payroll record not found");
 
   const doc = createDoc({ title: "Payroll Slip" });
   const buf = docToBuffer(doc);
