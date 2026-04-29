@@ -1030,7 +1030,12 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
     if (b.status === 'done') sets.push(`"completedAt"=NOW()`);
     if (sets.length === 0) { res.json(existingTask); return; }
     params.push(taskId);
-    await rawExecute(`UPDATE project_tasks SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    let taskWhere = `id=$${params.length}`;
+    if (b.status !== undefined && b.status !== existingTask.status) {
+      params.push(existingTask.status ?? "todo");
+      taskWhere += ` AND status=$${params.length}`;
+    }
+    await rawExecute(`UPDATE project_tasks SET ${sets.join(",")} WHERE ${taskWhere}`, params);
 
     createAuditLog({
       companyId: scope.companyId,

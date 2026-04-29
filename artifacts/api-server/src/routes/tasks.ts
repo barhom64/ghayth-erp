@@ -350,15 +350,17 @@ router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
 
     if (sets.length === 0) { throw new ValidationError("لا توجد بيانات للتحديث"); }
 
+    let currentStatus: string | undefined;
     if (status) {
       const [current] = await rawQuery<{ status: string }>(
         `SELECT status FROM tasks WHERE id = $1 AND "companyId" = $2`,
         [id, scope.companyId]
       );
       if (!current) throw new NotFoundError("المهمة غير موجودة");
-      const allowed = VALID_TASK_TRANSITIONS[current.status];
+      currentStatus = current.status;
+      const allowed = VALID_TASK_TRANSITIONS[currentStatus];
       if (allowed && !allowed.includes(status)) {
-        throw new ConflictError(`لا يمكن نقل المهمة من "${current.status}" إلى "${status}"`);
+        throw new ConflictError(`لا يمكن نقل المهمة من "${currentStatus}" إلى "${status}"`);
       }
     }
 
@@ -369,6 +371,12 @@ router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
     params.push(scope.companyId);
     whereClause += ` AND "companyId" = $${idx}`;
     idx++;
+
+    if (currentStatus) {
+      params.push(currentStatus);
+      whereClause += ` AND status = $${idx}`;
+      idx++;
+    }
 
     if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {
       whereClause += ` AND "assignedTo" = $${idx}`;

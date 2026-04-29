@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { handleRouteError, ValidationError , zodParse } from "../lib/errorHandler.js";
+import { handleRouteError, zodParse } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import rateLimit from "express-rate-limit";
 import { logger } from "../lib/logger.js";

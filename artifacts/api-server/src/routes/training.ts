@@ -149,7 +149,12 @@ router.patch("/programs/:id", requirePermission("hr:update"), async (req, res) =
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE training_programs SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    let updateWhere = `id=$${params.length - 1} AND "companyId"=$${params.length}`;
+    if (b.status && b.status !== existing.status) {
+      params.push(existing.status);
+      updateWhere += ` AND status=$${params.length}`;
+    }
+    await rawExecute(`UPDATE training_programs SET ${sets.join(",")} WHERE ${updateWhere}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,

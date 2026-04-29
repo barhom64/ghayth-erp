@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError,
+import { handleRouteError, NotFoundError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";

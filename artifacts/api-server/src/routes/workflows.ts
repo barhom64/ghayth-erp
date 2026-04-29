@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError,
+import { handleRouteError, NotFoundError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
