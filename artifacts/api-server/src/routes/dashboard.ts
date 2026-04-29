@@ -65,7 +65,7 @@ router.get("/", async (req, res) => {
        FROM hr_leave_requests lr
        JOIN employees e ON e.id = lr."employeeId"
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-       WHERE ${leaveWhere.replace(/"companyId"/g, 'lr."companyId"')} AND lr.status = 'pending'
+       WHERE ${leaveWhere.replace(/"companyId"/g, 'lr."companyId"')} AND lr.status = 'pending' AND lr."deletedAt" IS NULL
        ORDER BY lr."createdAt" DESC
        LIMIT 10`,
       leaveParams
@@ -223,7 +223,7 @@ router.get("/summary", async (req, res) => {
     let pendingLeaveRequests = 0;
     try {
       const [lr] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM hr_leave_requests WHERE ${noBranchWhere} AND status = 'pending'`,
+        `SELECT COUNT(*) AS total FROM hr_leave_requests WHERE ${noBranchWhere} AND status = 'pending' AND "deletedAt" IS NULL`,
         [...noBranchParams]
       );
       pendingLeaveRequests = Number(lr?.total ?? 0);
@@ -448,10 +448,10 @@ router.get("/charts/recent-events", async (req, res) => {
         FROM invoices WHERE ${companyWhere} AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 3)
        UNION ALL
        (SELECT 'leave' AS type, id, 'طلب إجازة من ' || (SELECT name FROM employees WHERE id = lr."employeeId") AS text, lr."createdAt"
-        FROM hr_leave_requests lr WHERE lr.${companyWhere} ORDER BY lr."createdAt" DESC LIMIT 3)
+        FROM hr_leave_requests lr WHERE lr.${companyWhere} AND lr."deletedAt" IS NULL ORDER BY lr."createdAt" DESC LIMIT 3)
        UNION ALL
        (SELECT 'ticket' AS type, id, 'تذكرة دعم: ' || COALESCE(title, '#' || id) AS text, "createdAt"
-        FROM support_tickets WHERE ${companyWhere} ORDER BY "createdAt" DESC LIMIT 3)
+        FROM support_tickets WHERE ${companyWhere} AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 3)
        UNION ALL
        (SELECT 'task' AS type, id, 'مهمة: ' || COALESCE(title, '#' || id) AS text, "createdAt"
         FROM tasks WHERE ${companyWhere} ORDER BY "createdAt" DESC LIMIT 3)

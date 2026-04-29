@@ -31,7 +31,7 @@ router.get("/", async (req, res) => {
            JOIN employees e ON e.id = lr."employeeId"
            JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
            LEFT JOIN leave_approval_stages las ON las."leaveRequestId" = lr.id AND las.status = 'pending'
-           WHERE lr."companyId" = ANY($1::int[]) AND lr.status = 'pending'
+           WHERE lr."companyId" = ANY($1::int[]) AND lr.status = 'pending' AND lr."deletedAt" IS NULL
              AND (
                $2 = 'owner'
                OR las."assignedTo" = $3

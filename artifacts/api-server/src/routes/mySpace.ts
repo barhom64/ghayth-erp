@@ -68,7 +68,7 @@ router.get("/", async (req, res) => {
         `SELECT lr.id, 'leave' AS type, lt.name AS title, lr.status, lr."createdAt"
          FROM hr_leave_requests lr
          JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-         WHERE lr."employeeId" = $1 AND lr.status IN ('pending','under_review')
+         WHERE lr."employeeId" = $1 AND lr.status IN ('pending','under_review') AND lr."deletedAt" IS NULL
          ORDER BY lr."createdAt" DESC LIMIT 10`,
         [scope.employeeId]
       ).catch((e) => { logger.error(e, "my-space leaveReqs error:"); return []; });
@@ -168,7 +168,7 @@ router.get("/", async (req, res) => {
            JOIN employees e ON e.id = lr."employeeId"
            JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
            LEFT JOIN leave_approval_stages las ON las."leaveRequestId" = lr.id AND las.status = 'pending'
-           WHERE lr."companyId" = $1 AND lr.status = 'pending'
+           WHERE lr."companyId" = $1 AND lr.status = 'pending' AND lr."deletedAt" IS NULL
              AND (
                $2 = 'owner'
                OR las."assignedTo" = $3
@@ -409,7 +409,7 @@ router.get("/", async (req, res) => {
         `SELECT lr.id, lt.name AS title, 'leave_request' AS "itemType", lr."createdAt" AS deadline, lr.status
          FROM hr_leave_requests lr
          JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-         WHERE lr."employeeId" = $1 AND lr.status = 'pending'
+         WHERE lr."employeeId" = $1 AND lr.status = 'pending' AND lr."deletedAt" IS NULL
            AND lr."createdAt" < NOW() - INTERVAL '3 days'
          ORDER BY lr."createdAt" ASC LIMIT 5`,
         [scope.employeeId]
@@ -724,7 +724,7 @@ router.get("/requests", async (req, res) => {
       `SELECT lr.id, lt.name AS "leaveTypeName", lr."startDate", lr."endDate", lr.days, lr.status, lr."createdAt"
        FROM hr_leave_requests lr
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-       WHERE lr."employeeId" = $1
+       WHERE lr."employeeId" = $1 AND lr."deletedAt" IS NULL
        ORDER BY lr."createdAt" DESC LIMIT 20`,
       [scope.employeeId]
     ).catch(() => []);
