@@ -7,7 +7,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -831,46 +831,52 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
 
     const contractNumber = b.contractNumber || generateTimeRef("RC");
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO rental_contracts ("companyId","unitId","tenantId","tenantName","tenantPhone","tenantEmail","tenantIdNumber","startDate","endDate","monthlyRent","depositAmount","paymentDay",notes,status,
-       "contractNumber","ejarNumber","contractType","paymentFrequency","yearlyRent","totalContractValue","latePenaltyType","latePenaltyValue","gracePeriodDays","terminationNoticeDays","earlyTerminationFee","autoRenewal","renewalNoticeDays","renewalPeriodMonths","electricityResponsibility","waterResponsibility","gasResponsibility","maintenanceResponsibility","brokerageFee","brokeragePayor","depositHolder","insuranceRequired","ownerId","numberOfInstallments","specialConditions","ejarStatus","registrationDate")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
-       $15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)`,
-      [scope.companyId, b.unitId, tenantId, b.tenantName, b.tenantPhone, b.tenantEmail, b.tenantIdNumber, b.startDate, b.endDate, monthlyRent, b.depositAmount || 0, b.paymentDay || 1, b.notes, b.status || "active",
-       contractNumber, b.ejarNumber || null, b.contractType || 'residential', frequency, yearlyRent, totalContractValue, b.latePenaltyType || 'percentage', b.latePenaltyValue || 0, b.gracePeriodDays || 0, b.terminationNoticeDays || 30, b.earlyTerminationFee || 0, b.autoRenewal || false, b.renewalNoticeDays || 60, b.renewalPeriodMonths || 12, b.electricityResponsibility || 'tenant', b.waterResponsibility || 'tenant', b.gasResponsibility || 'tenant', b.maintenanceResponsibility || 'shared', b.brokerageFee || 0, b.brokeragePayor || 'tenant', b.depositHolder || 'owner', b.insuranceRequired || false, b.ownerId || null, installmentCount, b.specialConditions || null, b.ejarStatus || 'draft', b.registrationDate || null]
-    );
+    const insertId = await withTransaction(async (client) => {
+      const contractRes = await client.query(
+        `INSERT INTO rental_contracts ("companyId","unitId","tenantId","tenantName","tenantPhone","tenantEmail","tenantIdNumber","startDate","endDate","monthlyRent","depositAmount","paymentDay",notes,status,
+         "contractNumber","ejarNumber","contractType","paymentFrequency","yearlyRent","totalContractValue","latePenaltyType","latePenaltyValue","gracePeriodDays","terminationNoticeDays","earlyTerminationFee","autoRenewal","renewalNoticeDays","renewalPeriodMonths","electricityResponsibility","waterResponsibility","gasResponsibility","maintenanceResponsibility","brokerageFee","brokeragePayor","depositHolder","insuranceRequired","ownerId","numberOfInstallments","specialConditions","ejarStatus","registrationDate")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
+         $15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)
+         RETURNING id`,
+        [scope.companyId, b.unitId, tenantId, b.tenantName, b.tenantPhone, b.tenantEmail, b.tenantIdNumber, b.startDate, b.endDate, monthlyRent, b.depositAmount || 0, b.paymentDay || 1, b.notes, b.status || "active",
+         contractNumber, b.ejarNumber || null, b.contractType || 'residential', frequency, yearlyRent, totalContractValue, b.latePenaltyType || 'percentage', b.latePenaltyValue || 0, b.gracePeriodDays || 0, b.terminationNoticeDays || 30, b.earlyTerminationFee || 0, b.autoRenewal || false, b.renewalNoticeDays || 60, b.renewalPeriodMonths || 12, b.electricityResponsibility || 'tenant', b.waterResponsibility || 'tenant', b.gasResponsibility || 'tenant', b.maintenanceResponsibility || 'shared', b.brokerageFee || 0, b.brokeragePayor || 'tenant', b.depositHolder || 'owner', b.insuranceRequired || false, b.ownerId || null, installmentCount, b.specialConditions || null, b.ejarStatus || 'draft', b.registrationDate || null]
+      );
+      const contractId = contractRes.rows[0].id;
 
-    await applyTransition({
-      entity: "property_units",
-      id: Number(b.unitId),
-      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
-      action: "property.unit.rented",
-      fromStates: ["available", "reserved"],
-      toState: "rented",
-    });
+      await applyTransition({
+        entity: "property_units",
+        id: Number(b.unitId),
+        scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+        action: "property.unit.rented",
+        fromStates: ["available", "reserved"],
+        toState: "rented",
+      });
 
-    if (installmentCount && installmentCount > 0 && totalContractValue > 0) {
-      const installmentAmount = roundTo2(totalContractValue / installmentCount);
-      const freqMonths = frequency === 'quarterly' ? 3 : frequency === 'semi_annual' ? 6 : frequency === 'annual' ? 12 : 1;
-      for (let i = 0; i < installmentCount; i++) {
-        const dueDate = new Date(startDate);
-        dueDate.setMonth(dueDate.getMonth() + (i * freqMonths));
-        if (b.paymentDay) dueDate.setDate(Math.min(Number(b.paymentDay), 28));
-        const dueDateStr = toDateISO(dueDate);
-        const isLast = i === installmentCount - 1;
-        const amt = isLast ? totalContractValue - (installmentAmount * (installmentCount - 1)) : installmentAmount;
-        const rounded = roundTo2(amt);
-        // Write to both contract_payment_schedule (legacy) and rent_payments (runtime table the queries read from)
-        await rawExecute(
-          `INSERT INTO contract_payment_schedule ("companyId","contractId","installmentNumber","dueDate",amount,status) VALUES ($1,$2,$3,$4,$5,'pending')`,
-          [scope.companyId, insertId, i + 1, dueDateStr, rounded]
-        );
-        await rawExecute(
-          `INSERT INTO rent_payments ("contractId","dueDate",amount,"paidAmount",status,notes) VALUES ($1,$2,$3,0,'pending',$4)`,
-          [insertId, dueDateStr, rounded, `قسط ${i + 1}/${installmentCount}`]
-        );
+      if (installmentCount && installmentCount > 0 && totalContractValue > 0) {
+        const installmentAmount = roundTo2(totalContractValue / installmentCount);
+        const freqMonths = frequency === 'quarterly' ? 3 : frequency === 'semi_annual' ? 6 : frequency === 'annual' ? 12 : 1;
+        for (let i = 0; i < installmentCount; i++) {
+          const dueDate = new Date(startDate);
+          dueDate.setMonth(dueDate.getMonth() + (i * freqMonths));
+          if (b.paymentDay) dueDate.setDate(Math.min(Number(b.paymentDay), 28));
+          const dueDateStr = toDateISO(dueDate);
+          const isLast = i === installmentCount - 1;
+          const amt = isLast ? totalContractValue - (installmentAmount * (installmentCount - 1)) : installmentAmount;
+          const rounded = roundTo2(amt);
+          // Write to both contract_payment_schedule (legacy) and rent_payments (runtime table the queries read from)
+          await client.query(
+            `INSERT INTO contract_payment_schedule ("companyId","contractId","installmentNumber","dueDate",amount,status) VALUES ($1,$2,$3,$4,$5,'pending')`,
+            [scope.companyId, contractId, i + 1, dueDateStr, rounded]
+          );
+          await client.query(
+            `INSERT INTO rent_payments ("contractId","dueDate",amount,"paidAmount",status,notes) VALUES ($1,$2,$3,0,'pending',$4)`,
+            [contractId, dueDateStr, rounded, `قسط ${i + 1}/${installmentCount}`]
+          );
+        }
       }
-    }
+
+      return contractId;
+    });
 
     // Register lifecycle obligations (renewal notice + expiration)
     try {

@@ -85,6 +85,24 @@ router.post("/", requirePermission("crm:create"), async (req, res) => {
       language,
     } = parsed.data;
 
+    // Pre-check: reject duplicate email within same company
+    if (email) {
+      const [emailExists] = await rawQuery<any>(
+        `SELECT id FROM clients WHERE email = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+        [email, scope.companyId]
+      );
+      if (emailExists) throw new ConflictError("البريد الإلكتروني مستخدم لعميل آخر", { field: "email", fix: "استخدم بريداً إلكترونياً مختلفاً أو ابحث عن العميل الموجود" });
+    }
+
+    // Pre-check: reject duplicate phone within same company
+    if (phone) {
+      const [phoneExists] = await rawQuery<any>(
+        `SELECT id FROM clients WHERE phone = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+        [phone, scope.companyId]
+      );
+      if (phoneExists) throw new ConflictError("رقم الهاتف مستخدم لعميل آخر", { field: "phone", fix: "استخدم رقم هاتف مختلفاً أو ابحث عن العميل الموجود" });
+    }
+
     const attachments = (req.body as any).attachments ?? null;
     const { insertId } = await rawExecute(
       `INSERT INTO clients (name, phone, email, classification, source, notes, "type", nationality, language, "companyId", "isBlacklisted", attachments)

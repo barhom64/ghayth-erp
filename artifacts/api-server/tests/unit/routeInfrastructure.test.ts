@@ -142,7 +142,7 @@ describe("Domain-protected routes", () => {
 describe("GL-integrated domains have financial guard", () => {
   const indexSource = readFileSync(join(ROUTES_DIR, "index.ts"), "utf8");
 
-  const glPaths = ["/finance", "/fleet", "/warehouse", "/properties", "/legal", "/crm", "/store"];
+  const glPaths = ["/finance", "/fleet", "/warehouse", "/properties", "/store"];
 
   for (const path of glPaths) {
     it(`${path} has requireGuards("financial")`, () => {

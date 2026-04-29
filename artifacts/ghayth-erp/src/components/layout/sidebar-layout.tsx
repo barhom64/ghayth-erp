@@ -273,12 +273,16 @@ const allNavSections: NavSection[] = [
         { label: "لوحة التشغيل", path: "/umrah", icon: LayoutDashboard },
         { label: "المعتمرين", path: "/umrah/pilgrims", icon: Users },
         { label: "الوكلاء", path: "/umrah/agents", icon: Building2 },
+        { label: "الوكلاء الفرعيين", path: "/umrah/sub-agents", icon: Users },
         { label: "المواسم", path: "/umrah/seasons", icon: Calendar },
-        { label: "الغرامات", path: "/umrah/penalties", icon: AlertTriangle },
+        { label: "التسعير", path: "/umrah/pricing", icon: DollarSign },
+        { label: "خطط العمولات", path: "/umrah/commission-plans", icon: TrendingUp },
+        { label: "الغرامات والمخالفات", path: "/umrah/penalties", icon: AlertTriangle },
         { label: "فواتير الوكلاء", path: "/umrah/invoices", icon: Receipt },
         { label: "الباقات", path: "/umrah/packages", icon: Package },
         { label: "النقل والمواصلات", path: "/umrah/transport", icon: Truck },
         { label: "الاستيراد", path: "/umrah/import", icon: FileText },
+        { label: "المخالفات", path: "/umrah/violations", icon: Shield },
       ]},
     ],
   },
@@ -893,6 +897,44 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     ],
     "/properties/maintenance": [
       { label: "طلب صيانة جديد", icon: Plus, link: "/properties/maintenance/create" },
+    ],
+    "/umrah": [
+      { label: "استيراد معتمرين", icon: FileText, link: "/umrah/import" },
+      { label: "إضافة معتمر", icon: Plus, link: "/umrah/pilgrims?action=create" },
+      { label: "إنشاء فاتورة", icon: Receipt, link: "/umrah/invoices?action=generate" },
+    ],
+    "/umrah/pilgrims": [
+      { label: "إضافة معتمر", icon: Plus, link: "/umrah/pilgrims?action=create" },
+      { label: "استيراد من ملف", icon: FileText, link: "/umrah/import" },
+    ],
+    "/umrah/agents": [
+      { label: "إضافة وكيل", icon: Plus, link: "/umrah/agents?action=create" },
+    ],
+    "/umrah/sub-agents": [
+      { label: "إضافة وكيل فرعي", icon: Plus, link: "/umrah/sub-agents?action=create" },
+    ],
+    "/umrah/invoices": [
+      { label: "إنشاء فاتورة", icon: Plus, link: "/umrah/invoices?action=generate" },
+    ],
+    "/umrah/pricing": [
+      { label: "إضافة تسعيرة", icon: Plus, link: "/umrah/pricing?action=create" },
+    ],
+    "/umrah/commission-plans": [
+      { label: "إنشاء خطة عمولة", icon: Plus, link: "/umrah/commission-plans?action=create" },
+    ],
+    "/umrah/transport": [
+      { label: "إضافة رحلة", icon: Plus, link: "/umrah/transport?action=create" },
+    ],
+    "/umrah/penalties": [
+      { label: "إضافة غرامة", icon: Plus, link: "/umrah/penalties?action=create" },
+    ],
+    "/legal": [
+      { label: "إنشاء قضية", icon: Plus, link: "/legal?tab=cases&action=create" },
+      { label: "إنشاء عقد", icon: Plus, link: "/legal?tab=contracts&action=create" },
+    ],
+    "/crm": [
+      { label: "فرصة جديدة", icon: Plus, link: "/crm?tab=opportunities&action=create" },
+      { label: "صفقة جديدة", icon: Plus, link: "/crm?tab=deals&action=create" },
     ],
   };
 
