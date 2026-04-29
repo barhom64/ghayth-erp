@@ -1183,7 +1183,7 @@ financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:rea
       `SELECT po.ref, po."totalAmount" AS expected, po."expectedDelivery" AS "dueDate", s.name AS "supplierName", 'purchase_order' AS type
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id=po."supplierId"
-       WHERE po."companyId"=$1 AND po.status IN ('approved','pending')
+       WHERE po."companyId"=$1 AND po."deletedAt" IS NULL AND po.status IN ('approved','pending')
          AND po."expectedDelivery" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
        UNION ALL
        SELECT 'PAYROLL' AS ref, COALESCE(SUM(ea.salary),0) AS expected,

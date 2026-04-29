@@ -293,7 +293,7 @@ router.get("/role-data", async (req, res) => {
         `SELECT COALESCE(AVG(CASE WHEN b."totalAmount" > 0 THEN (COALESCE(bl_used.total,0)::numeric / b."totalAmount") * 100 ELSE 0 END), 0) AS avg
          FROM budgets b
          LEFT JOIN LATERAL (SELECT COALESCE(SUM(bl.amount),0) AS total FROM budget_lines bl WHERE bl."budgetId" = b.id) bl_used ON TRUE
-         WHERE b."companyId" = ANY($1::int[]) AND b.status = 'active'`,
+         WHERE b."companyId" = ANY($1::int[]) AND b."deletedAt" IS NULL AND b.status = 'active'`,
         [scope.allowedCompanies]
       ).catch(() => [{ avg: 0 }]);
       result.finance = {

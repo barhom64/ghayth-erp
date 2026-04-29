@@ -264,7 +264,7 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
     const sourceAcct = sourceAccountCode || "1100";
 
     if (accountCode && amount) {
-      const [budget] = await rawQuery<any>(`SELECT amount, used FROM budgets WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3`, [effectiveCompanyId, accountCode, targetPeriod]);
+      const [budget] = await rawQuery<any>(`SELECT amount, used FROM budgets WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3 AND "deletedAt" IS NULL`, [effectiveCompanyId, accountCode, targetPeriod]);
       if (budget) {
         const budgetAmount = Number(budget.amount);
         const newUsed = Number(budget.used) + Number(amount);

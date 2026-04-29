@@ -872,7 +872,7 @@ reportsRouter.get("/reports/budget-variance", requirePermission("finance:read"),
               CASE WHEN b.amount > 0 THEN ROUND(COALESCE(b.used, 0)::numeric / b.amount * 100, 1) ELSE 0 END AS "usagePct"
        FROM budgets b
        LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = $1
-       WHERE b."companyId" = $1 AND b.period = $2 ${branchFilter}
+       WHERE b."companyId" = $1 AND b."deletedAt" IS NULL AND b.period = $2 ${branchFilter}
        ORDER BY b."accountCode"`,
       params
     );
