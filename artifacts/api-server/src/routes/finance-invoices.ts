@@ -585,7 +585,7 @@ invoicesRouter.post("/invoices/:id/post", requirePermission("finance:approve"), 
       [id, scope.companyId]
     );
     if (!glEntry) {
-      console.warn(`[invoice-post] Invoice #${id} has no GL entry — should have been created on approval`);
+      logger.warn(`[invoice-post] Invoice #${id} has no GL entry — should have been created on approval`);
     }
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.posted", entity: "invoices", entityId: id }).catch((e) => logger.error(e, "finance-invoices background task failed"));

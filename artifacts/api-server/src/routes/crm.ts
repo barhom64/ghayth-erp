@@ -368,7 +368,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
       }
 
       if (b.stage === "closed_won") {
-        console.warn(`[crm] opportunity ${oppId} set to closed_won via PATCH — prefer /opportunities/${oppId}/convert`);
+        logger.warn(`[crm] opportunity ${oppId} set to closed_won via PATCH — prefer /opportunities/${oppId}/convert`);
       }
     }
 

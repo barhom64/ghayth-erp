@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { logger } from "../lib/logger.js";
 
 interface UserPermissionOverrides {
   granted: Set<string>;
@@ -131,7 +132,7 @@ export function requirePermission(...requiredPerms: string[]) {
           requiredPerms: missingPerms,
           reason: "permission_denied",
           ip,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[middleware] background task failed"));
 
         // Typed-error shape (P0.3) so the frontend's PageErrorBoundary and
         // useApiMutation toast pipeline can read the code + meta without
@@ -148,7 +149,7 @@ export function requirePermission(...requiredPerms: string[]) {
 
       next();
     } catch (err) {
-      console.error("Permission check error:", err);
+      logger.error(err, "Permission check error:");
       res.status(500).json({
         error: "خطأ في التحقق من الصلاحيات",
         code: "SERVER_ERROR",
@@ -203,7 +204,7 @@ export function requireAnyPermission(...candidatePerms: string[]) {
           requiredPerms: candidatePerms,
           reason: "permission_denied_any",
           ip,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[middleware] background task failed"));
 
         res.status(403).json({
           error: "لا تملك الصلاحية اللازمة",
@@ -216,7 +217,7 @@ export function requireAnyPermission(...candidatePerms: string[]) {
 
       next();
     } catch (err) {
-      console.error("Permission check error:", err);
+      logger.error(err, "Permission check error:");
       res.status(500).json({
         error: "خطأ في التحقق من الصلاحيات",
         code: "SERVER_ERROR",

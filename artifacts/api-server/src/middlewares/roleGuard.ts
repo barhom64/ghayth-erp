@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { logSecurityEvent } from "./permissionMiddleware.js";
+import { logger } from "../lib/logger.js";
 
 const roleModuleCache = new Map<number, { modules: string[]; roles: string[]; level: number; expiresAt: number }>();
 const CACHE_TTL = 30_000;
@@ -93,7 +94,7 @@ export function requireModule(...requiredModules: string[]) {
           requiredPerms: requiredModules,
           reason: "module_access_denied_no_modules",
           ip,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[middleware] background task failed"));
 
         res.status(403).json({
           error: "لا تملك صلاحية الوصول لهذا القسم",
@@ -116,7 +117,7 @@ export function requireModule(...requiredModules: string[]) {
           requiredPerms: requiredModules,
           reason: "module_access_denied",
           ip,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[middleware] background task failed"));
 
         res.status(403).json({
           error: "لا تملك صلاحية الوصول لهذا القسم",
@@ -128,7 +129,7 @@ export function requireModule(...requiredModules: string[]) {
       }
       next();
     } catch (err) {
-      console.error("Role guard error:", err);
+      logger.error(err, "Role guard error:");
       res.status(500).json({ error: "خطأ في التحقق من الصلاحيات", code: "SERVER_ERROR" });
     }
   };
@@ -159,7 +160,7 @@ export function requireMinLevel(minLevel: number) {
           requiredPerms: [`min_level:${minLevel}`],
           reason: "insufficient_level",
           ip,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[middleware] background task failed"));
 
         res.status(403).json({
           error: "مستوى الصلاحيات غير كافٍ للوصول لهذا المورد",
@@ -171,7 +172,7 @@ export function requireMinLevel(minLevel: number) {
       }
       next();
     } catch (err) {
-      console.error("Role guard error:", err);
+      logger.error(err, "Role guard error:");
       res.status(500).json({ error: "خطأ في التحقق من الصلاحيات", code: "SERVER_ERROR" });
     }
   };
@@ -202,7 +203,7 @@ export function requireRole(...requiredRoles: string[]) {
           requiredPerms: requiredRoles,
           reason: "role_required",
           ip,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[middleware] background task failed"));
 
         res.status(403).json({
           error: "لا تملك الدور المطلوب لهذا الإجراء",
@@ -214,7 +215,7 @@ export function requireRole(...requiredRoles: string[]) {
       }
       next();
     } catch (err) {
-      console.error("Role guard error:", err);
+      logger.error(err, "Role guard error:");
       res.status(500).json({ error: "خطأ في التحقق من الصلاحيات", code: "SERVER_ERROR" });
     }
   };

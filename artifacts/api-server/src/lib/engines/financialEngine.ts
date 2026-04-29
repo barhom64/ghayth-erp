@@ -24,6 +24,7 @@ import {
 import { eventBus } from "../eventBus.js";
 import { rawQuery, rawExecute } from "../rawdb.js";
 import type { DomainEngine, GLPostingRequest } from "./domainEngineBase.js";
+import { logger } from "../logger.js";
 
 export interface GLPostingResult {
   journalId: number;
@@ -207,7 +208,7 @@ class FinancialEngineImpl implements DomainEngine {
     await rawExecute(
       `INSERT INTO invoice_payments ("invoiceId","companyId","clientId",amount,method,"transactionRef","paidAt",source) VALUES ($1,$2,$3,$4,$5,$6,NOW(),$7) ON CONFLICT DO NOTHING`,
       [params.invoiceId, params.companyId, params.clientId, payAmt, params.method, params.transactionRef, params.source]
-    ).catch(console.error);
+    ).catch((e) => logger.error(e, "[financialEngine] background task failed"));
 
     return { newPaid, newStatus };
   }

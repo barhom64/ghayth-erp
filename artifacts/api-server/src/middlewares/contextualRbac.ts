@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { rawQuery } from "../lib/rawdb.js";
+import { logger } from "../lib/logger.js";
 
 type OwnershipCheck = "company" | "branch" | "self" | "assignment";
 
@@ -152,7 +153,7 @@ export function requireOwnership(options: OwnershipOptions) {
 
       next();
     } catch (err) {
-      console.error("[ContextualRBAC] Ownership check error:", err);
+      logger.error(err, "[ContextualRBAC] Ownership check error:");
       // Fail open — if the ownership lookup itself errors (e.g. column
       // doesn't exist) we let downstream handlers proceed so we don't
       // accidentally lock users out of an endpoint. The error is logged
