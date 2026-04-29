@@ -1633,7 +1633,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         onApply: async (_row, client) => {
           if (currentStage) {
             await client.query(
-              `UPDATE leave_approval_stages SET status = 'returned', decision = $1, "decidedBy" = $2, "decidedAt" = NOW() WHERE id = $3`,
+              `UPDATE leave_approval_stages SET status = 'returned', decision = $1, "decidedBy" = $2, "decidedAt" = NOW() WHERE id = $3 AND status = 'pending'`,
               [reason, scope.activeAssignmentId, currentStage.id]
             );
           }
@@ -1777,7 +1777,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 
         await client.query(
           `UPDATE approval_requests SET status = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
-           WHERE "refType" = 'leave_request' AND "refId" = $2`,
+           WHERE "refType" = 'leave_request' AND "refId" = $2 AND status = 'pending'`,
           [scope.activeAssignmentId, Number(id)]
         );
 
@@ -3904,8 +3904,8 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
       const totalBankPayout = Math.max(0, totalNet);
 
       const [updatedRun] = await rawQuery<any>(
-        `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL RETURNING *`,
-        [status, id, scope.companyId]
+        `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL AND status = $4 RETURNING *`,
+        [status, id, scope.companyId, existing.status]
       );
       if (!updatedRun) throw new NotFoundError("دورة الرواتب غير موجودة");
 
@@ -3988,8 +3988,8 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
     }
 
     const [row] = await rawQuery<any>(
-      `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL RETURNING *`,
-      [status, id, scope.companyId]
+      `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL AND status = $4 RETURNING *`,
+      [status, id, scope.companyId, existing.status]
     );
     if (!row) throw new NotFoundError("دورة الرواتب غير موجودة");
 
@@ -4239,12 +4239,12 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
       await rawExecute(
         `UPDATE official_letters
            SET status = $1, "approvedAt" = NOW(), "approvedBy" = $3
-         WHERE id = $2`,
+         WHERE id = $2 AND status = 'pending_approval'`,
         [newStatus, Number(id), scope.userId]
       );
     } else {
       await rawExecute(
-        `UPDATE official_letters SET status = $1 WHERE id = $2 AND "companyId" = $3`,
+        `UPDATE official_letters SET status = $1 WHERE id = $2 AND "companyId" = $3 AND status = 'pending_approval'`,
         [newStatus, Number(id), scope.companyId]
       );
     }

@@ -536,7 +536,7 @@ router.patch("/exit/:id/complete", requirePermission("hr:update"), async (req, r
       onApply: async (_row, client) => {
         await client.query(
           `UPDATE employee_assignments SET status = 'terminated', "endDate" = CURRENT_DATE
-           WHERE id = $1 AND "companyId" = $2`,
+           WHERE id = $1 AND "companyId" = $2 AND status = 'active'`,
           [item.assignmentId, scope.companyId]
         );
       },

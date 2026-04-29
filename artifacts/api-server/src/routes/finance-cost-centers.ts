@@ -140,7 +140,7 @@ router.delete("/cost-centers/:id", requirePermission("finance:delete"), async (r
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     await rawExecute(
-      `UPDATE cost_centers SET status = 'deleted', "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
+      `UPDATE cost_centers SET status = 'deleted', "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status != 'deleted'`,
       [id, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "cost_center.deleted", entity: "cost_centers", entityId: id });

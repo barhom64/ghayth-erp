@@ -323,7 +323,7 @@ router.post("/pbx/completed", async (req, res): Promise<void> => {
     const companyId = call.companyId;
 
     await rawExecute(
-      `UPDATE pbx_calls SET status=$1, duration=$2, "recordingUrl"=$3 WHERE id=$4 AND "companyId"=$5`,
+      `UPDATE pbx_calls SET status=$1, duration=$2, "recordingUrl"=$3 WHERE id=$4 AND "companyId"=$5 AND status != 'completed'`,
       [status, duration, recordingUrl, call.id, companyId]
     );
 
@@ -367,7 +367,7 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
     if (!callId) throw new ValidationError("callId مطلوب", { field: "callId" });
 
     await rawExecute(
-      `UPDATE pbx_calls SET status=$1, "answeredBy"=$2 WHERE "callId"=$3`,
+      `UPDATE pbx_calls SET status=$1, "answeredBy"=$2 WHERE "callId"=$3 AND status != 'completed'`,
       [status ?? "in_progress", answeredBy ?? null, callId]
     );
 

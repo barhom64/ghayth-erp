@@ -122,7 +122,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
       const [unitStats] = await rawQuery<any>(
         `SELECT
            COUNT(*) FILTER (WHERE status='under_maintenance') AS maintenance
-         FROM property_units WHERE "companyId"=$1`,
+         FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
         [cid]
       );
       const [overdueRent] = await rawQuery<any>(

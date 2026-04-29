@@ -917,7 +917,7 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
       );
       const allDepsDone = blockedDeps.every((d: any) => d.status === 'done');
       if (!allDepsDone) {
-        await rawExecute(`UPDATE project_tasks SET status='blocked' WHERE id=$1`, [insertId]);
+        await rawExecute(`UPDATE project_tasks SET status='blocked' WHERE id=$1 AND status='todo'`, [insertId]);
       }
     }
 

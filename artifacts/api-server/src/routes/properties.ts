@@ -1290,7 +1290,7 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
         // Free the unit
         if (contract.unitId) {
           await client.query(
-            `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
+            `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='occupied'`,
             [contract.unitId, scope.companyId]
           );
         }

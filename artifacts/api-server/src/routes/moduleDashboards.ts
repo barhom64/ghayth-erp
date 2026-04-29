@@ -28,9 +28,9 @@ router.get("/hr", requirePermission("hr:read"), async (req, res) => {
     const [employees, attendance, leaves, violations, contracts, evaluations] = await Promise.all([
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active FROM employee_assignments WHERE "companyId" = $1`, [cid]),
       sq1(`SELECT COUNT(*) FILTER (WHERE status = 'present') AS present, COUNT(*) FILTER (WHERE status = 'absent') AS absent, COUNT(*) FILTER (WHERE status = 'late') AS late, COUNT(*) FILTER (WHERE "lateMinutes" > 0) AS "lateCount", COALESCE(AVG("lateMinutes") FILTER (WHERE "lateMinutes" > 0), 0) AS "avgLateMinutes" FROM attendance WHERE "companyId" = $1 AND date = $2`, [cid, today]),
-      sq1(`SELECT COUNT(*) FILTER (WHERE status = 'pending') AS pending, COUNT(*) FILTER (WHERE status = 'approved') AS approved, COUNT(*) FILTER (WHERE status = 'rejected') AS rejected FROM hr_leave_requests WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) FILTER (WHERE status = 'pending') AS pending, COUNT(*) FILTER (WHERE status = 'approved') AS approved, COUNT(*) FILTER (WHERE status = 'rejected') AS rejected FROM hr_leave_requests WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COALESCE(SUM(deduction), 0) AS "totalDeductions" FROM employee_violations WHERE "companyId" = $1 AND period = $2 AND "deletedAt" IS NULL`, [cid, today.slice(0, 7)]),
-      sq1(`SELECT COUNT(*) AS "expiring" FROM employee_contracts WHERE "companyId" = $1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`, [cid]),
+      sq1(`SELECT COUNT(*) AS "expiring" FROM employee_contracts WHERE "companyId" = $1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total FROM employee_kpi_snapshots WHERE "companyId" = $1 AND "snapshotDate" >= CURRENT_DATE - INTERVAL '30 days'`, [cid]),
     ]);
 
@@ -127,11 +127,11 @@ router.get("/legal", requirePermission("legal:read"), async (req, res) => {
     const [contracts, cases, sessions] = await Promise.all([
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COUNT(*) FILTER (WHERE status = 'active' AND "endDate"::date - CURRENT_DATE <= 30) AS "expiringSoon", COALESCE(SUM(value), 0) AS "totalValue" FROM legal_contracts WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE priority = 'high') AS "highPriority" FROM legal_cases WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
-      sq1(`SELECT COUNT(*) AS upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id = ls."caseId" WHERE lc."companyId" = $1 AND ls."sessionDate" >= CURRENT_DATE AND ls."sessionDate" <= CURRENT_DATE + INTERVAL '30 days'`, [cid]),
+      sq1(`SELECT COUNT(*) AS upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id = ls."caseId" WHERE lc."companyId" = $1 AND lc."deletedAt" IS NULL AND ls."deletedAt" IS NULL AND ls."sessionDate" >= CURRENT_DATE AND ls."sessionDate" <= CURRENT_DATE + INTERVAL '30 days'`, [cid]),
     ]);
 
     const casesByStatus = await safeQuery(
-      `SELECT status, COUNT(*) AS count FROM legal_cases WHERE "companyId" = $1 GROUP BY status`, [cid]
+      `SELECT status, COUNT(*) AS count FROM legal_cases WHERE "companyId" = $1 AND "deletedAt" IS NULL GROUP BY status`, [cid]
     );
 
     res.json({
