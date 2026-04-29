@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { FINANCE_ROLES, HR_ROLES, PR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError } from "../lib/errorHandler.js";
@@ -256,7 +257,7 @@ router.get("/role-data", async (req, res) => {
     const role = scope.role;
     const result: any = { role };
 
-    if (["hr_manager", "general_manager", "owner"].includes(role)) {
+    if (HR_ROLES.includes(role)) {
       const [onboarding] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM tasks WHERE ${where} AND category = 'onboarding' AND status != 'completed'`, params
       ).catch(() => [{ total: 0 }]);
@@ -279,7 +280,7 @@ router.get("/role-data", async (req, res) => {
       };
     }
 
-    if (["finance_manager", "general_manager", "owner"].includes(role)) {
+    if (FINANCE_ROLES.includes(role)) {
       const [overdueInvoices] = await rawQuery<any>(
         `SELECT COUNT(*) AS count, COALESCE(SUM(total - "paidAmount"), 0) AS amount
          FROM invoices WHERE ${where} AND "deletedAt" IS NULL AND status IN ('overdue','sent') AND "dueDate" < CURRENT_DATE`, params
@@ -305,7 +306,7 @@ router.get("/role-data", async (req, res) => {
       };
     }
 
-    if (["branch_manager", "general_manager", "owner"].includes(role)) {
+    if (PR_APPROVAL_ROLES.includes(role)) {
       const [teamTasks] = await rawQuery<any>(
         `SELECT
            COUNT(*) AS total,

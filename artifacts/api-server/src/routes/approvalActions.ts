@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { APPROVAL_AUDIT_ROLES } from "../lib/rbacCatalog.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 
@@ -7,7 +8,7 @@ const router = Router();
 router.get("/overrides/report", async (req, res) => {
   try {
     const scope = req.scope!;
-    const allowedRoles = ["owner", "general_manager", "hr_manager", "finance_manager", "compliance", "audit"];
+    const allowedRoles = APPROVAL_AUDIT_ROLES;
     if (!allowedRoles.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح لك بالاطلاع على تقرير المخالفات");
     }

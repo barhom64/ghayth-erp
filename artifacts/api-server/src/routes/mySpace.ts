@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { HR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { todayISO, currentPeriod, currentYear, toDateISO } from "../lib/businessHelpers.js";
@@ -503,7 +504,7 @@ router.get("/", async (req, res) => {
           } catch (e) { logger.error(e, "my-space roleEntities cases error:"); }
         }
         let hrSummary: any = null;
-        if (["owner", "branch_manager", "general_manager", "hr_manager"].includes(scope.role)) {
+        if (HR_APPROVAL_ROLES.includes(scope.role)) {
           try {
             const [hs] = await rawQuery<any>(
               `SELECT COUNT(*) AS total,

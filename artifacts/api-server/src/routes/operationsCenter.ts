@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { OPS_CLOSE_ROLES, OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -530,7 +531,7 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
   try {
     const parsed = zodParse(dailyCloseExecuteSchema.safeParse(req.body));
     const scope = req.scope!;
-    const allowedRoles = ["owner", "general_manager", "branch_manager", "hr_manager", "finance_manager"];
+    const allowedRoles = OPS_CLOSE_ROLES;
     if (!allowedRoles.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح — يتطلب صلاحية مدير على الأقل");
     }
@@ -539,7 +540,7 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
     const userId = scope.userId;
     const cid = scope.companyId;
     const forceClose = req.body?.force === true;
-    const overrideRoles = ["owner", "general_manager"];
+    const overrideRoles = OWNER_GM_ROLES;
 
     if (!forceClose) {
       const { where, params } = buildFilter(scope, req);

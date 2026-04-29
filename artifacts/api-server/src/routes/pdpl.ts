@@ -2,6 +2,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
+import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -76,7 +77,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
     const employeeId = parseId(req.params.employeeId, "employeeId");
 
     const isOwnData = scope.employeeId === employeeId;
-    const isHROrAbove = ["hr_manager", "general_manager", "owner"].includes(scope.role);
+    const isHROrAbove = HR_ROLES.includes(scope.role);
 
     if (!isOwnData && !isHROrAbove) {
       throw new ForbiddenError("يمكنك فقط تصدير بياناتك الشخصية أو يجب أن تكون مسؤول موارد بشرية");

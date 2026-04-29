@@ -456,9 +456,7 @@ describe("Auto-detection system", () => {
   it("PUT /auto-detection/settings restricts to HR/GM/Owner", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('router.put("/auto-detection/settings"');
     const section = DISCIPLINE_ROUTE.slice(idx, idx + 800);
-    expect(section).toContain("hr_manager");
-    expect(section).toContain("general_manager");
-    expect(section).toContain("owner");
+    expect(section).toContain("HR_ROLES");
     expect(section).toContain("غير مصرح بتعديل إعدادات الرصد التلقائي");
   });
 

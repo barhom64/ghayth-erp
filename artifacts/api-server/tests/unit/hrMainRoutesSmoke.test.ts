@@ -103,10 +103,7 @@ describe("Payroll run creation", () => {
   it("payroll restricts to HR/Finance/GM/Owner roles", () => {
     const idx = HR_ROUTE.indexOf('router.post("/payroll"');
     const section = HR_ROUTE.slice(idx, idx + 800);
-    expect(section).toContain("hr_manager");
-    expect(section).toContain("finance_manager");
-    expect(section).toContain("general_manager");
-    expect(section).toContain("owner");
+    expect(section).toContain("PAYROLL_ROLES");
   });
 
   it("payroll checks financial period is open", () => {

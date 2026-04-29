@@ -919,7 +919,7 @@ router.get("/penalties", requirePermission("umrah:read"), async (req, res) => {
        FROM umrah_penalties pen
        LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id
        LEFT JOIN umrah_agents a ON pen."agentId"=a.id
-       WHERE ${where} ORDER BY pen."createdAt" DESC`, params
+       WHERE ${where} ORDER BY pen."createdAt" DESC LIMIT 500`, params
     );
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List penalties error"); }
@@ -1092,7 +1092,7 @@ router.get("/agent-invoices", requirePermission("umrah:read"), async (req, res) 
        FROM umrah_agent_invoices i
        LEFT JOIN umrah_agents a ON i."agentId"=a.id
        LEFT JOIN umrah_seasons s ON i."seasonId"=s.id
-       WHERE ${where} ORDER BY i."createdAt" DESC`, params
+       WHERE ${where} ORDER BY i."createdAt" DESC LIMIT 500`, params
     );
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List agent invoices error"); }
@@ -1127,7 +1127,7 @@ router.get("/transport", requirePermission("umrah:read"), async (req, res) => {
        FROM umrah_transport t
        LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId"
        LEFT JOIN fleet_drivers d ON d.id = t."driverId"
-       WHERE t."companyId"=$1 ORDER BY t."tripDate" DESC`,
+       WHERE t."companyId"=$1 ORDER BY t."tripDate" DESC LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows });
@@ -1371,7 +1371,7 @@ router.get("/violations", requirePermission("umrah:read"), async (req, res) => {
        LEFT JOIN umrah_agents a ON a.id = v."agentId"
        LEFT JOIN umrah_sub_agents sa ON sa.id = v."subAgentId"
        WHERE v."companyId"=$1 AND v."deletedAt" IS NULL
-       ORDER BY v."detectedAt" DESC`,
+       ORDER BY v."detectedAt" DESC LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });

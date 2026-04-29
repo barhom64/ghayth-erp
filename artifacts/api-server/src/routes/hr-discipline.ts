@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { Router } from "express";
+import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -1142,7 +1143,7 @@ router.get("/auto-detection/settings", requirePermission("hr:read"), async (req,
 router.put("/auto-detection/settings", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بتعديل إعدادات الرصد التلقائي");
     }
     const body: Partial<AutoDetectionSettings> = zodParse(autoDetectionSettingsSchema.safeParse(req.body)) as any;
@@ -1171,7 +1172,7 @@ router.put("/auto-detection/settings", requirePermission("hr:update"), async (re
 router.post("/auto-detection/run", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بتشغيل الرصد التلقائي");
     }
     const body = zodParse(autoDetectionRunSchema.safeParse(req.body));

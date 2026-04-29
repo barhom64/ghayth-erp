@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { Router } from "express";
+import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -355,12 +356,12 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
     const { approved = true, reason, notes } = (req.body ?? {}) as { approved?: boolean; reason?: string; notes?: string };
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError(
         "صلاحية اعتماد نهاية الخدمة محصورة بمدير HR أو المدير العام أو المالك",
         {
           fix: "هذا الإجراء يتطلب صلاحية إدارية عليا.",
-          meta: { yourRole: scope.role, requiredRoles: ["hr_manager", "general_manager", "owner"] },
+          meta: { yourRole: scope.role, requiredRoles: HR_ROLES },
         }
       );
     }

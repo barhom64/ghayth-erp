@@ -326,7 +326,7 @@ router.get("/", requirePermission("projects:read"), async (req, res) => {
     }
 
     const rows = await rawQuery<any>(
-      `SELECT p.*, cl.name AS "clientName", e.name AS "managerName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" LEFT JOIN employees e ON e.id=p."managerId" WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.id DESC`,
+      `SELECT p.*, cl.name AS "clientName", e.name AS "managerName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" LEFT JOIN employees e ON e.id=p."managerId" WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -1518,7 +1518,7 @@ router.get("/:id/risks", requirePermission("projects:read"), async (req, res) =>
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     const rows = await rawQuery<any>(
-      `SELECT * FROM project_risks WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY (probability * impact) DESC`,
+      `SELECT * FROM project_risks WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY (probability * impact) DESC LIMIT 500`,
       [projectId, scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
@@ -1737,7 +1737,7 @@ router.get("/:id/costs", requirePermission("projects:read"), async (req, res) =>
        FROM project_costs pc
        LEFT JOIN employees e ON e.id=pc."enteredBy"
        WHERE pc."projectId"=$1 AND pc."companyId"=$2
-       ORDER BY pc."costDate" DESC`,
+       ORDER BY pc."costDate" DESC LIMIT 500`,
       [projectId, scope.companyId]
     );
     const [totals] = await rawQuery<any>(

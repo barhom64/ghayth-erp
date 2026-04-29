@@ -7,6 +7,7 @@ import {
   IntegrationError,
   parseId,
 } from "../lib/errorHandler.js";
+import { FINANCE_ROLES, OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -281,13 +282,13 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
             { field: "amount", fix: "أعد تقييم الميزانية أو قلل المبلغ المطلوب", meta: { utilization: Math.round(utilization), status: "rejected" } }
           );
         }
-        if (utilization > 99 && !["owner", "general_manager"].includes(scope.role)) {
+        if (utilization > 99 && !OWNER_GM_ROLES.includes(scope.role)) {
           throw new ForbiddenError(
             "تجاوز الميزانية 100-110%. يتطلب موافقة المدير العام فقط",
             { fix: "اطلب موافقة المدير العام قبل المتابعة", meta: { utilization: Math.round(utilization), status: "blocked_gm" } }
           );
         }
-        if (utilization > 80 && !["finance_manager", "general_manager", "owner"].includes(scope.role)) {
+        if (utilization > 80 && !FINANCE_ROLES.includes(scope.role)) {
           throw new ForbiddenError(
             "استخدام الميزانية 80-99%. يتطلب موافقة المدير المالي",
             { fix: "اطلب موافقة المدير المالي قبل المتابعة", meta: { utilization: Math.round(utilization), status: "warning_cfo" } }
