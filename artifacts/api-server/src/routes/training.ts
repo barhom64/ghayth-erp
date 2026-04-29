@@ -66,7 +66,7 @@ const router = Router();
 router.get("/programs", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM training_programs WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM training_programs WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "training"); }
 });
@@ -239,7 +239,7 @@ router.get("/enrollments", requirePermission("hr:read"), async (req, res) => {
     let where = `tp."companyId"=$1 AND tp."deletedAt" IS NULL`;
     const params: any[] = [scope.companyId];
     if (programId) { params.push(programId); where += ` AND e."programId"=$${params.length}`; }
-    const rows = await rawQuery(`SELECT e.*, tp.title as "programTitle" FROM training_enrollments e LEFT JOIN training_programs tp ON e."programId"=tp.id WHERE ${where} ORDER BY e."createdAt" DESC`, params);
+    const rows = await rawQuery(`SELECT e.*, tp.title as "programTitle" FROM training_enrollments e LEFT JOIN training_programs tp ON e."programId"=tp.id WHERE ${where} ORDER BY e."createdAt" DESC LIMIT 500`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "training"); }
 });

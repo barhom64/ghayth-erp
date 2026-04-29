@@ -372,7 +372,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
     if (!pr) throw new NotFoundError("طلب الشراء غير موجود");
     if (pr.status !== "approved") { throw new ValidationError("يمكن تحويل الطلبات المعتمدة فقط"); return; }
 
-    const items = await rawQuery<any>(`SELECT * FROM purchase_request_items WHERE "requestId" = $1`, [Number(id)]);
+    const items = await rawQuery<any>(`SELECT * FROM purchase_request_items WHERE "requestId" = $1 LIMIT 500`, [Number(id)]);
     const subtotal = Number(pr.totalAmount);
     const vatRate = Number(pr.vatRate ?? 15);
     const vatAmount = computeVat(subtotal, vatRate);

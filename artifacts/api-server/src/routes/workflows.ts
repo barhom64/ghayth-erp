@@ -339,7 +339,7 @@ router.get("/definitions/:id", requirePermission("admin:read"), async (req, res)
     );
     if (!def) throw new NotFoundError("التعريف غير موجود");
     const steps = await rawQuery<any>(
-      `SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder"`,
+      `SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" LIMIT 500`,
       [def.id]
     );
     res.json({ ...def, steps });
@@ -409,7 +409,7 @@ router.put("/definitions/:id", requirePermission("admin:write"), async (req, res
     }
 
     const [def] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1`, [id]);
-    const updatedSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder"`, [id]);
+    const updatedSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" LIMIT 500`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_definitions", entityId: id, after: { requestTypeLabel } }).catch((e) => logger.error(e, "workflows background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.updated", entity: "workflow_definitions", entityId: id, details: JSON.stringify({ requestTypeLabel }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json({ ...def, steps: updatedSteps });

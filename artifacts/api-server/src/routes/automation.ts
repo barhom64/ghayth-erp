@@ -10,7 +10,7 @@ const router = Router();
 
 router.get("/cron-jobs", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
-    const rows = await rawQuery<any>(`SELECT * FROM cron_jobs ORDER BY name`);
+    const rows = await rawQuery<any>(`SELECT * FROM cron_jobs ORDER BY name LIMIT 500`);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Cron jobs error:"); }
 });

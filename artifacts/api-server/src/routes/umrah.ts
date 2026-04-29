@@ -589,7 +589,7 @@ router.get("/pilgrims/:id", requirePermission("umrah:read"), async (req, res): P
        WHERE p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`, [req.params.id, scope.companyId]
     );
     if (!row) { throw new NotFoundError("المعتمر غير موجود"); }
-    const penalties = await rawQuery(`SELECT * FROM umrah_penalties WHERE "pilgrimId"=$1 AND "companyId"=$2 ORDER BY "createdAt" DESC`, [req.params.id, scope.companyId]);
+    const penalties = await rawQuery(`SELECT * FROM umrah_penalties WHERE "pilgrimId"=$1 AND "companyId"=$2 ORDER BY "createdAt" DESC LIMIT 500`, [req.params.id, scope.companyId]);
     res.json({ ...row, penalties });
   } catch (err) { handleRouteError(err, res, "Get pilgrim error"); }
 });
@@ -1115,7 +1115,7 @@ router.get("/invoices/:id", requirePermission("umrah:read"), async (req, res): P
     );
     if (!row) throw new NotFoundError("الفاتورة غير موجودة");
     const penalties = await rawQuery(
-      `SELECT * FROM umrah_penalties WHERE "invoiceId"=$1 AND "companyId"=$2 ORDER BY "createdAt" DESC`,
+      `SELECT * FROM umrah_penalties WHERE "invoiceId"=$1 AND "companyId"=$2 ORDER BY "createdAt" DESC LIMIT 500`,
       [req.params.id, scope.companyId]
     );
     res.json({ ...row, penalties });

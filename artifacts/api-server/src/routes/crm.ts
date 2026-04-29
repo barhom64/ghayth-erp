@@ -746,7 +746,7 @@ router.get("/opportunities/:id", requirePermission("crm:read"), async (req, res)
     if (!row) throw new NotFoundError("الفرصة غير موجودة");
 
     const activities = await rawQuery<any>(
-      `SELECT * FROM crm_activities WHERE "opportunityId"=$1 ORDER BY "scheduledAt" DESC`,
+      `SELECT * FROM crm_activities WHERE "opportunityId"=$1 ORDER BY "scheduledAt" DESC LIMIT 500`,
       [row.id]
     );
     const overdueActivities = activities.filter((a: any) => !a.completedAt && new Date(a.scheduledAt) < new Date());
@@ -930,7 +930,7 @@ router.get("/opportunities/:id/activities", requirePermission("crm:read"), async
       [oppId, scope.companyId]
     );
     if (!opp) throw new NotFoundError("الفرصة غير موجودة");
-    const rows = await rawQuery<any>(`SELECT * FROM crm_activities WHERE "opportunityId"=$1 ORDER BY "createdAt" DESC`, [oppId]);
+    const rows = await rawQuery<any>(`SELECT * FROM crm_activities WHERE "opportunityId"=$1 ORDER BY "createdAt" DESC LIMIT 500`, [oppId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "CRM activities error:"); }
 });

@@ -138,7 +138,7 @@ router.get("/", requirePermission("documents:read"), async (req: Request, res: R
       where += ` AND status=$${params.length}`;
     }
 
-    const rows = await rawQuery(`SELECT * FROM documents ${where} ORDER BY "createdAt" DESC`, params);
+    const rows = await rawQuery(`SELECT * FROM documents ${where} ORDER BY "createdAt" DESC LIMIT 500`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -497,7 +497,7 @@ router.get("/:id/entity-links", requirePermission("documents:read"), async (req:
 router.get("/folders", requirePermission("documents:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM document_folders WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY name`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM document_folders WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });

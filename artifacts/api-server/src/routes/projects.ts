@@ -515,12 +515,12 @@ router.get("/:id", requirePermission("projects:read"), async (req, res) => {
 
     const [project] = await rawQuery<any>(`SELECT p.*, cl.name AS "clientName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" WHERE ${detailWhere}`, detailParams);
     if (!project) throw new NotFoundError("المشروع غير موجود");
-    const phases = await rawQuery<any>(`SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex"`, [project.id]);
-    const tasks = await rawQuery<any>(`SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" WHERE pt."projectId"=$1 ORDER BY pt."dueDate"`, [project.id]);
+    const phases = await rawQuery<any>(`SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`, [project.id]);
+    const tasks = await rawQuery<any>(`SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" WHERE pt."projectId"=$1 ORDER BY pt."dueDate" LIMIT 500`, [project.id]);
 
     let taskDeps: any[] = [];
     if (tasks.length > 0) {
-      taskDeps = await rawQuery<any>(`SELECT * FROM project_task_dependencies WHERE "taskId" IN (${tasks.map((_: any, i: number) => `$${i + 1}`).join(',')})`, tasks.map((t: any) => t.id));
+      taskDeps = await rawQuery<any>(`SELECT * FROM project_task_dependencies WHERE "taskId" IN (${tasks.map((_: any, i: number) => `$${i + 1}`).join(',')}) LIMIT 500`, tasks.map((t: any) => t.id));
     }
     const taskGraph = tasks.map((t: any) => ({
       id: t.id,
@@ -848,7 +848,7 @@ router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update
       }
     }
 
-    const tasks = await rawQuery<any>(`SELECT * FROM project_tasks WHERE "projectId"=$1`, [projectId]);
+    const tasks = await rawQuery<any>(`SELECT * FROM project_tasks WHERE "projectId"=$1 LIMIT 500`, [projectId]);
     const doneTasks = tasks.filter((t: any) => t.status === 'done').length;
     const progressPct = tasks.length > 0 ? Math.round((doneTasks / tasks.length) * 100) : 0;
     await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [progressPct, projectId, scope.companyId]);
@@ -1121,7 +1121,7 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
     }
 
     if (task?.projectId) {
-      const allTasks = await rawQuery<any>(`SELECT * FROM project_tasks WHERE "projectId"=$1`, [task.projectId]);
+      const allTasks = await rawQuery<any>(`SELECT * FROM project_tasks WHERE "projectId"=$1 LIMIT 500`, [task.projectId]);
       const doneTasks = allTasks.filter((t: any) => t.status === 'done').length;
       const progressPct = allTasks.length > 0 ? Math.round((doneTasks / allTasks.length) * 100) : 0;
       await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [progressPct, task.projectId, scope.companyId]);
@@ -2016,11 +2016,11 @@ router.get("/:id/gantt", requirePermission("projects:read"), async (req, res) =>
     const project = await assertProjectAccess(projectId, scope);
 
     const phases = await rawQuery<any>(
-      `SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex"`,
+      `SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`,
       [projectId]
     );
     const tasks = await rawQuery<any>(
-      `SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" WHERE pt."projectId"=$1 ORDER BY pt."startDate","phaseId"`,
+      `SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" WHERE pt."projectId"=$1 ORDER BY pt."startDate","phaseId" LIMIT 500`,
       [projectId]
     );
     const milestones = await rawQuery<any>(
