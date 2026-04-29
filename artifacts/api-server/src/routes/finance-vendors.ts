@@ -138,7 +138,7 @@ vendorsRouter.delete("/vendors/:id", requirePermission("finance:delete"), async 
     if (!existing) throw new NotFoundError("المورد غير موجود");
 
     const [openOrders] = await rawQuery<any>(
-      `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "supplierId" = $1 AND "companyId" = $2 AND status NOT IN ('cancelled','received','closed')`,
+      `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "supplierId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status NOT IN ('cancelled','received','closed')`,
       [vendorId, scope.companyId]
     );
     const [openRequests] = await rawQuery<any>(
@@ -363,9 +363,9 @@ vendorsRouter.get("/vendors/:id", requirePermission("finance:read"), async (req,
     // migration after a fresh smoke test caught the column-not-found error.
     const [vendor] = await rawQuery<any>(
       `SELECT s.*,
-              COALESCE((SELECT SUM("totalAmount") FROM purchase_orders po WHERE po."supplierId" = s.id), 0)::numeric AS "totalPurchases",
-              COALESCE((SELECT COUNT(*) FROM purchase_orders po WHERE po."supplierId" = s.id AND po.status IN ('pending','approved','sent')), 0)::int AS "activeOrders",
-              (SELECT MAX(po."createdAt") FROM purchase_orders po WHERE po."supplierId" = s.id) AS "lastOrderAt"
+              COALESCE((SELECT SUM("totalAmount") FROM purchase_orders po WHERE po."supplierId" = s.id AND po."deletedAt" IS NULL), 0)::numeric AS "totalPurchases",
+              COALESCE((SELECT COUNT(*) FROM purchase_orders po WHERE po."supplierId" = s.id AND po."deletedAt" IS NULL AND po.status IN ('pending','approved','sent')), 0)::int AS "activeOrders",
+              (SELECT MAX(po."createdAt") FROM purchase_orders po WHERE po."supplierId" = s.id AND po."deletedAt" IS NULL) AS "lastOrderAt"
        FROM suppliers s
        WHERE s.id = $1 AND s."companyId" = ANY($2) AND s."deletedAt" IS NULL`,
       [id, scope.allowedCompanies]

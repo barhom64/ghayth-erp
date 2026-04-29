@@ -140,7 +140,7 @@ router.get("/overview", requirePermission("bi:read"), async (req, res) => {
          (SELECT COUNT(*) FROM clients WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS clients,
          (SELECT COUNT(*) FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS invoices,
          (SELECT COUNT(*) FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS projects,
-         (SELECT COUNT(*) FROM fleet_vehicles WHERE "companyId" = $1) AS vehicles,
+         (SELECT COUNT(*) FROM fleet_vehicles WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS vehicles,
          (SELECT COUNT(*) FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status = 'open') AS "openTickets",
          (SELECT COALESCE(SUM("paidAmount"), 0) FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "paidAmount" > 0) AS "totalRevenue"`,
       [cid]

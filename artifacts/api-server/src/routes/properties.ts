@@ -577,7 +577,7 @@ router.post("/contracts/impact-preview", requirePermission("properties:read"), a
     let unitStatus = "";
     if (unitId) {
       const [unit] = await rawQuery<any>(
-        `SELECT "unitNumber", status FROM property_units WHERE id = $1 AND "companyId" = $2`,
+        `SELECT "unitNumber", status FROM property_units WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [Number(unitId), scope.companyId]
       );
       unitLabel = unit?.unitNumber || String(unitId);
@@ -2431,7 +2431,7 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
        b.deedNumber || null, b.deedDate || null, b.buildingPermitNumber || null, nationalAddress, b.latitude || null, b.longitude || null,
        b.totalUnits || 0, b.totalArea || null, b.yearBuilt || null, b.ownerId || null, b.managerId || null, b.description || b.notes || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "property_buildings", entityId: insertId,
@@ -2528,7 +2528,7 @@ router.patch("/buildings/:id", requirePermission("property:update"), async (req,
     if (Object.keys(after).length === 0) { res.json(existing); return; }
     params.push(id);
     await rawExecute(`UPDATE property_buildings SET ${sets.join(",")}, "updatedAt"=NOW() WHERE id=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -2918,7 +2918,7 @@ router.get("/owners", requirePermission("property:read"), async (req, res) => {
     if (search) { params.push(`%${search}%`); conditions.push(`(name ILIKE $${params.length} OR "nationalId" ILIKE $${params.length} OR "crNumber" ILIKE $${params.length} OR phone ILIKE $${params.length})`); }
     const rows = await rawQuery<any>(
       `SELECT o.*,
-        (SELECT COUNT(*) FROM property_buildings WHERE "ownerId"=o.id) AS "buildingCount",
+        (SELECT COUNT(*) FROM property_buildings WHERE "ownerId"=o.id AND "deletedAt" IS NULL) AS "buildingCount",
         (SELECT COUNT(*) FROM property_units WHERE "ownerId"=o.id AND "deletedAt" IS NULL) AS "unitCount",
         (SELECT COUNT(*) FROM rental_contracts WHERE "ownerId"=o.id AND status='active' AND "deletedAt" IS NULL) AS "activeContracts"
        FROM property_owners o WHERE ${conditions.join(" AND ")} AND o."deletedAt" IS NULL ORDER BY o.name LIMIT 500`,
@@ -2934,7 +2934,7 @@ router.get("/owners/:id", requirePermission("property:read"), async (req, res) =
     const id = parseId(req.params.id, "id");
     const [owner] = await rawQuery<any>(`SELECT * FROM property_owners WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!owner) throw new NotFoundError("المالك غير موجود");
-    const buildings = await rawQuery<any>(`SELECT * FROM property_buildings WHERE "ownerId"=$1 AND "companyId"=$2 LIMIT 500`, [id, scope.companyId]);
+    const buildings = await rawQuery<any>(`SELECT * FROM property_buildings WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 500`, [id, scope.companyId]);
     const units = await rawQuery<any>(`SELECT * FROM property_units WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 500`, [id, scope.companyId]);
     const contracts = await rawQuery<any>(`SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."ownerId"=$1 AND c."companyId"=$2 AND c."deletedAt" IS NULL ORDER BY c.id DESC LIMIT 500`, [id, scope.companyId]);
     res.json({ ...owner, buildings, units, contracts });

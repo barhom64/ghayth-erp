@@ -97,7 +97,7 @@ router.get("/fleet", requirePermission("fleet:read"), async (req, res) => {
     const cid = scope.companyId;
 
     const [vehicles, trips, maintenance, fuel] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active' OR status = 'available') AS active, COUNT(*) FILTER (WHERE status = 'in_use') AS "inUse", COUNT(*) FILTER (WHERE status = 'needs_service') AS "needsService", COUNT(*) FILTER (WHERE status = 'out_of_service') AS "outOfService" FROM fleet_vehicles WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active' OR status = 'available') AS active, COUNT(*) FILTER (WHERE status = 'in_use') AS "inUse", COUNT(*) FILTER (WHERE status = 'needs_service') AS "needsService", COUNT(*) FILTER (WHERE status = 'out_of_service') AS "outOfService" FROM fleet_vehicles WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'in_progress') AS active, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COALESCE(SUM(distance), 0) AS "totalDistance", COALESCE(SUM(cost), 0) AS "totalCost" FROM fleet_trips WHERE "companyId" = $1`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'pending' OR status = 'scheduled') AS pending, COALESCE(SUM(cost), 0) AS "totalCost" FROM fleet_maintenance WHERE "companyId" = $1`, [cid]),
       sq1(`SELECT COALESCE(SUM("totalCost"), 0) AS "totalCost", COALESCE(SUM(liters), 0) AS "totalLiters" FROM fleet_fuel_logs WHERE "companyId" = $1`, [cid]),
@@ -151,9 +151,9 @@ router.get("/properties", requirePermission("property:read"), async (req, res) =
     const cid = scope.companyId;
 
     const [units, rentalContracts, payments, maintenanceReqs] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'available') AS available, COUNT(*) FILTER (WHERE status = 'rented') AS rented, COUNT(*) FILTER (WHERE status = 'maintenance') AS "underMaintenance" FROM property_units WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'available') AS available, COUNT(*) FILTER (WHERE status = 'rented') AS rented, COUNT(*) FILTER (WHERE status = 'maintenance') AS "underMaintenance" FROM property_units WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COUNT(*) FILTER (WHERE "endDate"::date - CURRENT_DATE <= 30 AND status = 'active') AS "expiringSoon", COALESCE(SUM("monthlyRent"), 0) AS "monthlyIncome" FROM rental_contracts WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
-      sq1(`SELECT COALESCE(SUM(amount), 0) AS "totalDue", COALESCE(SUM("paidAmount"), 0) AS "totalCollected", COUNT(*) FILTER (WHERE status = 'pending' AND "dueDate" < CURRENT_DATE) AS overdue FROM rent_payments rp JOIN rental_contracts rc ON rc.id = rp."contractId" WHERE rc."companyId" = $1`, [cid]),
+      sq1(`SELECT COALESCE(SUM(amount), 0) AS "totalDue", COALESCE(SUM("paidAmount"), 0) AS "totalCollected", COUNT(*) FILTER (WHERE status = 'pending' AND "dueDate" < CURRENT_DATE) AS overdue FROM rent_payments rp JOIN rental_contracts rc ON rc.id = rp."contractId" WHERE rc."companyId" = $1 AND rc."deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status NOT IN ('completed','closed')) AS open, COUNT(*) FILTER (WHERE priority = 'critical') AS critical FROM maintenance_requests WHERE "companyId" = $1`, [cid]),
     ]);
 

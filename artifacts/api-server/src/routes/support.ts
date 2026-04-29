@@ -170,7 +170,7 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
       `INSERT INTO support_tickets ("companyId",ref,title,description,category,priority,status,"clientId","assigneeId","slaDeadline") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [scope.companyId, ref, title, b.description, b.category, priority, 'open', b.clientId ?? null, assigneeId, slaResolutionDeadline]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     if (assigneeId) {
       const [assigneeAssignment] = await rawQuery<any>(
