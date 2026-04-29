@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
@@ -136,7 +138,7 @@ router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
     if (!parsed_patchRule.success) throw new ValidationError(parsed_patchRule.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed_patchRule.data;
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
 
     const [existing] = await rawQuery<any>(
       `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2`,
@@ -183,7 +185,7 @@ router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
 router.delete("/:id", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
@@ -210,7 +212,7 @@ router.patch("/:id/toggle", requirePermission("admin:write"), async (req, res) =
   try {
     { const _guard = toggleRuleSchema.safeParse(req.body); if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id, "isActive" FROM business_rules WHERE id = $1 AND ("companyId" IS NULL OR "companyId" = $2)`,
       [id, scope.companyId]

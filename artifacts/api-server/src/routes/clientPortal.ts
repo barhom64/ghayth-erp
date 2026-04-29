@@ -3,7 +3,9 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, isTypedError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, isTypedError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
@@ -661,7 +663,7 @@ protectedRouter.get("/kb", withPortalScope(async (req, res) => {
 protectedRouter.get("/kb/:id", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND status='published' AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -676,7 +678,7 @@ protectedRouter.get("/kb/:id", withPortalScope(async (req, res) => {
 
 protectedRouter.post("/kb/:id/feedback", withPortalScope(async (req, res) => {
   try {
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const parsed_portalKbFeedbackSchema = portalKbFeedbackSchema.safeParse(req.body);
     if (!parsed_portalKbFeedbackSchema.success) throw new ValidationError(parsed_portalKbFeedbackSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_portalKbFeedbackSchema.data;

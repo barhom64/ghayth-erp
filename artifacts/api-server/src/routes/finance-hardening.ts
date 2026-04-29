@@ -4,6 +4,7 @@ import {
   NotFoundError,
   ConflictError,
   ForbiddenError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -93,7 +94,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", requirePermission("f
   try {
     const scope = req.scope!;
 
-    const periodId = Number(req.params.id);
+    const periodId = parseId(req.params.id, "id");
     const { notes } = req.body as any;
 
     // Pre-flight: refuse close when the period still has unposted manual
@@ -163,7 +164,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", requirePermission("
   try {
     const scope = req.scope!;
 
-    const periodId = Number(req.params.id);
+    const periodId = parseId(req.params.id, "id");
     const { reason } = req.body as any;
     if (!reason) {
       throw new ValidationError("سبب فتح الفترة مطلوب", {
@@ -322,7 +323,7 @@ financeHardeningRouter.get("/journal-manual", requirePermission("finance:read"),
 financeHardeningRouter.get("/journal-manual/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT je.*, json_agg(jl.*) FILTER (WHERE jl.id IS NOT NULL) AS lines,
               e_cre.name AS "createdByName"
@@ -358,7 +359,7 @@ financeHardeningRouter.patch("/journal-manual/:id/submit", requirePermission("fi
   try {
     const scope = req.scope!;
 
-    const journalId = Number(req.params.id);
+    const journalId = parseId(req.params.id, "id");
 
     // Fetch ref only for the success message; engine does state validation.
     const [je] = await rawQuery<any>(
@@ -395,7 +396,7 @@ financeHardeningRouter.patch("/journal-manual/:id/review", requirePermission("fi
   try {
     const scope = req.scope!;
 
-    const journalId = Number(req.params.id);
+    const journalId = parseId(req.params.id, "id");
     const { approved, notes } = req.body as any;
 
     // Fetch createdBy for the "cannot review your own entry" business rule
@@ -459,7 +460,7 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", requirePermission("f
   try {
     const scope = req.scope!;
 
-    const journalId = Number(req.params.id);
+    const journalId = parseId(req.params.id, "id");
     const { approved, notes } = req.body as any;
 
     const [je] = await rawQuery<any>(
@@ -512,7 +513,7 @@ financeHardeningRouter.patch("/journal-manual/:id/post", requirePermission("fina
   try {
     const scope = req.scope!;
 
-    const journalId = Number(req.params.id);
+    const journalId = parseId(req.params.id, "id");
 
     const [je] = await rawQuery<any>(
       `SELECT ref FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
@@ -690,7 +691,7 @@ financeHardeningRouter.delete("/bank-guarantees/:id", requirePermission("finance
   try {
     const scope = req.scope!;
 
-    const guaranteeId = Number(req.params.id);
+    const guaranteeId = parseId(req.params.id, "id");
 
     const [existing] = await rawQuery<any>(
       `SELECT id, ref, bank, status, amount FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -760,7 +761,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/cancel", requirePermission("fi
   try {
     const scope = req.scope!;
 
-    const guaranteeId = Number(req.params.id);
+    const guaranteeId = parseId(req.params.id, "id");
     const { reason } = req.body as any;
     if (!reason || !String(reason).trim()) {
       throw new ValidationError("سبب الإلغاء مطلوب", {
@@ -813,7 +814,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/release", requirePermission("f
   try {
     const scope = req.scope!;
 
-    const guaranteeId = Number(req.params.id);
+    const guaranteeId = parseId(req.params.id, "id");
     const { notes } = req.body as any;
 
     const [existing] = await rawQuery<any>(
@@ -1092,7 +1093,7 @@ financeHardeningRouter.post("/projects", requirePermission("finance:create"), as
 financeHardeningRouter.get("/projects/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT p.*, COALESCE(p.budget - p."spentAmount", 0) AS "budgetRemaining"
        FROM projects p
@@ -1294,7 +1295,7 @@ financeHardeningRouter.get("/posting-failures", requirePermission("finance:read"
 financeHardeningRouter.patch("/posting-failures/:id/resolve", requirePermission("finance:approve"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { affectedRows } = await rawExecute(
       `UPDATE financial_posting_failures SET resolved = true, "resolvedAt" = NOW(), "resolvedBy" = $1
        WHERE id = $2 AND "companyId" = $3 AND resolved = false`,

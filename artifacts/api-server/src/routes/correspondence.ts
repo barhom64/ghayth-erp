@@ -7,6 +7,7 @@ import {
   handleRouteError,
   ValidationError,
   NotFoundError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, currentYear, generateRef as makeRef } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -87,7 +88,7 @@ correspondenceRouter.get("/", requirePermission("communications:read"), async (r
 correspondenceRouter.get("/:id", requirePermission("communications:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT c.*, COALESCE(e.name, u.email) AS "createdByName"
        FROM correspondence c
@@ -143,7 +144,7 @@ correspondenceRouter.post("/", requirePermission("communications:write"), async 
 correspondenceRouter.patch("/:id", requirePermission("communications:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -187,7 +188,7 @@ correspondenceRouter.patch("/:id", requirePermission("communications:write"), as
 correspondenceRouter.post("/:id/send", requirePermission("communications:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -217,7 +218,7 @@ correspondenceRouter.post("/:id/send", requirePermission("communications:write")
 correspondenceRouter.post("/:id/respond", requirePermission("communications:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { subject, content, notes } = req.body as { subject?: string; content?: string; notes?: string };
 
     const [original] = await rawQuery<any>(

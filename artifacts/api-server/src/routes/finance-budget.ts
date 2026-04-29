@@ -7,6 +7,7 @@ import {
   NotFoundError,
   ConflictError,
   ForbiddenError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -170,7 +171,7 @@ budgetRouter.patch("/budget/:id", requirePermission("finance:update"), async (re
   try {
     const scope = req.scope!;
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body;
     const fields: string[] = [];
     const params: any[] = [];
@@ -214,7 +215,7 @@ budgetRouter.delete("/budget/:id", requirePermission("finance:delete"), async (r
   try {
     const scope = req.scope!;
 
-    const budgetId = Number(req.params.id);
+    const budgetId = parseId(req.params.id, "id");
 
     const [existing] = await rawQuery<any>(
       `SELECT id, "accountCode", period, amount, used FROM budgets WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -410,7 +411,7 @@ budgetRouter.get("/budget/approval-requests", requirePermission("finance:read"),
 budgetRouter.post("/budget/approval-requests/:id/decide", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const requestId = Number(req.params.id);
+    const requestId = parseId(req.params.id, "id");
     const { decision, notes } = req.body as any; // decision: 'approved' | 'rejected'
     if (!["approved", "rejected"].includes(decision)) {
       throw new ValidationError("القرار يجب أن يكون approved أو rejected", {
@@ -565,7 +566,7 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
 budgetRouter.get("/budget/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [item] = await rawQuery<any>(
       `SELECT b.*, coa.name AS "accountName"
        FROM budgets b

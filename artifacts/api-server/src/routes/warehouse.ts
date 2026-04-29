@@ -4,6 +4,7 @@ import {
   ValidationError,
   ConflictError,
   IntegrationError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -298,7 +299,7 @@ router.get("/products/:id", requirePermission("warehouse:read"), async (req, res
 router.patch("/products/:id", requirePermission("warehouse:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -447,7 +448,7 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
 router.delete("/products/:id", requirePermission("warehouse:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id, sku, name, "currentStock" FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -504,7 +505,7 @@ router.get("/movements", requirePermission("warehouse:read"), async (req, res) =
 router.get("/movements/:id", requirePermission("warehouse:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT m.*, p.name AS "productName", p.sku
        FROM warehouse_movements m
@@ -874,7 +875,7 @@ router.get("/categories", requirePermission("warehouse:read"), async (req, res) 
 router.get("/categories/:id", requirePermission("warehouse:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT * FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -944,7 +945,7 @@ router.get("/suppliers", requirePermission("warehouse:read"), async (req, res) =
 router.get("/suppliers/:id", requirePermission("warehouse:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -999,7 +1000,7 @@ router.post("/suppliers", requirePermission("warehouse:create"), async (req, res
 router.patch("/categories/:id", requirePermission("warehouse:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body;
     const fields: string[] = [];
     const params: any[] = [];
@@ -1030,7 +1031,7 @@ router.patch("/categories/:id", requirePermission("warehouse:update"), async (re
 router.delete("/categories/:id", requirePermission("warehouse:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id, name FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -1080,7 +1081,7 @@ router.delete("/categories/:id", requirePermission("warehouse:delete"), async (r
 router.patch("/suppliers/:id", requirePermission("warehouse:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body;
     const fields: string[] = [];
     const params: any[] = [];
@@ -1117,7 +1118,7 @@ router.patch("/suppliers/:id", requirePermission("warehouse:update"), async (req
 router.delete("/suppliers/:id", requirePermission("warehouse:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM suppliers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المورد غير موجود");
     await rawExecute(`UPDATE suppliers SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
@@ -1207,7 +1208,7 @@ router.post("/inventory-counts", requirePermission("warehouse:create"), async (r
 router.get("/inventory-counts/:id/items", requirePermission("warehouse:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const countId = Number(req.params.id);
+    const countId = parseId(req.params.id, "id");
     const items = await rawQuery<any>(
       `SELECT ici.*, wp.name AS "productName", wp.sku, wp."currentStock" AS "systemStock"
        FROM inventory_count_items ici
@@ -1252,7 +1253,7 @@ router.get("/inventory-counts/:id/items", requirePermission("warehouse:read"), a
 router.post("/inventory-counts/:id/items", requirePermission("warehouse:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const countId = Number(req.params.id);
+    const countId = parseId(req.params.id, "id");
     const b = req.body;
     // Ensure count exists and is in draft
     const [count] = await rawQuery<any>(`SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2`, [countId, scope.companyId]);
@@ -1312,7 +1313,7 @@ router.post("/inventory-counts/:id/items", requirePermission("warehouse:create")
 router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const countId = Number(req.params.id);
+    const countId = parseId(req.params.id, "id");
 
     // Pre-fetch count items so we can use them inside onApply and for
     // GL posting after the transition commits.

@@ -3,7 +3,9 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
-import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { createAuditLog, createNotification, emitEvent, getLegalResponsible, currentPeriod, currentYear, generateRef } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
@@ -401,7 +403,7 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
     const parsed = updateRequestSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body;
 
     const [existing] = await rawQuery<any>(
@@ -517,7 +519,7 @@ router.post("/:id/approve", requirePermission("requests:write"), async (req, res
     const parsed = approveRequestSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { notes } = req.body;
 
     const request = await validateRequestTransition(id, scope.companyId, "approved", scope);
@@ -581,7 +583,7 @@ router.post("/:id/reject", requirePermission("requests:write"), async (req, res)
     const parsed = rejectRequestSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { notes } = req.body;
     if (!notes) throw new ValidationError("يجب ذكر سبب الرفض", { field: "notes" });
 
@@ -643,7 +645,7 @@ router.post("/:id/return", requirePermission("requests:write"), async (req, res)
     const parsed = returnRequestSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { notes } = req.body;
     if (!notes) throw new ValidationError("يجب ذكر سبب الإرجاع", { field: "notes" });
 
@@ -704,7 +706,7 @@ router.post("/:id/return", requirePermission("requests:write"), async (req, res)
 router.get("/:id/actions", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const rows = await rawQuery(
       `SELECT aa.*, u.email as "actionByEmail" FROM approval_actions aa LEFT JOIN users u ON aa."actionBy"=u.id WHERE aa."entityType"='request' AND aa."entityId"=$1 AND aa."companyId"=$2 ORDER BY aa."createdAt" DESC`,
       [id, scope.companyId]
@@ -716,7 +718,7 @@ router.get("/:id/actions", requirePermission("requests:read"), async (req, res) 
 router.delete("/:id", requirePermission("requests:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     // Only the requester (while still pending/draft) or a manager may delete.
     // Approved/rejected/closed/converted requests are terminal — deleting them
     // would erase the audit trail of an already-processed decision and orphan
@@ -766,7 +768,7 @@ router.post("/:id/convert", requirePermission("requests:write"), async (req, res
     const parsed = convertRequestSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { targetType } = req.body;
 
     if (!["maintenance", "purchase", "case"].includes(targetType)) {

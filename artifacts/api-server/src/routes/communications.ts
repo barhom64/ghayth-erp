@@ -1,4 +1,6 @@
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, IntegrationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, IntegrationError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { logger } from "../lib/logger.js";
 import { z } from "zod";
@@ -531,7 +533,7 @@ router.post("/log/:id/convert", requirePermission("communications:write"), async
     const parsed = convertLogSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
-    const logId = Number(req.params.id);
+    const logId = parseId(req.params.id, "id");
     const { targetType } = req.body;
 
     if (!["task", "ticket", "request"].includes(targetType)) {
@@ -612,7 +614,7 @@ router.post("/log/:id/convert", requirePermission("communications:write"), async
 router.delete("/log/:id", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<any>(`SELECT * FROM communications_log WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
       `UPDATE communications_log SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,

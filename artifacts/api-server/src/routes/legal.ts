@@ -3,6 +3,7 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -245,7 +246,7 @@ router.get("/contracts/:id", requirePermission("legal:read"), async (req, res) =
 router.patch("/contracts/:id", requirePermission("legal:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -343,7 +344,7 @@ router.patch("/contracts/:id", requirePermission("legal:write"), async (req, res
 router.delete("/contracts/:id", requirePermission("legal:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id, title, status FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -384,7 +385,7 @@ router.delete("/contracts/:id", requirePermission("legal:delete"), async (req, r
 router.post("/contracts/:id/renew", requirePermission("legal:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { newEndDate, newValue, notes } = req.body ?? {};
     if (!newEndDate) {
       throw new ValidationError("تاريخ نهاية التجديد مطلوب", {
@@ -461,7 +462,7 @@ router.post("/contracts/:id/renew", requirePermission("legal:write"), async (req
 router.post("/contracts/:id/terminate", requirePermission("legal:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { reason, effectiveDate } = req.body ?? {};
     if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
       throw new ValidationError("سبب إنهاء العقد مطلوب", {
@@ -613,7 +614,7 @@ router.get("/cases/:id", requirePermission("legal:read"), async (req, res) => {
 router.patch("/cases/:id", requirePermission("legal:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("القضية غير موجودة");
     const b = req.body;
@@ -691,7 +692,7 @@ router.patch("/cases/:id", requirePermission("legal:write"), async (req, res) =>
 router.delete("/cases/:id", requirePermission("legal:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id, title, status FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -729,7 +730,7 @@ router.delete("/cases/:id", requirePermission("legal:delete"), async (req, res) 
 router.post("/cases/:id/close", requirePermission("legal:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body || {};
     if (!b.closureReason || typeof b.closureReason !== "string" || !b.closureReason.trim()) {
       throw new ValidationError("سبب الإغلاق مطلوب", { field: "closureReason", fix: "أدخل سبب إغلاق القضية" });
@@ -762,7 +763,7 @@ router.post("/cases/:id/close", requirePermission("legal:write"), async (req, re
 router.get("/cases/:caseId/sessions", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const caseId = Number(req.params.caseId);
+    const caseId = parseId(req.params.caseId, "caseId");
     const [legalCase] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!legalCase) throw new NotFoundError("القضية غير موجودة");
     const rows = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 ORDER BY "sessionDate" DESC LIMIT 500`, [caseId]);
@@ -776,7 +777,7 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
     const parsed = createSessionSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed.data as any;
-    const caseId = Number(req.params.caseId);
+    const caseId = parseId(req.params.caseId, "caseId");
 
     const sd = new Date(b.sessionDate);
     if (Number.isNaN(sd.getTime())) {
@@ -964,7 +965,7 @@ router.get("/stats", requirePermission("legal:read"), async (req, res) => {
 router.get("/cases/:caseId/correspondence", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const caseId = Number(req.params.caseId);
+    const caseId = parseId(req.params.caseId, "caseId");
     const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
     const rows = await rawQuery<any>(`SELECT * FROM legal_correspondence WHERE "caseId"=$1 ORDER BY "correspondenceDate" DESC LIMIT 500`, [caseId]);
@@ -975,7 +976,7 @@ router.get("/cases/:caseId/correspondence", requirePermission("legal:read"), asy
 router.post("/cases/:caseId/correspondence", requirePermission("legal:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const caseId = Number(req.params.caseId);
+    const caseId = parseId(req.params.caseId, "caseId");
     const parsed = createCorrespondenceSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed.data as any;
@@ -1010,7 +1011,7 @@ router.post("/cases/:caseId/correspondence", requirePermission("legal:create"), 
 router.post("/cases/:caseId/costs", requirePermission("legal:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const caseId = Number(req.params.caseId);
+    const caseId = parseId(req.params.caseId, "caseId");
     const parsed = createCaseCostSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed.data;
@@ -1065,7 +1066,7 @@ router.post("/cases/:caseId/costs", requirePermission("legal:create"), async (re
 router.get("/cases/:caseId/judgments", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const caseId = Number(req.params.caseId);
+    const caseId = parseId(req.params.caseId, "caseId");
     const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
     const rows = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE "caseId"=$1 ORDER BY "judgmentDate" DESC LIMIT 500`, [caseId]);
@@ -1076,7 +1077,7 @@ router.get("/cases/:caseId/judgments", requirePermission("legal:read"), async (r
 router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const caseId = Number(req.params.caseId);
+    const caseId = parseId(req.params.caseId, "caseId");
     const parsed = createJudgmentSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed.data as any;
@@ -1173,8 +1174,8 @@ router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async
 router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const caseId = Number(req.params.caseId);
+    const id = parseId(req.params.id, "id");
+    const caseId = parseId(req.params.caseId, "caseId");
     const b = req.body;
 
     const [existingJ] = await rawQuery<any>(
@@ -1238,7 +1239,7 @@ router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), a
 router.patch("/cases/:id/financial-risk", requirePermission("legal:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { financialRisk, riskLevel } = req.body;
     const [existing] = await rawQuery<any>(
       `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -1293,7 +1294,7 @@ router.patch("/cases/:id/financial-risk", requirePermission("legal:write"), asyn
 router.get("/sessions/:id", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT s.*, lc."caseNumber", lc.title AS "caseTitle"
        FROM legal_sessions s
@@ -1309,7 +1310,7 @@ router.get("/sessions/:id", requirePermission("legal:read"), async (req, res) =>
 router.get("/judgments/:id", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT j.*, lc."caseNumber", lc.title AS "caseTitle"
        FROM legal_judgments j
@@ -1325,7 +1326,7 @@ router.get("/judgments/:id", requirePermission("legal:read"), async (req, res) =
 router.get("/correspondence/:id", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT c.*, lc."caseNumber", lc.title AS "caseTitle"
        FROM legal_correspondence c

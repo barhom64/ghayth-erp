@@ -5,6 +5,7 @@ import {
   ConflictError,
   ForbiddenError,
   IntegrationError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -570,7 +571,7 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
     const parsed = updateProjectSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     if (!isFullAccess(scope) && scope.role !== "projects_manager") {
       throw new ForbiddenError("لا تملك صلاحية تعديل هذا المشروع", { fix: "صلاحية projects_manager مطلوبة" });
     }
@@ -685,7 +686,7 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
 router.delete("/:id", requirePermission("projects:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     if (!isFullAccess(scope) && scope.role !== "projects_manager") {
       throw new ForbiddenError("لا تملك صلاحية حذف هذا المشروع", { fix: "صلاحية projects_manager مطلوبة" });
     }
@@ -737,7 +738,7 @@ router.post("/:id/phases", requirePermission("projects:create"), async (req, res
     const parsed = createPhaseSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
-    const projectId = Number(req.params.id);
+    const projectId = parseId(req.params.id, "id");
     const b = req.body;
     if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
       throw new ValidationError("اسم المرحلة مطلوب", { field: "name", fix: "أدخل اسم المرحلة" });
@@ -777,8 +778,8 @@ router.post("/:id/phases", requirePermission("projects:create"), async (req, res
 router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const projectId = Number(req.params.id);
-    const phaseId = Number(req.params.phaseId);
+    const projectId = parseId(req.params.id, "id");
+    const phaseId = parseId(req.params.phaseId, "phaseId");
 
     const project = await assertProjectAccess(projectId, scope);
 
@@ -861,7 +862,7 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const b = req.body;
-    const projectId = Number(req.params.id);
+    const projectId = parseId(req.params.id, "id");
 
     if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
       throw new ValidationError("عنوان المهمة مطلوب", { field: "title", fix: "أدخل عنواناً واضحاً للمهمة" });
@@ -984,7 +985,7 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
     const parsed = updateTaskSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
-    const taskId = Number(req.params.taskId);
+    const taskId = parseId(req.params.taskId, "taskId");
     const b = req.body;
 
     const [existingTask] = await rawQuery<any>(
@@ -1292,7 +1293,7 @@ router.get("/stats/overview", requirePermission("projects:read"), async (req, re
 router.get("/manager/:employeeId/workload", requirePermission("projects:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const employeeId = Number(req.params.employeeId);
+    const employeeId = parseId(req.params.employeeId, "employeeId");
     if (!employeeId) throw new ValidationError("معرّف الموظف مطلوب");
 
     const [counts] = await rawQuery<any>(
@@ -1345,7 +1346,7 @@ router.get("/manager/:employeeId/workload", requirePermission("projects:read"), 
 router.get("/:id/milestones", requirePermission("projects:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const projectId = Number(req.params.id);
+    const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     const rows = await rawQuery<any>(
       `SELECT * FROM project_milestones WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY "targetDate"`,
@@ -1361,7 +1362,7 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const b = req.body;
-    const projectId = Number(req.params.id);
+    const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
       throw new ValidationError("عنوان المعلَم مطلوب", { field: "title", fix: "أدخل عنواناً واضحاً للمعلَم" });
@@ -1439,7 +1440,7 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
     const parsed = updateMilestoneSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
-    const id = Number(req.params.milestoneId);
+    const id = parseId(req.params.milestoneId, "milestoneId");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM project_milestones WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
@@ -1514,7 +1515,7 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
 router.get("/:id/risks", requirePermission("projects:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const projectId = Number(req.params.id);
+    const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     const rows = await rawQuery<any>(
       `SELECT * FROM project_risks WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY (probability * impact) DESC`,
@@ -1530,7 +1531,7 @@ router.post("/:id/risks", requirePermission("projects:create"), async (req, res)
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const b = req.body;
-    const projectId = Number(req.params.id);
+    const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
       throw new ValidationError("عنوان المخاطرة مطلوب", { field: "title", fix: "أدخل وصفاً مختصراً للمخاطرة" });
@@ -1582,7 +1583,7 @@ router.patch("/risks/:riskId", requirePermission("projects:update"), async (req,
     const parsed = updateRiskSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
-    const id = Number(req.params.riskId);
+    const id = parseId(req.params.riskId, "riskId");
     const [existingRisk] = await rawQuery<any>(
       `SELECT * FROM project_risks WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
@@ -1668,7 +1669,7 @@ router.patch("/risks/:riskId", requirePermission("projects:update"), async (req,
 router.get("/:id/resources", requirePermission("projects:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const projectId = Number(req.params.id);
+    const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     const rows = await rawQuery<any>(
       `SELECT pr.*, e.name AS "employeeName", ea."jobTitle" AS "employeeJobTitle"
@@ -1689,7 +1690,7 @@ router.post("/:id/resources", requirePermission("projects:create"), async (req, 
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const b = req.body;
-    const projectId = Number(req.params.id);
+    const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     assertProjectMutable(project);
     const { insertId } = await rawExecute(
@@ -1732,7 +1733,7 @@ router.post("/:id/resources", requirePermission("projects:create"), async (req, 
 router.get("/:id/costs", requirePermission("projects:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const projectId = Number(req.params.id);
+    const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     const rows = await rawQuery<any>(
       `SELECT pc.*, e.name AS "enteredByName"
@@ -1761,7 +1762,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const b = req.body;
-    const projectId = Number(req.params.id);
+    const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     assertProjectMutable(project);
     if (!b.description || typeof b.description !== "string" || !b.description.trim()) {
@@ -1861,7 +1862,7 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
     const parsed = closeProjectSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
-    const projectId = Number(req.params.id);
+    const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
 
     const [totals] = await rawQuery<any>(
@@ -2010,7 +2011,7 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
 router.get("/:id/gantt", requirePermission("projects:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const projectId = Number(req.params.id);
+    const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
 
     const phases = await rawQuery<any>(
@@ -2069,7 +2070,7 @@ router.get("/:id/gantt", requirePermission("projects:read"), async (req, res) =>
 router.get("/:id/letters", requirePermission("projects:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const projectId = Number(req.params.id);
+    const projectId = parseId(req.params.id, "id");
     await assertProjectAccess(projectId, scope);
     const rows = await rawQuery<any>(
       `SELECT l.id, l.subject, l.direction, l.direction AS type, l.status, l."sentAt" AS "letterDate",

@@ -5,6 +5,7 @@ import {
   ConflictError,
   ForbiddenError,
   IntegrationError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -880,7 +881,7 @@ router.get("/attendance/today-summary", requirePermission("hr:read"), async (req
 router.get("/attendance/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT a.*, e.name AS "employeeName", e."empNumber",
               CASE WHEN a."checkIn" IS NOT NULL AND a."checkOut" IS NOT NULL
@@ -1021,7 +1022,7 @@ router.get("/leave-requests", requirePermission("hr:read"), async (req, res) => 
 router.get("/leaves/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [item] = await rawQuery<any>(
       `SELECT lr.id, lr.status, lr."startDate", lr."endDate", lr.days AS duration,
               lr.reason, lr."createdAt", lr."rejectedReason",
@@ -2048,7 +2049,7 @@ router.get("/payroll", requirePermission("hr:read"), async (req, res) => {
 router.get("/payroll/:id", requirePermission("hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     if (req.path.endsWith("/lines")) return; // let next handler handle it
     const [row] = await rawQuery<any>(
       `SELECT pr.*, e.name AS "runByName",
@@ -2804,7 +2805,7 @@ router.get("/performance", requirePermission("hr:read"), async (req, res) => {
 router.get("/performance/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT pr.*, pr."overallScore" AS "overallRating", pr.period AS "reviewPeriod",
               e.name AS "employeeName", e."empNumber",
@@ -3075,7 +3076,7 @@ router.delete("/approval-chain-definitions/:id", requirePermission("hr:delete"),
     if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: يتطلب صلاحية مالك أو HR أو مدير عام");
     }
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT * FROM approval_chains WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     await rawExecute(`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
@@ -3372,7 +3373,7 @@ router.patch("/violations/:id", requirePermission("hr:update"), async (req, res)
     if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل المخالفات مقصور على HR أو المدير أو المالك");
     }
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body as any;
     const sets: string[] = [];
     const params: any[] = [];
@@ -3409,7 +3410,7 @@ async function violationApprovalAction(req: any, res: any, newStatus: "approved"
     if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: اعتماد المخالفات مقصور على HR أو المدير أو المالك");
     }
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { notes } = req.body as any;
     const [violation] = await rawQuery<any>(
       `SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -3444,7 +3445,7 @@ router.patch("/violations/:id/return", requirePermission("hr:update"), (req, res
 router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body as any;
     const sets: string[] = [];
     const params: any[] = [];
@@ -3484,7 +3485,7 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
 router.delete("/shifts/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     await rawExecute(`UPDATE shifts SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
@@ -3728,7 +3729,7 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
 router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body || {};
     if (!b.reason) {
       throw new ValidationError("سبب الإلغاء مطلوب", {
@@ -3818,7 +3819,7 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
 router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [leaveReq] = await rawQuery<any>(
       `SELECT lr.id, lr."employeeId", lr."leaveTypeId", lr.days, lr."startDate", lr.status
        FROM hr_leave_requests lr WHERE lr.id = $1 AND lr."companyId" = $2`,
@@ -4017,7 +4018,7 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: حذف الرواتب مقصور على HR أو المالك");
     }
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [exists] = await rawQuery<any>(
       `SELECT id, status, period, "totalNet" FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]
     );
@@ -4093,7 +4094,7 @@ router.delete("/performance/:id", requirePermission("hr:delete"), async (req, re
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: حذف التقييمات مقصور على HR أو المالك");
     }
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
       `UPDATE performance_reviews SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
@@ -4117,7 +4118,7 @@ router.delete("/violations/:id", requirePermission("hr:delete"), async (req, res
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: حذف المخالفات مقصور على HR أو المالك");
     }
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
       `UPDATE employee_violations SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
@@ -4138,7 +4139,7 @@ router.delete("/violations/:id", requirePermission("hr:delete"), async (req, res
 router.get("/official-letters/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [letter] = await rawQuery<any>(
       `SELECT ol.*, e.name AS "employeeName", e."empNumber",
               e."nationalId", e."passportNumber", e."iqamaNumber",
@@ -4180,7 +4181,7 @@ router.patch("/official-letters/:id", requirePermission("hr:update"), async (req
     if (sets.length === 0) {
       throw new ValidationError("لا توجد بيانات");
     }
-    const letterId = Number(req.params.id);
+    const letterId = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [letterId, scope.companyId]);
     params.push(letterId, scope.companyId);
     const [row] = await rawQuery<any>(
@@ -4205,7 +4206,7 @@ router.delete("/official-letters/:id", requirePermission("hr:delete"), async (re
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: حذف الخطابات مقصور على HR أو المالك");
     }
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
       `UPDATE official_letters SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
@@ -4856,7 +4857,7 @@ router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, re
 router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const cycleId = Number(req.params.id);
+    const cycleId = parseId(req.params.id, "id");
 
     const [cycle] = await rawQuery<any>(
       `SELECT ec.*, e.name AS "employeeName", e."empNumber", ea."jobTitle"
@@ -4956,7 +4957,7 @@ router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, r
 router.get("/evaluation-cycles/:id/system-report", requirePermission("hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const cycleId = Number(req.params.id);
+    const cycleId = parseId(req.params.id, "id");
 
     const [cycle] = await rawQuery<any>(
       `SELECT ec."employeeId", ec."companyId"
@@ -5025,7 +5026,7 @@ router.get("/evaluation-cycles/:id/system-report", requirePermission("hr:read"),
 router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:create"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const cycleId = Number(req.params.id);
+    const cycleId = parseId(req.params.id, "id");
     const { overallScore, scores, comments } = req.body as any;
 
     // Evaluator is always the authenticated user — prevents impersonation
@@ -5109,7 +5110,7 @@ router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:crea
 router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const cycleId = Number(req.params.id);
+    const cycleId = parseId(req.params.id, "id");
     const { managerId, overallScore, scores, comments } = req.body as any;
 
     if (!managerId || !overallScore) {
@@ -5208,7 +5209,7 @@ router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create
 router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const cycleId = Number(req.params.id);
+    const cycleId = parseId(req.params.id, "id");
 
     const [cycle] = await rawQuery<any>(
       `SELECT ec.*, e.name AS "employeeName", ea."jobTitle"
@@ -5285,7 +5286,7 @@ router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async
 router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const employeeId = Number(req.params.id);
+    const employeeId = parseId(req.params.id, "id");
 
     // Validate employee belongs to this company via assignment (prevents cross-tenant PII leakage)
     const [empAssign] = await rawQuery<any>(
@@ -5341,7 +5342,7 @@ router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), as
 router.get("/upward-reviews/manager/:managerId", requirePermission("hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const managerId = Number(req.params.managerId);
+    const managerId = parseId(req.params.managerId, "managerId");
 
     // Only HR or the manager themselves can view this — no cross-manager access
     if (!isHR(scope) && scope.employeeId !== managerId) {
@@ -5513,7 +5514,7 @@ router.patch("/public-holidays/:id", requirePermission("hr:update"), async (req,
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح");
     }
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body;
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
@@ -5562,7 +5563,7 @@ router.delete("/public-holidays/:id", requirePermission("hr:delete"), async (req
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح");
     }
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     await rawExecute(`UPDATE public_holidays SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
@@ -5607,7 +5608,7 @@ router.get("/transfers", requirePermission("hr:read"), async (req, res) => {
 router.get("/transfers/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT t.*, t."effectiveDate" AS "transferDate",
               e.name AS "employeeName", e."empNumber",
@@ -5736,7 +5737,7 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
         fix: "اطلب من مدير الموارد البشرية اتخاذ القرار.",
       });
     }
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { approved, notes } = req.body as any;
     const [transfer] = await rawQuery<any>(
       `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`,
@@ -5830,7 +5831,7 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
         { fix: "اطلب من مدير الفرع تنفيذ الاستقبال." }
       );
     }
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { confirmed, notes } = req.body as any;
     const [transfer] = await rawQuery<any>(
       `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`,
@@ -5996,7 +5997,7 @@ router.post("/idp", requirePermission("hr:create"), async (req, res) => {
 router.patch("/idp/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body;
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
@@ -6029,7 +6030,7 @@ router.patch("/idp/:id", requirePermission("hr:update"), async (req, res) => {
 router.delete("/idp/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     await rawExecute(`UPDATE employee_development_plans SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
@@ -6049,7 +6050,7 @@ router.delete("/idp/:id", requirePermission("hr:delete"), async (req, res) => {
 router.get("/gratuity/:employeeId", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const employeeId = Number(req.params.employeeId);
+    const employeeId = parseId(req.params.employeeId, "employeeId");
     const { terminationType, terminationDate } = req.query as any;
 
     const [assignment] = await rawQuery<any>(
@@ -6710,7 +6711,7 @@ router.get("/excuse-requests", requirePermission("hr:read"), async (req, res) =>
 router.get("/excuse-requests/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT e.*, e."excuseDate" AS date, e."estimatedMinutes" AS duration,
               emp.name AS "employeeName", emp."empNumber"
@@ -6769,7 +6770,7 @@ router.post("/excuse-requests", requirePermission("hr:create"), async (req, res)
 router.patch("/excuse-requests/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const excuseId = Number(req.params.id);
+    const excuseId = parseId(req.params.id, "id");
     const { approved, rejectionReason } = req.body as any;
 
     const newStatus = approved ? "approved" : "rejected";

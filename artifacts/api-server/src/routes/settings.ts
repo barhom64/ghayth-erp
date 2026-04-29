@@ -1,4 +1,6 @@
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -372,7 +374,7 @@ router.put("/branches/:id", requirePermission("settings:write"), async (req, res
     if (!parsed_updateBranchSchema.success) throw new ValidationError(parsed_updateBranchSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_updateBranchSchema.data;
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery(`SELECT id, "companyId" FROM branches WHERE id=$1 AND "companyId" = ANY($2)`, [id, scope.allowedCompanies]);
     if (!existing) { throw new NotFoundError("الفرع غير موجود"); }
     const { name, nameEn, city, phone, logoUrl, address, taxNumber, crNumber, email, website, footerText } = body;

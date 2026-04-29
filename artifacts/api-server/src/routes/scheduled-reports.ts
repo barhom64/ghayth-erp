@@ -2,7 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 
 export const scheduledReportsRouter = Router();
@@ -65,7 +67,7 @@ scheduledReportsRouter.post("/", requirePermission("reports:write"), async (req,
 scheduledReportsRouter.patch("/:id", requirePermission("reports:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const parsed = patchScheduledReportSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { title, frequency, recipients, params, isActive } = parsed.data;
@@ -91,7 +93,7 @@ scheduledReportsRouter.patch("/:id", requirePermission("reports:write"), async (
 scheduledReportsRouter.delete("/:id", requirePermission("reports:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     await rawExecute(
       `DELETE FROM scheduled_reports WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]

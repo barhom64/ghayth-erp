@@ -8,6 +8,7 @@ import {
   ValidationError,
   NotFoundError,
   ForbiddenError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, generateRef } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -73,7 +74,7 @@ contractsRouter.get("/", requirePermission("hr:read"), async (req, res) => {
 contractsRouter.get("/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [contract] = await rawQuery<any>(
       `SELECT ec.*, e.name AS "employeeName", e."empNumber",
               e."nationalId", e."passportNumber",
@@ -153,7 +154,7 @@ contractsRouter.post("/", requirePermission("hr:create"), async (req, res) => {
 contractsRouter.patch("/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -197,7 +198,7 @@ contractsRouter.patch("/:id", requirePermission("hr:update"), async (req, res) =
 contractsRouter.post("/:id/submit", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [contract] = await rawQuery<any>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -225,7 +226,7 @@ contractsRouter.post("/:id/submit", requirePermission("hr:create"), async (req, 
 contractsRouter.post("/:id/approve", requirePermission("hr:approve"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [contract] = await rawQuery<any>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -255,7 +256,7 @@ contractsRouter.post("/:id/approve", requirePermission("hr:approve"), async (req
 contractsRouter.post("/:id/reject", requirePermission("hr:approve"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { reason } = req.body as { reason?: string };
     const [contract] = await rawQuery<any>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -285,7 +286,7 @@ contractsRouter.post("/:id/reject", requirePermission("hr:approve"), async (req,
 contractsRouter.post("/:id/sign-company", requirePermission("hr:approve"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [contract] = await rawQuery<any>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -315,7 +316,7 @@ contractsRouter.post("/:id/sign-company", requirePermission("hr:approve"), async
 contractsRouter.post("/:id/sign-employee", async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [contract] = await rawQuery<any>(
       `SELECT ec.* FROM employee_contracts ec
        JOIN employee_assignments ea ON ea.id = ec."assignmentId"
@@ -348,7 +349,7 @@ contractsRouter.post("/:id/sign-employee", async (req, res) => {
 contractsRouter.post("/:id/activate", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [contract] = await rawQuery<any>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -377,7 +378,7 @@ contractsRouter.post("/:id/activate", requirePermission("hr:update"), async (req
 contractsRouter.post("/:id/terminate", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { reason } = req.body as { reason?: string };
     const [contract] = await rawQuery<any>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -408,7 +409,7 @@ contractsRouter.post("/:id/terminate", requirePermission("hr:update"), async (re
 contractsRouter.post("/:id/renew", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { newEndDate, newSalary } = req.body as { newEndDate?: string; newSalary?: number };
     const [contract] = await rawQuery<any>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,

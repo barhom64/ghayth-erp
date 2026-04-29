@@ -3,6 +3,7 @@ import {
   NotFoundError,
   ValidationError,
   ConflictError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -608,7 +609,7 @@ custodiesRouter.post("/custodies/:id/settle", requirePermission("finance:create"
   try {
     const scope = req.scope!;
 
-    const custodyId = Number(req.params.id);
+    const custodyId = parseId(req.params.id, "id");
     const { amount, description, sourceAccountCode } = req.body as any;
 
     const [custody] = await rawQuery<any>(
@@ -728,7 +729,7 @@ custodiesRouter.patch("/custodies/:id/approve", requirePermission("finance:updat
   try {
     const scope = req.scope!;
 
-    const custodyId = Number(req.params.id);
+    const custodyId = parseId(req.params.id, "id");
     const { approved, notes } = req.body as any;
 
     // Fetch ref for the success message + approval_actions audit row.

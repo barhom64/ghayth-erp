@@ -94,6 +94,15 @@ export class IntegrationError extends TypedError {
   public readonly code = "INTEGRATION_ERROR";
 }
 
+/** Parse a route param as a positive integer ID; throws ValidationError on NaN / ≤ 0. */
+export function parseId(val: string | string[] | undefined, label = "id"): number {
+  const raw = Array.isArray(val) ? val[0] : val;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n))
+    throw new ValidationError(`معرف غير صالح: ${label}`, { field: label });
+  return n;
+}
+
 /** True when `err` is one of our typed error classes. */
 export function isTypedError(err: unknown): err is TypedError {
   return err instanceof TypedError;

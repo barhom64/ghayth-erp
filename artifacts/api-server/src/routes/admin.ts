@@ -1,4 +1,6 @@
-import { handleRouteError, ValidationError, ForbiddenError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, ForbiddenError, NotFoundError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, pool } from "../lib/rawdb.js";
@@ -176,7 +178,7 @@ router.patch("/users/:id", requirePermission("admin:write"), async (req, res) =>
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [userBelongs] = await rawQuery(
       `SELECT 1 FROM users u
        LEFT JOIN employees e ON e.id = u."employeeId"
@@ -241,7 +243,7 @@ router.delete("/users/:id", requirePermission("admin:write"), async (req, res) =
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     if (id === scope.userId) { throw new ValidationError("لا يمكنك حذف حسابك الخاص"); }
     const [userBelongs] = await rawQuery(
       `SELECT 1 FROM users u
@@ -284,7 +286,7 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [userBelongs] = await rawQuery(
       `SELECT 1 FROM users u
        LEFT JOIN employees e ON e.id = u."employeeId"
@@ -428,7 +430,7 @@ router.get("/user-roles/:userId", requirePermission("admin:read"), async (req, r
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const userId = Number(req.params.userId);
+    const userId = parseId(req.params.userId, "userId");
     if (!userId || isNaN(userId)) { throw new ValidationError("معرف غير صالح"); }
     if (!await userBelongsToCompany(userId, scope.companyId)) {
       throw new ForbiddenError("المستخدم لا ينتمي لشركتك");
@@ -494,7 +496,7 @@ router.delete("/user-roles/:id", requirePermission("admin:write"), async (req, r
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     if (!id || isNaN(id)) { throw new ValidationError("معرف غير صالح"); }
     const [roleRecord] = await rawQuery(
       `SELECT id FROM user_roles WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
@@ -566,7 +568,7 @@ router.patch("/integrations/:id", requirePermission("admin:write"), async (req, 
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body;
     const sets: string[] = [];
     const params: any[] = [];
@@ -890,7 +892,7 @@ router.patch("/violations/:id/resolve", requirePermission("admin:write"), async 
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
 
     const [existing] = await rawQuery<any>(
       `SELECT * FROM audit_violations WHERE id=$1 AND "companyId"=$2`,
@@ -1078,7 +1080,7 @@ router.delete("/role-permissions/:id", requirePermission("admin:write"), async (
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const result = await rawExecute(
       `DELETE FROM role_permissions WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
@@ -1201,7 +1203,7 @@ router.get("/governance/event-dlq", requirePermission("admin:read"), async (req,
 
 router.post("/governance/event-dlq/:id/replay", requirePermission("admin:write"), async (req, res) => {
   try {
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [entry] = await rawQuery<any>(
       `SELECT id, "eventName", payload, "retryCount" FROM event_dlq WHERE id=$1 AND "resolvedAt" IS NULL`,
       [id]
@@ -1222,7 +1224,7 @@ router.post("/governance/event-dlq/:id/replay", requirePermission("admin:write")
 
 router.delete("/governance/event-dlq/:id", requirePermission("admin:write"), async (req, res) => {
   try {
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     await rawExecute(`UPDATE event_dlq SET "resolvedAt"=NOW() WHERE id=$1`, [id]);
     res.json({ resolved: true });
   } catch (err) { handleRouteError(err, res, "DLQ resolve error:"); }

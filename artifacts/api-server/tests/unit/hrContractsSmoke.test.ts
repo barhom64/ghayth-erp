@@ -191,7 +191,7 @@ describe("Contract rejection flow", () => {
 
   it("reject creates audit log with reason", () => {
     const idx = CONTRACTS_ROUTE.indexOf('/:id/reject"');
-    const section = CONTRACTS_ROUTE.slice(idx, idx + 1000);
+    const section = CONTRACTS_ROUTE.slice(idx, idx + 1200);
     expect(section).toContain("contract_rejected");
     expect(section).toContain("reason");
   });

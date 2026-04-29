@@ -5,6 +5,7 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -76,7 +77,7 @@ vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, 
 vendorsRouter.patch("/vendors/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const vendorId = Number(req.params.id);
+    const vendorId = parseId(req.params.id, "id");
     const { name, contactPerson, phone, email, taxNumber, category } = req.body as any;
     const sets: string[] = [];
     const params: any[] = [];
@@ -128,7 +129,7 @@ vendorsRouter.delete("/vendors/:id", requirePermission("finance:delete"), async 
   try {
     const scope = req.scope!;
 
-    const vendorId = Number(req.params.id);
+    const vendorId = parseId(req.params.id, "id");
 
     const [existing] = await rawQuery<any>(
       `SELECT id, name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -242,7 +243,7 @@ vendorsRouter.get("/receivables", requirePermission("finance:read"), async (req,
 vendorsRouter.get("/receivables/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT i.*, c.name AS "clientName"
        FROM invoices i
@@ -298,7 +299,7 @@ vendorsRouter.get("/commitments", requirePermission("finance:read"), async (req,
 vendorsRouter.get("/commitments/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT po.*, s.name AS "supplierName"
        FROM purchase_orders po
@@ -314,7 +315,7 @@ vendorsRouter.get("/commitments/:id", requirePermission("finance:read"), async (
 vendorsRouter.get("/financial-requests/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT wr.*, e.name AS "submittedByName"
        FROM workflow_requests wr
@@ -354,7 +355,7 @@ vendorsRouter.get("/financial-requests", requirePermission("finance:read"), asyn
 vendorsRouter.get("/vendors/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = (req as any).scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     if (!id || isNaN(id)) { throw new ValidationError("معرف غير صالح"); return; }
     // NB: the SUM aggregate uses "totalAmount" — the purchase_orders table
     // has no `total` column. This was broken in the original finance.ts
@@ -383,7 +384,7 @@ vendorsRouter.get("/vendors/:id", requirePermission("finance:read"), async (req,
 vendorsRouter.patch("/commitments/:id/approve", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { approved, notes } = req.body as any;
     const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
     if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
@@ -410,7 +411,7 @@ vendorsRouter.patch("/commitments/:id/approve", requirePermission("finance:updat
 vendorsRouter.patch("/receivables/:id/approve", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { approved, notes } = req.body as any;
     const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
     if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
@@ -437,7 +438,7 @@ vendorsRouter.patch("/receivables/:id/approve", requirePermission("finance:updat
 vendorsRouter.patch("/vouchers/:id/approve", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { approved, notes } = req.body as any;
     const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
     if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
@@ -464,7 +465,7 @@ vendorsRouter.patch("/vouchers/:id/approve", requirePermission("finance:update")
 vendorsRouter.patch("/financial-requests/:id/approve", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { approved, notes } = req.body as any;
     const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
     if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
@@ -490,7 +491,7 @@ vendorsRouter.patch("/financial-requests/:id/approve", requirePermission("financ
 vendorsRouter.patch("/budgets/:id/approve", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { approved, notes } = req.body as any;
     const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
     if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");

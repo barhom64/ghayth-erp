@@ -2,7 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError, ConflictError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, ConflictError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
@@ -1267,7 +1269,7 @@ router.get("/ai-insights", requirePermission("bi:read"), async (req, res) => {
 router.patch("/ai-insights/:id/dismiss", requirePermission("bi:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     await rawExecute(
       `UPDATE smart_alerts SET "isDismissed" = true WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
@@ -1281,7 +1283,7 @@ router.patch("/ai-insights/:id/dismiss", requirePermission("bi:write"), async (r
 router.patch("/ai-insights/:id/read", requirePermission("bi:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     await rawExecute(
       `UPDATE smart_alerts SET "isRead" = true WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
