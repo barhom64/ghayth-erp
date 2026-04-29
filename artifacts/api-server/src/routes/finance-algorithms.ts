@@ -54,7 +54,8 @@ financeAlgorithmsRouter.get("/ar-aging", requirePermission("finance:read"), asyn
          AND (i.total - i."paidAmount") > 0.009
          AND i."dueDate" IS NOT NULL
          AND i."createdAt"::date <= $1::date
-       ORDER BY c.name, i."dueDate" ASC`,
+       ORDER BY c.name, i."dueDate" ASC
+       LIMIT 500`,
       [asOfDate, scope.companyId]
     );
 
@@ -188,7 +189,8 @@ financeAlgorithmsRouter.get("/ap-aging", requirePermission("finance:read"), asyn
          AND COALESCE(je."sourceType",'') NOT IN ('purchase_order','purchase_request')
        GROUP BY je.id, je.ref, je.status, je."createdAt", je.description
        HAVING (SUM(jl.credit) - SUM(jl.debit)) > 0.009
-       ORDER BY "supplierName", "orderDate" ASC`,
+       ORDER BY "supplierName", "orderDate" ASC
+       LIMIT 500`,
       [asOfDate, scope.companyId]
     );
 
@@ -377,7 +379,8 @@ financeAlgorithmsRouter.get("/bank-reconciliation/:batchId", requirePermission("
        LEFT JOIN journal_lines jl ON jl.id = bs."matchedJournalLineId"
        LEFT JOIN journal_entries je ON je.id = jl."journalId"
        WHERE bs."companyId" = $1 AND bs."importBatchId" = $2
-       ORDER BY bs."statementDate" ASC`,
+       ORDER BY bs."statementDate" ASC
+       LIMIT 500`,
       [scope.companyId, batchId]
     );
 
@@ -488,7 +491,8 @@ financeAlgorithmsRouter.get("/bank-reconciliation", requirePermission("finance:r
        FROM bank_statements
        WHERE "companyId" = $1
        GROUP BY "importBatchId", "accountCode"
-       ORDER BY MIN("createdAt") DESC`,
+       ORDER BY MIN("createdAt") DESC
+       LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: batches });
@@ -505,7 +509,7 @@ financeAlgorithmsRouter.get("/fixed-assets", requirePermission("finance:read"), 
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT * FROM fixed_assets WHERE "companyId" = $1 ORDER BY "purchaseDate" DESC`,
+      `SELECT * FROM fixed_assets WHERE "companyId" = $1 ORDER BY "purchaseDate" DESC LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
@@ -888,7 +892,8 @@ financeAlgorithmsRouter.get("/inventory-costing", requirePermission("finance:rea
        FROM warehouse_products p
        LEFT JOIN warehouse_categories c ON c.id = p."categoryId"
        WHERE p."companyId" = $1 AND p.status = 'active' AND p."deletedAt" IS NULL
-       ORDER BY p.name`,
+       ORDER BY p.name
+       LIMIT 500`,
       [scope.companyId]
     );
 
@@ -919,7 +924,8 @@ financeAlgorithmsRouter.get("/inventory-costing/:productId", requirePermission("
       `SELECT m.*, m."createdAt" AS date
        FROM warehouse_movements m
        WHERE m."productId"=$1
-       ORDER BY m."createdAt" ASC`,
+       ORDER BY m."createdAt" ASC
+       LIMIT 500`,
       [productId]
     );
 
@@ -1465,7 +1471,8 @@ financeAlgorithmsRouter.get("/treasury", requirePermission("finance:read"), asyn
          AND ca."deletedAt" IS NULL
          AND ca."allowPosting" = true
          AND (ca.code LIKE '11%' OR ca.code LIKE '12%')
-       ORDER BY ca.code`,
+       ORDER BY ca.code
+       LIMIT 500`,
       [scope.companyId]
     );
 
@@ -1511,7 +1518,8 @@ financeAlgorithmsRouter.get("/treasury", requirePermission("finance:read"), asyn
          AND je."createdAt" >= $2
          AND (jl."accountCode" LIKE '11%' OR jl."accountCode" LIKE '12%')
        GROUP BY DATE(je."createdAt")
-       ORDER BY day DESC`,
+       ORDER BY day DESC
+       LIMIT 500`,
       [scope.companyId, thirtyDaysAgo]
     );
 
@@ -1617,7 +1625,8 @@ financeAlgorithmsRouter.get("/entity-financial-profile", requirePermission("fina
          LEFT JOIN chart_of_accounts ca ON ca.code = jl."accountCode" AND ca."companyId" = $1
          WHERE ${safeCol} = $2 AND je.status = 'posted' AND je."deletedAt" IS NULL
          GROUP BY ca.code, ca.name
-         ORDER BY SUM(jl.debit) DESC`,
+         ORDER BY SUM(jl.debit) DESC
+         LIMIT 500`,
         [cid, eid]
       ),
 

@@ -20,11 +20,11 @@ reportsRouter.get("/reports/entities/:entityType", requirePermission("finance:re
     const { entityType } = req.params;
     let rows: any[] = [];
     if (entityType === "client") {
-      rows = await rawQuery<any>(`SELECT id, name, phone, email FROM clients WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name`, [scope.companyId]);
+      rows = await rawQuery<any>(`SELECT id, name, phone, email FROM clients WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
     } else if (entityType === "supplier") {
-      rows = await rawQuery<any>(`SELECT id, name, phone, email FROM suppliers WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name`, [scope.companyId]);
+      rows = await rawQuery<any>(`SELECT id, name, phone, email FROM suppliers WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
     } else if (entityType === "employee") {
-      rows = await rawQuery<any>(`SELECT e.id, e.name, e.phone, e.email FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 WHERE e."deletedAt" IS NULL ORDER BY e.name`, [scope.companyId]);
+      rows = await rawQuery<any>(`SELECT e.id, e.name, e.phone, e.email FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 WHERE e."deletedAt" IS NULL ORDER BY e.name LIMIT 500`, [scope.companyId]);
     }
     res.json({ data: rows });
   } catch (err) {
@@ -732,7 +732,8 @@ reportsRouter.get("/reports/custody-advances", requirePermission("finance:read")
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' ${dateFilter}
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, e.name
-       ORDER BY je."createdAt" DESC`,
+       ORDER BY je."createdAt" DESC
+       LIMIT 500`,
       params
     );
 
@@ -747,7 +748,8 @@ reportsRouter.get("/reports/custody-advances", requirePermission("finance:read")
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'ADV%' ${dateFilter}
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, e.name
-       ORDER BY je."createdAt" DESC`,
+       ORDER BY je."createdAt" DESC
+       LIMIT 500`,
       params
     );
 
@@ -801,7 +803,8 @@ reportsRouter.get("/reports/expenses-analysis", requirePermission("finance:read"
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE jl.debit > jl.credit
        GROUP BY ${groupCol}
-       ORDER BY amount DESC`,
+       ORDER BY amount DESC
+       LIMIT 500`,
       params
     );
 
@@ -831,7 +834,8 @@ reportsRouter.get("/reports/revenue-analysis", requirePermission("finance:read")
        JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
        JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'revenue'
        GROUP BY coa.code, coa.name
-       ORDER BY amount DESC`,
+       ORDER BY amount DESC
+       LIMIT 500`,
       params
     );
 
@@ -843,7 +847,8 @@ reportsRouter.get("/reports/revenue-analysis", requirePermission("finance:read")
        FROM invoices i
        WHERE i."companyId" = $1 AND i."deletedAt" IS NULL ${dateFilter.replace(/je\./g, 'i.')}
        GROUP BY to_char(i."createdAt", 'YYYY-MM')
-       ORDER BY period ASC`,
+       ORDER BY period ASC
+       LIMIT 500`,
       params
     );
 
@@ -873,7 +878,8 @@ reportsRouter.get("/reports/budget-variance", requirePermission("finance:read"),
        FROM budgets b
        LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = $1
        WHERE b."companyId" = $1 AND b."deletedAt" IS NULL AND b.period = $2 ${branchFilter}
-       ORDER BY b."accountCode"`,
+       ORDER BY b."accountCode"
+       LIMIT 500`,
       params
     );
 
@@ -911,7 +917,8 @@ reportsRouter.get("/reports/cash-bank-statement", requirePermission("finance:rea
        JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
        LEFT JOIN branches b ON b.id = je."branchId"
        WHERE jl."accountCode" = $2
-       ORDER BY je."createdAt" ASC`,
+       ORDER BY je."createdAt" ASC
+       LIMIT 500`,
       params
     );
 
