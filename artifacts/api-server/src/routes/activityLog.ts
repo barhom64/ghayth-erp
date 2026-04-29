@@ -157,7 +157,7 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
         UNION ALL
         SELECT je.id FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL ${module ? `AND 'finance' = $${moduleParamIndex}` : ""}
         UNION ALL
-        SELECT r.id FROM requests r WHERE (r."companyId" = $1 OR r."companyId" IS NULL) ${module ? `AND 'requests' = $${moduleParamIndex}` : ""}
+        SELECT r.id FROM requests r WHERE (r."companyId" = $1 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL ${module ? `AND 'requests' = $${moduleParamIndex}` : ""}
         UNION ALL
         SELECT cl.id FROM communications_log cl WHERE cl."companyId" = $1 ${module ? `AND 'communications' = $${moduleParamIndex}` : ""}
         UNION ALL
@@ -185,7 +185,7 @@ router.get("/summary", requirePermission("admin:read"), async (req, res) => {
     const cid = scope.companyId;
 
     const [pendingRequests] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM requests WHERE status='pending' AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
+      `SELECT COUNT(*) AS count FROM requests WHERE status='pending' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
     const [pendingLeaves] = await rawQuery<any>(
       `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE status='pending' AND "companyId"=$1`, [cid]);
     const [overdueInvoices] = await rawQuery<any>(

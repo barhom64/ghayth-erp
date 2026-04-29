@@ -1397,13 +1397,13 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       // Find the appropriate assignee for the first step — never store NULL.
       let firstAssignee: number = managerAssignmentId!;
       if (!["branch_manager", "general_manager"].includes(firstStep.requiredRole)) {
-        const [roleMatch] = await rawQuery<any>(
+        const roleRes = await client.query(
           `SELECT id FROM employee_assignments
            WHERE "companyId" = $1 AND role = $2 AND status = 'active'
            LIMIT 1`,
           [scope.companyId, firstStep.requiredRole]
         );
-        if (roleMatch) firstAssignee = roleMatch.id;
+        if (roleRes.rows[0]) firstAssignee = roleRes.rows[0].id;
       }
 
       await client.query(
