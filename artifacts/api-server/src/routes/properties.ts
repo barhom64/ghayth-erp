@@ -843,15 +843,6 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
       );
       const contractId = contractRes.rows[0].id;
 
-      await applyTransition({
-        entity: "property_units",
-        id: Number(b.unitId),
-        scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
-        action: "property.unit.rented",
-        fromStates: ["available", "reserved"],
-        toState: "rented",
-      });
-
       if (installmentCount && installmentCount > 0 && totalContractValue > 0) {
         const installmentAmount = roundTo2(totalContractValue / installmentCount);
         const freqMonths = frequency === 'quarterly' ? 3 : frequency === 'semi_annual' ? 6 : frequency === 'annual' ? 12 : 1;
@@ -863,7 +854,6 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
           const isLast = i === installmentCount - 1;
           const amt = isLast ? totalContractValue - (installmentAmount * (installmentCount - 1)) : installmentAmount;
           const rounded = roundTo2(amt);
-          // Write to both contract_payment_schedule (legacy) and rent_payments (runtime table the queries read from)
           await client.query(
             `INSERT INTO contract_payment_schedule ("companyId","contractId","installmentNumber","dueDate",amount,status) VALUES ($1,$2,$3,$4,$5,'pending')`,
             [scope.companyId, contractId, i + 1, dueDateStr, rounded]
@@ -876,6 +866,15 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
       }
 
       return contractId;
+    });
+
+    await applyTransition({
+      entity: "property_units",
+      id: Number(b.unitId),
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "property.unit.rented",
+      fromStates: ["available", "reserved"],
+      toState: "rented",
     });
 
     // Register lifecycle obligations (renewal notice + expiration)

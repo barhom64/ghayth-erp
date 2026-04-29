@@ -875,16 +875,16 @@ router.post("/run-penalty-engine", requirePermission("umrah:write"), async (req,
              VALUES ($1,$2,$3,$4,'overstay',$5,$6,$7) RETURNING id`,
             [scope.companyId, p.id, p.agentId, p.seasonId, p.daysOver, amount, `غرامة تأخر ${p.daysOver} يوم — ${p.fullName}`]
           );
-          await applyTransition({
-            entity: "umrah_pilgrims",
-            id: p.id,
-            scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
-            action: "umrah.pilgrim.violated",
-            fromStates: ["overstayed"],
-            toState: "violated",
-            extraWhere: `"deletedAt" IS NULL`,
-          });
           return penRes.rows;
+        });
+        await applyTransition({
+          entity: "umrah_pilgrims",
+          id: p.id,
+          scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+          action: "umrah.pilgrim.violated",
+          fromStates: ["overstayed"],
+          toState: "violated",
+          extraWhere: `"deletedAt" IS NULL`,
         });
         if (penRows[0]?.id) {
           try {
