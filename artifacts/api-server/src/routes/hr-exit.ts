@@ -28,6 +28,7 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { generateSequentialNumber } from "../lib/hrHelpers.js";
 import { HR_TABLES, NUMBER_PREFIXES } from "../lib/hrEnums.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -63,7 +64,7 @@ async function ensureExitTables(): Promise<void> {
       "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
       "deletedAt" TIMESTAMPTZ
     )
-  `).catch(console.error);
+  `).catch((e) => logger.error(e, "hr-exit background task failed"));
 
   await rawExecute(`
     CREATE TABLE IF NOT EXISTS hr_exit_clearance (
@@ -78,7 +79,7 @@ async function ensureExitTables(): Promise<void> {
       notes TEXT,
       "createdAt" TIMESTAMPTZ DEFAULT NOW()
     )
-  `).catch(console.error);
+  `).catch((e) => logger.error(e, "hr-exit background task failed"));
 }
 
 // ─── رقم متسلسل (يستخدم الأداة الموحّدة من hrHelpers) ───────────────────
@@ -311,7 +312,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
       submittedBy: scope.activeAssignmentId,
       submittedByName: scope.userName,
       data: { exitNumber, exitType: b.exitType, netSettlement, gratuity },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-exit background task failed"));
 
     // ── إشعار المدير (fallback) ──
     if (!approvalResult?.requiresApproval) {
@@ -322,7 +323,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
           type: "exit_request", title: "طلب نهاية خدمة جديد",
           body: `طلب ${b.exitType === "resignation" ? "استقالة" : "نهاية خدمة"} — ${exitNumber}`,
           priority: "high", refType: "hr_exit_request", refId: insertId,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "hr-exit background task failed"));
       }
     }
 
@@ -399,7 +400,7 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
         companyId: scope.companyId, branchId: scope.branchId,
         refType: "hr_exit_request", refId: item.id,
         approved: false, decidedBy: scope.activeAssignmentId, reason: rejectionReason,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr-exit background task failed"));
       res.json({ success: true, message: "تم رفض طلب نهاية الخدمة" });
       return;
     }
@@ -493,12 +494,12 @@ router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, 
       );
     }
 
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "exit.clearance_updated", entity: "hr_exit_clearance", entityId: item.id, details: JSON.stringify({ status: newStatus, exitRequestId: item.exitRequestId }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "exit.clearance_updated", entity: "hr_exit_clearance", entityId: item.id, details: JSON.stringify({ status: newStatus, exitRequestId: item.exitRequestId }) }).catch((e) => logger.error(e, "hr-exit background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "hr_exit_clearance_items", entityId: Number(req.params.id),
       after: { status: newStatus, clearedBy: scope.userId, notes: b.notes || null, exitRequestId: item.exitRequestId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-exit background task failed"));
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "خطأ في تحديث إخلاء الطرف");
@@ -547,7 +548,7 @@ router.patch("/exit/:id/complete", requirePermission("hr:update"), async (req, r
       hrEngine.postExitSettlementGL(
         { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
         { id: item.id, employeeId: item.employeeId, eosAmount, remainingLeaveAmount, totalSettlement },
-      ).catch((e: unknown) => console.error("Exit settlement GL error:", e));
+      ).catch((e: unknown) => logger.error(e, "Exit settlement GL error:"));
     }
 
     res.json({ success: true, message: "تم إتمام نهاية الخدمة وتعطيل التعيين" });

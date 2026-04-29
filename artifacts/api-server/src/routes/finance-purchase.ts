@@ -282,7 +282,7 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
       });
     }
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "purchase_request.created", entity: "purchase_requests", entityId: insertId, details: JSON.stringify({ ref, totalAmount, supplierId }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "purchase_request.created", entity: "purchase_requests", entityId: insertId, details: JSON.stringify({ ref, totalAmount, supplierId }) }).catch((e) => logger.error(e, "finance-purchase background task failed"));
 
     submitWorkflow({
       companyId: scope.companyId,
@@ -294,7 +294,7 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
       submittedBy: scope.activeAssignmentId,
       submittedByName: scope.userName,
       data: { ref, totalAmount, supplierId, items: items.length },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-purchase background task failed"));
 
     res.status(201).json({ id: insertId, ref, totalAmount, supplierId, notes, expectedDate, items, approval: approvalResult });
   } catch (err) {
@@ -350,7 +350,7 @@ purchaseRouter.patch("/purchase-requests/:id/approve", requirePermission("financ
       notifications: prNotifications.length > 0 ? prNotifications : undefined,
     });
 
-    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_request',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
+    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_request',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { logger.error(e, "finance-purchase error"); }
 
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
@@ -398,7 +398,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
         `INSERT INTO purchase_order_items ("orderId","itemName",quantity,"unitPrice","lineTotal")
          VALUES ${valuesSql.join(",")}`,
         params
-      ).catch(console.error);
+      ).catch((e) => logger.error(e, "finance-purchase background task failed"));
     }
 
     await applyTransition({
@@ -422,7 +422,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
       entityId: Number(id),
       action: "purchase_request.converted",
       after: { status: "converted", purchaseOrderId: poId, poRef, totalAmount },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-purchase background task failed"));
 
     res.status(201).json({ message: "تم تحويل طلب الشراء إلى أمر شراء", purchaseOrderId: poId, poRef, totalAmount });
   } catch (err) {
@@ -503,7 +503,7 @@ purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), asy
       await rawExecute(
         `INSERT INTO purchase_order_items ("orderId","itemName",quantity,"unitPrice","lineTotal") VALUES ${valuesSql.join(",")}`,
         params
-      ).catch(console.error);
+      ).catch((e) => logger.error(e, "finance-purchase background task failed"));
     }
 
     const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "procurement", refType: "purchase_order", refId: insertId, amount: Number(totalAmount) });
@@ -518,7 +518,7 @@ purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), asy
       });
     }
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "purchase_order.created", entity: "purchase_orders", entityId: insertId, details: JSON.stringify({ ref, totalAmount, supplierId }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "purchase_order.created", entity: "purchase_orders", entityId: insertId, details: JSON.stringify({ ref, totalAmount, supplierId }) }).catch((e) => logger.error(e, "finance-purchase background task failed"));
     res.status(201).json({ id: insertId, ref, totalAmount, vatAmount, supplierId, notes, expectedDelivery, approval: approvalResult });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
@@ -555,7 +555,7 @@ async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rej
       after: { status: newStatus, notes: notes ?? null },
     });
 
-    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_order',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { console.error(e); }
+    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_order',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { logger.error(e, "finance-purchase error"); }
 
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
@@ -746,7 +746,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
           { hoursAfterDue: 120, notifyRole: "general_manager" },
         ],
       });
-    } catch (obErr) { console.error("GRN invoice-match obligation failed:", obErr); }
+    } catch (obErr) { logger.error(obErr, "GRN invoice-match obligation failed:"); }
 
     // Consume budget on receipt so reports reflect committed spend. We
     // consume against the inventory account that was just debited so the
@@ -756,7 +756,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
         companyId: scope.companyId,
         accountCode: invAccount,
         amount: subtotal,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "finance-purchase background task failed"));
     }
 
     res.json({
@@ -1059,7 +1059,7 @@ purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"),
       entity: "payment_runs",
       entityId: runId ?? 0,
       details: JSON.stringify({ runRef, poCount: pos.length, totalPayment, journalId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-purchase background task failed"));
 
     res.status(201).json({
       runId,
@@ -1184,7 +1184,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
       entity: "purchase_orders",
       entityId: poId,
       details: JSON.stringify({ poRef, prId: id, approvalRequired: approvalResult.requiresApproval, supplierNotified: !!pr.supplierId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-purchase background task failed"));
 
     const [po] = await rawQuery<any>(
       `SELECT po.*, s.name AS "supplierName", s.email AS "supplierEmail"
@@ -1419,7 +1419,7 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", requirePermission("
     // P02-S3-MED — was missing both the period-open check that every
     // other GL-posting route in this file uses (lines 456, 777) AND
     // the await on the journal entry. The status update happened
-    // first, then `createJournalEntry(...).catch(console.error)`
+    // first, then `createJournalEntry(...).catch((e) => logger.error(e, "finance-purchase background task failed"))`
     // dropped any failure on the floor, so a closed-period rejection
     // (or a missing AP/Cash account) left the PO marked
     // `payment_scheduled` with zero matching journal entries — a

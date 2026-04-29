@@ -18,6 +18,7 @@ import {
   processDueRecurringJournals,
   type RecurringFrequency,
 } from "../lib/recurringJournalProcessor.js";
+import { logger } from "../lib/logger.js";
 export type { RecurringFrequency };
 export { computeNextRunDate, runRecurringJournal, processDueRecurringJournals };
 
@@ -169,7 +170,7 @@ recurringRouter.post("/recurring-journals", requirePermission("finance:create"),
       entity: "recurring_journals",
       entityId: insertId,
       after: { name, frequency: freq, startDate, lineCount: v.lines.length },
-    }).catch((err) => console.error("[audit] recurring_journal.created:", err));
+    }).catch((err) => logger.error(err, "[audit] recurring_journal.created:"));
 
     res.status(201).json({ id: insertId, name, frequency: freq, startDate, nextRunDate, active });
   } catch (err) {
@@ -256,7 +257,7 @@ recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:upda
       entity: "recurring_journals",
       entityId: id,
       after: { fields: Object.keys(b) },
-    }).catch((err) => console.error("[audit] recurring_journal.updated:", err));
+    }).catch((err) => logger.error(err, "[audit] recurring_journal.updated:"));
 
     res.json({ success: true, id });
   } catch (err) {
@@ -308,7 +309,7 @@ recurringRouter.post("/recurring-journals/:id/run-now", requirePermission("finan
       entity: "recurring_journals",
       entityId: id,
       after: { journalId: result.journalId, ref: result.ref, triggeredBy: "manual" },
-    }).catch((err) => console.error("[audit] recurring_journal.run_now:", err));
+    }).catch((err) => logger.error(err, "[audit] recurring_journal.run_now:"));
 
     res.status(201).json(result);
   } catch (err) {
@@ -350,7 +351,7 @@ recurringRouter.delete("/recurring-journals/:id", requirePermission("finance:del
       entity: "recurring_journals",
       entityId: id,
       after: { name: existing.name, softDelete: true },
-    }).catch((err) => console.error("[audit] recurring_journal.deleted:", err));
+    }).catch((err) => logger.error(err, "[audit] recurring_journal.deleted:"));
 
     res.json({ success: true });
   } catch (err) {

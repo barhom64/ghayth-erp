@@ -25,6 +25,7 @@ import {
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { logger } from "../lib/logger.js";
 
 export const journalRouter = Router();
 journalRouter.use(authMiddleware);
@@ -104,7 +105,7 @@ journalRouter.get("/expenses", requirePermission("finance:read"), async (req, re
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) {
-    console.error("Get expenses error:", err);
+    logger.error(err, "Get expenses error:");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
 });
@@ -328,7 +329,7 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
     await rawExecute(
       `UPDATE journal_entries SET "costCenter" = $1, "departmentId" = $2, "relatedEntityType" = $3, "relatedEntityId" = $4, "paymentMethod" = $5, reference = $6, "isPaid" = $7, "attachmentUrl" = $8, "attachmentType" = $9, "expenseType" = $10, "operationType" = $11, "projectId" = $12, "taxCategory" = $13, "govSyncEnabled" = $14, "govIntegrationId" = $15, "govEntityType" = $16, "govEntityId" = $17 WHERE id = $18 AND "companyId" = $19`,
       [costCenter ?? null, departmentId ?? null, relatedEntityType ?? null, relatedEntityId ?? null, paymentMethod ?? "cash", reference ?? null, isPaid != null ? !!isPaid : true, attachmentUrl ?? null, attachmentType ?? null, expenseType ?? null, operationType ?? "expense", projectId ?? null, taxCategory ?? null, govSyncEnabled ? true : false, govIntegrationId ? Number(govIntegrationId) : null, govEntityType ?? null, govEntityId ? Number(govEntityId) : null, journalId, effectiveCompanyId]
-    ).catch((err) => console.error("Failed to update expense metadata:", err));
+    ).catch((err) => logger.error(err, "Failed to update expense metadata:"));
 
     if (govSyncEnabled && govIntegrationId && govEntityType && govEntityId) {
       const [validIntegration] = await rawQuery<any>(
@@ -341,14 +342,14 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
            VALUES ($1, $2, $3, $4, $5, true, 'pending')
            ON CONFLICT ("companyId", "integrationId", "entityType", "entityId") DO NOTHING`,
           [effectiveCompanyId, Number(govIntegrationId), govEntityType, Number(govEntityId), ref]
-        ).catch(console.error);
+        ).catch((e) => logger.error(e, "finance-journal background task failed"));
       }
     }
 
     const approvalResult = await initiateApprovalChain({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, chainType: "expenses", refType: "expense", refId: journalId, amount: Number(amount ?? 0) });
     if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2`, [journalId, effectiveCompanyId]); }
 
-    emitEvent({ companyId: effectiveCompanyId, userId: scope.userId, action: "expense.created", entity: "expenses", entityId: journalId, details: JSON.stringify({ ref, accountCode, amount: baseAmount, vatAmount: computedVat, totalWithVat, sourceAccountCode: sourceAcct, approvalRequired: approvalResult.requiresApproval, operationType, expenseType, relatedEntityType, relatedEntityId }) }).catch(console.error);
+    emitEvent({ companyId: effectiveCompanyId, userId: scope.userId, action: "expense.created", entity: "expenses", entityId: journalId, details: JSON.stringify({ ref, accountCode, amount: baseAmount, vatAmount: computedVat, totalWithVat, sourceAccountCode: sourceAcct, approvalRequired: approvalResult.requiresApproval, operationType, expenseType, relatedEntityType, relatedEntityId }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
     res.status(201).json({ id: journalId, ref, amount: baseAmount, vatAmount: computedVat, totalWithVat, description: finalDescription, accountCode, sourceAccountCode: sourceAcct, operationType, expenseType, relatedEntityType, relatedEntityId, relatedEntityName, paymentMethod, costCenter, departmentId, branchId: branchId ?? scope.branchId, attachmentUrl, attachmentType, reference, isPaid, period: targetPeriod, approval: approvalResult });
   } catch (err) {
@@ -444,7 +445,7 @@ journalRouter.patch("/expenses/:id/approve", requirePermission("finance:update")
       try {
         await reverseAccountBalances(scope.companyId, expenseId);
       } catch (e) {
-        console.error("Failed to reverse expense GL on rejection:", e);
+        logger.error(e, "Failed to reverse expense GL on rejection:");
       }
     }
 
@@ -483,7 +484,7 @@ journalRouter.get("/vouchers", requirePermission("finance:read"), async (req, re
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) {
-    console.error("Get vouchers error:", err);
+    logger.error(err, "Get vouchers error:");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
 });
@@ -606,9 +607,9 @@ journalRouter.post("/vouchers", requirePermission("finance:create"), async (req,
     await rawExecute(
       `UPDATE journal_entries SET "paymentMethod" = $1, reference = $2, "attachmentUrl" = $3, "attachmentType" = $4, "relatedEntityType" = $5, "relatedEntityId" = $6, "operationType" = $7, "departmentId" = $8 WHERE id = $9 AND "companyId" = $10`,
       [method ?? "cash", reference ?? null, attachmentUrl ?? null, attachmentType ?? null, relatedEntityType ?? null, relatedEntityId ?? null, operationType ?? type, departmentId ?? null, journalId, scope.companyId]
-    ).catch((err) => console.error("Failed to update voucher metadata:", err));
+    ).catch((err) => logger.error(err, "Failed to update voucher metadata:"));
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `voucher.${type}`, entity: "vouchers", entityId: journalId, details: JSON.stringify({ ref, type, amount: baseAmount, vatAmount: computedVat, totalWithVat, accountCode, payee, method }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `voucher.${type}`, entity: "vouchers", entityId: journalId, details: JSON.stringify({ ref, type, amount: baseAmount, vatAmount: computedVat, totalWithVat, accountCode, payee, method }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
     res.status(201).json({ id: journalId, ref, type, amount: baseAmount, vatAmount: computedVat, totalWithVat, description: finalDescription, accountCode, paymentMethod: method, reference, attachmentUrl, relatedEntityType, relatedEntityId, relatedEntityName, contractId, invoiceId, branchId: branchId ?? scope.branchId });
   } catch (err) {
@@ -803,8 +804,8 @@ journalRouter.post("/journal", requirePermission("finance:create"), async (req, 
         [insertId, l.accountCode, l.description || null, Number(l.debit) || 0, Number(l.credit) || 0, l.costCenter || null, l.departmentId || null, l.projectId || null]
       );
     }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "journal_entries", entityId: insertId, after: { ref, description, totalDebit } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "finance.journal.created", entity: "journal_entries", entityId: insertId, details: JSON.stringify({ ref }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "journal_entries", entityId: insertId, after: { ref, description, totalDebit } }).catch((e) => logger.error(e, "finance-journal background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "finance.journal.created", entity: "journal_entries", entityId: insertId, details: JSON.stringify({ ref }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
     res.status(201).json({ id: insertId, ref });
   } catch (err) { handleRouteError(err, res, "Create journal entry error:"); }
 });
@@ -933,7 +934,7 @@ journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), 
       entityId: id,
       reason,
       after: { newJournalId, newRef, reverseDate },
-    }).catch((err) => console.error("Failed to create reversal audit log:", err));
+    }).catch((err) => logger.error(err, "Failed to create reversal audit log:"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -942,7 +943,7 @@ journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), 
       entity: "journal_entries",
       entityId: id,
       details: JSON.stringify({ reason, newJournalId, newRef }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
     res.status(201).json({
       id: newJournalId,
@@ -1149,7 +1150,7 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", requirePermission("
       entity: "financial_periods",
       entityId: journalId,
       details: JSON.stringify({ year, netIncome, totalRevenue, totalExpense, journalId, ref }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
     res.status(201).json({
       id: journalId,

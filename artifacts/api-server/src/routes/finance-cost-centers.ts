@@ -4,6 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -93,7 +94,7 @@ router.post("/cost-centers", requirePermission("finance:create"), async (req, re
     if (!row) throw new ConflictError("رمز مركز التكلفة مستخدم مسبقاً", { field: "code", fix: "استخدم رمزاً مختلفاً لمركز التكلفة" });
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "cost_center.created", entity: "cost_centers", entityId: row.id, after: row });
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "cost_center.created", entity: "cost_centers", entityId: row.id, details: JSON.stringify({ name, code, type: type || "general" }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "cost_center.created", entity: "cost_centers", entityId: row.id, details: JSON.stringify({ name, code, type: type || "general" }) }).catch((e) => logger.error(e, "finance-cost-centers background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create cost center error"); }
 });
@@ -137,7 +138,7 @@ router.patch("/cost-centers/:id", requirePermission("finance:update"), async (re
     );
     if (!row) throw new NotFoundError("مركز التكلفة غير موجود");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "cost_center.updated", entity: "cost_centers", entityId: row.id, after: row });
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "cost_center.updated", entity: "cost_centers", entityId: row.id, details: JSON.stringify({ name: row.name, code: row.code }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "cost_center.updated", entity: "cost_centers", entityId: row.id, details: JSON.stringify({ name: row.name, code: row.code }) }).catch((e) => logger.error(e, "finance-cost-centers background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update cost center error"); }
 });
@@ -150,7 +151,7 @@ router.delete("/cost-centers/:id", requirePermission("finance:delete"), async (r
       [req.params.id, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "cost_center.deleted", entity: "cost_centers", entityId: Number(req.params.id) });
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "cost_center.deleted", entity: "cost_centers", entityId: Number(req.params.id), details: JSON.stringify({ id: Number(req.params.id) }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "cost_center.deleted", entity: "cost_centers", entityId: Number(req.params.id), details: JSON.stringify({ id: Number(req.params.id) }) }).catch((e) => logger.error(e, "finance-cost-centers background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete cost center error"); }
 });

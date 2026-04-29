@@ -14,6 +14,7 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, toDateISO } from "../lib/businessHelpers.js";
 import crypto from "node:crypto";
 import QRCode from "qrcode";
+import { logger } from "../lib/logger.js";
 
 export const zatcaRouter = Router();
 zatcaRouter.use(authMiddleware);
@@ -298,7 +299,7 @@ zatcaRouter.put("/zatca/settings", requirePermission("finance:update"), async (r
       entity: "zatca_settings",
       entityId: scope.companyId,
       after: { enabled, environment, vatRegistrationNumber },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-zatca background task failed"));
 
     const [updated] = await rawQuery<any>(
       `SELECT id, "companyId", enabled, environment, "vatRegistrationNumber", "crNumber",

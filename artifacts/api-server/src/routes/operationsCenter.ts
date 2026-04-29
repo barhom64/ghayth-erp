@@ -5,6 +5,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError, ValidationError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { logger } from "../lib/logger.js";
 
 // ── Zod validation schemas ──────────────────────────────────────────
 const dailyCloseExecuteSchema = z.object({
@@ -114,7 +115,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
           { key: "violated", label: "مخالفات عمرة", value: violated, severity: severity(violated, t.violated.warn, t.violated.crit), actionLabel: "عرض المخالفات", actionLink: "/umrah?tab=penalties" },
         ],
       };
-    } catch (_e) { console.error("OpsCenter: umrah failed:", _e); }
+    } catch (_e) { logger.error(_e, "OpsCenter: umrah failed:"); }
 
     try {
       const [unitStats] = await rawQuery<any>(
@@ -156,7 +157,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
           { key: "expiringContracts", label: "عقود تنتهي خلال 30 يوم", value: expContractsVal, severity: severity(expContractsVal, t.expiringContracts.warn, t.expiringContracts.crit), actionLabel: "تجديد العقود", actionLink: "/properties/contracts" },
         ],
       };
-    } catch (_e) { console.error("OpsCenter: property failed:", _e); }
+    } catch (_e) { logger.error(_e, "OpsCenter: property failed:"); }
 
     try {
       const today = todayISO();
@@ -191,7 +192,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
           { key: "violations", label: "مخالفات معلقة", value: violationsVal, severity: severity(violationsVal, t.violations.warn, t.violations.crit), actionLabel: "مراجعة المخالفات", actionLink: "/hr/violations" },
         ],
       };
-    } catch (_e) { console.error("OpsCenter: hr failed:", _e); }
+    } catch (_e) { logger.error(_e, "OpsCenter: hr failed:"); }
 
     try {
       const [overdueInv] = await rawQuery<any>(
@@ -229,7 +230,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
           { key: "cashFlow", label: "التدفق النقدي (الشهر)", value: netCashFlow, severity: severity(cashFlowNegative, t.cashFlowNegative.warn, t.cashFlowNegative.crit), actionLabel: "عرض التقارير المالية", actionLink: "/finance/reports", extra: `وارد: ${inflow.toLocaleString()} — صادر: ${outflow.toLocaleString()} ر.س` },
         ],
       };
-    } catch (_e) { console.error("OpsCenter: finance failed:", _e); }
+    } catch (_e) { logger.error(_e, "OpsCenter: finance failed:"); }
 
     try {
       const [vehicleStats] = await rawQuery<any>(
@@ -251,7 +252,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
           { key: "activeTrips", label: "رحلات نشطة", value: activeTripsVal, severity: "ok" as Severity, actionLabel: "عرض الرحلات", actionLink: "/fleet/trips" },
         ],
       };
-    } catch (_e) { console.error("OpsCenter: fleet failed:", _e); }
+    } catch (_e) { logger.error(_e, "OpsCenter: fleet failed:"); }
 
     let slaItems: any[] = [];
     try {
@@ -322,7 +323,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
         hoursOverdue: Math.round(Number(e.hoursOverdue ?? 0)),
         entityLink: "/finance/expenses",
       })));
-    } catch (_e) { console.error("OpsCenter: approval SLA failed:", _e); }
+    } catch (_e) { logger.error(_e, "OpsCenter: approval SLA failed:"); }
 
     slaItems = slaItems.map(item => {
       const hoursOver = Math.abs(Number(item.hoursOverdue ?? 0));
@@ -347,7 +348,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
          LIMIT 50`,
         [companies]
       );
-    } catch (_e) { console.error("OpsCenter: livefeed failed:", _e); }
+    } catch (_e) { logger.error(_e, "OpsCenter: livefeed failed:"); }
 
     res.json({ sections, slaItems, liveFeed });
   } catch (err) {
@@ -564,7 +565,7 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
          "createdAt" TIMESTAMPTZ DEFAULT NOW(),
          UNIQUE("companyId", "closeDate")
        )`
-    ).catch(console.error);
+    ).catch((e) => logger.error(e, "operationsCenter background task failed"));
 
     const [existing] = await rawQuery<any>(
       `SELECT id FROM daily_close_log WHERE "companyId"=$1 AND "closeDate"=$2`,
@@ -584,7 +585,7 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
       companyId: cid, userId: scope.userId,
       action: "create", entity: "daily_close", entityId: 0,
       reason: forceClose ? `إقفال يومي بتجاوز - ${today}` : `إقفال يومي - ${today}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "operationsCenter background task failed"));
 
     try {
       await rawQuery(
@@ -592,9 +593,9 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
          VALUES ('daily_close', 'system', '0', $1, $2, $3, NOW())`,
         [cid, userId, forceClose ? `إقفال يومي بتجاوز - ${today}` : `إقفال يومي - ${today}`]
       );
-    } catch (_e) { console.error("OpsCenter: audit log for daily close failed:", _e); }
+    } catch (_e) { logger.error(_e, "OpsCenter: audit log for daily close failed:"); }
 
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "daily_close.executed", entity: "daily_close_log", entityId: 0, details: JSON.stringify({ date: today, forced: forceClose }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "daily_close.executed", entity: "daily_close_log", entityId: 0, details: JSON.stringify({ date: today, forced: forceClose }) }).catch((e) => logger.error(e, "operationsCenter background task failed"));
     res.json({ success: true, message: "تم إقفال اليوم بنجاح", date: today, forced: forceClose });
   } catch (err) {
     handleRouteError(err, res, "إقفال اليوم");

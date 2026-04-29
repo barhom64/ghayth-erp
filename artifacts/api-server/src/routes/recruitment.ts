@@ -5,6 +5,7 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const createPostingSchema = z.object({
   title: z.string().min(1, "عنوان الإعلان الوظيفي مطلوب"),
@@ -80,7 +81,7 @@ router.post("/postings", requirePermission("hr:write"), async (req, res) => {
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "job_postings", entityId: r.insertId,
       after: { title, type: type || "full-time", status: status || "open" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -88,7 +89,7 @@ router.post("/postings", requirePermission("hr:write"), async (req, res) => {
       entity: "job_postings",
       entityId: r.insertId,
       details: JSON.stringify({ title, type: type || "full-time", status: status || "open" }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     res.status(201).json({ id: r.insertId, title, status: status || "open" });
   } catch (err) { handleRouteError(err, res, "Create job posting error:"); }
 });
@@ -126,14 +127,14 @@ router.patch("/postings/:id", requirePermission("hr:write"), async (req, res) =>
     const result = await rawExecute(`UPDATE job_postings SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (result.affectedRows === 0) throw new NotFoundError("الإعلان الوظيفي غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: b }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: b }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "recruitment.posting.updated",
       entity: "job_postings",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
@@ -171,7 +172,7 @@ router.post("/postings/:id/close", requirePermission("hr:write"), async (req, re
         );
       },
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: { status: "closed", closedReason: reason } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: { status: "closed", closedReason: reason } }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -179,7 +180,7 @@ router.post("/postings/:id/close", requirePermission("hr:write"), async (req, re
       entity: "job_postings",
       entityId: id,
       details: JSON.stringify({ reason }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     res.json({ ...updated, event: "recruitment.job.closed" });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -206,14 +207,14 @@ router.post("/postings/:id/reopen", requirePermission("hr:write"), async (req, r
         closedReason: null,
       },
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: { status: "open", reopened: true } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: { status: "open", reopened: true } }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "recruitment.posting.reopened",
       entity: "job_postings",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     res.json({ ...updated, event: "recruitment.job.reopened" });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -229,14 +230,14 @@ router.delete("/postings/:id", requirePermission("hr:write"), async (req, res) =
     const [before] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!before) throw new NotFoundError("الإعلان الوظيفي غير موجود");
     await rawExecute(`UPDATE job_postings SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_postings", entityId: id, before }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_postings", entityId: id, before }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "recruitment.posting.deleted",
       entity: "job_postings",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     res.json({ message: "تم حذف الإعلان الوظيفي بنجاح" });
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
@@ -272,7 +273,7 @@ router.post("/applications", requirePermission("hr:write"), async (req, res) => 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "job_applications", entityId: r.insertId,
       after: { postingId: Number(postingId), applicantName, status: status || "new" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -280,7 +281,7 @@ router.post("/applications", requirePermission("hr:write"), async (req, res) => 
       entity: "job_applications",
       entityId: r.insertId,
       details: JSON.stringify({ postingId: Number(postingId), applicantName }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     res.status(201).json({ id: r.insertId, postingId: Number(postingId), applicantName, status: status || "new" });
   } catch (err) { handleRouteError(err, res, "Create application error:"); }
 });
@@ -313,14 +314,14 @@ router.patch("/applications/:id", requirePermission("hr:write"), async (req, res
     params.push(id);
     await rawExecute(`UPDATE job_applications SET ${sets.join(",")} WHERE id=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM job_applications WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_applications", entityId: id, after: b }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_applications", entityId: id, after: b }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "recruitment.application.updated",
       entity: "job_applications",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
@@ -332,14 +333,14 @@ router.delete("/applications/:id", requirePermission("hr:write"), async (req, re
     const [before] = await rawQuery<any>(`SELECT a.* FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2`, [id, scope.companyId]);
     if (!before) throw new NotFoundError("طلب التوظيف غير موجود");
     await rawExecute(`UPDATE job_applications SET "deletedAt" = NOW() WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_applications", entityId: id, before }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_applications", entityId: id, before }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "recruitment.application.deleted",
       entity: "job_applications",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     res.json({ message: "تم حذف طلب التوظيف بنجاح" });
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });

@@ -15,6 +15,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { emitEvent, createAuditLog, currentPeriod, currentYear, toDateISO, roundTo2, validateBudget } from "../lib/businessHelpers.js";
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { logger } from "../lib/logger.js";
 
 const createBudgetSchema = z.object({
   accountCode: z.string().min(1, "رمز الحساب مطلوب"),
@@ -110,7 +111,7 @@ budgetRouter.post("/budget", requirePermission("finance:create"), async (req, re
       entity: "budgets",
       entityId: insertId,
       after: { accountCode, period, amount: Number(amount) },
-    }).catch((err) => console.error("[audit] budget.created:", err));
+    }).catch((err) => logger.error(err, "[audit] budget.created:"));
 
     res.status(201).json({ id: insertId, ...req.body });
   } catch (err) {
@@ -203,7 +204,7 @@ budgetRouter.patch("/budget/:id", requirePermission("finance:update"), async (re
       entity: "budgets",
       entityId: id,
       after: { fields: Object.keys(b) },
-    }).catch((err) => console.error("[audit] budget.updated:", err));
+    }).catch((err) => logger.error(err, "[audit] budget.updated:"));
 
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update budget error:"); }
@@ -263,7 +264,7 @@ budgetRouter.delete("/budget/:id", requirePermission("finance:delete"), async (r
         period: existing.period,
         amount: Number(existing.amount),
       },
-    }).catch((err) => console.error("[audit] budget.deleted:", err));
+    }).catch((err) => logger.error(err, "[audit] budget.deleted:"));
 
     res.json({ message: "تم حذف الميزانية" });
   } catch (err) { handleRouteError(err, res, "Delete budget error:"); }
@@ -379,7 +380,7 @@ budgetRouter.post("/budget/approval-requests", requirePermission("finance:create
       entity: "budget_approval_requests",
       entityId: row.id,
       after: { accountCode, period, requestedAmount: Number(requestedAmount), level },
-    }).catch((err) => console.error("[audit] budget.approval_requested:", err));
+    }).catch((err) => logger.error(err, "[audit] budget.approval_requested:"));
 
     res.status(201).json({ data: row });
   } catch (err) {

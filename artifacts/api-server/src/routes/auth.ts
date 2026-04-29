@@ -98,8 +98,8 @@ const registerLimiter = rateLimit({
 });
 
 router.post("/register", registerLimiter, async (_req, res) => {
-  emitEvent({ companyId: 0, userId: 0, action: "auth.register", entity: "users", entityId: 0 }).catch(console.error);
-  createAuditLog({ companyId: 0, userId: 0, action: "create", entity: "users", entityId: 0, after: { blocked: true, reason: "self_registration_not_permitted" } }).catch(console.error);
+  emitEvent({ companyId: 0, userId: 0, action: "auth.register", entity: "users", entityId: 0 }).catch((e) => logger.error(e, "auth background task failed"));
+  createAuditLog({ companyId: 0, userId: 0, action: "create", entity: "users", entityId: 0, after: { blocked: true, reason: "self_registration_not_permitted" } }).catch((e) => logger.error(e, "auth background task failed"));
   res.status(405).json({ error: "إنشاء الحسابات يتم بواسطة المسؤول فقط — Self-registration is not permitted" });
 });
 
@@ -150,7 +150,7 @@ router.post("/login", loginLimiter, async (req, res) => {
           companyId: 0, userId: user.id,
           action: "login_failed", entity: "users", entityId: user.id,
           after: { email, reason: "account_locked", attempts },
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "auth background task failed"));
         res.status(429).json({ error: `تم قفل الحساب لمدة ${LOCKOUT_MINUTES} دقيقة بسبب تكرار محاولات الدخول الفاشلة` });
       } else {
         try {
@@ -165,7 +165,7 @@ router.post("/login", loginLimiter, async (req, res) => {
           companyId: 0, userId: user.id,
           action: "login_failed", entity: "users", entityId: user.id,
           after: { email, reason: "invalid_password", attempts },
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "auth background task failed"));
         throw new ForbiddenError("بيانات الدخول غير صحيحة");
       }
       return;
@@ -222,7 +222,7 @@ router.post("/login", loginLimiter, async (req, res) => {
     setAccessTokenCookie(res, token);
     setRefreshTokenCookie(res, refreshToken);
 
-    emitEvent({ companyId: primary.companyId, branchId: primary.branchId, userId: user.id, action: "auth.login.success", entity: "users", entityId: user.id, details: JSON.stringify({ email, assignmentId: primary.id }) }).catch(console.error);
+    emitEvent({ companyId: primary.companyId, branchId: primary.branchId, userId: user.id, action: "auth.login.success", entity: "users", entityId: user.id, details: JSON.stringify({ email, assignmentId: primary.id }) }).catch((e) => logger.error(e, "auth background task failed"));
     res.json({ assignments, userRoles });
   } catch (err) {
     handleRouteError(err, res, "Login error:");
@@ -279,8 +279,8 @@ router.post("/refresh", async (req, res) => {
 
     setAccessTokenCookie(res, newToken);
 
-    emitEvent({ companyId: 0, userId: rt.userId, action: "auth.refresh", entity: "users", entityId: rt.userId }).catch(console.error);
-    createAuditLog({ companyId: 0, userId: rt.userId, action: "update", entity: "users", entityId: rt.userId, after: { reason: "token_refresh" } }).catch(console.error);
+    emitEvent({ companyId: 0, userId: rt.userId, action: "auth.refresh", entity: "users", entityId: rt.userId }).catch((e) => logger.error(e, "auth background task failed"));
+    createAuditLog({ companyId: 0, userId: rt.userId, action: "update", entity: "users", entityId: rt.userId, after: { reason: "token_refresh" } }).catch((e) => logger.error(e, "auth background task failed"));
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Refresh token error:");
@@ -302,8 +302,8 @@ router.post("/logout", authMiddleware, async (req, res) => {
       }
     }
     clearAuthCookies(res);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "auth.logout", entity: "users", entityId: scope.userId }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "users", entityId: scope.userId, after: { reason: "logout" } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "auth.logout", entity: "users", entityId: scope.userId }).catch((e) => logger.error(e, "auth background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "users", entityId: scope.userId, after: { reason: "logout" } }).catch((e) => logger.error(e, "auth background task failed"));
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Logout error:");
@@ -330,8 +330,8 @@ router.post("/switch-assignment", authMiddleware, async (req, res) => {
     }
     const token = signToken({ userId: scope.userId, assignmentId: Number(assignmentId), role: assignment.role });
     setAccessTokenCookie(res, token);
-    emitEvent({ companyId: assignment.companyId, userId: scope.userId, action: "auth.switch_assignment", entity: "user_assignments", entityId: Number(assignmentId) }).catch(console.error);
-    createAuditLog({ companyId: assignment.companyId, userId: scope.userId, action: "update", entity: "employee_assignments", entityId: Number(assignmentId), after: { switchedTo: assignmentId, role: assignment.role } }).catch(console.error);
+    emitEvent({ companyId: assignment.companyId, userId: scope.userId, action: "auth.switch_assignment", entity: "user_assignments", entityId: Number(assignmentId) }).catch((e) => logger.error(e, "auth background task failed"));
+    createAuditLog({ companyId: assignment.companyId, userId: scope.userId, action: "update", entity: "employee_assignments", entityId: Number(assignmentId), after: { switchedTo: assignmentId, role: assignment.role } }).catch((e) => logger.error(e, "auth background task failed"));
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Switch assignment error:");
@@ -398,9 +398,9 @@ router.post("/change-password", authMiddleware, changePasswordLimiter, async (re
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "password_change", entity: "users", entityId: scope.userId,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "auth background task failed"));
     clearAuthCookies(res);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "auth.password.changed", entity: "users", entityId: scope.userId }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "auth.password.changed", entity: "users", entityId: scope.userId }).catch((e) => logger.error(e, "auth background task failed"));
     res.json({ success: true, message: "تم تغيير كلمة المرور بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "Change password error:");

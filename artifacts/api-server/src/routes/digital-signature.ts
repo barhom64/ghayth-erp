@@ -71,8 +71,8 @@ router.post("/request-otp", requirePermission("documents:write"), async (req, re
       companyId: scope.companyId, userId: scope.userId, action: "request_otp",
       entity: entityType, entityId: Number(entityId),
       after: { action, ip, deviceFingerprint },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "digital_signature.otp_requested", entity: "digital_signature_otps", entityId: Number(entityId), details: JSON.stringify({ entityType, entityId, action, ip }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "digital-signature background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "digital_signature.otp_requested", entity: "digital_signature_otps", entityId: Number(entityId), details: JSON.stringify({ entityType, entityId, action, ip }) }).catch((e) => logger.error(e, "digital-signature background task failed"));
 
     res.json({
       message: "تم إرسال رمز التحقق (OTP) — صالح لمدة 10 دقائق",
@@ -126,8 +126,8 @@ router.post("/verify", requirePermission("documents:write"), async (req, res: Re
       entity: entityType,
       entityId: Number(entityId),
       after: { signatureRef, ip, deviceFingerprint, action, verifiedAt: new Date().toISOString() },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "digital_signature.verified", entity: "digital_signature_logs", entityId: Number(entityId), details: JSON.stringify({ entityType, entityId, action, signatureRef, ip }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "digital-signature background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "digital_signature.verified", entity: "digital_signature_logs", entityId: Number(entityId), details: JSON.stringify({ entityType, entityId, action, signatureRef, ip }) }).catch((e) => logger.error(e, "digital-signature background task failed"));
 
     res.json({
       verified: true,

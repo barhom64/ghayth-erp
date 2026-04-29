@@ -12,6 +12,7 @@ import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, t
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -225,7 +226,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
           `INSERT INTO crm_activities ("opportunityId",type,description,"scheduledAt","createdBy") VALUES ($1,'follow_up',$2,$3,$4)`,
           [insertId, stageConfig.description, followUpDate.toISOString(), scope.userId]
         );
-      } catch (actErr) { console.error("Failed to create auto activity:", actErr); }
+      } catch (actErr) { logger.error(actErr, "Failed to create auto activity:"); }
     }
 
     if (b.assignedTo) {
@@ -244,9 +245,9 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
             priority: "normal",
             refType: "crm_opportunities",
             refId: insertId,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "crm background task failed"));
         }
-      } catch (e) { console.error("CRM notification error:", e); }
+      } catch (e) { logger.error(e, "CRM notification error:"); }
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
@@ -259,7 +260,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
       entity: "crm_opportunities",
       entityId: insertId,
       after: { title, clientId: b.clientId ?? null, value, stage, assignedTo: b.assignedTo ?? null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
 
     // Register CRM follow-up obligation — terminal stages were filtered out
     // at validation time above so every opportunity reaching this point is
@@ -281,7 +282,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
           { hoursAfterDue: 72, notifyRole: "general_manager" },
         ],
       });
-    } catch (obErr) { console.error("CRM opportunity obligation failed:", obErr); }
+    } catch (obErr) { logger.error(obErr, "CRM opportunity obligation failed:"); }
 
     emitEvent({
       companyId: scope.companyId,
@@ -291,7 +292,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
       entity: "crm_opportunities",
       entityId: insertId,
       details: JSON.stringify({ title, value, stage, clientId: b.clientId ?? null, assignedTo: b.assignedTo ?? null }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
 
     res.status(201).json({ ...row, autoAction: stageConfig?.description });
   } catch (err) { handleRouteError(err, res, "Create opportunity error:"); }
@@ -468,7 +469,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
             [oppId, `[تلقائي] ${stageConfig.description}`, followUpDate.toISOString(), scope.userId]
           );
           autoActions.push(`متابعة تلقائية بعد ${stageConfig.followUpDays} أيام`);
-        } catch (actErr) { console.error("Auto activity creation failed:", actErr); }
+        } catch (actErr) { logger.error(actErr, "Auto activity creation failed:"); }
       }
 
       if (b.stage === 'proposal') {
@@ -480,7 +481,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
             [oppId, '[تلقائي] تصعيد — لم يرد العميل على العرض خلال أسبوع', escalationDate.toISOString(), scope.userId]
           );
           autoActions.push('تصعيد تلقائي بعد 7 أيام إن لم يُرد');
-        } catch (e) { console.error("Escalation activity error:", e); }
+        } catch (e) { logger.error(e, "Escalation activity error:"); }
       }
 
       if (existing.assignedTo) {
@@ -499,9 +500,9 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
               priority: "normal",
               refType: "crm_opportunities",
               refId: oppId,
-            }).catch(console.error);
+            }).catch((e) => logger.error(e, "crm background task failed"));
           }
-        } catch (e) { console.error("Stage change notification error:", e); }
+        } catch (e) { logger.error(e, "Stage change notification error:"); }
       }
     }
 
@@ -509,7 +510,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
       await handleDealWon(scope, existing, b.value ?? existing.value);
       autoActions.push('إنشاء عقد + فاتورة + تحديث إيرادات العميل');
       // Mark follow-up obligation as met and emit deal-won event
-      await markObligationMet(scope.companyId, "crm_opportunity", oppId, "follow_up").catch(console.error);
+      await markObligationMet(scope.companyId, "crm_opportunity", oppId, "follow_up").catch((e) => logger.error(e, "crm background task failed"));
       emitEvent({
         companyId: scope.companyId,
         userId: scope.userId,
@@ -517,7 +518,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
         entity: "crm_opportunities",
         entityId: oppId,
         details: `صفقة ناجحة: ${existing.title} — ${b.value ?? existing.value} ريال`,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "crm background task failed"));
     }
 
     if (b.stage === 'closed_lost' && existing.stage !== 'closed_lost') {
@@ -527,9 +528,9 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
           `INSERT INTO crm_activities ("opportunityId",type,description,"scheduledAt","completedAt","createdBy") VALUES ($1,'analysis',$2,NOW(),NOW(),$3)`,
           [oppId, `تحليل خسارة: ${b.lostReason || 'غير محدد'} — القيمة المفقودة: ${existing.value} ريال`, scope.userId]
         );
-      } catch (e) { console.error("Lost analysis error:", e); }
+      } catch (e) { logger.error(e, "Lost analysis error:"); }
       // Cancel follow-up obligation and emit deal-lost event
-      await cancelObligation(scope.companyId, "crm_opportunity", oppId).catch(console.error);
+      await cancelObligation(scope.companyId, "crm_opportunity", oppId).catch((e) => logger.error(e, "crm background task failed"));
       emitEvent({
         companyId: scope.companyId,
         userId: scope.userId,
@@ -537,7 +538,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
         entity: "crm_opportunities",
         entityId: oppId,
         details: `صفقة خاسرة: ${existing.title} — السبب: ${b.lostReason || 'غير محدد'}`,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "crm background task failed"));
     }
 
     // Stage change (non-terminal) → refresh follow-up obligation window
@@ -564,7 +565,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
             { hoursAfterDue: 72, notifyRole: "general_manager" },
           ],
         });
-      } catch (obErr) { console.error("CRM stage-change obligation refresh failed:", obErr); }
+      } catch (obErr) { logger.error(obErr, "CRM stage-change obligation refresh failed:"); }
 
       emitEvent({
         companyId: scope.companyId,
@@ -573,7 +574,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
         entity: "crm_opportunities",
         entityId: oppId,
         details: `تغيير مرحلة: ${existing.title} — من ${existing.stage} إلى ${b.stage}`,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "crm background task failed"));
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [oppId, scope.companyId]);
@@ -602,7 +603,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
       before: existing,
       after: row,
       reason: `حقول معدّلة: ${Object.keys(changedFields).join("، ") || "بلا تغيير"}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
 
     // Generic updated event for non-stage edits. The stage_changed /
     // deal.won / deal.lost events already cover lifecycle transitions,
@@ -620,7 +621,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
         before: existing,
         after: row,
         details: JSON.stringify({ changedFields }),
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "crm background task failed"));
     }
 
     res.json({ ...row, autoActions });
@@ -663,7 +664,7 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
         }
       );
     } catch (contractErr) {
-      console.error("Failed to request legal contract for deal-won:", contractErr);
+      logger.error(contractErr, "Failed to request legal contract for deal-won:");
     }
 
     const monthNum = currentMonthPadded();
@@ -689,7 +690,7 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
         }
       );
     } catch (invoiceErr) {
-      console.error("Failed to request invoice for deal-won:", invoiceErr);
+      logger.error(invoiceErr, "Failed to request invoice for deal-won:");
     }
 
     // GL posting via CRM Engine → Financial Engine (with period check + sourceKey)
@@ -700,14 +701,14 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
         { id: opp.id, clientId: clientId || 0, amount: dealValue, vatAmount, description: `قيد فاتورة CRM — ${opp.title}` }
       );
     } catch (jeErr) {
-      console.error("CRM deal-won GL posting via engine failed:", jeErr);
+      logger.error(jeErr, "CRM deal-won GL posting via engine failed:");
     }
 
     if (clientId) {
       try {
         await rawExecute(`UPDATE clients SET "totalRevenue"=COALESCE("totalRevenue",0)+$1 WHERE id=$2 AND "companyId"=$3`, [dealValue, clientId, scope.companyId]);
       } catch (revenueErr) {
-        console.error("Failed to update client totalRevenue:", revenueErr);
+        logger.error(revenueErr, "Failed to update client totalRevenue:");
       }
     }
 
@@ -727,12 +728,12 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
             priority: "normal",
             refType: "crm_opportunities",
             refId: opp.id,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "crm background task failed"));
         }
-      } catch (e) { console.error("Deal won notification error:", e); }
+      } catch (e) { logger.error(e, "Deal won notification error:"); }
     }
   } catch (err) {
-    console.error("Handle deal won error:", err);
+    logger.error(err, "Handle deal won error:");
   }
 }
 
@@ -814,12 +815,12 @@ router.post("/opportunities/:id/convert", requirePermission("crm:update"), async
       companyId: scope.companyId, userId: scope.userId,
       action: "crm.opportunity.converted", entity: "crm_opportunities", entityId: id,
       details: JSON.stringify({ convertedClientId, stage: "closed_won" }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "crm_opportunities", entityId: id,
       after: { stage: "closed_won", convertedClientId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
     res.json({ ...updated, event: "crm.opportunity.converted", convertedClientId });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -835,7 +836,7 @@ router.delete("/opportunities/:id", requirePermission("crm:delete"), async (req,
     const [existing] = await rawQuery<any>(`SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الفرصة غير موجودة");
     await rawExecute(`UPDATE crm_opportunities SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    await cancelObligation(scope.companyId, "crm_opportunity", id).catch(console.error);
+    await cancelObligation(scope.companyId, "crm_opportunity", id).catch((e) => logger.error(e, "crm background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -843,11 +844,11 @@ router.delete("/opportunities/:id", requirePermission("crm:delete"), async (req,
       entity: "crm_opportunities",
       entityId: id,
       details: `حذف فرصة CRM`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "crm_opportunities", entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
     res.json({ message: "تم حذف الفرصة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete opportunity error:"); }
 });
@@ -953,12 +954,12 @@ router.post("/opportunities/:id/activities", requirePermission("crm:create"), as
       companyId: scope.companyId, userId: scope.userId,
       action: "crm.activity.created", entity: "crm_activities", entityId: insertId,
       details: JSON.stringify({ opportunityId: oppId, type: b.type }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "crm_activities", entityId: insertId,
       after: { opportunityId: oppId, type: b.type, description: b.description },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create activity error:"); }
 });
@@ -1009,9 +1010,9 @@ router.post("/followup-check", requirePermission("crm:create"), async (req, res)
               priority: "high",
               refType: "crm_opportunities",
               refId: activity.opportunityId,
-            }).catch(console.error);
+            }).catch((e) => logger.error(e, "crm background task failed"));
           }
-        } catch (e) { console.error("Follow-up escalation error:", e); }
+        } catch (e) { logger.error(e, "Follow-up escalation error:"); }
         escalated.push({ activityId: activity.id, oppTitle: activity.oppTitle, overdueDays });
       }
     }
@@ -1020,12 +1021,12 @@ router.post("/followup-check", requirePermission("crm:create"), async (req, res)
       companyId: scope.companyId, userId: scope.userId,
       action: "crm.followup.checked", entity: "crm_activities", entityId: 0,
       details: JSON.stringify({ totalOverdue: overdueActivities.length, escalated: escalated.length }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "preview", entity: "crm_activities", entityId: 0,
       after: { totalOverdue: overdueActivities.length, escalated: escalated.length },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
     res.json({ totalOverdue: overdueActivities.length, escalated: escalated.length, details: escalated });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });

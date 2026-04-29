@@ -611,7 +611,7 @@ export async function createSubsidiaryAccountsForEntity(
       );
     }
   } catch (err) {
-    console.error("createSubsidiaryAccountsForEntity error:", err);
+    logger.error(err, "createSubsidiaryAccountsForEntity error:");
   }
 }
 

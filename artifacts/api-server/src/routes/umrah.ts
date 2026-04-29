@@ -10,6 +10,7 @@ import {
   generateTimeRef,
 } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
+import { logger } from "../lib/logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LIFECYCLE STATE MACHINES — Umrah domain
@@ -164,8 +165,8 @@ router.post("/seasons", requirePermission("umrah:write"), async (req, res) => {
       [scope.companyId, b.title, b.startDate, b.endDate, b.notes]
     );
     if (!rows[0]) throw new NotFoundError("فشل في إنشاء الموسم");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_seasons", entityId: rows[0].id, after: { title: b.title } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.season.opened", entity: "umrah_seasons", entityId: rows[0].id, after: { title: b.title } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_seasons", entityId: rows[0].id, after: { title: b.title } }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.season.opened", entity: "umrah_seasons", entityId: rows[0].id, after: { title: b.title } }).catch((e) => logger.error(e, "umrah background task failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create season error"); }
 });
@@ -215,9 +216,9 @@ router.patch("/seasons/:id", requirePermission("umrah:write"), async (req, res):
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE umrah_seasons SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery(`SELECT * FROM umrah_seasons WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_seasons", entityId: Number(id), after: { status: b.status } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_seasons", entityId: Number(id), after: { status: b.status } }).catch((e) => logger.error(e, "umrah background task failed"));
     if (b.status) {
-      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `umrah.season.${b.status}`, entity: "umrah_seasons", entityId: Number(id), after: { status: b.status } }).catch(console.error);
+      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `umrah.season.${b.status}`, entity: "umrah_seasons", entityId: Number(id), after: { status: b.status } }).catch((e) => logger.error(e, "umrah background task failed"));
     }
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update season error"); }
@@ -257,8 +258,8 @@ router.post("/agents", requirePermission("umrah:write"), async (req, res) => {
       [scope.companyId, b.name, b.contactPerson, b.phone, b.email, b.country, b.profitMargin || 0, b.contractRef, b.currency || "SAR", b.notes]
     );
     if (!rows[0]) throw new NotFoundError("فشل في إنشاء الوكيل");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_agents", entityId: rows[0].id, after: { name: b.name } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.created", entity: "umrah_agents", entityId: rows[0].id, details: JSON.stringify({ name: b.name, country: b.country }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_agents", entityId: rows[0].id, after: { name: b.name } }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.created", entity: "umrah_agents", entityId: rows[0].id, details: JSON.stringify({ name: b.name, country: b.country }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create agent error"); }
 });
@@ -289,8 +290,8 @@ router.patch("/agents/:id", requirePermission("umrah:write"), async (req, res) =
     params.push(req.params.id); params.push(scope.companyId);
     await rawExecute(`UPDATE umrah_agents SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery(`SELECT * FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [req.params.id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_agents", entityId: Number(req.params.id) }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.updated", entity: "umrah_agents", entityId: Number(req.params.id), details: JSON.stringify(b) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_agents", entityId: Number(req.params.id) }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.updated", entity: "umrah_agents", entityId: Number(req.params.id), details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update agent error"); }
 });
@@ -306,8 +307,8 @@ router.delete("/agents/:id", requirePermission("umrah:write"), async (req, res):
       throw new ConflictError(`لا يمكن حذف الوكيل — مرتبط بـ ${inUse.c} معتمر`);
     }
     await rawExecute(`UPDATE umrah_agents SET "deletedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_agents", entityId: id, before: { name: existing.name } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.deleted", entity: "umrah_agents", entityId: id, details: JSON.stringify({ name: existing.name }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_agents", entityId: id, before: { name: existing.name } }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.deleted", entity: "umrah_agents", entityId: id, details: JSON.stringify({ name: existing.name }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete agent error"); }
 });
@@ -331,8 +332,8 @@ router.post("/packages", requirePermission("umrah:write"), async (req, res) => {
       [scope.companyId, b.name, b.seasonId, b.costPrice, b.sellPrice, b.includesTransport || false, b.includesHotel || false, b.includesMeals || false, b.includesZiyarat || false, b.duration || 7, b.description]
     );
     if (!rows[0]) throw new NotFoundError("فشل في إنشاء الباقة");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_packages", entityId: rows[0].id, after: { name: b.name } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.package.created", entity: "umrah_packages", entityId: rows[0].id, details: JSON.stringify({ name: b.name, costPrice: b.costPrice, sellPrice: b.sellPrice }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_packages", entityId: rows[0].id, after: { name: b.name } }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.package.created", entity: "umrah_packages", entityId: rows[0].id, details: JSON.stringify({ name: b.name, costPrice: b.costPrice, sellPrice: b.sellPrice }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create package error"); }
 });
@@ -369,8 +370,8 @@ router.patch("/packages/:id", requirePermission("umrah:write"), async (req, res)
     params.push(req.params.id); params.push(scope.companyId);
     await rawExecute(`UPDATE umrah_packages SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery(`SELECT * FROM umrah_packages WHERE id=$1 AND "companyId"=$2`, [req.params.id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_packages", entityId: Number(req.params.id), after: b }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.package.updated", entity: "umrah_packages", entityId: Number(req.params.id), details: JSON.stringify(b) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_packages", entityId: Number(req.params.id), after: b }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.package.updated", entity: "umrah_packages", entityId: Number(req.params.id), details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update package error"); }
 });
@@ -509,8 +510,8 @@ router.post("/pilgrims", requirePermission("umrah:write"), async (req, res) => {
         scope.userId,
       ]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_pilgrims", entityId: rows[0]?.id, after: { fullName: String(b.fullName).trim(), passportNumber: String(b.passportNumber).trim() } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.pilgrim.created", entity: "umrah_pilgrims", entityId: rows[0]?.id, after: { fullName: String(b.fullName).trim() } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_pilgrims", entityId: rows[0]?.id, after: { fullName: String(b.fullName).trim(), passportNumber: String(b.passportNumber).trim() } }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.pilgrim.created", entity: "umrah_pilgrims", entityId: rows[0]?.id, after: { fullName: String(b.fullName).trim() } }).catch((e) => logger.error(e, "umrah background task failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create pilgrim error"); }
 });
@@ -560,8 +561,8 @@ router.patch("/pilgrims/:id", requirePermission("umrah:write"), async (req, res)
       await rawExecute(`UPDATE umrah_pilgrims SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
       const [row] = await rawQuery(`SELECT * FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [pilgrimId, scope.companyId]);
       if (!row) throw new NotFoundError("المعتمر غير موجود");
-      createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pilgrims", entityId: pilgrimId }).catch(console.error);
-      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pilgrim.updated", entity: "umrah_pilgrims", entityId: pilgrimId, details: JSON.stringify(b) }).catch(console.error);
+      createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pilgrims", entityId: pilgrimId }).catch((e) => logger.error(e, "umrah background task failed"));
+      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pilgrim.updated", entity: "umrah_pilgrims", entityId: pilgrimId, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah background task failed"));
       res.json(row);
     }
   } catch (err) {
@@ -602,8 +603,8 @@ router.delete("/pilgrims/:id", requirePermission("umrah:write"), async (req, res
       throw new ConflictError("لا يمكن حذف معتمر عليه غرامات مُفوترة");
     }
     await rawExecute(`UPDATE umrah_pilgrims SET "deletedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_pilgrims", entityId: id, before: { fullName: existing.fullName } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pilgrim.deleted", entity: "umrah_pilgrims", entityId: id, details: JSON.stringify({ fullName: existing.fullName }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_pilgrims", entityId: id, before: { fullName: existing.fullName } }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pilgrim.deleted", entity: "umrah_pilgrims", entityId: id, details: JSON.stringify({ fullName: existing.fullName }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete pilgrim error"); }
 });
@@ -723,15 +724,15 @@ async function doImport(scope: any, body: { seasonId: number; rows: any[]; fileT
     await rawExecute(
       `UPDATE umrah_import_logs SET "newRecords"=$1,"updatedRecords"=$2,"duplicateRecords"=$3,"errorRecords"=$4,errors=$5,"processedRows"=$6 WHERE id=$7 AND "companyId"=$8`,
       [newCount, updateCount, dupCount, errCount, JSON.stringify(errors), Math.min(batchStart + BATCH_SIZE, importRows.length), logId, scope.companyId]
-    ).catch(console.error);
+    ).catch((e) => logger.error(e, "umrah background task failed"));
   }
 
   await rawExecute(
     `UPDATE umrah_import_logs SET "newRecords"=$1,"updatedRecords"=$2,"duplicateRecords"=$3,"errorRecords"=$4,errors=$5,"processedRows"=$6,status='completed' WHERE id=$7 AND "companyId"=$8`,
     [newCount, updateCount, dupCount, errCount, JSON.stringify(errors), importRows.length, logId, scope.companyId]
   );
-  createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_import_logs", entityId: logId, after: { total: importRows.length, new: newCount, updated: updateCount } }).catch(console.error);
-  emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.import.completed", entity: "umrah_import_logs", entityId: logId, details: JSON.stringify({ total: importRows.length, new: newCount, updated: updateCount, errors: errCount }) }).catch(console.error);
+  createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_import_logs", entityId: logId, after: { total: importRows.length, new: newCount, updated: updateCount } }).catch((e) => logger.error(e, "umrah background task failed"));
+  emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.import.completed", entity: "umrah_import_logs", entityId: logId, details: JSON.stringify({ total: importRows.length, new: newCount, updated: updateCount, errors: errCount }) }).catch((e) => logger.error(e, "umrah background task failed"));
   return { importLogId: logId, batchId: logId, total: importRows.length, new: newCount, updated: updateCount, duplicates: dupCount, errors: errCount, errorDetails: errors };
 }
 
@@ -847,7 +848,7 @@ router.post("/run-daily-status", requirePermission("umrah:write"), async (req, r
       } catch { /* state already changed */ }
     }
 
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.daily_status.run", entity: "umrah_pilgrims", entityId: 0, details: JSON.stringify({ date: today, arrivedUpdated, overstayedUpdated, departedUpdated }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.daily_status.run", entity: "umrah_pilgrims", entityId: 0, details: JSON.stringify({ date: today, arrivedUpdated, overstayedUpdated, departedUpdated }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ date: today, arrivedUpdated, overstayedUpdated, departedUpdated });
   } catch (err) { handleRouteError(err, res, "Daily status error"); }
 });
@@ -898,8 +899,8 @@ router.post("/run-penalty-engine", requirePermission("umrah:write"), async (req,
         created++;
       }
     }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_penalties", entityId: 0, after: { checked: overstayed.length, penaltiesCreated: created } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.penalty_engine.run", entity: "umrah_penalties", entityId: 0, details: JSON.stringify({ checked: overstayed.length, penaltiesCreated: created }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_penalties", entityId: 0, after: { checked: overstayed.length, penaltiesCreated: created } }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.penalty_engine.run", entity: "umrah_penalties", entityId: 0, details: JSON.stringify({ checked: overstayed.length, penaltiesCreated: created }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ checked: overstayed.length, penaltiesCreated: created });
   } catch (err) { handleRouteError(err, res, "Penalty engine error"); }
 });
@@ -1058,7 +1059,7 @@ router.post("/agent-invoices/generate", requirePermission("umrah:write"), async 
       await rawExecute(
         `UPDATE umrah_agent_invoices SET "journalEntryId"=$1 WHERE id=$2 AND "companyId"=$3`,
         [journalId, rows[0].id, scope.companyId]
-      ).catch(console.error);
+      ).catch((e) => logger.error(e, "umrah background task failed"));
 
       emitEvent({
         companyId: scope.companyId,
@@ -1067,12 +1068,12 @@ router.post("/agent-invoices/generate", requirePermission("umrah:write"), async 
         entity: "umrah_agent_invoices",
         entityId: rows[0].id,
         details: JSON.stringify({ journalId, total, servicesTotal, penaltiesTotal, commission }),
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "umrah background task failed"));
     } catch (glErr) {
-      console.error("[umrah] GL posting failed for agent invoice", rows[0].id, glErr);
+      logger.error({ err: glErr, invoiceId: rows[0].id }, "[umrah] GL posting failed for agent invoice");
     }
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_agent_invoices", entityId: rows[0]?.id, after: { agentId, seasonId, total } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_agent_invoices", entityId: rows[0]?.id, after: { agentId, seasonId, total } }).catch((e) => logger.error(e, "umrah background task failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Generate invoice error"); }
 });
@@ -1162,8 +1163,8 @@ router.delete("/transport/:id", requirePermission("umrah:write"), async (req, re
       throw new ConflictError("لا يمكن حذف رحلة قيد التنفيذ");
     }
     await rawExecute(`DELETE FROM umrah_transport WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_transport", entityId: id }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.deleted", entity: "umrah_transport", entityId: id }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_transport", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.deleted", entity: "umrah_transport", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete transport error"); }
 });
@@ -1211,12 +1212,12 @@ router.post("/transport", requirePermission("umrah:write"), async (req, res) => 
           { id: rows[0].id, cost: tripCost, fromLocation: b.fromLocation, toLocation: b.toLocation, vehicleId: b.vehicleId || undefined, driverId: b.driverId || undefined }
         );
       } catch (glErr) {
-        console.error("Transport GL posting failed:", glErr);
+        logger.error(glErr, "Transport GL posting failed:");
       }
     }
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_transport", entityId: rows[0]?.id, after: { fromLocation: b.fromLocation, toLocation: b.toLocation } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.created", entity: "umrah_transport", entityId: rows[0]?.id, details: JSON.stringify({ fromLocation: b.fromLocation, toLocation: b.toLocation, cost: b.cost }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_transport", entityId: rows[0]?.id, after: { fromLocation: b.fromLocation, toLocation: b.toLocation } }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.created", entity: "umrah_transport", entityId: rows[0]?.id, details: JSON.stringify({ fromLocation: b.fromLocation, toLocation: b.toLocation, cost: b.cost }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create transport error"); }
 });
@@ -1271,8 +1272,8 @@ router.patch("/transport/:id", requirePermission("umrah:write"), async (req, res
       await rawExecute(`UPDATE umrah_transport SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
       const [row] = await rawQuery(`SELECT * FROM umrah_transport WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
       if (!row) throw new NotFoundError("رحلة النقل غير موجودة");
-      createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_transport", entityId: id, after: b }).catch(console.error);
-      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.updated", entity: "umrah_transport", entityId: id, details: JSON.stringify(b) }).catch(console.error);
+      createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_transport", entityId: id, after: b }).catch((e) => logger.error(e, "umrah background task failed"));
+      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.updated", entity: "umrah_transport", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah background task failed"));
       res.json(row);
     }
   } catch (err) {
@@ -1308,8 +1309,8 @@ router.post("/transport/:id/assign-pilgrims", requirePermission("umrah:write"), 
       `UPDATE umrah_transport SET "pilgrimCount"=$1 WHERE id=$2 AND "companyId"=$3`,
       [newCount, transportId, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_transport", entityId: transportId, after: { assignedPilgrims: pilgrimIds.length, totalCount: newCount } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.pilgrims_assigned", entity: "umrah_transport", entityId: transportId, details: JSON.stringify({ pilgrimIds, count: pilgrimIds.length }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_transport", entityId: transportId, after: { assignedPilgrims: pilgrimIds.length, totalCount: newCount } }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.pilgrims_assigned", entity: "umrah_transport", entityId: transportId, details: JSON.stringify({ pilgrimIds, count: pilgrimIds.length }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ transportId, assignedCount: pilgrimIds.length, totalPilgrimCount: newCount });
   } catch (err) { handleRouteError(err, res, "Assign pilgrims to transport error"); }
 });
@@ -1346,8 +1347,8 @@ router.post("/assign-bulk", requirePermission("umrah:write"), async (req, res): 
       `UPDATE umrah_pilgrims SET "agentId"=$1, "updatedAt"=NOW() WHERE "companyId"=$2 AND id IN (${placeholders})`,
       [agentId, scope.companyId, ...pilgrimIds]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pilgrims", entityId: 0, after: { assigned: pilgrimIds.length, agentId } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pilgrims.bulk_assigned", entity: "umrah_pilgrims", entityId: 0, details: JSON.stringify({ count: pilgrimIds.length, agentId }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pilgrims", entityId: 0, after: { assigned: pilgrimIds.length, agentId } }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pilgrims.bulk_assigned", entity: "umrah_pilgrims", entityId: 0, details: JSON.stringify({ count: pilgrimIds.length, agentId }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ assigned: pilgrimIds.length, agentId });
   } catch (err) { handleRouteError(err, res, "Bulk assign error"); }
 });
@@ -1406,8 +1407,8 @@ router.post("/violations", requirePermission("umrah:write"), async (req, res) =>
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW()) RETURNING *`,
       [scope.companyId, scope.branchId || null, b.type, b.referenceType || null, b.referenceNumber || null, b.mutamerId || null, b.agentId || null, b.subAgentId || null, b.description || null, b.penaltyAmount || 0, b.status || "open", scope.userId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_violations", entityId: rows[0]?.id, after: { type: b.type, penaltyAmount: b.penaltyAmount } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.violation.created", entity: "umrah_violations", entityId: rows[0]?.id, after: { type: b.type } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_violations", entityId: rows[0]?.id, after: { type: b.type, penaltyAmount: b.penaltyAmount } }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.violation.created", entity: "umrah_violations", entityId: rows[0]?.id, after: { type: b.type } }).catch((e) => logger.error(e, "umrah background task failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create violation error"); }
 });
@@ -1444,7 +1445,7 @@ router.delete("/violations/:id", requirePermission("umrah:write"), async (req, r
       [id, scope.companyId, scope.userId]
     );
     if (!row) throw new NotFoundError("المخالفة غير موجودة");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_violations", entityId: id }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_violations", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete violation error"); }
 });
@@ -1481,10 +1482,10 @@ router.post("/penalties", requirePermission("umrah:write"), async (req, res) => 
           { id: rows[0].id, amount: Number(b.amount), pilgrimName, agentName, type: b.type || "manual" }
         );
       } catch (glErr) {
-        console.error("Penalty GL posting failed:", glErr);
+        logger.error(glErr, "Penalty GL posting failed:");
       }
     }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_penalties", entityId: rows[0]?.id, after: { amount: b.amount, type: b.type } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_penalties", entityId: rows[0]?.id, after: { amount: b.amount, type: b.type } }).catch((e) => logger.error(e, "umrah background task failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create penalty error"); }
 });

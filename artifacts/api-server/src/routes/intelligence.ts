@@ -13,6 +13,7 @@ import { haversineDistance, movingAverage, selectLeastLoadedResource, loadBalanc
 import { getUsageStats } from "../lib/activityTracker.js";
 import { calculateClientRFM, calculateAllClientsRFM, getClientAnalyticsSummary, getBestContactTime, detectSeasonalPatterns } from "../lib/clientAnalytics.js";
 import { getPersonalizedRecommendations } from "../lib/smartRecommendations.js";
+import { logger } from "../lib/logger.js";
 
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -95,7 +96,7 @@ router.post("/alerts/scan", requirePermission("admin:write"), async (req, res): 
   try {
     const scope = req.scope!;
     const result = await runSmartAlerts(scope.companyId);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "smart_alerts", entityId: 0, after: { fired: result.fired } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "smart_alerts", entityId: 0, after: { fired: result.fired } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -104,7 +105,7 @@ router.post("/alerts/scan", requirePermission("admin:write"), async (req, res): 
       entity: "smart_alerts",
       entityId: 0,
       details: JSON.stringify({ fired: result.fired }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ message: `تم فحص التنبيهات الذكية`, fired: result.fired, details: result.details });
   } catch (err) { handleRouteError(err, res, "Alert scan error:"); }
 });
@@ -117,7 +118,7 @@ router.patch("/alerts/:id/read", requirePermission("admin:write"), async (req, r
       `UPDATE smart_alerts SET "isRead"=true WHERE id=$1 AND "companyId"=$2`,
       [Number(id), scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "smart_alerts", entityId: Number(id), after: { isRead: true } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "smart_alerts", entityId: Number(id), after: { isRead: true } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -126,7 +127,7 @@ router.patch("/alerts/:id/read", requirePermission("admin:write"), async (req, r
       entity: "smart_alerts",
       entityId: Number(id),
       details: JSON.stringify({ isRead: true }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ message: "تم تعليم التنبيه كمقروء" });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -401,7 +402,7 @@ router.post("/ai/categorize", requirePermission("admin:write"), async (req, res)
     const scope = req.scope!;
     const { message, context } = body;
     const result = await aiEngine.receptionCategorize(message, context);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_categorize", entityId: 0, after: { message: message?.substring(0, 100) } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_categorize", entityId: 0, after: { message: message?.substring(0, 100) } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -410,7 +411,7 @@ router.post("/ai/categorize", requirePermission("admin:write"), async (req, res)
       entity: "ai_categorize",
       entityId: 0,
       details: JSON.stringify({ message: message?.substring(0, 100) }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "AI categorize error:"); }
 });
@@ -423,7 +424,7 @@ router.post("/ai/draft-reply", requirePermission("admin:write"), async (req, res
     const scope = req.scope!;
     const { ticketTitle, ticketDescription, history } = body;
     const draft = await aiEngine.responderDraft(ticketTitle, ticketDescription, history);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_draft_reply", entityId: 0, after: { ticketTitle } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_draft_reply", entityId: 0, after: { ticketTitle } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -432,7 +433,7 @@ router.post("/ai/draft-reply", requirePermission("admin:write"), async (req, res
       entity: "ai_draft_reply",
       entityId: 0,
       details: JSON.stringify({ ticketTitle }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ draft });
   } catch (err) { handleRouteError(err, res, "AI draft reply error:"); }
 });
@@ -445,7 +446,7 @@ router.post("/ai/translate", requirePermission("admin:write"), async (req, res):
     const scope = req.scope!;
     const { text, targetLanguage } = body;
     const translated = await aiEngine.translatorTranslate(text, targetLanguage);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_translate", entityId: 0, after: { targetLanguage } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_translate", entityId: 0, after: { targetLanguage } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -454,7 +455,7 @@ router.post("/ai/translate", requirePermission("admin:write"), async (req, res):
       entity: "ai_translate",
       entityId: 0,
       details: JSON.stringify({ targetLanguage }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ translated, targetLanguage });
   } catch (err) { handleRouteError(err, res, "AI translate error:"); }
 });
@@ -467,7 +468,7 @@ router.post("/ai/summarize", requirePermission("admin:write"), async (req, res):
     const scope = req.scope!;
     const { content, maxLength } = body;
     const summary = await aiEngine.summarizerSummarize(content, maxLength);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_summarize", entityId: 0 }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_summarize", entityId: 0 }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -476,7 +477,7 @@ router.post("/ai/summarize", requirePermission("admin:write"), async (req, res):
       entity: "ai_summarize",
       entityId: 0,
       details: JSON.stringify({ maxLength }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ summary });
   } catch (err) { handleRouteError(err, res, "AI summarize error:"); }
 });
@@ -489,7 +490,7 @@ router.post("/ai/evaluate-rules", requirePermission("admin:write"), async (req, 
     const scope = req.scope!;
     const { context, data, rules } = body;
     const result = await aiEngine.rulesEngineEvaluate({ context, data, rules });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_evaluate_rules", entityId: 0, after: { context } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_evaluate_rules", entityId: 0, after: { context } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -498,7 +499,7 @@ router.post("/ai/evaluate-rules", requirePermission("admin:write"), async (req, 
       entity: "ai_evaluate_rules",
       entityId: 0,
       details: JSON.stringify({ context }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "AI rules engine error:"); }
 });
@@ -511,7 +512,7 @@ router.post("/ai/forecast", requirePermission("admin:write"), async (req, res): 
     const scope = req.scope!;
     const { metricName, historicalData, forecastPeriods } = body;
     const result = await aiEngine.predictorForecast({ metricName, historicalData, forecastPeriods });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_forecast", entityId: 0, after: { metricName } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_forecast", entityId: 0, after: { metricName } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -520,7 +521,7 @@ router.post("/ai/forecast", requirePermission("admin:write"), async (req, res): 
       entity: "ai_forecast",
       entityId: 0,
       details: JSON.stringify({ metricName }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "AI forecast error:"); }
 });
@@ -536,7 +537,7 @@ router.post("/algorithms/haversine", requirePermission("admin:write"), async (re
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "preview", entity: "algorithms", entityId: 0,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -545,7 +546,7 @@ router.post("/algorithms/haversine", requirePermission("admin:write"), async (re
       entity: "algorithms",
       entityId: 0,
       details: JSON.stringify({ lat1, lon1, lat2, lon2, distance }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ distance, unit: "km" });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -561,7 +562,7 @@ router.post("/algorithms/moving-average", requirePermission("admin:write"), asyn
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "preview", entity: "algorithms", entityId: 0,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -570,7 +571,7 @@ router.post("/algorithms/moving-average", requirePermission("admin:write"), asyn
       entity: "algorithms",
       entityId: 0,
       details: JSON.stringify({ periods, dataPoints: values.length }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ result, periods, dataPoints: values.length });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -586,7 +587,7 @@ router.post("/algorithms/load-balance", requirePermission("admin:write"), async 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "preview", entity: "algorithms", entityId: 0,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -595,7 +596,7 @@ router.post("/algorithms/load-balance", requirePermission("admin:write"), async 
       entity: "algorithms",
       entityId: 0,
       details: JSON.stringify({ resourceCount: resources.length }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ selected });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -698,7 +699,7 @@ router.post("/smart-assign", requireRole("branch_manager", "general_manager", "o
        FROM employees e WHERE e.id=$2`,
       [scope.companyId, result.employeeId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "smart_assign", entityId: result.assignmentId, after: { employeeId: result.employeeId, taskType: taskType ?? "general" } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "smart_assign", entityId: result.assignmentId, after: { employeeId: result.employeeId, taskType: taskType ?? "general" } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -707,7 +708,7 @@ router.post("/smart-assign", requireRole("branch_manager", "general_manager", "o
       entity: "smart_assign",
       entityId: result.assignmentId,
       details: JSON.stringify({ employeeId: result.employeeId, taskType: taskType ?? "general", taskTitle }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({
       recommended: {
         employeeId: result.employeeId,

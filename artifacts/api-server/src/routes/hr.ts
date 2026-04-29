@@ -38,6 +38,7 @@ import {
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { ensureInquiryMemoForViolation } from "../lib/disciplineEngine.js";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
 
 // ── Zod request-body schemas ──
 
@@ -476,7 +477,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
         incidentDescription: `تأخر ${lateMinutes} دقيقة عن وقت البداية (تجاوز الحد ${lateThreshold} دقيقة)`,
         source: "auto",
         createdBy: scope.userId,
-      }).catch((err) => console.error("ensureInquiryMemoForViolation (check-in) error:", err));
+      }).catch((err) => logger.error(err, "ensureInquiryMemoForViolation (check-in) error:"));
     }
 
     // ── Step 13: Count monthly violations for penalty escalation ──
@@ -542,7 +543,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
         type: "late_warning", title: "تنبيه تأخر",
         body: `تم تسجيل تأخرك ${lateMinutes} دقيقة اليوم. ${penaltyLabel ? `العقوبة: ${penaltyLabel}` : ""}`,
         priority: "high", refType: "attendance", refId: attendanceId,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     // ── Step 17: Notify manager ──
@@ -554,22 +555,22 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
             type: "late_arrival", title: "تأخر موظف",
             body: `تأخر الموظف ${lateMinutes} دقيقة اليوم ${today}${penaltyLevel > 0 ? ` (مستوى العقوبة: ${penaltyLevel})` : ""}`,
             priority: "high", refType: "attendance", refId: attendanceId,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "hr background task failed"));
         }
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "attendance.checkin", entity: "attendance", entityId: attendanceId,
       details: JSON.stringify({ lateMinutes, isLate, distanceMeters, isOutOfRange, penaltyLevel, penaltyLabel, isWorkDay }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "attendance", entityId: attendanceId,
       after: { lateMinutes, isLate, distanceMeters, isOutOfRange, penaltyLevel, penaltyLabel, isWorkDay },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json({
       message: "تم تسجيل الحضور", lateMinutes, isLate,
@@ -771,7 +772,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
         incidentDescription: `خروج مبكر بمقدار ${earlyDepartureMinutes} دقيقة عن وقت نهاية الوردية`,
         source: "auto",
         createdBy: scope.userId,
-      }).catch((err) => console.error("ensureInquiryMemoForViolation (check-out) error:", err));
+      }).catch((err) => logger.error(err, "ensureInquiryMemoForViolation (check-out) error:"));
 
       // ── Notify employee about early departure ──
       createNotification({
@@ -779,7 +780,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
         type: "early_departure_warning", title: "تنبيه خروج مبكر",
         body: `تم تسجيل خروجك المبكر بمقدار ${earlyDepartureMinutes} دقيقة اليوم.`,
         priority: "high", refType: "attendance", refId: existing.id,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
 
       // ── Notify manager ──
       getManagerAssignmentId(scope.companyId, scope.branchId).then((managerAssignmentId) => {
@@ -789,22 +790,22 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
             type: "early_departure", title: "خروج مبكر لموظف",
             body: `غادر الموظف مبكراً بمقدار ${earlyDepartureMinutes} دقيقة اليوم ${today}`,
             priority: "high", refType: "attendance", refId: existing.id,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "hr background task failed"));
         }
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "attendance.checkout", entity: "attendance", entityId: existing.id,
       details: JSON.stringify({ workedHours, overtimeMinutes, earlyDepartureMinutes, isCheckOutOutOfRange, checkOutDistanceMeters }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "attendance", entityId: existing.id,
       after: { workedHours, overtimeMinutes, earlyDepartureMinutes, isCheckOutOutOfRange, checkOutDistanceMeters },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json({ message: "تم تسجيل الانصراف", workedHours, overtimeMinutes, earlyDepartureMinutes, isCheckOutOutOfRange, type: "checkout" });
   } catch (err) {
@@ -1062,7 +1063,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         "autoApprovedAt" TIMESTAMPTZ,
         "createdAt" TIMESTAMPTZ DEFAULT NOW()
       )
-    `).catch(console.error);
+    `).catch((e) => logger.error(e, "hr background task failed"));
     await rawExecute(`DO $$ BEGIN
       ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "genderRestriction" VARCHAR(10);
       ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "minServiceMonths" INTEGER DEFAULT 0;
@@ -1070,11 +1071,11 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "requiresDocument" BOOLEAN DEFAULT false;
       ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "maxDeptAbsentPct" NUMERIC DEFAULT 25;
     EXCEPTION WHEN OTHERS THEN NULL;
-    END $$`).catch(console.error);
+    END $$`).catch((e) => logger.error(e, "hr background task failed"));
     await rawExecute(`DO $$ BEGIN
       ALTER TABLE hr_leave_balances ADD COLUMN IF NOT EXISTS reserved NUMERIC DEFAULT 0;
     EXCEPTION WHEN OTHERS THEN NULL;
-    END $$`).catch(console.error);
+    END $$`).catch((e) => logger.error(e, "hr background task failed"));
 
     const scope = req.scope!;
     const parsed = leaveRequestSchema.safeParse(req.body);
@@ -1420,14 +1421,14 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         body: `طلب إجازة ${leaveType.name} لمدة ${days} أيام من ${startDate} إلى ${endDate}`,
         priority: "high", refType: "leave_request", refId: insertId,
         actionUrl: `/hr/leave-requests/${insertId}`,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "leave.requested", entity: "hr_leave_requests", entityId: insertId,
       details: JSON.stringify({ leaveTypeId, days, startDate, endDate, leaveTypeName: leaveType.name }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     submitWorkflow({
       companyId: scope.companyId,
@@ -1439,7 +1440,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       submittedBy: scope.activeAssignmentId,
       submittedByName: scope.userName,
       data: { leaveTypeId, days, startDate, endDate, reason },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     const [request] = await rawQuery<any>(
       `SELECT lr.*, lt.name AS "leaveTypeName"
@@ -1452,7 +1453,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "hr_leave_requests", entityId: insertId,
       after: { leaveTypeId, days, startDate, endDate, reason },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.status(201).json(request);
   } catch (err) {
@@ -1712,16 +1713,16 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
           type: "leave_request", title: `طلب إجازة يتطلب مراجعة ${nextStep.requiredRole}`,
           body: `أقر المرحلة ${currentStageNum} على طلب إجازة لمدة ${request.days} أيام`,
           priority: "high", refType: "leave_request", refId: Number(id),
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "hr background task failed"));
 
         emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `leave.stage${currentStageNum}_approved`,
-          entity: "hr_leave_requests", entityId: Number(id) }).catch(console.error);
+          entity: "hr_leave_requests", entityId: Number(id) }).catch((e) => logger.error(e, "hr background task failed"));
 
         createAuditLog({
           companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
           action: "update", entity: "hr_leave_requests", entityId: Number(id),
           after: { status: "pending", stage: currentStageNum, nextStage: nextStep.stepOrder },
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "hr background task failed"));
 
         res.json({ message: `تمت الموافقة من المرحلة ${currentStageNum}. الطلب الآن في مرحلة ${nextStep.requiredRole}`, status: "pending", nextStage: nextStep.stepOrder });
         return;
@@ -1819,7 +1820,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         type: "leave_approved", title: "تمت الموافقة على طلب الإجازة",
         body: `تمت الموافقة على إجازة ${request.leaveTypeName} من ${request.startDate} إلى ${request.endDate}`,
         priority: "high", refType: "leave_request", refId: Number(id),
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
     for (const asn of allAssignments) {
       const aId = asn.id;
@@ -1843,9 +1844,9 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
             type: "leave_approved", title: "موظف في إجازة معتمدة",
             body: `تمت الموافقة على إجازة موظف من ${request.startDate} إلى ${request.endDate}. تم إعادة توزيع المهام.`,
             priority: "normal", refType: "leave_request", refId: Number(id),
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "hr background task failed"));
         }
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     try {
@@ -1867,7 +1868,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
           { hoursAfterDue: 24, notifyRole: "general_manager" },
         ],
       });
-    } catch (obErr) { console.error("Return-to-work obligation failed:", obErr); }
+    } catch (obErr) { logger.error(obErr, "Return-to-work obligation failed:"); }
 
     res.json({ message: "تمت الموافقة النهائية", status: "approved", affectedAssignments: allAssignments.length });
   } catch (err) {
@@ -1997,17 +1998,17 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
         type: "leave_escalated", title: "تصعيد طلب إجازة",
         body: `تم تصعيد طلب إجازة (${id}) لعدم البت فيه خلال المهلة المحددة`,
         priority: "urgent", refType: "leave_request", refId: Number(id),
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.escalated",
-      entity: "hr_leave_requests", entityId: Number(id) }).catch(console.error);
+      entity: "hr_leave_requests", entityId: Number(id) }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "hr_leave_requests", entityId: Number(id),
       after: { status: "escalated" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json({ message: "تم تصعيد الطلب لـ HR" });
   } catch (err) {
@@ -2506,13 +2507,13 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
       companyId: scope.companyId, userId: scope.userId,
       action: "payroll.completed", entity: "payroll_runs", entityId: runId,
       details: JSON.stringify({ period: targetPeriod, totalNet, totalGosiEmployer, assignmentCount: lines.length }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "payroll.run", entity: "payroll_runs", entityId: runId,
       after: { period: targetPeriod, totalNet, totalGosiEmployer, assignmentCount: lines.length },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     // Employee-level aggregate for response
     const empAgg = new Map<number, { total: number; count: number }>();
@@ -2554,7 +2555,7 @@ router.get("/violations", requirePermission("hr:read"), async (req, res) => {
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { console.error("Get violations error:", err); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+  } catch (err) { logger.error(err, "Get violations error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
 
 router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => {
@@ -2647,7 +2648,7 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
       regulationId: regulationId ? Number(regulationId) : undefined,
       source: "manual",
       createdBy: scope.userId,
-    }).catch((err) => console.error("inquiry memo create failed:", err));
+    }).catch((err) => logger.error(err, "inquiry memo create failed:"));
 
     // Notify the offender and their manager.
     createNotification({
@@ -2659,7 +2660,7 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
       priority: "high",
       refType: "employee_violations",
       refId: insertId,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
     const managerAsn = await getManagerAssignmentId(scope.companyId, asn.branchId ?? scope.branchId ?? null).catch(() => null);
     if (managerAsn && managerAsn !== Number(assignmentId)) {
       createNotification({
@@ -2671,7 +2672,7 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
         priority: "normal",
         refType: "employee_violations",
         refId: insertId,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     await emitEvent({
@@ -2730,7 +2731,7 @@ router.get("/shifts", requirePermission("hr:read"), async (req, res) => {
     const scope = req.scope!;
     const rows = await rawQuery<any>(`SELECT * FROM shifts WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { console.error("Get shifts error:", err); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+  } catch (err) { logger.error(err, "Get shifts error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
 
 router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
@@ -2779,9 +2780,9 @@ router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "shifts", entityId: insertId,
       after: { name, startTime: startTime ?? null, endTime: endTime ?? null, days: days ?? "0,1,2,3,4", shiftType: effectiveShiftType, isDefault: !!isDefault },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
     const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id = $1`, [insertId]);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.created", entity: "hr_shifts", entityId: insertId, details: JSON.stringify({ name, shiftType: effectiveShiftType }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.created", entity: "hr_shifts", entityId: insertId, details: JSON.stringify({ name, shiftType: effectiveShiftType }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create shift error:"); }
 });
@@ -2797,7 +2798,7 @@ router.get("/performance", requirePermission("hr:read"), async (req, res) => {
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { console.error("Get performance error:", err); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+  } catch (err) { logger.error(err, "Get performance error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
 
 router.get("/performance/:id", requirePermission("hr:read"), async (req, res) => {
@@ -2889,7 +2890,7 @@ router.post("/performance", requirePermission("hr:create"), async (req, res) => 
       entityId: insertId,
       after: { employeeId: resolvedEmployeeId, period, overallScore: Number(overallScore ?? 0), status: effectiveStatus },
     });
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "performance.created", entity: "hr_performance", entityId: insertId, details: JSON.stringify({ employeeId: resolvedEmployeeId, period }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "performance.created", entity: "hr_performance", entityId: insertId, details: JSON.stringify({ employeeId: resolvedEmployeeId, period }) }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.status(201).json({
       id: insertId,
@@ -2986,7 +2987,7 @@ router.post("/salary-components", requirePermission("hr:create"), async (req, re
       entityId: insertId,
       after: { name, type: type ?? "fixed", category: category ?? "allowance", value: Number(value ?? 0), taxable: taxable ?? true },
     });
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "salary_component.created", entity: "hr_salary_components", entityId: insertId, details: JSON.stringify({ name, type: type ?? "fixed", category: category ?? "allowance" }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "salary_component.created", entity: "hr_salary_components", entityId: insertId, details: JSON.stringify({ name, type: type ?? "fixed", category: category ?? "allowance" }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.status(201).json({ id: insertId, name, type: type ?? "fixed", category: category ?? "allowance", value: Number(value ?? 0), taxable: taxable ?? true, status: "active" });
   } catch (err) { handleRouteError(err, res, "Create salary component error:"); }
 });
@@ -3061,8 +3062,8 @@ router.post("/approval-chain-definitions", requirePermission("hr:create"), async
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "approval_chains", entityId: chainId,
       after: { name, chainType, minAmount, maxAmount, stepCount: steps?.length ?? 0 },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "approval_chain.created", entity: "hr_approval_chain_definitions", entityId: chainId, details: JSON.stringify({ name, chainType }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "approval_chain.created", entity: "hr_approval_chain_definitions", entityId: chainId, details: JSON.stringify({ name, chainType }) }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.status(201).json({ id: chainId, name, chainType, stepsCreated: steps?.length ?? 0 });
   } catch (err) { handleRouteError(err, res, "Create approval chain error:"); }
@@ -3081,8 +3082,8 @@ router.delete("/approval-chain-definitions/:id", requirePermission("hr:delete"),
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "approval_chains", entityId: id,
       before: existing ?? { id },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "approval_chain.deleted", entity: "hr_approval_chain_definitions", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "approval_chain.deleted", entity: "hr_approval_chain_definitions", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3210,7 +3211,7 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
           `UPDATE email_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
             WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
           [request.refId]
-        ).catch((e) => console.error("cancel email_queue for rejected letter failed:", e));
+        ).catch((e) => logger.error(e, "cancel email_queue for rejected letter failed:"));
         await rawExecute(
           `UPDATE whatsapp_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
             WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
@@ -3224,13 +3225,13 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       action: "update", entity: "approval_requests", entityId: Number(req.params.id),
       before: { status: request.status, refType: request.refType, refId: request.refId },
       after: { status: result.status, approved: !!approved, reason: reason ?? null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: `approval.${result.status}`, entity: "approval_requests",
       entityId: Number(req.params.id),
       details: JSON.stringify({ refType: request.refType, refId: request.refId, result: result.status }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Approval decision error:"); }
@@ -3281,8 +3282,8 @@ router.put("/attendance-policy", requirePermission("hr:update"), async (req, res
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "attendance_policies", entityId: scope.companyId,
       after: { lateThresholdMinutes: b.lateThresholdMinutes ?? 15, gpsRadiusMeters: b.gpsRadiusMeters ?? 500 },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "attendance_policy.updated", entity: "hr_attendance_policies", entityId: scope.companyId, details: JSON.stringify({ lateThresholdMinutes: b.lateThresholdMinutes ?? 15, gpsRadiusMeters: b.gpsRadiusMeters ?? 500 }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "attendance_policy.updated", entity: "hr_attendance_policies", entityId: scope.companyId, details: JSON.stringify({ lateThresholdMinutes: b.lateThresholdMinutes ?? 15, gpsRadiusMeters: b.gpsRadiusMeters ?? 500 }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3396,8 +3397,8 @@ router.patch("/violations/:id", requirePermission("hr:update"), async (req, res)
       action: "update", entity: "employee_violations", entityId: id,
       before: beforeRow ?? {},
       after: updated ?? {},
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "violation.updated", entity: "hr_violations", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "violation.updated", entity: "hr_violations", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(updated || { message: "تم التحديث" });
   } catch (err) { handleRouteError(err, res, "Patch violation error:"); }
 });
@@ -3474,8 +3475,8 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
       action: "update", entity: "shifts", entityId: id,
       before: beforeRow ?? {},
       after: row ?? {},
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.updated", entity: "hr_shifts", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.updated", entity: "hr_shifts", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Patch shift error:"); }
 });
@@ -3490,8 +3491,8 @@ router.delete("/shifts/:id", requirePermission("hr:delete"), async (req, res) =>
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "shifts", entityId: id,
       before: beforeRow ?? { id },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.deleted", entity: "hr_shifts", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.deleted", entity: "hr_shifts", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ message: "تم حذف الوردية" });
   } catch (err) { handleRouteError(err, res, "Delete shift error:"); }
 });
@@ -3558,8 +3559,8 @@ router.post("/shift-assignments", requirePermission("hr:create"), async (req, re
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "employee_shift_assignments", entityId: insertId,
       after: { assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.assignment.created", entity: "hr_shift_assignments", entityId: insertId, details: JSON.stringify({ assignmentId: Number(assignmentId), shiftId: Number(shiftId) }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.assignment.created", entity: "hr_shift_assignments", entityId: insertId, details: JSON.stringify({ assignmentId: Number(assignmentId), shiftId: Number(shiftId) }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.status(201).json({ id: insertId, assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null });
   } catch (err) { handleRouteError(err, res, "Create shift assignment error:"); }
 });
@@ -3633,7 +3634,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
       submittedBy: scope.activeAssignmentId,
       submittedByName: scope.userName,
       data: { type, subject, content },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     // Leave a creation trail: the approval chain writes its own rows but the
     // letter itself had no audit entry, so the employee timeline started at
@@ -3651,7 +3652,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
         subject,
         status: approvalResult.requiresApproval ? "pending_approval" : (status ?? "draft"),
       },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -3660,7 +3661,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
       entity: "official_letter",
       entityId: insertId,
       after: { employeeId, type: type ?? "general", subject },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.status(201).json({ id: insertId, ...req.body, approval: approvalResult });
   } catch (err) { handleRouteError(err, res, "Create official letter error:"); }
@@ -3714,8 +3715,8 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "hr_leave_requests", entityId: Number(req.params.id),
       after: { status: status ?? undefined, reason: reason ?? undefined },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "leave.updated", entity: "hr_leave_requests", entityId: Number(req.params.id), details: JSON.stringify({ id: Number(req.params.id), status, reason }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "leave.updated", entity: "hr_leave_requests", entityId: Number(req.params.id), details: JSON.stringify({ id: Number(req.params.id), status, reason }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3868,12 +3869,12 @@ router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req,
       action: "delete", entity: "hr_leave_requests", entityId: id,
       before: { employeeId: leaveReq.employeeId, days: leaveReq.days, status: "pending" },
       after: { status: "deleted" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "leave.deleted", entity: "hr_leave_requests", entityId: id,
       details: `حذف طلب إجازة — ${leaveReq.days} أيام — رصيد مُحرّر`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
@@ -3969,7 +3970,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
             ],
           });
         }
-      } catch (obErr) { console.error("Payroll obligation registration failed:", obErr); }
+      } catch (obErr) { logger.error(obErr, "Payroll obligation registration failed:"); }
 
       await emitEvent({
         companyId: scope.companyId,
@@ -3978,7 +3979,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
         entity: "payroll_runs",
         entityId: Number(req.params.id),
         details: `ترحيل رواتب ${period}: صافي ${totalBankPayout.toFixed(2)} / GOSI ${totalGosiPayable.toFixed(2)}`,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
 
       const [row] = await rawQuery<any>(
         `SELECT * FROM payroll_runs WHERE id = $1`,
@@ -3989,7 +3990,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
         action: "update", entity: "payroll_runs", entityId: Number(req.params.id),
         before: { status: existing.status, period: existing.period },
         after: { status: "posted", period: existing.period },
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
       res.json(row);
       return;
     }
@@ -4005,7 +4006,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
       action: "update", entity: "payroll_runs", entityId: Number(req.params.id),
       before: { status: existing.status },
       after: { status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -4034,12 +4035,12 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
       action: "delete", entity: "payroll_runs", entityId: id,
       before: { period: exists.period, status: exists.status, totalNet: exists.totalNet },
       after: { status: "deleted" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "payroll.deleted", entity: "payroll_runs", entityId: id,
       details: `حذف دورة رواتب ${exists.period}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
@@ -4080,8 +4081,8 @@ router.patch("/performance/:id", requirePermission("hr:update"), async (req, res
       action: "update", entity: "performance_reviews", entityId: Number(req.params.id),
       before: beforeRow ?? {},
       after: row,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "performance.updated", entity: "hr_performance", entityId: Number(req.params.id), details: JSON.stringify({ id: Number(req.params.id) }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "performance.updated", entity: "hr_performance", entityId: Number(req.params.id), details: JSON.stringify({ id: Number(req.params.id) }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Patch performance error:"); }
 });
@@ -4103,8 +4104,8 @@ router.delete("/performance/:id", requirePermission("hr:delete"), async (req, re
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "performance_reviews", entityId: id,
       before: beforeRow ?? { id },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "performance.deleted", entity: "hr_performance", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "performance.deleted", entity: "hr_performance", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -4127,8 +4128,8 @@ router.delete("/violations/:id", requirePermission("hr:delete"), async (req, res
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "employee_violations", entityId: id,
       before: beforeRow ?? { id },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "violation.deleted", entity: "hr_violations", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "violation.deleted", entity: "hr_violations", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -4192,8 +4193,8 @@ router.patch("/official-letters/:id", requirePermission("hr:update"), async (req
       action: "update", entity: "official_letters", entityId: letterId,
       before: beforeRow ?? {},
       after: row,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "letter.updated", entity: "hr_official_letters", entityId: letterId, details: JSON.stringify({ id: letterId }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "letter.updated", entity: "hr_official_letters", entityId: letterId, details: JSON.stringify({ id: letterId }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -4215,8 +4216,8 @@ router.delete("/official-letters/:id", requirePermission("hr:delete"), async (re
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "official_letters", entityId: id,
       before: beforeRow ?? { id },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "letter.deleted", entity: "hr_official_letters", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "letter.deleted", entity: "hr_official_letters", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -4263,7 +4264,7 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
         `UPDATE email_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
           WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
         [Number(id)]
-      ).catch((e) => console.error("cancel email_queue for rejected letter failed:", e));
+      ).catch((e) => logger.error(e, "cancel email_queue for rejected letter failed:"));
       await rawExecute(
         `UPDATE whatsapp_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
           WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
@@ -4299,7 +4300,7 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
           priority: "high",
           refType: "official_letter",
           refId: Number(id),
-        }).catch((e) => console.error("notify letter creator failed:", e));
+        }).catch((e) => logger.error(e, "notify letter creator failed:"));
       }
     }
 
@@ -4308,7 +4309,7 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
         `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('official_letter',$1,$2,$3,$4,$5)`,
         [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
       );
-    } catch (e) { console.error("Failed to log approval action:", e); }
+    } catch (e) { logger.error(e, "Failed to log approval action:"); }
 
     // Close the loop: emit a lifecycle event so the letter actually gets
     // dispatched (email_queue). Without this the route used to stop at
@@ -4338,7 +4339,7 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "official_letters", entityId: Number(id),
       after: { status: newStatus, subject: letter.subject, type: letter.type, notes: notes ?? null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json({ id: Number(id), status: newStatus });
   } catch (err) { handleRouteError(err, res, "خطأ في اعتماد الخطاب"); }
@@ -4431,8 +4432,8 @@ router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res)
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "settings", entityId: scope.companyId,
       after: { key: "hr.onboarding_steps", steps },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "onboarding.steps_updated", entity: "hr_onboarding_steps", entityId: scope.companyId, details: JSON.stringify({ stepCount: steps.length }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "onboarding.steps_updated", entity: "hr_onboarding_steps", entityId: scope.companyId, details: JSON.stringify({ stepCount: steps.length }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ data: steps });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -4456,12 +4457,12 @@ router.post("/impact-preview/leave", requirePermission("hr:read"), async (req, r
     const daysCount = days ?? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1);
     const impact = await computeLeaveImpact(scope.companyId, Number(employeeId), assignment.id, Number(leaveTypeId), startDate, endDate, daysCount);
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.leave.impact_preview", entity: "hr_leave_requests", entityId: Number(employeeId) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.leave.impact_preview", entity: "hr_leave_requests", entityId: Number(employeeId) }).catch((e) => logger.error(e, "hr background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "preview", entity: "hr_leave_requests", entityId: Number(employeeId),
       after: { employeeId: Number(employeeId), leaveTypeId: Number(leaveTypeId), startDate, endDate },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json(impact);
   } catch (err) { handleRouteError(err, res, "خطأ في حساب الأثر"); }
@@ -4481,12 +4482,12 @@ router.post("/impact-preview/termination", requirePermission("hr:read"), async (
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
     const impact = await computeTerminationImpact(scope.companyId, Number(employeeId), assignment.id);
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.termination.impact_preview", entity: "employees", entityId: Number(employeeId) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.termination.impact_preview", entity: "employees", entityId: Number(employeeId) }).catch((e) => logger.error(e, "hr background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "preview", entity: "employees", entityId: Number(employeeId),
       after: { employeeId: Number(employeeId) },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json(impact);
   } catch (err) { handleRouteError(err, res, "خطأ في حساب الأثر"); }
@@ -4506,12 +4507,12 @@ router.post("/impact-preview/violation", requirePermission("hr:read"), async (re
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
     const impact = await computeViolationImpact(scope.companyId, Number(employeeId), assignment.id, Number(deduction), severity);
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.violation.impact_preview", entity: "employee_violations", entityId: Number(employeeId) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.violation.impact_preview", entity: "employee_violations", entityId: Number(employeeId) }).catch((e) => logger.error(e, "hr background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "preview", entity: "employee_violations", entityId: Number(employeeId),
       after: { employeeId: Number(employeeId), deduction: Number(deduction), severity },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json(impact);
   } catch (err) { handleRouteError(err, res, "خطأ في حساب الأثر"); }
@@ -5092,13 +5093,13 @@ router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:crea
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "evaluation.peer_submitted", entity: "peer_evaluations", entityId: insertId,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "peer_evaluations", entityId: insertId,
       after: { cycleId, evaluatorId, evaluatorRole, overallScore },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.status(201).json({ id: insertId, cycleId, evaluatorId, evaluatorRole, overallScore });
   } catch (err) { handleRouteError(err, res, "خطأ في إرسال التقييم"); }
@@ -5191,13 +5192,13 @@ router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "evaluation.upward_submitted", entity: "anonymous_upward_reviews", entityId: insertId,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "anonymous_upward_reviews", entityId: insertId,
       after: { cycleId, managerId, overallScore },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.status(201).json({ id: insertId, cycleId, anonymous: true, message: "تم إرسال التقييم بنجاح — هويتك محمية" });
   } catch (err) { handleRouteError(err, res, "خطأ في إرسال التقييم العكسي"); }
@@ -5453,8 +5454,8 @@ router.post("/delegations", requirePermission("hr:approve"), async (req, res) =>
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "delegations", entityId: r.insertId,
       after: { delegatorId: emp.id, delegateId: Number(delegateId), scope: delegationScope || "عام", reason, startDate: startDate || null, endDate: endDate || null },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delegation.created", entity: "hr_delegations", entityId: r.insertId, details: JSON.stringify({ delegateId: Number(delegateId), scope: delegationScope || "عام" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delegation.created", entity: "hr_delegations", entityId: r.insertId, details: JSON.stringify({ delegateId: Number(delegateId), scope: delegationScope || "عام" }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.status(201).json({ success: true, id: r.insertId, delegateId: Number(delegateId), startDate: startDate || null, endDate: endDate || null });
   } catch (err) { handleRouteError(err, res, "خطأ في إنشاء التفويض"); }
 });
@@ -5500,8 +5501,8 @@ router.post("/public-holidays", requirePermission("hr:create"), async (req, res)
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "public_holidays", entityId: insertId,
       after: { name: b.name, startDate: b.startDate, endDate: b.endDate || b.startDate, year, type: b.type || "national" },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "holiday.created", entity: "hr_public_holidays", entityId: insertId, details: JSON.stringify({ name: b.name, startDate: b.startDate }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "holiday.created", entity: "hr_public_holidays", entityId: insertId, details: JSON.stringify({ name: b.name, startDate: b.startDate }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create holiday error:"); }
 });
@@ -5535,8 +5536,8 @@ router.patch("/public-holidays/:id", requirePermission("hr:update"), async (req,
       action: "update", entity: "public_holidays", entityId: id,
       before: beforeRow ?? {},
       after: rows[0],
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "holiday.updated", entity: "hr_public_holidays", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "holiday.updated", entity: "hr_public_holidays", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update holiday error:"); }
 });
@@ -5568,8 +5569,8 @@ router.delete("/public-holidays/:id", requirePermission("hr:delete"), async (req
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "public_holidays", entityId: id,
       before: beforeRow ?? { id },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "holiday.deleted", entity: "hr_public_holidays", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "holiday.deleted", entity: "hr_public_holidays", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ message: "تم حذف العطلة" });
   } catch (err) { handleRouteError(err, res, "Delete holiday error:"); }
 });
@@ -5696,14 +5697,14 @@ router.post("/transfers", requirePermission("hr:create"), async (req, res) => {
         type: "transfer_request", title: "طلب نقل موظف جديد",
         body: `طلب نقل موظف بين الفروع — يحتاج مراجعة HR`,
         priority: "normal", refType: "employee_transfer", refId: insertId,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "employee_transfers", entityId: insertId,
       after: { employeeId: b.employeeId, fromBranchId: assignment.branchId, toBranchId: b.toBranchId, status: "pending" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -5716,7 +5717,7 @@ router.post("/transfers", requirePermission("hr:create"), async (req, res) => {
         fromBranchId: assignment.branchId,
         toBranchId: b.toBranchId,
       }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create transfer error:"); }
@@ -5808,7 +5809,7 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "employee_transfers", entityId: id,
       after: { status: row?.status, approved, notes: notes ?? null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Approve transfer error:"); }
@@ -5933,7 +5934,7 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "employee_transfers", entityId: id,
       after: { status: row?.status, confirmed, notes: notes ?? null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Receive transfer error:"); }
@@ -5986,8 +5987,8 @@ router.post("/idp", requirePermission("hr:create"), async (req, res) => {
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "employee_development_plans", entityId: insertId,
       after: { employeeId: b.employeeId, title: b.title || "خطة التطوير الفردي", status: "planned" },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "idp.created", entity: "hr_individual_development_plans", entityId: insertId, details: JSON.stringify({ employeeId: b.employeeId, title: b.title || "خطة التطوير الفردي" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "idp.created", entity: "hr_individual_development_plans", entityId: insertId, details: JSON.stringify({ employeeId: b.employeeId, title: b.title || "خطة التطوير الفردي" }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create IDP error:"); }
 });
@@ -6019,8 +6020,8 @@ router.patch("/idp/:id", requirePermission("hr:update"), async (req, res) => {
       action: "update", entity: "employee_development_plans", entityId: id,
       before: beforeRow ?? {},
       after: rows[0],
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "idp.updated", entity: "hr_individual_development_plans", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "idp.updated", entity: "hr_individual_development_plans", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update IDP error:"); }
 });
@@ -6035,8 +6036,8 @@ router.delete("/idp/:id", requirePermission("hr:delete"), async (req, res) => {
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "employee_development_plans", entityId: id,
       before: beforeRow ?? { id },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "idp.deleted", entity: "hr_individual_development_plans", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "idp.deleted", entity: "hr_individual_development_plans", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ message: "تم حذف خطة التطوير" });
   } catch (err) { handleRouteError(err, res, "Delete IDP error:"); }
 });
@@ -6227,13 +6228,13 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
       entity: "journal_entries",
       entityId: journalId ?? 0,
       details: JSON.stringify({ period: targetPeriod, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "journal_entries", entityId: journalId ?? 0,
       after: { period: targetPeriod, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length, ref },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.status(201).json({
       journalId,
@@ -6594,13 +6595,13 @@ router.post("/company-documents", requirePermission("hr:create"), async (req, re
       [scope.companyId, b.documentType || b.title, b.documentNumber || b.type || null,
        b.expiryDate || null, b.notes || null]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "company_document.created", entity: "hr_company_documents", entityId: insertId, details: JSON.stringify({ documentType: b.documentType }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "company_document.created", entity: "hr_company_documents", entityId: insertId, details: JSON.stringify({ documentType: b.documentType }) }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "company_documents", entityId: insertId,
       after: { documentType: b.documentType, documentNumber: b.documentNumber, expiryDate: b.expiryDate },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.status(201).json({ id: insertId, message: "تم إضافة وثيقة المنشأة" });
   } catch (err) { handleRouteError(err, res, "Company documents error:"); }
@@ -6665,13 +6666,13 @@ router.post("/employee-documents", requirePermission("hr:create"), async (req, r
        b.documentNumber || b.number || null, b.issueDate || null,
        b.expiryDate || null, b.notes || null]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "employee_document.created", entity: "hr_employee_documents", entityId: insertId, details: JSON.stringify({ employeeId: Number(b.employeeId), documentType: b.documentType }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "employee_document.created", entity: "hr_employee_documents", entityId: insertId, details: JSON.stringify({ employeeId: Number(b.employeeId), documentType: b.documentType }) }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "employee_documents", entityId: insertId,
       after: { employeeId: Number(b.employeeId), documentType: b.documentType, documentNumber: b.documentNumber, expiryDate: b.expiryDate },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.status(201).json({ id: insertId, message: "تم إضافة وثيقة الموظف" });
   } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
@@ -6758,8 +6759,8 @@ router.post("/excuse-requests", requirePermission("hr:create"), async (req, res)
       companyId: scope.companyId, branchId: assignment.branchId, userId: scope.userId,
       action: "create", entity: "hr_excuse_requests", entityId: insertId,
       after: { excuseDate, excuseType, estimatedMinutes },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: assignment.branchId, userId: scope.userId, action: "excuse.created", entity: "hr_excuse_requests", entityId: insertId, details: JSON.stringify({ excuseDate, excuseType }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: assignment.branchId, userId: scope.userId, action: "excuse.created", entity: "hr_excuse_requests", entityId: insertId, details: JSON.stringify({ excuseDate, excuseType }) }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.status(201).json({ id: insertId, message: "تم تقديم طلب الاستئذان بنجاح" });
   } catch (err) { handleRouteError(err, res, "Create excuse request error:"); }

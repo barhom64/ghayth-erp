@@ -14,6 +14,7 @@ import {
   getTimeline,
   getTimelineByRef,
 } from "../lib/workflowEngine.js";
+import { logger } from "../lib/logger.js";
 
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -112,8 +113,8 @@ router.post("/submit", requirePermission("admin:write"), async (req, res) => {
       submittedByName: scope.userName,
       data,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_instances", entityId: result.instanceId, after: { requestType, title } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.created", entity: "workflow_instances", entityId: result.instanceId, details: JSON.stringify({ requestType, title }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_instances", entityId: result.instanceId, after: { requestType, title } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.created", entity: "workflow_instances", entityId: result.instanceId, details: JSON.stringify({ requestType, title }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.status(201).json(result);
   } catch (err) {
     handleRouteError(err, res, "workflows");
@@ -136,8 +137,8 @@ router.post("/:id/approve", requirePermission("admin:write"), async (req, res) =
       attachments: body.attachments,
       overrideReason: body.overrideReason,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "approve" } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.approved", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ notes: body.notes }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "approve" } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.approved", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ notes: body.notes }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Workflow approve error:"); }
 });
@@ -157,8 +158,8 @@ router.post("/:id/reject", requirePermission("admin:write"), async (req, res) =>
       notes: body.notes,
       overrideReason: body.overrideReason,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "reject" } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.rejected", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ notes: body.notes }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "reject" } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.rejected", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ notes: body.notes }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Workflow reject error:"); }
 });
@@ -181,8 +182,8 @@ router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => 
       referredToName,
       overrideReason,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "refer", referredTo } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "refer", referredTo }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "refer", referredTo } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "refer", referredTo }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Workflow refer error:"); }
 });
@@ -202,8 +203,8 @@ router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) 
       notes: body.notes,
       overrideReason: body.overrideReason,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "escalate" } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "escalate" }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "escalate" } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "escalate" }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Workflow escalate error:"); }
 });
@@ -223,8 +224,8 @@ router.post("/:id/return", requirePermission("admin:write"), async (req, res) =>
       notes: body.notes,
       overrideReason: body.overrideReason,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "return" } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "return" }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "return" } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "return" }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Workflow return error:"); }
 });
@@ -359,8 +360,8 @@ router.post("/definitions", requirePermission("admin:write"), async (req, res) =
         );
       }
     }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_definitions", entityId: insertId, after: { requestType, requestTypeLabel } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "workflow_definitions", entityId: insertId, details: JSON.stringify({ requestType, requestTypeLabel }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_definitions", entityId: insertId, after: { requestType, requestTypeLabel } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "workflow_definitions", entityId: insertId, details: JSON.stringify({ requestType, requestTypeLabel }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.status(201).json({ id: insertId });
   } catch (err) {
     handleRouteError(err, res, "workflows");
@@ -399,8 +400,8 @@ router.put("/definitions/:id", requirePermission("admin:write"), async (req, res
 
     const [def] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1`, [id]);
     const updatedSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder"`, [id]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_definitions", entityId: id, after: { requestTypeLabel } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.updated", entity: "workflow_definitions", entityId: id, details: JSON.stringify({ requestTypeLabel }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_definitions", entityId: id, after: { requestTypeLabel } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.updated", entity: "workflow_definitions", entityId: id, details: JSON.stringify({ requestTypeLabel }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json({ ...def, steps: updatedSteps });
   } catch (err) {
     handleRouteError(err, res, "workflows");
@@ -413,8 +414,8 @@ router.delete("/definitions/:id", requirePermission("admin:write"), async (req, 
     const id = Number(req.params.id);
     const [before] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     await rawExecute(`DELETE FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "workflow_definitions", entityId: id, before }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.deleted", entity: "workflow_definitions", entityId: id, details: JSON.stringify({ requestType: before?.requestType }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "workflow_definitions", entityId: id, before }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.deleted", entity: "workflow_definitions", entityId: id, details: JSON.stringify({ requestType: before?.requestType }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json({ message: "تم الحذف" });
   } catch (err) {
     handleRouteError(err, res, "workflows");
@@ -450,8 +451,8 @@ router.post("/sla-definitions", requirePermission("admin:write"), async (req, re
        "escalateTo" = EXCLUDED."escalateTo"`,
       [scope.companyId, requestType, warningHours ?? 24, deadlineHours ?? 48, escalationHours ?? 72, autoApproveOnTimeout ?? false, escalateTo ?? "hr_manager"]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "sla_definitions", entityId: insertId, after: { requestType } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "sla_definitions", entityId: insertId, details: JSON.stringify({ requestType }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "sla_definitions", entityId: insertId, after: { requestType } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "sla_definitions", entityId: insertId, details: JSON.stringify({ requestType }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.status(201).json({ id: insertId });
   } catch (err) {
     handleRouteError(err, res, "workflows");

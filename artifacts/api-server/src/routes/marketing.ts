@@ -4,6 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 // P02-S3-CRIT — `marketing:*` permissions are seeded for the
 // `general_manager` and `crm_manager` roles in companyBootstrap.ts:195
@@ -91,8 +92,8 @@ router.post("/campaigns", requirePermission("marketing:create"), async (req, res
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "marketing_campaigns", entityId: r.insertId,
       after: { name, channel, status: status || "draft", budget: Number(budget ?? 0) },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.created", entity: "marketing_campaigns", entityId: r.insertId, details: JSON.stringify({ name, channel, status: status || "draft" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "marketing background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.created", entity: "marketing_campaigns", entityId: r.insertId, details: JSON.stringify({ name, channel, status: status || "draft" }) }).catch((e) => logger.error(e, "marketing background task failed"));
     res.status(201).json({ id: r.insertId, name, status: status || "draft", budget: Number(budget ?? 0) });
   } catch (err) { handleRouteError(err, res, "Create campaign error:"); }
 });
@@ -130,8 +131,8 @@ router.patch("/campaigns/:id", requirePermission("marketing:update"), async (req
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE marketing_campaigns SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.updated", entity: "marketing_campaigns", entityId: id, details: JSON.stringify(b) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "marketing_campaigns", entityId: id, after: b }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.updated", entity: "marketing_campaigns", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "marketing background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "marketing_campaigns", entityId: id, after: b }).catch((e) => logger.error(e, "marketing background task failed"));
     const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "marketing"); }
@@ -144,8 +145,8 @@ router.delete("/campaigns/:id", requirePermission("marketing:delete"), async (re
     const [existing] = await rawQuery<any>(`SELECT id FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الحملة غير موجودة");
     await rawExecute(`UPDATE marketing_campaigns SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.deleted", entity: "marketing_campaigns", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delete", entity: "marketing_campaigns", entityId: id }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.deleted", entity: "marketing_campaigns", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "marketing background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delete", entity: "marketing_campaigns", entityId: id }).catch((e) => logger.error(e, "marketing background task failed"));
     res.json({ message: "تم حذف الحملة بنجاح" });
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
@@ -236,8 +237,8 @@ router.patch("/campaigns/:id/revenue", requirePermission("marketing:update"), as
     const id = Number(req.params.id);
     const { revenue } = req.body;
     await rawExecute(`UPDATE marketing_campaigns SET revenue=$1 WHERE id=$2 AND "companyId"=$3`, [revenue || 0, id, scope.companyId]);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.revenue_updated", entity: "marketing_campaigns", entityId: id, details: JSON.stringify({ revenue: revenue || 0 }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "marketing_campaigns", entityId: id, after: { revenue: revenue || 0 } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.revenue_updated", entity: "marketing_campaigns", entityId: id, details: JSON.stringify({ revenue: revenue || 0 }) }).catch((e) => logger.error(e, "marketing background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "marketing_campaigns", entityId: id, after: { revenue: revenue || 0 } }).catch((e) => logger.error(e, "marketing background task failed"));
     const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "marketing"); }

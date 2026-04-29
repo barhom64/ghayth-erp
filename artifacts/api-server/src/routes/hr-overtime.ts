@@ -27,6 +27,7 @@ import {
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { generateSequentialNumber, calcHourlyRate as calcHourlyRateHelper } from "../lib/hrHelpers.js";
 import { HR_TABLES, NUMBER_PREFIXES } from "../lib/hrEnums.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -58,7 +59,7 @@ async function ensureOvertimeTable(): Promise<void> {
       "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
       "deletedAt" TIMESTAMPTZ
     )
-  `).catch(console.error);
+  `).catch((e) => logger.error(e, "hr-overtime background task failed"));
 }
 
 // ─── رقم متسلسل (يستخدم الأداة الموحّدة من hrHelpers) ───────────────────
@@ -288,7 +289,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
       submittedBy: scope.activeAssignmentId,
       submittedByName: scope.userName,
       data: { requestNumber, hours, totalAmount, overtimeDate: b.overtimeDate },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-overtime background task failed"));
 
     // ── إشعار المدير (fallback) ──
     if (!approvalResult?.requiresApproval) {
@@ -299,7 +300,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
           type: "overtime_request", title: "طلب وقت إضافي",
           body: `طلب ${hours} ساعات إضافية بتاريخ ${b.overtimeDate} — ${requestNumber}`,
           priority: "normal", refType: "hr_overtime_request", refId: insertId,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "hr-overtime background task failed"));
       }
     }
 
@@ -316,7 +317,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
       entity: "hr_overtime_requests",
       entityId: insertId,
       details: JSON.stringify({ requestNumber, hours, totalAmount, overtimeDate: b.overtimeDate, assignmentId: b.assignmentId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-overtime background task failed"));
 
     res.status(201).json({
       id: insertId, requestNumber, totalAmount,
@@ -363,13 +364,13 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
         companyId: scope.companyId, branchId: scope.branchId,
         refType: "hr_overtime_request", refId: item.id,
         approved: false, decidedBy: scope.activeAssignmentId, reason: rejectionReason,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr-overtime background task failed"));
       createNotification({
         companyId: scope.companyId, assignmentId: item.assignmentId,
         type: "overtime_rejected", title: "تم رفض طلب الوقت الإضافي",
         body: `تم رفض الطلب ${item.requestNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
         priority: "normal", refType: "hr_overtime_request", refId: item.id,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr-overtime background task failed"));
       emitEvent({
         companyId: scope.companyId,
         branchId: scope.branchId,
@@ -378,7 +379,7 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
         entity: "hr_overtime_requests",
         entityId: item.id,
         details: JSON.stringify({ requestNumber: item.requestNumber, reason: rejectionReason }),
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr-overtime background task failed"));
       res.json({ success: true, message: "تم رفض الطلب" });
       return;
     }
@@ -414,7 +415,7 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
       type: "overtime_approved", title: "تمت الموافقة على الوقت الإضافي",
       body: `تمت الموافقة على ${item.hours} ساعات إضافية — ${item.requestNumber}`,
       priority: "normal", refType: "hr_overtime_request", refId: item.id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-overtime background task failed"));
 
     await createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
@@ -429,7 +430,7 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
       entity: "hr_overtime_requests",
       entityId: item.id,
       details: JSON.stringify({ requestNumber: item.requestNumber, hours: item.hours, totalAmount: item.totalAmount }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-overtime background task failed"));
 
     res.json({ success: true, message: "تم اعتماد طلب الوقت الإضافي" });
   } catch (err) {
@@ -461,7 +462,7 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
       companyId: scope.companyId, branchId: scope.branchId,
       refType: "hr_overtime_request", refId: item.id,
       approved: false, decidedBy: scope.activeAssignmentId, reason: b.reason,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-overtime background task failed"));
 
     await rawExecute(
       `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2`,
@@ -473,7 +474,7 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
       type: "overtime_rejected", title: "تم رفض طلب الوقت الإضافي",
       body: `تم رفض الطلب ${item.requestNumber}${b.reason ? " — السبب: " + b.reason : ""}`,
       priority: "normal", refType: "hr_overtime_request", refId: item.id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-overtime background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -482,12 +483,12 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
       entity: "hr_overtime_requests",
       entityId: item.id,
       details: JSON.stringify({ requestNumber: item.requestNumber, reason: b.reason }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-overtime background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "hr_overtime_requests", entityId: Number(req.params.id),
       after: { status: "rejected", rejectionReason: b.reason || null, requestNumber: item.requestNumber },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-overtime background task failed"));
 
     res.json({ success: true });
   } catch (err) {

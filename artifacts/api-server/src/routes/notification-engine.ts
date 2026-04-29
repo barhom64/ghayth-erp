@@ -6,6 +6,7 @@ import { getDeliveryStats } from "../lib/notificationEngine.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -163,7 +164,7 @@ router.put("/preferences", requirePermission("admin:write"), async (req: Request
       companyId, userId: scope.userId, action: "update_notification_preferences",
       entity: "notification_preferences", entityId: 0,
       after: { preferences },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
       companyId,
       branchId: scope.branchId,
@@ -172,7 +173,7 @@ router.put("/preferences", requirePermission("admin:write"), async (req: Request
       entity: "notification_preferences",
       entityId: 0,
       details: JSON.stringify({ count: preferences.length }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
     res.json({ success: true });
   } catch (err) {
@@ -226,7 +227,7 @@ router.post("/routing-rules", requirePermission("admin:write"), async (req: Requ
       companyId: scope.companyId, userId: scope.userId, action: "create_routing_rule",
       entity: "notification_routing_rules", entityId: rows[0]?.id ?? 0,
       after: { eventCategory, channels, priority, description, fallbackChainId, isActive },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -235,7 +236,7 @@ router.post("/routing-rules", requirePermission("admin:write"), async (req: Requ
       entity: "notification_routing_rules",
       entityId: rows[0]?.id ?? 0,
       details: JSON.stringify({ eventCategory, channels }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
     res.json({ data: rows[0] });
   } catch (err) {
@@ -268,7 +269,7 @@ router.put("/routing-rules/:id", requirePermission("admin:write"), async (req: R
       companyId: scope.companyId, userId: scope.userId, action: "update_routing_rule",
       entity: "notification_routing_rules", entityId: Number(req.params.id),
       after: { channels, priority, description, fallbackChainId, isActive },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -277,7 +278,7 @@ router.put("/routing-rules/:id", requirePermission("admin:write"), async (req: R
       entity: "notification_routing_rules",
       entityId: Number(req.params.id),
       details: JSON.stringify({ channels, priority }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
     res.json({ success: true });
   } catch (err) {
@@ -301,7 +302,7 @@ router.delete("/routing-rules/:id", requirePermission("admin:write"), async (req
       companyId: scope.companyId, userId: scope.userId, action: "delete_routing_rule",
       entity: "notification_routing_rules", entityId: Number(req.params.id),
       before,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -310,7 +311,7 @@ router.delete("/routing-rules/:id", requirePermission("admin:write"), async (req
       entity: "notification_routing_rules",
       entityId: Number(req.params.id),
       details: JSON.stringify({ eventCategory: (before as any)?.eventCategory }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
     res.json({ success: true });
   } catch (err) {
@@ -364,7 +365,7 @@ router.post("/templates", requirePermission("admin:write"), async (req: Request,
       companyId: scope.companyId, userId: scope.userId, action: "create_notification_template",
       entity: "notification_templates", entityId: rows[0]?.id ?? 0,
       after: { templateKey, channel, titleTemplate, bodyTemplate, language, isActive },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -373,7 +374,7 @@ router.post("/templates", requirePermission("admin:write"), async (req: Request,
       entity: "notification_templates",
       entityId: rows[0]?.id ?? 0,
       details: JSON.stringify({ templateKey, channel, language }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
     res.json({ data: rows[0] });
   } catch (err) {
@@ -405,7 +406,7 @@ router.put("/templates/:id", requirePermission("admin:write"), async (req: Reque
       companyId: scope.companyId, userId: scope.userId, action: "update_notification_template",
       entity: "notification_templates", entityId: Number(req.params.id),
       after: { titleTemplate, bodyTemplate, isActive },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -414,7 +415,7 @@ router.put("/templates/:id", requirePermission("admin:write"), async (req: Reque
       entity: "notification_templates",
       entityId: Number(req.params.id),
       details: JSON.stringify({ titleTemplate, isActive }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
     res.json({ success: true });
   } catch (err) {
@@ -438,7 +439,7 @@ router.delete("/templates/:id", requirePermission("admin:write"), async (req: Re
       companyId: scope.companyId, userId: scope.userId, action: "delete_notification_template",
       entity: "notification_templates", entityId: Number(req.params.id),
       before,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -447,7 +448,7 @@ router.delete("/templates/:id", requirePermission("admin:write"), async (req: Re
       entity: "notification_templates",
       entityId: Number(req.params.id),
       details: JSON.stringify({ templateKey: (before as any)?.templateKey }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
     res.json({ success: true });
   } catch (err) {
@@ -490,7 +491,7 @@ router.post("/fallback-chains", requirePermission("admin:write"), async (req: Re
       companyId: scope.companyId, userId: scope.userId, action: "create_fallback_chain",
       entity: "notification_fallback_chains", entityId: rows[0]?.id ?? 0,
       after: { name, description, steps, isActive },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -499,7 +500,7 @@ router.post("/fallback-chains", requirePermission("admin:write"), async (req: Re
       entity: "notification_fallback_chains",
       entityId: rows[0]?.id ?? 0,
       details: JSON.stringify({ name, stepsCount: steps.length }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
     res.json({ data: rows[0] });
   } catch (err) {
@@ -531,7 +532,7 @@ router.put("/fallback-chains/:id", requirePermission("admin:write"), async (req:
       companyId: scope.companyId, userId: scope.userId, action: "update_fallback_chain",
       entity: "notification_fallback_chains", entityId: Number(req.params.id),
       after: { name, description, steps, isActive },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -540,7 +541,7 @@ router.put("/fallback-chains/:id", requirePermission("admin:write"), async (req:
       entity: "notification_fallback_chains",
       entityId: Number(req.params.id),
       details: JSON.stringify({ name }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
     res.json({ success: true });
   } catch (err) {
@@ -564,7 +565,7 @@ router.delete("/fallback-chains/:id", requirePermission("admin:write"), async (r
       companyId: scope.companyId, userId: scope.userId, action: "delete_fallback_chain",
       entity: "notification_fallback_chains", entityId: Number(req.params.id),
       before,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -573,7 +574,7 @@ router.delete("/fallback-chains/:id", requirePermission("admin:write"), async (r
       entity: "notification_fallback_chains",
       entityId: Number(req.params.id),
       details: JSON.stringify({ name: (before as any)?.name }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
     res.json({ success: true });
   } catch (err) {
@@ -625,7 +626,7 @@ router.post("/webhooks", requirePermission("admin:write"), async (req: Request, 
       companyId: scope.companyId, userId: scope.userId, action: "create_webhook",
       entity: "notification_webhooks", entityId: rows[0]?.id ?? 0,
       after: { name, url, events, isActive },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -634,7 +635,7 @@ router.post("/webhooks", requirePermission("admin:write"), async (req: Request, 
       entity: "notification_webhooks",
       entityId: rows[0]?.id ?? 0,
       details: JSON.stringify({ name, url }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
     res.json({ data: rows[0] });
   } catch (err) {
@@ -682,7 +683,7 @@ router.put("/webhooks/:id", requirePermission("admin:write"), async (req: Reques
       companyId: scope.companyId, userId: scope.userId, action: "update_webhook",
       entity: "notification_webhooks", entityId: Number(req.params.id),
       after: { name, url, events, isActive },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -691,7 +692,7 @@ router.put("/webhooks/:id", requirePermission("admin:write"), async (req: Reques
       entity: "notification_webhooks",
       entityId: Number(req.params.id),
       details: JSON.stringify({ name, url }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
     res.json({ success: true });
   } catch (err) {
@@ -715,7 +716,7 @@ router.delete("/webhooks/:id", requirePermission("admin:write"), async (req: Req
       companyId: scope.companyId, userId: scope.userId, action: "delete_webhook",
       entity: "notification_webhooks", entityId: Number(req.params.id),
       before,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -724,7 +725,7 @@ router.delete("/webhooks/:id", requirePermission("admin:write"), async (req: Req
       entity: "notification_webhooks",
       entityId: Number(req.params.id),
       details: JSON.stringify({ name: (before as any)?.name }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
     res.json({ success: true });
   } catch (err) {

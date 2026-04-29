@@ -10,6 +10,7 @@ import {
   ForbiddenError,
 } from "../lib/errorHandler.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, generateRef } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const contractsRouter = Router();
 contractsRouter.use(authMiddleware);
@@ -242,7 +243,7 @@ contractsRouter.post("/:id/approve", requirePermission("hr:approve"), async (req
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_approved", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
-    await createNotification({ companyId: scope.companyId, assignmentId: contract.assignmentId, type: "contract_approved", title: "تم اعتماد العقد", body: `تم اعتماد العقد رقم ${contract.ref}`, refType: "contract", refId: id }).catch(console.error);
+    await createNotification({ companyId: scope.companyId, assignmentId: contract.assignmentId, type: "contract_approved", title: "تم اعتماد العقد", body: `تم اعتماد العقد رقم ${contract.ref}`, refType: "contract", refId: id }).catch((e) => logger.error(e, "hr-contracts background task failed"));
 
     res.json(updated);
   } catch (err) {

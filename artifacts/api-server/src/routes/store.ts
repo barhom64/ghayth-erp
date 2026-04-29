@@ -90,8 +90,8 @@ router.post("/products", requirePermission("store:write"), async (req, res) => {
       `INSERT INTO store_products (name, description, sku, price, "costPrice", quantity, category, status, "imageUrl", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [name, description, sku, price || 0, costPrice || 0, quantity || 0, category, status || "active", imageUrl, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "store_products", entityId: r.insertId, after: { name, sku, price, category, status: status || "active" } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.product.created", entity: "store_products", entityId: r.insertId, details: JSON.stringify({ name, sku }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "store_products", entityId: r.insertId, after: { name, sku, price, category, status: status || "active" } }).catch((e) => logger.error(e, "store background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.product.created", entity: "store_products", entityId: r.insertId, details: JSON.stringify({ name, sku }) }).catch((e) => logger.error(e, "store background task failed"));
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "Create store product"); }
 });
@@ -133,8 +133,8 @@ router.patch("/products/:id", requirePermission("store:write"), async (req, res)
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE store_products SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "store_products", entityId: id, after: b }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.product.updated", entity: "store_products", entityId: id, details: JSON.stringify(b) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "store_products", entityId: id, after: b }).catch((e) => logger.error(e, "store background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.product.updated", entity: "store_products", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "store background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update store product"); }
 });
@@ -146,8 +146,8 @@ router.delete("/products/:id", requirePermission("store:write"), async (req, res
     const [existing] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المنتج غير موجود");
     await rawExecute(`UPDATE store_products SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "store_products", entityId: id, before: existing }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.product.deleted", entity: "store_products", entityId: id, details: JSON.stringify({ name: existing.name }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "store_products", entityId: id, before: existing }).catch((e) => logger.error(e, "store background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.product.deleted", entity: "store_products", entityId: id, details: JSON.stringify({ name: existing.name }) }).catch((e) => logger.error(e, "store background task failed"));
     res.json({ message: "تم حذف المنتج بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete store product"); }
 });
@@ -192,8 +192,8 @@ router.post("/orders", requirePermission("store:write"), async (req, res) => {
         );
       }
     }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "store_orders", entityId: orderId, after: { orderNumber: orderNumber || `ORD-${Date.now()}`, customerName, status: status || "pending", totalAmount } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.order.created", entity: "store_orders", entityId: orderId, details: JSON.stringify({ customerName, totalAmount }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "store_orders", entityId: orderId, after: { orderNumber: orderNumber || `ORD-${Date.now()}`, customerName, status: status || "pending", totalAmount } }).catch((e) => logger.error(e, "store background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.order.created", entity: "store_orders", entityId: orderId, details: JSON.stringify({ customerName, totalAmount }) }).catch((e) => logger.error(e, "store background task failed"));
     res.status(201).json({ id: orderId });
   } catch (err) { handleRouteError(err, res, "Create store order"); }
 });
@@ -262,8 +262,8 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
       }
     }
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "store_orders", entityId: id, after: b }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.order.updated", entity: "store_orders", entityId: id, details: JSON.stringify(b) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "store_orders", entityId: id, after: b }).catch((e) => logger.error(e, "store background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.order.updated", entity: "store_orders", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "store background task failed"));
     res.json(row.updated ?? row);
   } catch (err) { handleRouteError(err, res, "Update store order"); }
 });
@@ -275,8 +275,8 @@ router.delete("/orders/:id", requirePermission("store:write"), async (req, res) 
     const [existing] = await rawQuery<any>(`SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الطلب غير موجود");
     await rawExecute(`UPDATE store_orders SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "store_orders", entityId: id, before: existing }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.order.deleted", entity: "store_orders", entityId: id, details: JSON.stringify({ orderNumber: existing.orderNumber }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "store_orders", entityId: id, before: existing }).catch((e) => logger.error(e, "store background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.order.deleted", entity: "store_orders", entityId: id, details: JSON.stringify({ orderNumber: existing.orderNumber }) }).catch((e) => logger.error(e, "store background task failed"));
     res.json({ message: "تم حذف الطلب بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete store order"); }
 });
@@ -331,7 +331,7 @@ async function postStoreOrderGl(scope: any, order: any) {
     await rawExecute(
       `UPDATE store_orders SET "journalEntryId"=$1 WHERE id=$2 AND "companyId"=$3`,
       [result.journalId, order.id, scope.companyId]
-    ).catch(console.error);
+    ).catch((e) => logger.error(e, "store background task failed"));
   }
 
   emitEvent({
@@ -342,7 +342,7 @@ async function postStoreOrderGl(scope: any, order: any) {
     entity: "store_orders",
     entityId: order.id,
     details: JSON.stringify({ journalId: result?.journalId, totalAmount, totalCogs }),
-  }).catch(console.error);
+  }).catch((e) => logger.error(e, "store background task failed"));
 }
 
 export default router;

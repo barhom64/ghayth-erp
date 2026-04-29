@@ -4,6 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, ConflictError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -63,8 +64,8 @@ router.post("/dashboards", requirePermission("bi:write"), async (req, res) => {
       [title, description, layout ? JSON.stringify(layout) : '{}', isDefault || false, scope.userId, scope.companyId]
     );
     if (!row) throw new ConflictError("لوحة القيادة موجودة مسبقاً", { field: "title", fix: "استخدم عنواناً مختلفاً للوحة القيادة" });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_dashboards", entityId: row.id, after: { title } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.dashboard.created", entity: "bi_dashboards", entityId: row.id, details: JSON.stringify({ title }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_dashboards", entityId: row.id, after: { title } }).catch((e) => logger.error(e, "bi background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.dashboard.created", entity: "bi_dashboards", entityId: row.id, details: JSON.stringify({ title }) }).catch((e) => logger.error(e, "bi background task failed"));
     res.status(201).json({ id: row.id });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
@@ -92,8 +93,8 @@ router.post("/kpis", requirePermission("bi:write"), async (req, res) => {
       [name, description, module, formula, target, currentValue, unit, frequency || "monthly", scope.companyId]
     );
     if (!kpiRow) throw new ConflictError("مؤشر الأداء موجود مسبقاً", { field: "name", fix: "استخدم اسماً مختلفاً لمؤشر الأداء" });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_kpis", entityId: kpiRow.id, after: { name, module } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.kpi.created", entity: "bi_kpis", entityId: kpiRow.id, details: JSON.stringify({ name, module }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_kpis", entityId: kpiRow.id, after: { name, module } }).catch((e) => logger.error(e, "bi background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.kpi.created", entity: "bi_kpis", entityId: kpiRow.id, details: JSON.stringify({ name, module }) }).catch((e) => logger.error(e, "bi background task failed"));
     res.status(201).json({ id: kpiRow.id });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
@@ -121,8 +122,8 @@ router.post("/reports", requirePermission("bi:write"), async (req, res) => {
       [title, description, type, query, filters ? JSON.stringify(filters) : '{}', scheduledAt || null, scope.userId, scope.companyId]
     );
     if (!reportRow) throw new ConflictError("التقرير موجود مسبقاً", { field: "title", fix: "استخدم عنواناً مختلفاً للتقرير" });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_reports", entityId: reportRow.id, after: { title, type } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.report.created", entity: "bi_reports", entityId: reportRow.id, details: JSON.stringify({ title, type }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_reports", entityId: reportRow.id, after: { title, type } }).catch((e) => logger.error(e, "bi background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.report.created", entity: "bi_reports", entityId: reportRow.id, details: JSON.stringify({ title, type }) }).catch((e) => logger.error(e, "bi background task failed"));
     res.status(201).json({ id: reportRow.id });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
@@ -1271,8 +1272,8 @@ router.patch("/ai-insights/:id/dismiss", requirePermission("bi:write"), async (r
       `UPDATE smart_alerts SET "isDismissed" = true WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.insight.dismissed", entity: "smart_alerts", entityId: id, details: JSON.stringify({ isDismissed: true }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "ai_insights", entityId: id, after: { isDismissed: true } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.insight.dismissed", entity: "smart_alerts", entityId: id, details: JSON.stringify({ isDismissed: true }) }).catch((e) => logger.error(e, "bi background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "ai_insights", entityId: id, after: { isDismissed: true } }).catch((e) => logger.error(e, "bi background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Dismiss insight"); }
 });
@@ -1285,8 +1286,8 @@ router.patch("/ai-insights/:id/read", requirePermission("bi:write"), async (req,
       `UPDATE smart_alerts SET "isRead" = true WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.insight.read", entity: "smart_alerts", entityId: id, details: JSON.stringify({ isRead: true }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "ai_insights", entityId: id, after: { isRead: true } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.insight.read", entity: "smart_alerts", entityId: id, details: JSON.stringify({ isRead: true }) }).catch((e) => logger.error(e, "bi background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "ai_insights", entityId: id, after: { isRead: true } }).catch((e) => logger.error(e, "bi background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Mark insight read"); }
 });
@@ -1317,8 +1318,8 @@ router.post("/alert-fatigue/mute", requirePermission("bi:write"), async (req, re
          SET "muteUntil" = $4, reason = $5, "updatedAt" = NOW()`,
       [scope.companyId, scope.activeAssignmentId, alertType, muteUntil || null, reason || null]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.alert.muted", entity: "alert_mute_rules", entityId: 0, details: JSON.stringify({ alertType, muteUntil }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "alert_mute_rules", entityId: 0, after: { alertType, muteUntil, reason } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.alert.muted", entity: "alert_mute_rules", entityId: 0, details: JSON.stringify({ alertType, muteUntil }) }).catch((e) => logger.error(e, "bi background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "alert_mute_rules", entityId: 0, after: { alertType, muteUntil, reason } }).catch((e) => logger.error(e, "bi background task failed"));
     res.json({ success: true, message: `تم كتم تنبيهات "${alertType}"` });
   } catch (err) { handleRouteError(err, res, "Mute alert type"); }
 });
@@ -1331,8 +1332,8 @@ router.delete("/alert-fatigue/mute/:alertType", requirePermission("bi:write"), a
       `DELETE FROM alert_mute_rules WHERE "assignmentId" = $1 AND "alertType" = $2 AND "companyId" = $3`,
       [scope.activeAssignmentId, alertType, scope.companyId]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.alert.unmuted", entity: "alert_mute_rules", entityId: 0, details: JSON.stringify({ alertType }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "alert_mute_rules", entityId: 0, after: { alertType } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.alert.unmuted", entity: "alert_mute_rules", entityId: 0, details: JSON.stringify({ alertType }) }).catch((e) => logger.error(e, "bi background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "alert_mute_rules", entityId: 0, after: { alertType } }).catch((e) => logger.error(e, "bi background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Unmute alert type"); }
 });

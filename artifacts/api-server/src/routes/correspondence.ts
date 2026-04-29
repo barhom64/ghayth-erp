@@ -9,6 +9,7 @@ import {
   NotFoundError,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, currentYear, generateRef as makeRef } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const correspondenceRouter = Router();
 correspondenceRouter.use(authMiddleware);
@@ -130,7 +131,7 @@ correspondenceRouter.post("/", requirePermission("communications:write"), async 
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "correspondence_created", entity: "correspondence", entityId: row.id, after: { ref, direction: data.direction } });
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.created", entity: "correspondence", entityId: row.id, details: JSON.stringify({ ref, direction: data.direction, subject: data.subject }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.created", entity: "correspondence", entityId: row.id, details: JSON.stringify({ ref, direction: data.direction, subject: data.subject }) }).catch((e) => logger.error(e, "correspondence background task failed"));
 
     res.status(201).json(row);
   } catch (err) {
@@ -175,7 +176,7 @@ correspondenceRouter.patch("/:id", requirePermission("communications:write"), as
       params
     );
     if (!updated) throw new NotFoundError("المراسلة غير موجودة");
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.updated", entity: "correspondence", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.updated", entity: "correspondence", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "correspondence background task failed"));
     res.json(updated);
   } catch (err) {
     handleRouteError(err, res, "خطأ في تعديل المراسلة");
@@ -204,7 +205,7 @@ correspondenceRouter.post("/:id/send", requirePermission("communications:write")
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "correspondence_sent", entity: "correspondence", entityId: id, after: { ref: existing.ref } });
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.sent", entity: "correspondence", entityId: id, details: JSON.stringify({ ref: existing.ref, direction: existing.direction }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.sent", entity: "correspondence", entityId: id, details: JSON.stringify({ ref: existing.ref, direction: existing.direction }) }).catch((e) => logger.error(e, "correspondence background task failed"));
 
     res.json(updated);
   } catch (err) {
@@ -255,7 +256,7 @@ correspondenceRouter.post("/:id/respond", requirePermission("communications:writ
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "correspondence_response", entity: "correspondence", entityId: response.id, after: {
       responseRef, originalRef: original.ref,
     } });
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.responded", entity: "correspondence", entityId: response.id, details: JSON.stringify({ responseRef, originalRef: original.ref }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.responded", entity: "correspondence", entityId: response.id, details: JSON.stringify({ responseRef, originalRef: original.ref }) }).catch((e) => logger.error(e, "correspondence background task failed"));
 
     res.status(201).json(response);
   } catch (err) {

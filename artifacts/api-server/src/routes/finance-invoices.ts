@@ -406,7 +406,7 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
       await client.query(
         `UPDATE budgets SET used = used + $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4`,
         [baseAmount, effectiveCompanyId, invRevenueCode, currentPeriod()]
-      ).catch(console.error);
+      ).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
       if (finalDueDate) {
         const collectionDate = new Date(finalDueDate);
@@ -423,9 +423,9 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
     // GL entry deferred to approval (POST /invoices/:id/approve)
     // to prevent unapproved drafts from affecting the ledger.
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.created", entity: "invoices", entityId: insertId, details: JSON.stringify({ ref, total, dueDate: finalDueDate, vatAmount, lineCount: validatedLines.length }) }).catch(console.error);
-    createNotification({ companyId: scope.companyId, assignmentId: scope.activeAssignmentId, type: "invoice_created", title: "تم إنشاء فاتورة جديدة", body: `فاتورة ${ref} بمبلغ ${total.toLocaleString()} ﷼`, priority: "normal", refType: "invoices", refId: insertId }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "invoices", entityId: insertId, after: { ref, total, vatAmount, clientId: clientId ?? null } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.created", entity: "invoices", entityId: insertId, details: JSON.stringify({ ref, total, dueDate: finalDueDate, vatAmount, lineCount: validatedLines.length }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
+    createNotification({ companyId: scope.companyId, assignmentId: scope.activeAssignmentId, type: "invoice_created", title: "تم إنشاء فاتورة جديدة", body: `فاتورة ${ref} بمبلغ ${total.toLocaleString()} ﷼`, priority: "normal", refType: "invoices", refId: insertId }).catch((e) => logger.error(e, "finance-invoices background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "invoices", entityId: insertId, after: { ref, total, vatAmount, clientId: clientId ?? null } }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     const [invoice] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [insertId, scope.companyId]);
     res.status(201).json({ ...invoice, lines: validatedLines });
@@ -490,7 +490,7 @@ invoicesRouter.post("/invoices/:id/send", requirePermission("finance:create"), a
       throw err;
     }
 
-    createNotification({ companyId: scope.companyId, assignmentId: scope.activeAssignmentId, type: "invoice_sent", title: `تم إرسال الفاتورة ${invoice.ref}`, body: `تم إرسال الفاتورة للعميل ${invoice.clientName || ""} عبر ${channels.join(" + ") || "النظام"}`, priority: "normal", refType: "invoices", refId: Number(id) }).catch(console.error);
+    createNotification({ companyId: scope.companyId, assignmentId: scope.activeAssignmentId, type: "invoice_sent", title: `تم إرسال الفاتورة ${invoice.ref}`, body: `تم إرسال الفاتورة للعميل ${invoice.clientName || ""} عبر ${channels.join(" + ") || "النظام"}`, priority: "normal", refType: "invoices", refId: Number(id) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     res.json({ message: "تم إرسال الفاتورة بنجاح", status: "sent", channels, ref: invoice.ref });
   } catch (err) {
@@ -548,7 +548,7 @@ invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"
       guardId: id,
     });
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.approved", entity: "invoices", entityId: id, details: JSON.stringify({ ref: invoice.ref, total: invoice.total }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.approved", entity: "invoices", entityId: id, details: JSON.stringify({ ref: invoice.ref, total: invoice.total }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!updated) throw new NotFoundError("الفاتورة غير موجودة");
@@ -587,7 +587,7 @@ invoicesRouter.post("/invoices/:id/post", requirePermission("finance:approve"), 
       console.warn(`[invoice-post] Invoice #${id} has no GL entry — should have been created on approval`);
     }
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.posted", entity: "invoices", entityId: id }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.posted", entity: "invoices", entityId: id }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!updated) throw new NotFoundError("الفاتورة غير موجودة");
@@ -690,7 +690,7 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
       ],
     });
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.paid", entity: "invoices", entityId: Number(id), details: JSON.stringify({ amount, method, newStatus }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.paid", entity: "invoices", entityId: Number(id), details: JSON.stringify({ amount, method, newStatus }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     res.json({ message: "تم تسجيل الدفعة", newPaidAmount: newPaid, status: newStatus });
   } catch (err) {
@@ -797,7 +797,7 @@ invoicesRouter.patch("/invoices/:id", requirePermission("finance:update"), async
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -808,7 +808,7 @@ invoicesRouter.patch("/invoices/:id", requirePermission("finance:update"), async
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     res.json(row);
   } catch (err) {
@@ -847,7 +847,7 @@ invoicesRouter.delete("/invoices/:id", requirePermission("finance:delete"), asyn
           `UPDATE journal_entries SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2`,
           [Number(je.id), scope.companyId]
         );
-      } catch (e) { console.error("Failed to reverse invoice GL on delete:", e); }
+      } catch (e) { logger.error(e, "Failed to reverse invoice GL on delete:"); }
     }
 
     await rawExecute(
@@ -859,18 +859,18 @@ invoicesRouter.delete("/invoices/:id", requirePermission("finance:delete"), asyn
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [scope.companyId, scope.userId, "invoice.deleted", "invoices", String(id),
        JSON.stringify({ fromStatus: inv.status, toStatus: "cancelled" })]
-    ).catch(console.error);
+    ).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "invoices", entityId: id,
       before: { status: inv.status }, after: { status: "cancelled" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-invoices background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "invoice.deleted", entity: "invoices", entityId: id,
       details: `تم حذف الفاتورة ${inv.ref} وعكس رصيد GL`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     res.json({ success: true });
   } catch (err) {
@@ -919,7 +919,7 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
                 `UPDATE journal_entries SET status = 'reversed' WHERE id = $1 AND "companyId" = $2`,
                 [Number(je.id), scope.companyId]
               );
-            } catch (e) { console.error("Failed to reverse invoice GL on rejection:", e); }
+            } catch (e) { logger.error(e, "Failed to reverse invoice GL on rejection:"); }
           }
         }
         try {
@@ -927,7 +927,7 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
             `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('invoice',$1,$2,$3,$4,$5)`,
             [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
           );
-        } catch (e) { console.error(e); }
+        } catch (e) { logger.error(e, "finance-invoices error"); }
       },
     });
 
@@ -943,7 +943,7 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
         refType: "invoice",
         refId: Number(id),
         actionUrl: `/finance/invoices/${id}`,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "finance-invoices background task failed"));
     }
 
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
@@ -1120,7 +1120,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
       entity: "invoices",
       entityId: id,
       details: JSON.stringify({ memoId, amount: creditAmount, net, vat, reason }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     res.status(201).json({
       memoId,
@@ -1257,7 +1257,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
       entity: "invoices",
       entityId: id,
       details: JSON.stringify({ memoId, amount: chargeAmount, net, vat, reason }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     res.status(201).json({
       memoId,
@@ -1447,7 +1447,7 @@ invoicesRouter.post("/bad-debt/post", requirePermission("finance:create"), async
         ],
       }));
     } catch (je) {
-      console.error("Bad debt JE error:", je);
+      logger.error(je, "Bad debt JE error:");
       throw new IntegrationError(
         "فشل تسجيل قيد مخصص الديون المشكوك فيها",
         { field: "journalEntry", fix: "راجع إعدادات الحسابات (5170/1210) ثم أعد المحاولة" }
@@ -1461,7 +1461,7 @@ invoicesRouter.post("/bad-debt/post", requirePermission("finance:create"), async
       entity: "journal_entries",
       entityId: journalId ?? 0,
       details: JSON.stringify({ period: targetPeriod, total, buckets, rates: r }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     res.status(201).json({ journalId, ref, period: targetPeriod, total, buckets, rates: r });
   } catch (err) {

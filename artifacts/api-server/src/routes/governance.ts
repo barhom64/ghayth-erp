@@ -5,6 +5,7 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { logger } from "../lib/logger.js";
 
 const createPolicySchema = z.object({
   title: z.string().min(1, "عنوان السياسة مطلوب"),
@@ -72,7 +73,7 @@ router.post("/policies", requirePermission("governance:write"), async (req, res)
       const selectRes = await client.query(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
       return { insertId, row: selectRes.rows[0] };
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_policies", entityId: insertId, after: { title, category } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_policies", entityId: insertId, after: { title, category } }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -80,7 +81,7 @@ router.post("/policies", requirePermission("governance:write"), async (req, res)
       entity: "governance_policies",
       entityId: insertId,
       details: JSON.stringify({ title, category }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -142,14 +143,14 @@ router.patch("/policies/:id", requirePermission("governance:write"), async (req,
       const selectRes = await client.query(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
       return selectRes.rows[0];
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_policies", entityId: id }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_policies", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "governance.policy.updated",
       entity: "governance_policies",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -207,7 +208,7 @@ router.post("/policies/:id/new-version", requirePermission("governance:write"), 
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_policies", entityId: insertId, after: { version: nextVersion, parentId } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_policies", entityId: insertId, after: { version: nextVersion, parentId } }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -215,7 +216,7 @@ router.post("/policies/:id/new-version", requirePermission("governance:write"), 
       entity: "governance_policies",
       entityId: insertId,
       details: JSON.stringify({ version: nextVersion, parentId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.status(201).json(row);
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -266,14 +267,14 @@ router.delete("/policies/:id", requirePermission("governance:write"), async (req
     const [before] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const result = await rawExecute(`UPDATE governance_policies SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) throw new NotFoundError("السياسة غير موجودة");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_policies", entityId: id, before }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_policies", entityId: id, before }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "governance.policy.deleted",
       entity: "governance_policies",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.json({ message: "تم حذف السياسة بنجاح" });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -300,7 +301,7 @@ router.post("/risks", requirePermission("governance:write"), async (req, res) =>
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "governance_risks", entityId: r.insertId,
       after: { title, severity: severity ?? "medium", status: status || "open" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -308,7 +309,7 @@ router.post("/risks", requirePermission("governance:write"), async (req, res) =>
       entity: "governance_risks",
       entityId: r.insertId,
       details: JSON.stringify({ title, severity: severity ?? "medium" }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.status(201).json({ id: r.insertId, title, severity: severity ?? "medium", status: status || "open" });
   } catch (err) { handleRouteError(err, res, "Create risk error:"); }
 });
@@ -341,14 +342,14 @@ router.patch("/risks/:id", requirePermission("governance:write"), async (req, re
     const result = await rawExecute(`UPDATE governance_risks SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (result.affectedRows === 0) throw new NotFoundError("المخاطرة غير موجودة");
     const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_risks", entityId: id }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_risks", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "governance.risk.updated",
       entity: "governance_risks",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -360,14 +361,14 @@ router.delete("/risks/:id", requirePermission("governance:write"), async (req, r
     const [before] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const result = await rawExecute(`UPDATE governance_risks SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) throw new NotFoundError("المخاطرة غير موجودة");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_risks", entityId: id, before }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_risks", entityId: id, before }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "governance.risk.deleted",
       entity: "governance_risks",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.json({ message: "تم حذف المخاطرة بنجاح" });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -388,7 +389,7 @@ router.post("/audits", requirePermission("governance:write"), async (req, res) =
       `INSERT INTO governance_audits (title, scope, status, "auditorName", "startDate", "endDate", findings, "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [title, auditScope, status || "planned", auditorName, startDate, endDate, findings, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_audits", entityId: r.insertId, after: { title } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_audits", entityId: r.insertId, after: { title } }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -396,7 +397,7 @@ router.post("/audits", requirePermission("governance:write"), async (req, res) =
       entity: "governance_audits",
       entityId: r.insertId,
       details: JSON.stringify({ title }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -427,14 +428,14 @@ router.patch("/audits/:id", requirePermission("governance:write"), async (req, r
     const result = await rawExecute(`UPDATE governance_audits SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (result.affectedRows === 0) throw new NotFoundError("المراجعة غير موجودة");
     const [row] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_audits", entityId: id }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_audits", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "governance.audit.updated",
       entity: "governance_audits",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -446,14 +447,14 @@ router.delete("/audits/:id", requirePermission("governance:write"), async (req, 
     const [before] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const result = await rawExecute(`UPDATE governance_audits SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) throw new NotFoundError("المراجعة غير موجودة");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_audits", entityId: id, before }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_audits", entityId: id, before }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "governance.audit.deleted",
       entity: "governance_audits",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.json({ message: "تم حذف المراجعة بنجاح" });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -474,7 +475,7 @@ router.post("/compliance", requirePermission("governance:write"), async (req, re
       `INSERT INTO governance_compliance (regulation, description, status, "dueDate", "responsiblePerson", notes, "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [regulation, description, status || "compliant", dueDate, responsiblePerson, notes, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_compliance", entityId: r.insertId, after: { regulation } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_compliance", entityId: r.insertId, after: { regulation } }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -482,7 +483,7 @@ router.post("/compliance", requirePermission("governance:write"), async (req, re
       entity: "governance_compliance",
       entityId: r.insertId,
       details: JSON.stringify({ regulation }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -514,14 +515,14 @@ router.patch("/compliance/:id", requirePermission("governance:write"), async (re
     const result = await rawExecute(`UPDATE governance_compliance SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (result.affectedRows === 0) throw new NotFoundError("بند الامتثال غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_compliance", entityId: id }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_compliance", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "governance.compliance.updated",
       entity: "governance_compliance",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -533,14 +534,14 @@ router.delete("/compliance/:id", requirePermission("governance:write"), async (r
     const [before] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const result = await rawExecute(`UPDATE governance_compliance SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) throw new NotFoundError("بند الامتثال غير موجود");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_compliance", entityId: id, before }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_compliance", entityId: id, before }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "governance.compliance.deleted",
       entity: "governance_compliance",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.json({ message: "تم حذف بند الامتثال بنجاح" });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -615,7 +616,7 @@ router.post("/compliance-actions", requirePermission("governance:write"), async 
       [scope.companyId, b.title, b.regulation || null, b.description || null, b.owner || null, b.dueDate || null, b.status || 'open']
     );
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "policy_compliance_actions", entityId: r.insertId, after: { title: b.title } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "policy_compliance_actions", entityId: r.insertId, after: { title: b.title } }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -623,7 +624,7 @@ router.post("/compliance-actions", requirePermission("governance:write"), async 
       entity: "policy_compliance_actions",
       entityId: r.insertId,
       details: JSON.stringify({ title: b.title }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -643,14 +644,14 @@ router.patch("/compliance-actions/:actionId", requirePermission("governance:writ
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "policy_compliance_actions", entityId: id }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "policy_compliance_actions", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "governance.compliance_action.updated",
       entity: "policy_compliance_actions",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -661,14 +662,14 @@ router.delete("/compliance-actions/:actionId", requirePermission("governance:wri
     const id = Number(req.params.actionId);
     const [before] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     await rawExecute(`UPDATE policy_compliance_actions SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "policy_compliance_actions", entityId: id, before }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "policy_compliance_actions", entityId: id, before }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "governance.compliance_action.deleted",
       entity: "policy_compliance_actions",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -692,7 +693,7 @@ router.post("/policies/:id/compliance-actions", requirePermission("governance:wr
       [policyId, scope.companyId, b.action || b.title, b.status || 'open', b.responsiblePerson || b.owner || null, b.dueDate || null, b.notes || b.description || null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "policy_compliance_actions", entityId: r.insertId, after: { policyId, action: b.action } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "policy_compliance_actions", entityId: r.insertId, after: { policyId, action: b.action } }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -700,7 +701,7 @@ router.post("/policies/:id/compliance-actions", requirePermission("governance:wr
       entity: "policy_compliance_actions",
       entityId: r.insertId,
       details: JSON.stringify({ policyId, action: b.action }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -720,14 +721,14 @@ router.patch("/compliance-actions/:id", requirePermission("governance:write"), a
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "policy_compliance_actions", entityId: id }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "policy_compliance_actions", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "governance.compliance_action.updated",
       entity: "policy_compliance_actions",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -746,14 +747,14 @@ router.patch("/risks/:id/treatment", requirePermission("governance:write"), asyn
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE governance_risks SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_risks", entityId: id, after: { treatmentPlan: b.treatmentPlan } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_risks", entityId: id, after: { treatmentPlan: b.treatmentPlan } }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "governance.risk.treatment_updated",
       entity: "governance_risks",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -775,7 +776,7 @@ router.post("/capa", requirePermission("governance:write"), async (req, res) => 
       [scope.companyId, b.auditId || null, b.finding, b.rootCause || null, b.correctiveAction || null, b.preventiveAction || null, b.status || 'open', b.responsiblePerson || null, b.dueDate || null, null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM governance_capa WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_capa", entityId: r.insertId, after: { finding: b.finding } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_capa", entityId: r.insertId, after: { finding: b.finding } }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -783,7 +784,7 @@ router.post("/capa", requirePermission("governance:write"), async (req, res) => 
       entity: "governance_capa",
       entityId: r.insertId,
       details: JSON.stringify({ finding: b.finding }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -805,14 +806,14 @@ router.patch("/capa/:id", requirePermission("governance:write"), async (req, res
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE governance_capa SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM governance_capa WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_capa", entityId: id }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_capa", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "governance.capa.updated",
       entity: "governance_capa",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "governance background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
 });

@@ -8,6 +8,7 @@ import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 const SECRET: string = process.env.JWT_SECRET ?? (() => { throw new Error("JWT_SECRET is required for careers portal"); })();
@@ -104,8 +105,8 @@ router.post("/auth/register", portalLimiter, async (req: Request, res: Response)
       companyId: 0, userId: result.insertId, action: "careers_register",
       entity: "applicant_accounts", entityId: result.insertId,
       after: { name: name.trim(), email: email.trim().toLowerCase() },
-    }).catch(console.error);
-    emitEvent({ companyId: 0, branchId: 0, userId: result.insertId, action: "careers.account.registered", entity: "applicant_accounts", entityId: result.insertId, details: JSON.stringify({ name: name.trim(), email: email.trim().toLowerCase() }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "careersPortal background task failed"));
+    emitEvent({ companyId: 0, branchId: 0, userId: result.insertId, action: "careers.account.registered", entity: "applicant_accounts", entityId: result.insertId, details: JSON.stringify({ name: name.trim(), email: email.trim().toLowerCase() }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
     res.json({ token, accountId: result.insertId });
   } catch (err) {
@@ -146,8 +147,8 @@ router.post("/auth/login", portalLimiter, async (req: Request, res: Response) =>
       companyId: 0, userId: account.id, action: "careers_login",
       entity: "applicant_accounts", entityId: account.id,
       after: { email: email.trim().toLowerCase() },
-    }).catch(console.error);
-    emitEvent({ companyId: 0, branchId: 0, userId: account.id, action: "careers.account.logged_in", entity: "applicant_accounts", entityId: account.id, details: JSON.stringify({ email: email.trim().toLowerCase() }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "careersPortal background task failed"));
+    emitEvent({ companyId: 0, branchId: 0, userId: account.id, action: "careers.account.logged_in", entity: "applicant_accounts", entityId: account.id, details: JSON.stringify({ email: email.trim().toLowerCase() }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
     res.json({ token, accountId: account.id });
   } catch (err) {
@@ -233,8 +234,8 @@ router.patch("/me", careersAuth, async (req: Request, res: Response) => {
       companyId: 0, userId: (req as any).applicantId, action: "careers_update_profile",
       entity: "applicant_accounts", entityId: (req as any).applicantId,
       after: { name, phone, city, education, experienceYears },
-    }).catch(console.error);
-    emitEvent({ companyId: 0, branchId: 0, userId: (req as any).applicantId, action: "careers.profile.updated", entity: "applicant_accounts", entityId: (req as any).applicantId, details: JSON.stringify({ name, phone, city, education, experienceYears }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "careersPortal background task failed"));
+    emitEvent({ companyId: 0, branchId: 0, userId: (req as any).applicantId, action: "careers.profile.updated", entity: "applicant_accounts", entityId: (req as any).applicantId, details: JSON.stringify({ name, phone, city, education, experienceYears }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
     res.json({ message: "تم تحديث البيانات" });
   } catch (err) {
@@ -260,8 +261,8 @@ router.patch("/me/resume", careersAuth, async (req: Request, res: Response) => {
       companyId: 0, userId: (req as any).applicantId, action: "careers_update_resume",
       entity: "applicant_accounts", entityId: (req as any).applicantId,
       after: { resumeUrl },
-    }).catch(console.error);
-    emitEvent({ companyId: 0, branchId: 0, userId: (req as any).applicantId, action: "careers.resume.updated", entity: "applicant_accounts", entityId: (req as any).applicantId, details: JSON.stringify({ resumeUrl }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "careersPortal background task failed"));
+    emitEvent({ companyId: 0, branchId: 0, userId: (req as any).applicantId, action: "careers.resume.updated", entity: "applicant_accounts", entityId: (req as any).applicantId, details: JSON.stringify({ resumeUrl }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
     res.json({ message: "تم حفظ رابط السيرة الذاتية بنجاح" });
   } catch (err) {
@@ -327,8 +328,8 @@ router.post("/apply", careersAuth, async (req: Request, res: Response) => {
       companyId: 0, userId: applicantId, action: "careers_apply",
       entity: "job_applications", entityId: result.insertId,
       after: { postingId, applicantId, coverLetter: coverLetter ? "provided" : null },
-    }).catch(console.error);
-    emitEvent({ companyId: 0, branchId: 0, userId: applicantId, action: "careers.application.submitted", entity: "job_applications", entityId: result.insertId, details: JSON.stringify({ postingId, applicantId }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "careersPortal background task failed"));
+    emitEvent({ companyId: 0, branchId: 0, userId: applicantId, action: "careers.application.submitted", entity: "job_applications", entityId: result.insertId, details: JSON.stringify({ postingId, applicantId }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
     res.json({ applicationId: result.insertId, message: "تم تقديم طلبك بنجاح" });
   } catch (err) {

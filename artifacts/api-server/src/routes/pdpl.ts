@@ -6,6 +6,7 @@ import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent, toDateISO } from "../lib/businessHelpers.js";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
 
 const dataRequestSchema = z.object({
   requestType: z.enum(["access", "rectification", "erasure", "portability", "objection"]),
@@ -131,7 +132,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
         "Subject Rights Request",
         scope.activeAssignmentId
       ]
-    ).catch(console.error);
+    ).catch((e) => logger.error(e, "pdpl background task failed"));
 
     res.json({
       exportedAt: new Date().toISOString(),
@@ -182,8 +183,8 @@ router.post("/data-request", authMiddleware, requirePermission("admin:write"), a
       companyId: scope.companyId, userId: scope.userId, action: "create_data_request",
       entity: "data_access_requests", entityId: insertId,
       after: { requestType, requesterName: requesterName ?? scope.userName, dueDate: toDateISO(dueDate) },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "pdpl.data_request.created", entity: "data_access_requests", entityId: insertId, details: JSON.stringify({ requestType, requesterName: requesterName ?? scope.userName }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "pdpl background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "pdpl.data_request.created", entity: "data_access_requests", entityId: insertId, details: JSON.stringify({ requestType, requesterName: requesterName ?? scope.userName }) }).catch((e) => logger.error(e, "pdpl background task failed"));
 
     res.status(201).json({
       id: insertId,

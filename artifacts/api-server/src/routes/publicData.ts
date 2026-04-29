@@ -4,6 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import rateLimit from "express-rate-limit";
+import { logger } from "../lib/logger.js";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("الرجاء إدخال بريد إلكتروني صحيح"),
@@ -72,9 +73,9 @@ router.post("/forgot-password", publicLimiter, async (req, res) => {
       companyId: 0, userId: 0, action: "forgot_password_request",
       entity: "password_reset_requests", entityId: 0,
       after: { email: email.trim().toLowerCase() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "publicData background task failed"));
 
-    emitEvent({ companyId: 0, branchId: 0, userId: 0, action: "password_reset.requested", entity: "password_reset_requests", entityId: 0, details: JSON.stringify({ email: email.trim().toLowerCase() }) }).catch(console.error);
+    emitEvent({ companyId: 0, branchId: 0, userId: 0, action: "password_reset.requested", entity: "password_reset_requests", entityId: 0, details: JSON.stringify({ email: email.trim().toLowerCase() }) }).catch((e) => logger.error(e, "publicData background task failed"));
 
     res.json({ message: "تم إرسال طلب استعادة كلمة المرور بنجاح. سيقوم مدير النظام بمراجعة طلبك." });
   } catch (err) {

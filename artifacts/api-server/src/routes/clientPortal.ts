@@ -7,6 +7,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, isTyp
 import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -203,8 +204,8 @@ router.post("/auth/login", loginLimiter, async (req, res) => {
       `UPDATE client_portal_accounts SET "lastLoginAt" = NOW() WHERE id = $1`,
       [account.id]
     );
-    emitEvent({ companyId: account.companyId, branchId: 0, userId: 0, action: "portal.login", entity: "client_portal_accounts", entityId: account.id, details: JSON.stringify({ clientId: account.clientId, email }) }).catch(console.error);
-    createAuditLog({ companyId: account.companyId, userId: 0, action: "login", entity: "client_portal_accounts", entityId: account.id, after: { clientId: account.clientId, email } }).catch(console.error);
+    emitEvent({ companyId: account.companyId, branchId: 0, userId: 0, action: "portal.login", entity: "client_portal_accounts", entityId: account.id, details: JSON.stringify({ clientId: account.clientId, email }) }).catch((e) => logger.error(e, "clientPortal background task failed"));
+    createAuditLog({ companyId: account.companyId, userId: 0, action: "login", entity: "client_portal_accounts", entityId: account.id, after: { clientId: account.clientId, email } }).catch((e) => logger.error(e, "clientPortal background task failed"));
     const token = signPortalToken({
       accountId: account.id,
       clientId: account.clientId,
@@ -463,12 +464,12 @@ protectedRouter.post("/tickets/:id/replies", withPortalScope(async (req, res) =>
     createAuditLog({
       companyId: scope.companyId, userId: scope.accountId,
       action: "create", entity: "ticket_replies", entityId: Number(id),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "clientPortal background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.accountId,
       action: "portal.ticket_reply.created", entity: "ticket_replies", entityId: Number(id),
       details: JSON.stringify({ ticketId: Number(id), clientId: scope.clientId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "clientPortal background task failed"));
     res.status(201).json({ message: "تم إرسال الرد بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "Portal ticket reply error:");
@@ -505,12 +506,12 @@ protectedRouter.post("/tickets", withPortalScope(async (req, res) => {
     createAuditLog({
       companyId, userId: scope.accountId,
       action: "create", entity: "support_tickets", entityId: insertId,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "clientPortal background task failed"));
     emitEvent({
       companyId, userId: scope.accountId,
       action: "portal.ticket.created", entity: "support_tickets", entityId: insertId,
       details: JSON.stringify({ ref, title, clientId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "clientPortal background task failed"));
     res.status(201).json(ticket);
   } catch (err) {
     handleRouteError(err, res, "Portal create ticket error:");
@@ -542,12 +543,12 @@ protectedRouter.patch("/profile/password", withPortalScope(async (req, res) => {
     createAuditLog({
       companyId, userId: accountId,
       action: "update", entity: "client_portal_accounts", entityId: accountId,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "clientPortal background task failed"));
     emitEvent({
       companyId, userId: accountId,
       action: "portal.password.changed", entity: "client_portal_accounts", entityId: accountId,
       details: JSON.stringify({ clientId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "clientPortal background task failed"));
     res.json({ message: "تم تغيير كلمة المرور بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "Portal change password error:");
@@ -587,12 +588,12 @@ protectedRouter.post("/invoices/:id/pay", withPortalScope(async (req, res) => {
     createAuditLog({
       companyId: scope.companyId, userId: scope.accountId,
       action: "update", entity: "invoices", entityId: invoice.id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "clientPortal background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.accountId,
       action: "portal.invoice.paid", entity: "invoices", entityId: invoice.id,
       details: JSON.stringify({ paidAmount: payAmt, totalPaid: newPaid, status: newStatus, paymentRef, clientId: scope.clientId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "clientPortal background task failed"));
     res.json({
       invoiceId: invoice.id,
       invoiceRef: invoice.ref,
@@ -627,12 +628,12 @@ protectedRouter.post("/invoices/:id/csat", withPortalScope(async (req, res) => {
     createAuditLog({
       companyId: scope.companyId, userId: scope.accountId,
       action: "create", entity: "invoice_csat", entityId: Number(id),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "clientPortal background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.accountId,
       action: "portal.csat.submitted", entity: "invoice_csat", entityId: Number(id),
       details: JSON.stringify({ score, ticketId: Number(id), clientId: scope.clientId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "clientPortal background task failed"));
     res.status(201).json({ ticketId: Number(id), score, comment });
   } catch (err) {
     handleRouteError(err, res, "Portal CSAT error:");
@@ -666,7 +667,7 @@ protectedRouter.get("/kb/:id", withPortalScope(async (req, res) => {
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المقالة غير موجودة");
-    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1`, [id]).catch(console.error);
+    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1`, [id]).catch((e) => logger.error(e, "clientPortal background task failed"));
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "Portal KB article error:");
@@ -688,12 +689,12 @@ protectedRouter.post("/kb/:id/feedback", withPortalScope(async (req, res) => {
     createAuditLog({
       companyId: req.portalScope!.companyId, userId: req.portalScope!.accountId,
       action: "create", entity: "kb_feedback", entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "clientPortal background task failed"));
     emitEvent({
       companyId: req.portalScope!.companyId, userId: req.portalScope!.accountId,
       action: "portal.kb_feedback.submitted", entity: "kb_feedback", entityId: id,
       details: JSON.stringify({ helpful, articleId: id }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "clientPortal background task failed"));
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Portal KB feedback error:");

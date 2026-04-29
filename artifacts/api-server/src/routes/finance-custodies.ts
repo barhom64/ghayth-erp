@@ -14,6 +14,7 @@ import {
   createAuditLog,
   initiateApprovalChain,
 } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 
 export const custodiesRouter = Router();
@@ -111,7 +112,7 @@ custodiesRouter.get("/custodies", requirePermission("finance:read"), async (req,
       },
     });
   } catch (err) {
-    console.error("Get custodies error:", err);
+    logger.error(err, "Get custodies error:");
     res.json({ data: [], summary: { total: 0, totalAmount: 0, totalRemaining: 0, activeCount: 0, overdueCount: 0, pendingCount: 0 } });
   }
 });
@@ -462,7 +463,7 @@ custodiesRouter.post("/custodies", requirePermission("finance:create"), async (r
       entity: "custodies",
       entityId: journalId,
       details: JSON.stringify({ ref, assignmentId: custodyAssignmentId, employeeName: resolvedEmployeeName, amount, purpose, expectedReturnDate, approvalRequired: approvalResult.requiresApproval }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-custodies background task failed"));
 
     createAuditLog({
       companyId: scope.companyId,
@@ -472,7 +473,7 @@ custodiesRouter.post("/custodies", requirePermission("finance:create"), async (r
       entity: "custodies",
       entityId: journalId,
       after: { ref, employeeName: resolvedEmployeeName, amount, purpose, expectedReturnDate },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-custodies background task failed"));
 
     const entityStatus = approvalResult.requiresApproval ? "pending_approval" : "active";
     res.status(201).json({ id: journalId, ref, employeeName: resolvedEmployeeName, assignmentId: custodyAssignmentId, amount, description, purpose, expectedReturnDate, status: entityStatus, approval: approvalResult });
@@ -585,7 +586,7 @@ custodiesRouter.post("/custodies/settle", requirePermission("finance:create"), a
       entity: "custodies",
       entityId: journalId,
       details: JSON.stringify({ custodyRef, amount }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-custodies background task failed"));
 
     createAuditLog({
       companyId: scope.companyId,
@@ -595,7 +596,7 @@ custodiesRouter.post("/custodies/settle", requirePermission("finance:create"), a
       entity: "custodies",
       entityId: journalId,
       after: { custodyRef, settleRef, amount: settleAmount, remaining: remaining - settleAmount },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-custodies background task failed"));
 
     res.status(201).json({ id: journalId, ref: settleRef, custodyRef, amount, description });
   } catch (err) {
@@ -705,7 +706,7 @@ custodiesRouter.post("/custodies/:id/settle", requirePermission("finance:create"
       entity: "custodies",
       entityId: journalId,
       details: JSON.stringify({ custodyRef: custody.ref, amount }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-custodies background task failed"));
 
     createAuditLog({
       companyId: scope.companyId,
@@ -715,7 +716,7 @@ custodiesRouter.post("/custodies/:id/settle", requirePermission("finance:create"
       entity: "custodies",
       entityId: journalId,
       after: { custodyRef: custody.ref, settleRef, amount: settleAmount, remaining: remaining - settleAmount },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-custodies background task failed"));
 
     res.status(201).json({ id: journalId, ref: settleRef, custodyRef: custody.ref, amount, description });
   } catch (err) {
