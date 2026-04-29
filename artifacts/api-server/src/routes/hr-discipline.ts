@@ -412,10 +412,10 @@ router.get("/memos", requirePermission("hr:read"), async (req, res) => {
     const params: any[] = [scope.companyId];
     let where = `m."companyId" = $1 AND m."deletedAt" IS NULL`;
     if (status) { params.push(status); where += ` AND m.status = $${params.length}`; }
-    if (assignmentId) { params.push(assignmentId); where += ` AND m."assignmentId" = $${params.length}`; }
-    if (employeeId) { params.push(employeeId); where += ` AND m."employeeId" = $${params.length}`; }
+    if (Number.isFinite(assignmentId)) { params.push(assignmentId); where += ` AND m."assignmentId" = $${params.length}`; }
+    if (Number.isFinite(employeeId)) { params.push(employeeId); where += ` AND m."employeeId" = $${params.length}`; }
     const regulationIdFilter = req.query.regulationId ? Number(req.query.regulationId) : null;
-    if (regulationIdFilter) { params.push(regulationIdFilter); where += ` AND m."regulationId" = $${params.length}`; }
+    if (Number.isFinite(regulationIdFilter)) { params.push(regulationIdFilter); where += ` AND m."regulationId" = $${params.length}`; }
     const rows = await rawQuery<any>(
       `SELECT m.id, m."memoNumber", m."incidentType", m."incidentDate",
               m."incidentDurationMinutes", m.status, m.source,
