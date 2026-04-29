@@ -101,7 +101,7 @@ router.get("/", async (req, res) => {
           `SELECT ol.id, e.name AS "employeeName", ol.type AS "letterType", ol.status, ol."createdAt"
            FROM official_letters ol
            JOIN employees e ON e.id = ol."employeeId"
-           WHERE ol."companyId" = ANY($1::int[]) AND ol.status IN ('pending_approval','pending')
+           WHERE ol."companyId" = ANY($1::int[]) AND ol.status IN ('pending_approval','pending') AND ol."deletedAt" IS NULL
            ORDER BY ol."createdAt" DESC LIMIT 20`,
           [scope.allowedCompanies]
         );

@@ -125,7 +125,7 @@ router.patch("/postings/:id", requirePermission("hr:write"), async (req, res) =>
     params.push(id); params.push(scope.companyId);
     const result = await rawExecute(`UPDATE job_postings SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (result.affectedRows === 0) throw new NotFoundError("الإعلان الوظيفي غير موجود");
-    const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: b }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
@@ -226,7 +226,7 @@ router.delete("/postings/:id", requirePermission("hr:write"), async (req, res) =
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [before] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [before] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!before) throw new NotFoundError("الإعلان الوظيفي غير موجود");
     await rawExecute(`UPDATE job_postings SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_postings", entityId: id, before }).catch(console.error);
@@ -298,7 +298,7 @@ router.patch("/applications/:id", requirePermission("hr:write"), async (req, res
   try {
     const scope = req.scope!;
     const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT a.id FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT a.id FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2 AND a."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("طلب التوظيف غير موجود");
     const parsed = updateApplicationSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
@@ -312,7 +312,7 @@ router.patch("/applications/:id", requirePermission("hr:write"), async (req, res
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id);
     await rawExecute(`UPDATE job_applications SET ${sets.join(",")} WHERE id=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM job_applications WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM job_applications WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_applications", entityId: id, after: b }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,

@@ -237,13 +237,13 @@ router.get("/store", async (req, res) => {
     const cid = scope.companyId;
 
     const [orders, products, revenue] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'pending') AS pending, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled FROM store_orders WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE "isActive" = true) AS active FROM store_products WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COALESCE(SUM("totalAmount"), 0) AS "totalRevenue", COALESCE(SUM("totalAmount") FILTER (WHERE status = 'completed'), 0) AS "completedRevenue" FROM store_orders WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'pending') AS pending, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled FROM store_orders WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE "isActive" = true) AS active FROM store_products WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COALESCE(SUM("totalAmount"), 0) AS "totalRevenue", COALESCE(SUM("totalAmount") FILTER (WHERE status = 'completed'), 0) AS "completedRevenue" FROM store_orders WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
     ]);
 
     const monthlyOrders = await safeQuery(
-      `SELECT TO_CHAR(DATE_TRUNC('month', "createdAt"), 'YYYY-MM') AS month, COUNT(*) AS orders, COALESCE(SUM("totalAmount"), 0) AS revenue FROM store_orders WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '6 months' GROUP BY month ORDER BY month`, [cid]
+      `SELECT TO_CHAR(DATE_TRUNC('month', "createdAt"), 'YYYY-MM') AS month, COUNT(*) AS orders, COALESCE(SUM("totalAmount"), 0) AS revenue FROM store_orders WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" >= CURRENT_DATE - INTERVAL '6 months' GROUP BY month ORDER BY month`, [cid]
     );
 
     res.json({

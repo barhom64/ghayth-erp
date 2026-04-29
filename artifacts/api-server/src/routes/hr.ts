@@ -2728,7 +2728,7 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
 router.get("/shifts", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT * FROM shifts WHERE "companyId" = $1 ORDER BY name`, [scope.companyId]);
+    const rows = await rawQuery<any>(`SELECT * FROM shifts WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { console.error("Get shifts error:", err); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
@@ -2793,7 +2793,7 @@ router.get("/performance", requirePermission("hr:read"), async (req, res) => {
       `SELECT pr.*, e.name AS "employeeName", e."empNumber"
        FROM performance_reviews pr
        JOIN employees e ON e.id = pr."employeeId"
-       WHERE pr."companyId" = $1 ORDER BY pr."createdAt" DESC LIMIT 100`,
+       WHERE pr."companyId" = $1 AND pr."deletedAt" IS NULL ORDER BY pr."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -2811,7 +2811,7 @@ router.get("/performance/:id", requirePermission("hr:read"), async (req, res) =>
        FROM performance_reviews pr
        JOIN employees e ON e.id = pr."employeeId"
        LEFT JOIN employees rv ON rv.id = pr."reviewerId"
-       WHERE pr.id = $1 AND pr."companyId" = $2`,
+       WHERE pr.id = $1 AND pr."companyId" = $2 AND pr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("تقييم الأداء غير موجود");
@@ -3573,7 +3573,7 @@ router.get("/official-letters", requirePermission("hr:read"), async (req, res) =
        FROM official_letters ol
        LEFT JOIN employees e ON e.id = ol."employeeId"
        LEFT JOIN branches b ON b.id = ol."branchId"
-       WHERE ol."companyId" = $1
+       WHERE ol."companyId" = $1 AND ol."deletedAt" IS NULL
        ORDER BY ol."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
@@ -4069,7 +4069,7 @@ router.patch("/performance/:id", requirePermission("hr:update"), async (req, res
     }
     sets.push(`"updatedAt" = NOW()`);
     params.push(Number(req.params.id), scope.companyId);
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id = $1 AND "companyId" = $2`, [Number(req.params.id), scope.companyId]);
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     const [row] = await rawQuery<any>(
       `UPDATE performance_reviews SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
@@ -4180,7 +4180,7 @@ router.patch("/official-letters/:id", requirePermission("hr:update"), async (req
       throw new ValidationError("لا توجد بيانات");
     }
     const letterId = Number(req.params.id);
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2`, [letterId, scope.companyId]);
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [letterId, scope.companyId]);
     params.push(letterId, scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE official_letters SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
@@ -4232,7 +4232,7 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
     const { approved, notes } = req.body as any;
 
     const [letter] = await rawQuery<any>(
-      `SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
     if (!letter) throw new NotFoundError("الخطاب غير موجود");

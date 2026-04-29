@@ -83,7 +83,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
       const [sums] = await rawQuery<any>(
         `SELECT COALESCE(SUM(total), 0) AS total, COUNT(*)::int AS count
          FROM purchase_orders
-         WHERE "companyId"=$1 AND status NOT IN ('paid','cancelled','draft')`,
+         WHERE "companyId"=$1 AND status NOT IN ('paid','cancelled','draft') AND "deletedAt" IS NULL`,
         [companyId]
       );
       return { total: Number(sums?.total ?? 0), count: Number(sums?.count ?? 0) };

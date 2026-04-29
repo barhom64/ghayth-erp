@@ -35,7 +35,7 @@ budgetRouter.get("/budget", requirePermission("finance:read"), async (req, res) 
       `SELECT b.*, coa.name AS "accountName"
        FROM budgets b
        LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId"
-       WHERE ${where}
+       WHERE ${where} AND b."deletedAt" IS NULL
        ORDER BY b.period DESC, b."accountCode"`,
       params
     );

@@ -284,7 +284,7 @@ vendorsRouter.get("/commitments", requirePermission("finance:read"), async (req,
               s.name AS "supplierName", s.name AS "vendorName"
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id = po."supplierId"
-       WHERE po."companyId" = $1 AND po.status NOT IN ('cancelled','closed','received')
+       WHERE po."companyId" = $1 AND po.status NOT IN ('cancelled','closed','received') AND po."deletedAt" IS NULL
        ORDER BY po."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
