@@ -424,7 +424,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", requirePermission("fi
     const from = startDate || "1900-01-01";
 
     const [client] = await rawQuery<any>(
-      `SELECT id, name, phone, email, "vatNumber" FROM clients WHERE id = $1 AND "companyId" = $2`,
+      `SELECT id, name, phone, email, "vatNumber" FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [clientId, scope.companyId]
     );
     if (!client) { throw new NotFoundError("العميل غير موجود"); return; }
@@ -669,7 +669,7 @@ reportsRouter.get("/reports/entity-statement", requirePermission("finance:read")
         );
       }
     } else if (entityType === "client" && entityId) {
-      const [cl] = await rawQuery<any>(`SELECT name FROM clients WHERE id = $1 AND "companyId" = $2`, [Number(entityId), scope.companyId]);
+      const [cl] = await rawQuery<any>(`SELECT name FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(entityId), scope.companyId]);
       entityName = cl?.name || "";
       const qParams: any[] = [Number(entityId), scope.companyId];
       let dateFilter = "";

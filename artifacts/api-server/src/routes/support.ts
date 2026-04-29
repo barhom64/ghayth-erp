@@ -111,7 +111,7 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
     // "مرجع غير صالح" — now we reject early with field="clientId".
     if (b.clientId) {
       const [client] = await rawQuery<{ id: number }>(
-        `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
         [Number(b.clientId), scope.companyId]
       );
       if (!client) {
@@ -513,7 +513,7 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
       if (ticket.clientId) {
         try {
           const [client] = await rawQuery<any>(
-            `SELECT id, name, email FROM clients WHERE id = $1 AND "companyId" = $2`,
+            `SELECT id, name, email FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
             [ticket.clientId, scope.companyId]
           );
           if (client?.email) {

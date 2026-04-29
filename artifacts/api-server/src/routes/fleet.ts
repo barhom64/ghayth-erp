@@ -294,7 +294,7 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
     // FK pre-check on employeeId if provided
     if (b.employeeId !== undefined && b.employeeId !== null && b.employeeId !== "") {
       const [emp] = await rawQuery<any>(
-        `SELECT id FROM employees WHERE id=$1`,
+        `SELECT id FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
         [b.employeeId]
       );
       if (!emp) {
