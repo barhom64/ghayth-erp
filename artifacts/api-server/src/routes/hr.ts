@@ -2561,6 +2561,7 @@ router.get("/violations", requirePermission("hr:read"), async (req, res) => {
 router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [item] = await rawQuery<any>(
       `SELECT ev.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", ea.salary, b.name AS "branchName"
@@ -2569,7 +2570,7 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
        JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN branches b ON b.id = ea."branchId"
        WHERE ev.id = $1 AND ev."companyId" = $2 AND ev."deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("المخالفة غير موجودة");
 
