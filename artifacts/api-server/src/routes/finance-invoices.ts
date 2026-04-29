@@ -716,10 +716,10 @@ invoicesRouter.get("/invoices/:id", requirePermission("finance:read"), async (re
       [Number(id), scope.companyId]
     );
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
-    const lines = await rawQuery<any>(`SELECT * FROM invoice_lines WHERE "invoiceId" = $1 ORDER BY id`, [Number(id)]);
+    const lines = await rawQuery<any>(`SELECT * FROM invoice_lines WHERE "invoiceId" = $1 ORDER BY id LIMIT 500`, [Number(id)]);
     const [payments, journalEntries] = await Promise.all([
-      rawQuery<any>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE $2 AND jl."accountCode" = '1100' AND jl.debit > 0 GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC`, [scope.companyId, `PAY-${invoice.ref}%`]),
-      rawQuery<any>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND (je.ref LIKE $2 OR je.ref LIKE $3) ORDER BY je."createdAt" DESC`, [scope.companyId, `JE-${invoice.ref}%`, `PAY-${invoice.ref}%`]),
+      rawQuery<any>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE $2 AND jl."accountCode" = '1100' AND jl.debit > 0 GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `PAY-${invoice.ref}%`]),
+      rawQuery<any>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND (je.ref LIKE $2 OR je.ref LIKE $3) ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `JE-${invoice.ref}%`, `PAY-${invoice.ref}%`]),
     ]);
     res.json({ ...invoice, lines, payments, journalEntries });
   } catch (err) {

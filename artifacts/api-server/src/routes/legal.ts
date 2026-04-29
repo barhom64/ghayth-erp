@@ -607,7 +607,7 @@ router.get("/cases/:id", requirePermission("legal:read"), async (req, res) => {
     const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("القضية غير موجودة");
 
-    const sessions = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 ORDER BY "sessionDate" DESC`, [row.id]);
+    const sessions = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 ORDER BY "sessionDate" DESC LIMIT 500`, [row.id]);
 
     res.json({ ...row, sessions, allowedTransitions: VALID_CASE_TRANSITIONS[row.status] || [] });
   } catch (err) { handleRouteError(err, res, "Get case error:"); }

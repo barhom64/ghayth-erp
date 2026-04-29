@@ -54,7 +54,7 @@ const router = Router();
 router.get("/campaigns", requirePermission("marketing:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM marketing_campaigns WHERE "companyId"=$1 ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM marketing_campaigns WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });

@@ -912,7 +912,7 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
     } catch (obErr) { logger.error(obErr, "Contract obligation registration failed:"); }
 
     const [row] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
-    const schedule = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber"`, [insertId]);
+    const schedule = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber" LIMIT 500`, [insertId]);
 
     // Lifecycle event: lease.created
     await emitEvent({
@@ -2317,7 +2317,7 @@ router.get("/tenants/:id", requirePermission("property:read"), async (req, res) 
 
     const contracts = tenantName
       ? await rawQuery<any>(
-          `SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND (c."tenantId"=$2 OR c."tenantName"=$3) ORDER BY c.id DESC`,
+          `SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND (c."tenantId"=$2 OR c."tenantName"=$3) ORDER BY c.id DESC LIMIT 500`,
           [scope.companyId, numericId ?? null, tenantName]
         )
       : [];
@@ -2934,9 +2934,9 @@ router.get("/owners/:id", requirePermission("property:read"), async (req, res) =
     const id = parseId(req.params.id, "id");
     const [owner] = await rawQuery<any>(`SELECT * FROM property_owners WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!owner) throw new NotFoundError("المالك غير موجود");
-    const buildings = await rawQuery<any>(`SELECT * FROM property_buildings WHERE "ownerId"=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    const units = await rawQuery<any>(`SELECT * FROM property_units WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    const contracts = await rawQuery<any>(`SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."ownerId"=$1 AND c."companyId"=$2 AND c."deletedAt" IS NULL ORDER BY c.id DESC`, [id, scope.companyId]);
+    const buildings = await rawQuery<any>(`SELECT * FROM property_buildings WHERE "ownerId"=$1 AND "companyId"=$2 LIMIT 500`, [id, scope.companyId]);
+    const units = await rawQuery<any>(`SELECT * FROM property_units WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 500`, [id, scope.companyId]);
+    const contracts = await rawQuery<any>(`SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."ownerId"=$1 AND c."companyId"=$2 AND c."deletedAt" IS NULL ORDER BY c.id DESC LIMIT 500`, [id, scope.companyId]);
     res.json({ ...owner, buildings, units, contracts });
   } catch (err) { handleRouteError(err, res, "Owner detail error:"); }
 });

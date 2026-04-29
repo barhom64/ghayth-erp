@@ -285,7 +285,7 @@ router.delete("/policies/:id", requirePermission("governance:write"), async (req
 router.get("/risks", requirePermission("governance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM governance_risks WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM governance_risks WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -380,7 +380,7 @@ router.delete("/risks/:id", requirePermission("governance:write"), async (req, r
 router.get("/audits", requirePermission("governance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM governance_audits WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM governance_audits WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -467,7 +467,7 @@ router.delete("/audits/:id", requirePermission("governance:write"), async (req, 
 router.get("/compliance", requirePermission("governance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM governance_compliance WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM governance_compliance WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -608,7 +608,7 @@ router.get("/compliance-dashboard", requirePermission("governance:read"), async 
 router.get("/compliance-actions", requirePermission("governance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE "companyId"=$1 ORDER BY "dueDate" ASC NULLS LAST, "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE "companyId"=$1 ORDER BY "dueDate" ASC NULLS LAST, "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -684,7 +684,7 @@ router.get("/policies/:id/compliance-actions", requirePermission("governance:rea
   try {
     const scope = req.scope!;
     const policyId = parseId(req.params.id, "id");
-    const rows = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE "policyId"=$1 AND "companyId"=$2 ORDER BY "createdAt"`, [policyId, scope.companyId]);
+    const rows = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE "policyId"=$1 AND "companyId"=$2 ORDER BY "createdAt" LIMIT 500`, [policyId, scope.companyId]);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -768,7 +768,7 @@ router.patch("/risks/:id/treatment", requirePermission("governance:write"), asyn
 router.get("/capa", requirePermission("governance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT * FROM governance_capa WHERE "companyId"=$1 ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery<any>(`SELECT * FROM governance_capa WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });

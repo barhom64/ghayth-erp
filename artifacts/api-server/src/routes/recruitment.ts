@@ -58,7 +58,7 @@ const router = Router();
 router.get("/postings", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM job_postings WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM job_postings WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
@@ -252,7 +252,7 @@ router.get("/applications", requirePermission("hr:read"), async (req, res) => {
     let where = `(jp."companyId"=$1 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL AND jp."deletedAt" IS NULL`;
     const params: any[] = [scope.companyId];
     if (postingId) { params.push(postingId); where += ` AND a."postingId"=$${params.length}`; }
-    const rows = await rawQuery(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE ${where} ORDER BY a."createdAt" DESC`, params);
+    const rows = await rawQuery(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE ${where} ORDER BY a."createdAt" DESC LIMIT 500`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });

@@ -217,7 +217,7 @@ router.delete("/", requirePermission("settings:write"), async (req, res) => {
 
 router.get("/general", requirePermission("settings:read"), async (_req, res) => {
   try {
-    const rows = await rawQuery(`SELECT * FROM system_settings WHERE "companyId" IS NULL AND "branchId" IS NULL ORDER BY key`);
+    const rows = await rawQuery(`SELECT * FROM system_settings WHERE "companyId" IS NULL AND "branchId" IS NULL ORDER BY key LIMIT 500`);
     res.json({ data: maskSecretSettings(rows) });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });

@@ -176,9 +176,9 @@ router.get("/", requirePermission("requests:read"), async (req, res) => {
     const isManager = ["owner", "general_manager", "hr_manager", "branch_manager"].includes(scope.role);
     let rows;
     if (isManager) {
-      rows = await rawQuery(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE (r."companyId"=$1 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL ORDER BY r."createdAt" DESC`, [scope.companyId]);
+      rows = await rawQuery(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE (r."companyId"=$1 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL ORDER BY r."createdAt" DESC LIMIT 500`, [scope.companyId]);
     } else {
-      rows = await rawQuery(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE (r."companyId"=$1 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL AND (r."requesterId"::text=$2 OR r."currentApprover"=$3) ORDER BY r."createdAt" DESC`, [scope.companyId, String(scope.activeAssignmentId), String(scope.activeAssignmentId)]);
+      rows = await rawQuery(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE (r."companyId"=$1 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL AND (r."requesterId"::text=$2 OR r."currentApprover"=$3) ORDER BY r."createdAt" DESC LIMIT 500`, [scope.companyId, String(scope.activeAssignmentId), String(scope.activeAssignmentId)]);
     }
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "requests"); }
@@ -327,7 +327,7 @@ router.get("/catalog", requirePermission("requests:read"), async (req, res) => {
 router.get("/types", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM request_types WHERE "isActive"=true AND ("companyId"=$1 OR "companyId" IS NULL) ORDER BY name`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM request_types WHERE "isActive"=true AND ("companyId"=$1 OR "companyId" IS NULL) ORDER BY name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
@@ -351,7 +351,7 @@ router.post("/types", requirePermission("requests:write"), async (req, res) => {
 router.get("/workflows", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM workflows WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM workflows WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });

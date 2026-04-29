@@ -279,7 +279,7 @@ router.get("/tickets/:id", requirePermission("support:read"), async (req, res) =
       [id, scope.companyId]
     );
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
-    const replies = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE "ticketId"=$1 ORDER BY "createdAt"`, [ticket.id]);
+    const replies = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE "ticketId"=$1 ORDER BY "createdAt" LIMIT 500`, [ticket.id]);
 
     const now = new Date();
     const slaDeadline = ticket.slaDeadline ? new Date(ticket.slaDeadline) : null;
@@ -685,7 +685,7 @@ router.get("/kb", requirePermission("support:read"), async (req, res) => {
     const params: any[] = [scope.companyId];
     if (category) { params.push(category); conditions.push(`category=$${params.length}`); }
     if (q) { params.push(`%${q}%`); conditions.push(`(title ILIKE $${params.length} OR content ILIKE $${params.length})`); }
-    const rows = await rawQuery<any>(`SELECT id, title, category, tags, views, helpful, "notHelpful", "createdAt", "updatedAt" FROM kb_articles WHERE ${conditions.join(' AND ')} ORDER BY views DESC`, params);
+    const rows = await rawQuery<any>(`SELECT id, title, category, tags, views, helpful, "notHelpful", "createdAt", "updatedAt" FROM kb_articles WHERE ${conditions.join(' AND ')} ORDER BY views DESC LIMIT 500`, params);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "KB list error:"); }
 });
