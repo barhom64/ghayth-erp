@@ -6,6 +6,7 @@ import {
   ForbiddenError,
   IntegrationError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -239,9 +240,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     const now = new Date();
     const today = toDateISO(now);
     const period = today.slice(0, 7);
-    const parsed = checkInSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { lat, lon, notes, workType } = parsed.data;
+    const { lat, lon, notes, workType } = zodParse(checkInSchema.safeParse(req.body));
 
     // Guard: the caller must have an active assignment. Without this, the
     // INSERT INTO attendance below would hit a 23502 NOT NULL on
@@ -2825,9 +2824,7 @@ router.get("/performance/:id", requirePermission("hr:read"), async (req, res) =>
 router.post("/performance", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = performanceSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { employeeId, assignmentId, period, overallScore, scores, categories, comments, notes, status } = parsed.data as any;
+    const { employeeId, assignmentId, period, overallScore, scores, categories, comments, notes, status } = zodParse(performanceSchema.safeParse(req.body)) as any;
 
     // Resolve the employee PK — performance_reviews."employeeId" is a FK
     // on employees.id, NOT employee_assignments.id. The old handler blindly
@@ -2973,9 +2970,7 @@ router.get("/salary-components", requirePermission("hr:read"), async (req, res) 
 router.post("/salary-components", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = salaryComponentSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { name, type, category, value, taxable } = parsed.data;
+    const { name, type, category, value, taxable } = zodParse(salaryComponentSchema.safeParse(req.body));
     const { insertId } = await rawExecute(
       `INSERT INTO salary_components ("companyId",name,type,"calculationType",value,"isTaxable","isActive")
        VALUES ($1,$2,$3,$4,$5,$6,true)`,
@@ -3040,9 +3035,7 @@ router.post("/approval-chain-definitions", requirePermission("hr:create"), async
     if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بإنشاء سلاسل موافقات");
     }
-    const parsed = approvalChainSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { name, chainType, minAmount, maxAmount, steps } = parsed.data;
+    const { name, chainType, minAmount, maxAmount, steps } = zodParse(approvalChainSchema.safeParse(req.body));
 
     const { insertId: chainId } = await rawExecute(
       `INSERT INTO approval_chains ("companyId",name,"chainType","minAmount","maxAmount")
@@ -3521,9 +3514,7 @@ router.get("/shift-assignments", requirePermission("hr:read"), async (req, res) 
 router.post("/shift-assignments", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = shiftAssignmentSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { assignmentId, shiftId, startDate, endDate } = parsed.data;
+    const { assignmentId, shiftId, startDate, endDate } = zodParse(shiftAssignmentSchema.safeParse(req.body));
     if (endDate && new Date(endDate) < new Date(startDate)) {
       throw new ValidationError("تاريخ النهاية قبل تاريخ البداية", {
         field: "endDate",
@@ -3588,9 +3579,7 @@ router.get("/official-letters", requirePermission("hr:read"), async (req, res) =
 router.post("/official-letters", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = officialLetterSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { employeeId, type, subject, content, status } = parsed.data;
+    const { employeeId, type, subject, content, status } = zodParse(officialLetterSchema.safeParse(req.body));
 
     // FK pre-check: employee must belong to this company (via any assignment).
     const [emp] = await rawQuery<{ id: number }>(
@@ -4783,9 +4772,7 @@ router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, re
       throw new ForbiddenError("مسموح فقط لـ HR بإنشاء دورات التقييم");
     }
 
-    const parsed = evaluationCycleSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { employeeId, period, notes, participants = [] } = parsed.data as any;
+    const { employeeId, period, notes, participants = [] } = zodParse(evaluationCycleSchema.safeParse(req.body)) as any;
 
     // Validate subject employee belongs to this company (multi-tenant integrity)
     const [subjectAssign] = await rawQuery<any>(
@@ -5408,9 +5395,7 @@ router.get("/delegations", requirePermission("hr:read"), async (req, res) => {
 router.post("/delegations", requirePermission("hr:approve"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = delegationSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { delegateId, scope: delegationScope, reason, startDate, endDate } = parsed.data;
+    const { delegateId, scope: delegationScope, reason, startDate, endDate } = zodParse(delegationSchema.safeParse(req.body));
     if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
       throw new ValidationError("تاريخ النهاية قبل تاريخ البداية", {
         field: "endDate",
@@ -5487,9 +5472,7 @@ router.post("/public-holidays", requirePermission("hr:create"), async (req, res)
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: إدارة الإجازات الرسمية مقصورة على HR أو المالك");
     }
-    const parsed = publicHolidaySchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data;
+    const b = zodParse(publicHolidaySchema.safeParse(req.body));
     const startDate = new Date(b.startDate);
     const year = b.year || startDate.getFullYear();
     const { insertId } = await rawExecute(
@@ -5640,9 +5623,7 @@ router.post("/transfers", requirePermission("hr:create"), async (req, res) => {
   // side-effect notification).
   try {
     const scope = req.scope!;
-    const parsed = transferSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(transferSchema.safeParse(req.body)) as any;
     const [assignment] = await rawQuery<any>(
       `SELECT ea.id, ea."branchId", ea."departmentId", ea.salary, ea."jobTitle"
        FROM employee_assignments ea
@@ -5971,9 +5952,7 @@ router.get("/idp", requirePermission("hr:read"), async (req, res) => {
 router.post("/idp", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = idpSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(idpSchema.safeParse(req.body)) as any;
     const goals = Array.isArray(b.goals) ? JSON.stringify(b.goals) : (b.goals || '[]');
     const skills = Array.isArray(b.skills) ? JSON.stringify(b.skills) : (b.skills || '[]');
     const trainingIds = Array.isArray(b.trainingIds) ? JSON.stringify(b.trainingIds) : (b.trainingIds || '[]');
@@ -6587,9 +6566,7 @@ router.get("/company-documents", requirePermission("hr:read"), async (req, res) 
 router.post("/company-documents", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = companyDocumentSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(companyDocumentSchema.safeParse(req.body)) as any;
 
     const { insertId } = await rawExecute(
       `INSERT INTO company_documents ("companyId",title,type,"expiryDate",notes)
@@ -6657,9 +6634,7 @@ router.get("/employee-documents", requirePermission("hr:read"), async (req, res)
 router.post("/employee-documents", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = employeeDocumentSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(employeeDocumentSchema.safeParse(req.body)) as any;
 
     const { insertId } = await rawExecute(
       `INSERT INTO employee_documents ("companyId","employeeId",type,name,number,"issueDate","expiryDate",notes)
@@ -6730,9 +6705,7 @@ router.get("/excuse-requests/:id", requirePermission("hr:read"), async (req, res
 router.post("/excuse-requests", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = excuseRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { assignmentId, excuseDate, excuseType, startTime, endTime, estimatedMinutes, reason } = parsed.data;
+    const { assignmentId, excuseDate, excuseType, startTime, endTime, estimatedMinutes, reason } = zodParse(excuseRequestSchema.safeParse(req.body));
 
     const effectiveAssignmentId = assignmentId || scope.activeAssignmentId;
     const [assignment] = await rawQuery<any>(

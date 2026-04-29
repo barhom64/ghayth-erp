@@ -4,6 +4,7 @@ import {
   NotFoundError,
   ConflictError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -88,9 +89,7 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
   // but nobody was emitting the event from the create handler).
   try {
     const scope = req.scope!;
-    const parsed = createTicketSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createTicketSchema.safeParse(req.body)) as any;
 
     const title = (b.title ?? b.subject ?? "").toString().trim();
     if (!title) {
@@ -295,9 +294,7 @@ router.get("/tickets/:id", requirePermission("support:read"), async (req, res) =
 router.post("/tickets/:id/replies", requirePermission("support:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createReplySchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createReplySchema.safeParse(req.body)) as any;
     const ticketId = parseId(req.params.id, "id");
 
     const [ticket] = await rawQuery<any>(`SELECT id, ref, title, "firstResponseAt", "slaDeadline", priority FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
@@ -627,9 +624,7 @@ router.post("/tickets/:id/csat", requirePermission("support:write"), async (req,
   try {
     const scope = req.scope!;
     const ticketId = parseId(req.params.id, "id");
-    const parsed = createCSATSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createCSATSchema.safeParse(req.body)) as any;
     const { score, comment } = b;
     const [ticket] = await rawQuery<any>(`SELECT id, "assigneeId", status FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
@@ -704,9 +699,7 @@ router.get("/kb/:id", requirePermission("support:read"), async (req, res) => {
 router.post("/kb", requirePermission("support:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createKbSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createKbSchema.safeParse(req.body)) as any;
     const { title, content, category, tags } = b;
     const { insertId } = await rawExecute(
       `INSERT INTO kb_articles (title, content, category, tags, status, views, helpful, "notHelpful", "companyId", "createdBy") VALUES ($1,$2,$3,$4,'published',0,0,0,$5,$6)`,

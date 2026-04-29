@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -79,9 +80,7 @@ obligationsRouter.get("/summary", requirePermission("operations:read"), async (r
 obligationsRouter.post("/", async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createObligationSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { entityType, entityId, obligationType, title, dueAt, assignedTo, escalationSteps, metadata, dedupeKey } = parsed.data;
+    const { entityType, entityId, obligationType, title, dueAt, assignedTo, escalationSteps, metadata, dedupeKey } = zodParse(createObligationSchema.safeParse(req.body));
     const id = await registerObligation({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -125,9 +124,7 @@ obligationsRouter.post("/:id/met", async (req, res) => {
 obligationsRouter.post("/met-by-entity", async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = entityActionSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { entityType, entityId, obligationType } = parsed.data;
+    const { entityType, entityId, obligationType } = zodParse(entityActionSchema.safeParse(req.body));
     const n = await markObligationMet(
       scope.companyId,
       entityType,
@@ -162,9 +159,7 @@ obligationsRouter.post("/:id/cancel", async (req, res) => {
 obligationsRouter.post("/cancel-by-entity", async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = entityActionSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { entityType, entityId, obligationType } = parsed.data;
+    const { entityType, entityId, obligationType } = zodParse(entityActionSchema.safeParse(req.body));
     const n = await cancelObligation(
       scope.companyId,
       entityType,

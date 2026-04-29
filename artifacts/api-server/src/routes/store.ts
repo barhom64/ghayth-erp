@@ -4,6 +4,7 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import {
   emitEvent,
@@ -92,9 +93,7 @@ router.get("/products", requirePermission("store:read"), async (req, res) => {
 router.post("/products", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createStoreProductSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { name, description, sku, price, costPrice, quantity, category, status, imageUrl } = parsed.data;
+    const { name, description, sku, price, costPrice, quantity, category, status, imageUrl } = zodParse(createStoreProductSchema.safeParse(req.body));
     const r = await rawExecute(
       `INSERT INTO store_products (name, description, sku, price, "costPrice", quantity, category, status, "imageUrl", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [name, description, sku, price || 0, costPrice || 0, quantity || 0, category, status || "active", imageUrl, scope.companyId]
@@ -125,9 +124,7 @@ router.patch("/products/:id", requirePermission("store:write"), async (req, res)
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المنتج غير موجود");
-    const parsed = updateStoreProductSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(updateStoreProductSchema.safeParse(req.body)) as any;
     const sets: string[] = [];
     const params: any[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
@@ -184,9 +181,7 @@ router.get("/orders", requirePermission("store:read"), async (req, res) => {
 router.post("/orders", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createStoreOrderSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { orderNumber, customerName, customerPhone, status, totalAmount, items, notes, branchId } = parsed.data;
+    const { orderNumber, customerName, customerPhone, status, totalAmount, items, notes, branchId } = zodParse(createStoreOrderSchema.safeParse(req.body));
     const r = await rawExecute(
       `INSERT INTO store_orders ("orderNumber", "customerName", "customerPhone", status, "totalAmount", items, notes, "companyId", "branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [orderNumber || `ORD-${Date.now()}`, customerName, customerPhone, status, totalAmount, items ? JSON.stringify(items) : '[]', notes, scope.companyId, branchId || scope.branchId || null]
@@ -236,9 +231,7 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const parsed = updateStoreOrderSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(updateStoreOrderSchema.safeParse(req.body)) as any;
     const sets: string[] = [];
     const params: any[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }

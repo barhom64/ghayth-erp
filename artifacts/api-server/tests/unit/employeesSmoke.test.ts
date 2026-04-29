@@ -181,7 +181,7 @@ describe("Employees — validation", () => {
   it("POST / validates body with safeParse and throws ValidationError on failure", () => {
     const s = section('router.post("/",', 3000);
     expect(s).toContain("createEmployeeSchema.safeParse(req.body)");
-    expect(s).toContain("throw new ValidationError");
+    expect(s).toContain("zodParse");
   });
 
   it("POST / rejects salary <= 0 with field-tagged error", () => {
@@ -208,7 +208,7 @@ describe("Employees — validation", () => {
   it("PATCH /:id validates body with patchEmployeeSchema.safeParse", () => {
     const s = section('router.patch("/:id",', 3000);
     expect(s).toContain("patchEmployeeSchema.safeParse");
-    expect(s).toContain("throw new ValidationError");
+    expect(s).toContain("zodParse");
   });
 
   it("PATCH /:id pre-checks email and nationalId uniqueness excluding self (id <> $2)", () => {

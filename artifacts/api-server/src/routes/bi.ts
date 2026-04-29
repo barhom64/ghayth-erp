@@ -4,6 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, ConflictError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -54,9 +55,7 @@ router.get("/dashboards", requirePermission("bi:read"), async (req, res) => {
 router.post("/dashboards", requirePermission("bi:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed_createDashboardSchema = createDashboardSchema.safeParse(req.body);
-    if (!parsed_createDashboardSchema.success) throw new ValidationError(parsed_createDashboardSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createDashboardSchema.data;
+    const body = zodParse(createDashboardSchema.safeParse(req.body));
     const { title, description, layout, isDefault } = body;
     const [row] = await rawQuery<any>(
       `INSERT INTO bi_dashboards (title, description, layout, "isDefault", "createdBy", "companyId")
@@ -83,9 +82,7 @@ router.get("/kpis", requirePermission("bi:read"), async (req, res) => {
 router.post("/kpis", requirePermission("bi:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed_createKpiSchema = createKpiSchema.safeParse(req.body);
-    if (!parsed_createKpiSchema.success) throw new ValidationError(parsed_createKpiSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createKpiSchema.data;
+    const body = zodParse(createKpiSchema.safeParse(req.body));
     const { name, description, module, formula, target, currentValue, unit, frequency } = body;
     const [kpiRow] = await rawQuery<any>(
       `INSERT INTO bi_kpis (name, description, module, formula, target, "currentValue", unit, frequency, "companyId")
@@ -112,9 +109,7 @@ router.get("/reports", requirePermission("bi:read"), async (req, res) => {
 router.post("/reports", requirePermission("bi:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed_createReportSchema = createReportSchema.safeParse(req.body);
-    if (!parsed_createReportSchema.success) throw new ValidationError(parsed_createReportSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createReportSchema.data;
+    const body = zodParse(createReportSchema.safeParse(req.body));
     const { title, description, type, query, filters, scheduledAt } = body;
     const [reportRow] = await rawQuery<any>(
       `INSERT INTO bi_reports (title, description, type, query, filters, "scheduledAt", "createdBy", "companyId")
@@ -1308,9 +1303,7 @@ router.get("/alert-fatigue/settings", requirePermission("bi:read"), async (req, 
 router.post("/alert-fatigue/mute", requirePermission("bi:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed_muteAlertSchema = muteAlertSchema.safeParse(req.body);
-    if (!parsed_muteAlertSchema.success) throw new ValidationError(parsed_muteAlertSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_muteAlertSchema.data;
+    const body = zodParse(muteAlertSchema.safeParse(req.body));
     const { alertType, muteUntil, reason } = body;
 
     await rawExecute(

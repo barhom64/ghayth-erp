@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError , zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
@@ -396,9 +396,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
 
 router.post("/ai/categorize", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
-    const parsed_aiCategorizeSchema = aiCategorizeSchema.safeParse(req.body);
-    if (!parsed_aiCategorizeSchema.success) throw new ValidationError(parsed_aiCategorizeSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_aiCategorizeSchema.data;
+    const body = zodParse(aiCategorizeSchema.safeParse(req.body));
     const scope = req.scope!;
     const { message, context } = body;
     const result = await aiEngine.receptionCategorize(message, context);
@@ -418,9 +416,7 @@ router.post("/ai/categorize", requirePermission("admin:write"), async (req, res)
 
 router.post("/ai/draft-reply", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
-    const parsed_aiDraftReplySchema = aiDraftReplySchema.safeParse(req.body);
-    if (!parsed_aiDraftReplySchema.success) throw new ValidationError(parsed_aiDraftReplySchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_aiDraftReplySchema.data;
+    const body = zodParse(aiDraftReplySchema.safeParse(req.body));
     const scope = req.scope!;
     const { ticketTitle, ticketDescription, history } = body;
     const draft = await aiEngine.responderDraft(ticketTitle, ticketDescription, history);
@@ -440,9 +436,7 @@ router.post("/ai/draft-reply", requirePermission("admin:write"), async (req, res
 
 router.post("/ai/translate", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
-    const parsed_aiTranslateSchema = aiTranslateSchema.safeParse(req.body);
-    if (!parsed_aiTranslateSchema.success) throw new ValidationError(parsed_aiTranslateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_aiTranslateSchema.data;
+    const body = zodParse(aiTranslateSchema.safeParse(req.body));
     const scope = req.scope!;
     const { text, targetLanguage } = body;
     const translated = await aiEngine.translatorTranslate(text, targetLanguage);
@@ -462,9 +456,7 @@ router.post("/ai/translate", requirePermission("admin:write"), async (req, res):
 
 router.post("/ai/summarize", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
-    const parsed_aiSummarizeSchema = aiSummarizeSchema.safeParse(req.body);
-    if (!parsed_aiSummarizeSchema.success) throw new ValidationError(parsed_aiSummarizeSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_aiSummarizeSchema.data;
+    const body = zodParse(aiSummarizeSchema.safeParse(req.body));
     const scope = req.scope!;
     const { content, maxLength } = body;
     const summary = await aiEngine.summarizerSummarize(content, maxLength);
@@ -484,9 +476,7 @@ router.post("/ai/summarize", requirePermission("admin:write"), async (req, res):
 
 router.post("/ai/evaluate-rules", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
-    const parsed_aiEvaluateRulesSchema = aiEvaluateRulesSchema.safeParse(req.body);
-    if (!parsed_aiEvaluateRulesSchema.success) throw new ValidationError(parsed_aiEvaluateRulesSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_aiEvaluateRulesSchema.data;
+    const body = zodParse(aiEvaluateRulesSchema.safeParse(req.body));
     const scope = req.scope!;
     const { context, data, rules } = body;
     const result = await aiEngine.rulesEngineEvaluate({ context, data, rules });
@@ -506,9 +496,7 @@ router.post("/ai/evaluate-rules", requirePermission("admin:write"), async (req, 
 
 router.post("/ai/forecast", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
-    const parsed_aiForecastSchema = aiForecastSchema.safeParse(req.body);
-    if (!parsed_aiForecastSchema.success) throw new ValidationError(parsed_aiForecastSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_aiForecastSchema.data;
+    const body = zodParse(aiForecastSchema.safeParse(req.body));
     const scope = req.scope!;
     const { metricName, historicalData, forecastPeriods } = body;
     const result = await aiEngine.predictorForecast({ metricName, historicalData, forecastPeriods });
@@ -528,9 +516,7 @@ router.post("/ai/forecast", requirePermission("admin:write"), async (req, res): 
 
 router.post("/algorithms/haversine", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
-    const parsed_haversineSchema = haversineSchema.safeParse(req.body);
-    if (!parsed_haversineSchema.success) throw new ValidationError(parsed_haversineSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_haversineSchema.data;
+    const body = zodParse(haversineSchema.safeParse(req.body));
     const scope = req.scope!;
     const { lat1, lon1, lat2, lon2 } = body;
     const distance = haversineDistance(lat1, lon1, lat2, lon2);
@@ -553,9 +539,7 @@ router.post("/algorithms/haversine", requirePermission("admin:write"), async (re
 
 router.post("/algorithms/moving-average", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
-    const parsed_movingAverageSchema = movingAverageSchema.safeParse(req.body);
-    if (!parsed_movingAverageSchema.success) throw new ValidationError(parsed_movingAverageSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_movingAverageSchema.data;
+    const body = zodParse(movingAverageSchema.safeParse(req.body));
     const scope = req.scope!;
     const { values, periods } = body;
     const result = movingAverage(values, periods);
@@ -578,9 +562,7 @@ router.post("/algorithms/moving-average", requirePermission("admin:write"), asyn
 
 router.post("/algorithms/load-balance", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
-    const parsed_loadBalanceSchema = loadBalanceSchema.safeParse(req.body);
-    if (!parsed_loadBalanceSchema.success) throw new ValidationError(parsed_loadBalanceSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_loadBalanceSchema.data;
+    const body = zodParse(loadBalanceSchema.safeParse(req.body));
     const scope = req.scope!;
     const { resources, targetLat, targetLon, maxWorkload } = body;
     const selected = selectLeastLoadedResource(resources, { targetLat, targetLon, maxWorkload });
@@ -674,9 +656,7 @@ router.get("/company-kpis", requireRole("branch_manager", "general_manager", "ow
 
 router.post("/smart-assign", requireRole("branch_manager", "general_manager", "owner", "hr_manager"), async (req, res): Promise<void> => {
   try {
-    const parsed_smartAssignSchema = smartAssignSchema.safeParse(req.body);
-    if (!parsed_smartAssignSchema.success) throw new ValidationError(parsed_smartAssignSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_smartAssignSchema.data;
+    const body = zodParse(smartAssignSchema.safeParse(req.body));
     const scope = req.scope!;
     const { taskType, targetLat, targetLon, requiredSpecialty, taskTitle } = body;
 

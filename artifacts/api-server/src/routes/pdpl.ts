@@ -1,5 +1,6 @@
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -153,9 +154,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
 
 router.post("/data-request", authMiddleware, requirePermission("admin:write"), async (req, res) => {
   try {
-    const parsed_dataRequestSchema = dataRequestSchema.safeParse(req.body);
-    if (!parsed_dataRequestSchema.success) throw new ValidationError(parsed_dataRequestSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_dataRequestSchema.data;
+    const body = zodParse(dataRequestSchema.safeParse(req.body));
     const scope = req.scope!;
     const { requestType, notes, requesterName, requesterEmail } = body;
 

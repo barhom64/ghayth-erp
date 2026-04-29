@@ -283,12 +283,12 @@ describe("Settings Zod validation", () => {
     const putIdx = SETTINGS_ROUTE.indexOf('router.put("/",');
     const putSection = SETTINGS_ROUTE.slice(putIdx, putIdx + 3000);
     expect(putSection).toContain("settingUpsertSchema.safeParse");
-    expect(putSection).toContain("ValidationError");
+    expect(putSection).toContain("zodParse");
 
     const branchIdx = SETTINGS_ROUTE.indexOf('router.post("/branches"');
     const branchSection = SETTINGS_ROUTE.slice(branchIdx, branchIdx + 3000);
     expect(branchSection).toContain("createBranchSchema.safeParse");
-    expect(branchSection).toContain("ValidationError");
+    expect(branchSection).toContain("zodParse");
   });
 
   it("GET /resolve throws ValidationError when key is missing", () => {

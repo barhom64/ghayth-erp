@@ -5,6 +5,7 @@ import {
   ConflictError,
   IntegrationError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -520,9 +521,7 @@ router.get("/movements/:id", requirePermission("warehouse:read"), async (req, re
 router.post("/movements", requirePermission("warehouse:create"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const parsed = createMovementSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data;
+    const b = zodParse(createMovementSchema.safeParse(req.body));
     const qtyNum = b.quantity;
 
     let unitCost = b.unitCost || 0;

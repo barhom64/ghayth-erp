@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { logPageView } from "../lib/activityTracker.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError , zodParse } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import rateLimit from "express-rate-limit";
@@ -26,9 +26,7 @@ const logActivitySchema = z.object({
 router.post("/intelligence/activity", activityLimiter, authMiddleware, async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const parsed = logActivitySchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { page, sessionId } = parsed.data;
+    const { page, sessionId } = zodParse(logActivitySchema.safeParse(req.body));
     await logPageView({
       companyId: scope.companyId,
       userId: scope.userId,

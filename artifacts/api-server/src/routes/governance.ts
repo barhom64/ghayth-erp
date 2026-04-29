@@ -4,6 +4,7 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -54,9 +55,7 @@ router.get("/policies", requirePermission("governance:read"), async (req, res) =
 router.post("/policies", requirePermission("governance:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createPolicySchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { title, description, category, status, effectiveDate, expiryDate, modules } = parsed.data;
+    const { title, description, category, status, effectiveDate, expiryDate, modules } = zodParse(createPolicySchema.safeParse(req.body));
     const { insertId, row } = await withTransaction(async (client) => {
       const insertRes = await client.query(
         `INSERT INTO governance_policies (title, description, category, status, "effectiveDate", "expiryDate", version, "companyId")
@@ -293,9 +292,7 @@ router.get("/risks", requirePermission("governance:read"), async (req, res) => {
 router.post("/risks", requirePermission("governance:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createRiskSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { title, description, severity, likelihood, impact, status, mitigationPlan, assignedTo } = parsed.data;
+    const { title, description, severity, likelihood, impact, status, mitigationPlan, assignedTo } = zodParse(createRiskSchema.safeParse(req.body));
     const r = await rawExecute(
       `INSERT INTO governance_risks (title, description, severity, likelihood, impact, status, "mitigationPlan", "assignedTo", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [String(title).trim(), description ?? null, severity ?? "medium", likelihood ?? null, impact ?? null, status || "open", mitigationPlan ?? null, assignedTo ?? null, scope.companyId]

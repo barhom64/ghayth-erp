@@ -6,6 +6,7 @@ import {
   ForbiddenError,
   IntegrationError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -201,9 +202,7 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
     const scope = req.scope!;
 
 
-    const parsed = createPurchaseRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createPurchaseRequestSchema.safeParse(req.body)) as any;
 
     // The frontend create-form (purchase-orders-create.tsx) sends
     // `expectedDelivery` + items with `productId`, while the API
@@ -476,9 +475,7 @@ purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), asy
     const scope = req.scope!;
 
 
-    const parsed = createPurchaseOrderSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { supplierId, totalAmount, vatAmount, notes, expectedDelivery, branchId, companyId: bodyCompanyId, items } = parsed.data as any;
+    const { supplierId, totalAmount, vatAmount, notes, expectedDelivery, branchId, companyId: bodyCompanyId, items } = zodParse(createPurchaseOrderSchema.safeParse(req.body)) as any;
 
     if (!totalAmount || Number(totalAmount) <= 0) { throw new ValidationError("المبلغ الإجمالي مطلوب"); return; }
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies?.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
@@ -912,9 +909,7 @@ purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"),
     const scope = req.scope!;
 
 
-    const parsed = executePaymentRunSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { poIds, paymentDate, method = "bank_transfer", reference, bankAccount } = parsed.data as any;
+    const { poIds, paymentDate, method = "bank_transfer", reference, bankAccount } = zodParse(executePaymentRunSchema.safeParse(req.body)) as any;
     const payDate = paymentDate || todayISO();
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, payDate);
     if (!periodCheck.open) {

@@ -15,6 +15,7 @@ import {
   ConflictError,
   ForbiddenError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import {
   createAuditLog,
@@ -220,9 +221,7 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
   try {
     await ensureLoanTables();
     const scope = req.scope!;
-    const parsed_createLoanSchema = createLoanSchema.safeParse(req.body);
-    if (!parsed_createLoanSchema.success) throw new ValidationError(parsed_createLoanSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed_createLoanSchema.data;
+    const b = zodParse(createLoanSchema.safeParse(req.body));
 
     const amount = b.amount;
     const installmentCount = b.installmentCount;
@@ -485,9 +484,7 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
       throw new ForbiddenError("صلاحية رفض السلف محصورة بالمدير أو HR أو المدير المالي أو المالك");
     }
 
-    const parsed_rejectLoanSchema = rejectLoanSchema.safeParse(req.body);
-    if (!parsed_rejectLoanSchema.success) throw new ValidationError(parsed_rejectLoanSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed_rejectLoanSchema.data;
+    const b = zodParse(rejectLoanSchema.safeParse(req.body));
     const [loan] = await rawQuery<any>(
       `SELECT * FROM hr_employee_loans WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]

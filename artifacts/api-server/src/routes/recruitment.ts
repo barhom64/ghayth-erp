@@ -5,6 +5,7 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -66,9 +67,7 @@ router.get("/postings", requirePermission("hr:read"), async (req, res) => {
 router.post("/postings", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createPostingSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { title, department, location, type, description, requirements, salaryMin, salaryMax, status, closingDate } = parsed.data;
+    const { title, department, location, type, description, requirements, salaryMin, salaryMax, status, closingDate } = zodParse(createPostingSchema.safeParse(req.body));
     if (salaryMin !== undefined && salaryMin !== null && salaryMax !== undefined && salaryMax !== null && Number(salaryMax) < Number(salaryMin)) {
       throw new ValidationError("الحد الأعلى للراتب أقل من الحد الأدنى", {
         field: "salaryMax",
@@ -110,9 +109,7 @@ router.patch("/postings/:id", requirePermission("hr:write"), async (req, res) =>
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const parsed = updatePostingSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(updatePostingSchema.safeParse(req.body)) as any;
     const sets: string[] = [];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
@@ -260,9 +257,7 @@ router.get("/applications", requirePermission("hr:read"), async (req, res) => {
 router.post("/applications", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createApplicationSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { postingId, applicantName, email, phone, resumeUrl, status, notes, rating } = parsed.data;
+    const { postingId, applicantName, email, phone, resumeUrl, status, notes, rating } = zodParse(createApplicationSchema.safeParse(req.body));
     const [posting] = await rawQuery<{ id: number }>(
       `SELECT id FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [Number(postingId), scope.companyId]
@@ -305,9 +300,7 @@ router.patch("/applications/:id", requirePermission("hr:write"), async (req, res
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT a.id FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2 AND a."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("طلب التوظيف غير موجود");
-    const parsed = updateApplicationSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(updateApplicationSchema.safeParse(req.body)) as any;
     const sets: string[] = [];
     const params: any[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }

@@ -4,6 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import {
@@ -99,9 +100,7 @@ const router = Router();
 
 router.post("/submit", requirePermission("admin:write"), async (req, res) => {
   try {
-    const parsed_submitSchema = submitSchema.safeParse(req.body);
-    if (!parsed_submitSchema.success) throw new ValidationError(parsed_submitSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_submitSchema.data;
+    const body = zodParse(submitSchema.safeParse(req.body));
     const scope = req.scope!;
     const { requestType, refTable, refId, title, data } = body;
     const result = await submitWorkflow({
@@ -125,9 +124,7 @@ router.post("/submit", requirePermission("admin:write"), async (req, res) => {
 
 router.post("/:id/approve", requirePermission("admin:write"), async (req, res) => {
   try {
-    const parsed_approveSchema = approveSchema.safeParse(req.body);
-    if (!parsed_approveSchema.success) throw new ValidationError(parsed_approveSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_approveSchema.data;
+    const body = zodParse(approveSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const result = await approveWorkflow({
@@ -148,9 +145,7 @@ router.post("/:id/approve", requirePermission("admin:write"), async (req, res) =
 
 router.post("/:id/reject", requirePermission("admin:write"), async (req, res) => {
   try {
-    const parsed_rejectSchema = rejectSchema.safeParse(req.body);
-    if (!parsed_rejectSchema.success) throw new ValidationError(parsed_rejectSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_rejectSchema.data;
+    const body = zodParse(rejectSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const result = await rejectWorkflow({
@@ -170,9 +165,7 @@ router.post("/:id/reject", requirePermission("admin:write"), async (req, res) =>
 
 router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => {
   try {
-    const parsed_referSchema = referSchema.safeParse(req.body);
-    if (!parsed_referSchema.success) throw new ValidationError(parsed_referSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_referSchema.data;
+    const body = zodParse(referSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { referredTo, referredToName, notes, overrideReason } = body;
@@ -195,9 +188,7 @@ router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => 
 
 router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) => {
   try {
-    const parsed_escalateSchema = escalateSchema.safeParse(req.body);
-    if (!parsed_escalateSchema.success) throw new ValidationError(parsed_escalateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_escalateSchema.data;
+    const body = zodParse(escalateSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const result = await escalateWorkflow({
@@ -217,9 +208,7 @@ router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) 
 
 router.post("/:id/return", requirePermission("admin:write"), async (req, res) => {
   try {
-    const parsed_returnSchema = returnSchema.safeParse(req.body);
-    if (!parsed_returnSchema.success) throw new ValidationError(parsed_returnSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_returnSchema.data;
+    const body = zodParse(returnSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const result = await returnWorkflow({
@@ -350,9 +339,7 @@ router.get("/definitions/:id", requirePermission("admin:read"), async (req, res)
 
 router.post("/definitions", requirePermission("admin:write"), async (req, res) => {
   try {
-    const parsed_createDefinitionSchema = createDefinitionSchema.safeParse(req.body);
-    if (!parsed_createDefinitionSchema.success) throw new ValidationError(parsed_createDefinitionSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createDefinitionSchema.data;
+    const body = zodParse(createDefinitionSchema.safeParse(req.body));
     const scope = req.scope!;
     const { requestType, requestTypeLabel, description, isReturnable, enableEscalation, defaultSlaHours, steps } = body;
     const { insertId } = await rawExecute(
@@ -380,9 +367,7 @@ router.post("/definitions", requirePermission("admin:write"), async (req, res) =
 
 router.put("/definitions/:id", requirePermission("admin:write"), async (req, res) => {
   try {
-    const parsed_updateDefinitionSchema = updateDefinitionSchema.safeParse(req.body);
-    if (!parsed_updateDefinitionSchema.success) throw new ValidationError(parsed_updateDefinitionSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updateDefinitionSchema.data;
+    const body = zodParse(updateDefinitionSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { requestTypeLabel, description, isReturnable, enableEscalation, defaultSlaHours, isActive, steps } = body;
@@ -447,9 +432,7 @@ router.get("/sla-definitions", requirePermission("admin:read"), async (req, res)
 
 router.post("/sla-definitions", requirePermission("admin:write"), async (req, res) => {
   try {
-    const parsed_slaDefinitionSchema = slaDefinitionSchema.safeParse(req.body);
-    if (!parsed_slaDefinitionSchema.success) throw new ValidationError(parsed_slaDefinitionSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_slaDefinitionSchema.data;
+    const body = zodParse(slaDefinitionSchema.safeParse(req.body));
     const scope = req.scope!;
     const { requestType, warningHours, deadlineHours, escalationHours, autoApproveOnTimeout, escalateTo } = body;
     const { insertId } = await rawExecute(

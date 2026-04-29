@@ -4,6 +4,7 @@ import {
   NotFoundError,
   ConflictError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -209,9 +210,7 @@ router.get("/", requirePermission("hr:read"), async (req, res) => {
 
 router.post("/", requirePermission("hr:create"), async (req, res) => {
   try {
-    const parsed_createEmployeeSchema = createEmployeeSchema.safeParse(req.body);
-    if (!parsed_createEmployeeSchema.success) throw new ValidationError(parsed_createEmployeeSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createEmployeeSchema.data;
+    const body = zodParse(createEmployeeSchema.safeParse(req.body));
     const scope = req.scope!;
     const {
       name,
@@ -661,9 +660,7 @@ router.get("/onboarding-tasks", requirePermission("hr:read"), async (req, res) =
 
 router.patch("/onboarding-tasks/:id", requirePermission("hr:update"), async (req, res) => {
   try {
-    const parsed_patchOnboardingTaskSchema = patchOnboardingTaskSchema.safeParse(req.body);
-    if (!parsed_patchOnboardingTaskSchema.success) throw new ValidationError(parsed_patchOnboardingTaskSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_patchOnboardingTaskSchema.data;
+    const body = zodParse(patchOnboardingTaskSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { status } = body;
@@ -847,9 +844,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
   //   5. Explicitly emits `employee.updated` — the listener already exists
   //      in eventListeners.ts but nobody was firing the event.
   try {
-    const parsed_patchEmployee = patchEmployeeSchema.safeParse(req.body);
-    if (!parsed_patchEmployee.success) throw new ValidationError(parsed_patchEmployee.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const validatedBody = parsed_patchEmployee.data;
+    const validatedBody = zodParse(patchEmployeeSchema.safeParse(req.body));
     const scope = req.scope!;
     const { id } = req.params;
     const {

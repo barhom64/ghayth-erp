@@ -15,6 +15,7 @@ import {
   ConflictError,
   ForbiddenError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import {
   createAuditLog,
@@ -200,9 +201,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
   try {
     await ensureExitTables();
     const scope = req.scope!;
-    const parsed_createExitSchema = createExitSchema.safeParse(req.body);
-    if (!parsed_createExitSchema.success) throw new ValidationError(parsed_createExitSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed_createExitSchema.data;
+    const b = zodParse(createExitSchema.safeParse(req.body));
 
     // التحقق من عدم وجود طلب سابق
     const [existing] = await rawQuery<any>(
@@ -467,9 +466,7 @@ router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const parsed_updateClearanceSchema = updateClearanceSchema.safeParse(req.body);
-    if (!parsed_updateClearanceSchema.success) throw new ValidationError(parsed_updateClearanceSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed_updateClearanceSchema.data;
+    const b = zodParse(updateClearanceSchema.safeParse(req.body));
 
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_exit_clearance WHERE id = $1 AND "companyId" = $2`,

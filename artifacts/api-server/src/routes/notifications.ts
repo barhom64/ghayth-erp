@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError , zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -98,9 +98,7 @@ router.get("/preferences", requirePermission("notifications:read"), async (req, 
 
 router.post("/preferences", requirePermission("notifications:write"), async (req, res) => {
   try {
-    const parsed_preferencesSchema = preferencesSchema.safeParse(req.body);
-    if (!parsed_preferencesSchema.success) throw new ValidationError(parsed_preferencesSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_preferencesSchema.data;
+    const body = zodParse(preferencesSchema.safeParse(req.body));
     const scope = req.scope!;
     const { channel, category, enabled } = body;
     const { insertId } = await rawExecute(

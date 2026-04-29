@@ -6,6 +6,7 @@ import {
   ForbiddenError,
   IntegrationError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -607,9 +608,7 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
     const scope = req.scope!;
 
     const { id } = req.params;
-    const parsedPayment = createPaymentSchema.safeParse(req.body);
-    if (!parsedPayment.success) throw new ValidationError(parsedPayment.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { amount, method = "bank_transfer" } = parsedPayment.data;
+    const { amount, method = "bank_transfer" } = zodParse(createPaymentSchema.safeParse(req.body));
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [cashAccountCode, arAccountCode] = await Promise.all([
@@ -995,9 +994,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
-    const parsedMemo = createCreditMemoSchema.safeParse(req.body);
-    if (!parsedMemo.success) throw new ValidationError(parsedMemo.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { amount, reason, vatIncluded = true, memoDate } = parsedMemo.data;
+    const { amount, reason, vatIncluded = true, memoDate } = zodParse(createCreditMemoSchema.safeParse(req.body));
 
     const [invoice] = await rawQuery<any>(
       `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatAmount",
@@ -1485,9 +1482,7 @@ invoicesRouter.post("/customer-advances", requirePermission("finance:create"), a
   try {
     const scope = req.scope!;
 
-    const parsedAdvance = createCustomerAdvanceSchema.safeParse(req.body);
-    if (!parsedAdvance.success) throw new ValidationError(parsedAdvance.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { clientId, amount, method = "bank_transfer", reference, notes, receivedDate } = parsedAdvance.data;
+    const { clientId, amount, method = "bank_transfer", reference, notes, receivedDate } = zodParse(createCustomerAdvanceSchema.safeParse(req.body));
 
     const recvDate = receivedDate || todayISO();
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, recvDate);

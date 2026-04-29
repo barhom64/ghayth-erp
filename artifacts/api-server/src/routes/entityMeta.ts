@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError , zodParse } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
@@ -42,9 +42,7 @@ router.get("/comments/:entityType/:entityId", requirePermission("operations:read
 
 router.post("/comments/:entityType/:entityId", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
-    const parsed_comment = createCommentSchema.safeParse(req.body);
-    if (!parsed_comment.success) throw new ValidationError(parsed_comment.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const validatedBody = parsed_comment.data;
+    const validatedBody = zodParse(createCommentSchema.safeParse(req.body));
     const scope = req.scope!;
     const { entityType, entityId } = req.params;
     const { body } = validatedBody;
@@ -116,9 +114,7 @@ router.get("/tags/:entityType/:entityId", requirePermission("operations:read"), 
 
 router.post("/tags/:entityType/:entityId", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
-    const parsed_tag = createTagSchema.safeParse(req.body);
-    if (!parsed_tag.success) throw new ValidationError(parsed_tag.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const validatedBody = parsed_tag.data;
+    const validatedBody = zodParse(createTagSchema.safeParse(req.body));
     const scope = req.scope!;
     const { entityType, entityId } = req.params;
     const { tag, color } = validatedBody;
@@ -214,9 +210,7 @@ router.get("/tags-list/:entityType", requirePermission("operations:read"), async
 
 router.post("/bulk-action", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
-    const parsed_bulk = bulkActionSchema.safeParse(req.body);
-    if (!parsed_bulk.success) throw new ValidationError(parsed_bulk.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const validatedBody = parsed_bulk.data;
+    const validatedBody = zodParse(bulkActionSchema.safeParse(req.body));
     const scope = req.scope!;
     const { entityType, entityIds, action } = validatedBody;
     if (!entityType || !Array.isArray(entityIds) || entityIds.length === 0 || !action) {

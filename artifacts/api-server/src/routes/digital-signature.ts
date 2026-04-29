@@ -2,7 +2,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError , zodParse } from "../lib/errorHandler.js";
 import { logger } from "../lib/logger.js";
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
@@ -46,9 +46,7 @@ function getClientIP(req: Request): string {
 
 router.post("/request-otp", requirePermission("documents:write"), async (req, res: Response) => {
   try {
-    const parsed_requestOtpSchema = requestOtpSchema.safeParse(req.body);
-    if (!parsed_requestOtpSchema.success) throw new ValidationError(parsed_requestOtpSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_requestOtpSchema.data;
+    const body = zodParse(requestOtpSchema.safeParse(req.body));
     const scope = (req as any).scope!;
     const { entityType, entityId, action } = body;
     if (!entityType || !entityId || !action) {
@@ -88,9 +86,7 @@ router.post("/request-otp", requirePermission("documents:write"), async (req, re
 
 router.post("/verify", requirePermission("documents:write"), async (req, res: Response) => {
   try {
-    const parsed_verifySignatureSchema = verifySignatureSchema.safeParse(req.body);
-    if (!parsed_verifySignatureSchema.success) throw new ValidationError(parsed_verifySignatureSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_verifySignatureSchema.data;
+    const body = zodParse(verifySignatureSchema.safeParse(req.body));
     const scope = (req as any).scope!;
     const { otp, entityType, entityId, action } = body;
     if (!otp || !entityType || !entityId || !action) {

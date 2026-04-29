@@ -14,6 +14,7 @@ import {
   ValidationError,
   ForbiddenError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import {
   createAuditLog,
@@ -250,9 +251,7 @@ const autoDetectionRunSchema = z.object({
 router.post("/regulation", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed_createRegulationSchema = createRegulationSchema.safeParse(req.body);
-    if (!parsed_createRegulationSchema.success) throw new ValidationError(parsed_createRegulationSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createRegulationSchema.data;
+    const body = zodParse(createRegulationSchema.safeParse(req.body));
     const {
       section, articleNumber, title, description,
       penalty1, penalty2, penalty3, penalty4,
@@ -297,9 +296,7 @@ router.patch("/regulation/:id", requirePermission("hr:update"), async (req, res)
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const parsed_updateRegulationSchema = updateRegulationSchema.safeParse(req.body);
-    if (!parsed_updateRegulationSchema.success) throw new ValidationError(parsed_updateRegulationSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updateRegulationSchema.data;
+    const body = zodParse(updateRegulationSchema.safeParse(req.body));
     const allowed = [
       "title", "description", "penalty1", "penalty2", "penalty3", "penalty4",
       "extraDeduction", "severity", "isTermination", "legalReference", "isActive",
@@ -461,9 +458,7 @@ router.get("/memos/:id", requirePermission("hr:read"), async (req, res) => {
 router.post("/memos", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed_createMemoSchema = createMemoSchema.safeParse(req.body);
-    if (!parsed_createMemoSchema.success) throw new ValidationError(parsed_createMemoSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createMemoSchema.data;
+    const body = zodParse(createMemoSchema.safeParse(req.body));
     const {
       assignmentId,
       incidentType,
@@ -578,9 +573,7 @@ router.post("/memos/:id/justify", requirePermission("hr:read"), async (req, res)
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const parsed_justifyMemoSchema = justifyMemoSchema.safeParse(req.body);
-    if (!parsed_justifyMemoSchema.success) throw new ValidationError(parsed_justifyMemoSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_justifyMemoSchema.data;
+    const body = zodParse(justifyMemoSchema.safeParse(req.body));
     const { justification, declined } = body;
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
@@ -646,9 +639,7 @@ router.post("/memos/:id/manager-recommendation", requirePermission("hr:update"),
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const parsed_managerRecommendationSchema = managerRecommendationSchema.safeParse(req.body);
-    if (!parsed_managerRecommendationSchema.success) throw new ValidationError(parsed_managerRecommendationSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_managerRecommendationSchema.data;
+    const body = zodParse(managerRecommendationSchema.safeParse(req.body));
     const { recommendation, comment } = body;
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
@@ -689,9 +680,7 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const parsed_gmDecisionSchema = gmDecisionSchema.safeParse(req.body);
-    if (!parsed_gmDecisionSchema.success) throw new ValidationError(parsed_gmDecisionSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_gmDecisionSchema.data;
+    const body = zodParse(gmDecisionSchema.safeParse(req.body));
     const { decision, comment } = body;
 
     // Only GM/Owner or users with the approve permission can act
@@ -839,9 +828,7 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const parsed_cancelMemoSchema = cancelMemoSchema.safeParse(req.body);
-    if (!parsed_cancelMemoSchema.success) throw new ValidationError(parsed_cancelMemoSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_cancelMemoSchema.data;
+    const body = zodParse(cancelMemoSchema.safeParse(req.body));
     const { reason } = body;
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
@@ -1037,9 +1024,7 @@ router.post("/memos/:id/close", requirePermission("hr:update"), async (req, res)
 router.post("/penalty-preview", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed_penaltyPreviewSchema = penaltyPreviewSchema.safeParse(req.body);
-    if (!parsed_penaltyPreviewSchema.success) throw new ValidationError(parsed_penaltyPreviewSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_penaltyPreviewSchema.data;
+    const body = zodParse(penaltyPreviewSchema.safeParse(req.body));
     const { assignmentId, incidentType, incidentDate, durationMinutes, absenceDays, disruptsOthers, regulationId } = body;
     const [assignment] = await rawQuery<any>(
       `SELECT id, "employeeId", "companyId" FROM employee_assignments WHERE id = $1`,
@@ -1160,9 +1145,7 @@ router.put("/auto-detection/settings", requirePermission("hr:update"), async (re
     if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بتعديل إعدادات الرصد التلقائي");
     }
-    const parsed_autoDetectionSettingsSchema = autoDetectionSettingsSchema.safeParse(req.body);
-    if (!parsed_autoDetectionSettingsSchema.success) throw new ValidationError(parsed_autoDetectionSettingsSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body: Partial<AutoDetectionSettings> = parsed_autoDetectionSettingsSchema.data as any;
+    const body: Partial<AutoDetectionSettings> = zodParse(autoDetectionSettingsSchema.safeParse(req.body)) as any;
     await saveAutoDetectionSettings(scope.companyId, body);
 
     await createAuditLog({
@@ -1191,9 +1174,7 @@ router.post("/auto-detection/run", requirePermission("hr:update"), async (req, r
     if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بتشغيل الرصد التلقائي");
     }
-    const parsed_autoDetectionRunSchema = autoDetectionRunSchema.safeParse(req.body);
-    if (!parsed_autoDetectionRunSchema.success) throw new ValidationError(parsed_autoDetectionRunSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_autoDetectionRunSchema.data;
+    const body = zodParse(autoDetectionRunSchema.safeParse(req.body));
     const { date } = body;
     const targetDate = date ?? todayISO()!;
 

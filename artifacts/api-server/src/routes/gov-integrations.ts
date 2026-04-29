@@ -1,5 +1,6 @@
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -112,9 +113,7 @@ router.get("/", requirePermission("admin:write"), async (req, res) => {
 
 router.put("/:id", requirePermission("admin:write"), async (req, res) => {
   try {
-    const parsed_updateIntegrationSchema = updateIntegrationSchema.safeParse(req.body);
-    if (!parsed_updateIntegrationSchema.success) throw new ValidationError(parsed_updateIntegrationSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updateIntegrationSchema.data;
+    const body = zodParse(updateIntegrationSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { config, enabled, status } = body;
@@ -352,9 +351,7 @@ router.get("/links", requirePermission("admin:write"), async (req, res) => {
 
 router.post("/links", requirePermission("admin:write"), async (req, res) => {
   try {
-    const parsed_createLinkSchema = createLinkSchema.safeParse(req.body);
-    if (!parsed_createLinkSchema.success) throw new ValidationError(parsed_createLinkSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createLinkSchema.data;
+    const body = zodParse(createLinkSchema.safeParse(req.body));
     const scope = req.scope!;
     const { integrationId, entityType, entityId, externalRef, enabled, notes } = body;
 
@@ -397,9 +394,7 @@ router.post("/links", requirePermission("admin:write"), async (req, res) => {
 
 router.patch("/links/:id", requirePermission("admin:write"), async (req, res) => {
   try {
-    const parsed_patchLinkSchema = patchLinkSchema.safeParse(req.body);
-    if (!parsed_patchLinkSchema.success) throw new ValidationError(parsed_patchLinkSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_patchLinkSchema.data;
+    const body = zodParse(patchLinkSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { enabled, externalRef, syncStatus, notes } = body;

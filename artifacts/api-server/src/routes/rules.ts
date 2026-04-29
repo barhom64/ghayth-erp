@@ -2,6 +2,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, ValidationError, NotFoundError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -97,9 +98,7 @@ router.get("/logs", requirePermission("admin:write"), async (req, res) => {
 
 router.post("/", requirePermission("admin:write"), async (req, res) => {
   try {
-    const parsed_createRule = createRuleSchema.safeParse(req.body);
-    if (!parsed_createRule.success) throw new ValidationError(parsed_createRule.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed_createRule.data;
+    const b = zodParse(createRuleSchema.safeParse(req.body));
     const scope = req.scope!;
 
     if (!b.name || !b.triggerEvent || !b.actionType) {
@@ -134,9 +133,7 @@ router.post("/", requirePermission("admin:write"), async (req, res) => {
 
 router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
   try {
-    const parsed_patchRule = patchRuleSchema.safeParse(req.body);
-    if (!parsed_patchRule.success) throw new ValidationError(parsed_patchRule.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed_patchRule.data;
+    const b = zodParse(patchRuleSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
 

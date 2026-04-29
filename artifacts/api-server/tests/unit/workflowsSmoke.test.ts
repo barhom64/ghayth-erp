@@ -201,7 +201,7 @@ describe("Workflow Zod validation", () => {
     const handlerIdx = WF_ROUTE.indexOf('"/submit"');
     const handler = WF_ROUTE.slice(handlerIdx, handlerIdx + 3000);
     expect(handler).toContain("submitSchema.safeParse");
-    expect(handler).toContain("ValidationError");
+    expect(handler).toContain("zodParse");
   });
 
   it("rejectSchema, returnSchema require notes; referSchema requires referredTo", () => {

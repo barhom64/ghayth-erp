@@ -4,6 +4,7 @@ import {
   NotFoundError,
   ConflictError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -127,9 +128,7 @@ router.get("/contracts", requirePermission("legal:read"), async (req, res) => {
 router.post("/contracts", requirePermission("legal:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createContractSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createContractSchema.safeParse(req.body)) as any;
 
     if (!b.endDate) {
       throw new ValidationError("لا يمكن إنشاء عقد بدون تاريخ نهاية", { field: "endDate", fix: "حدد تاريخ نهاية العقد" });
@@ -530,9 +529,7 @@ router.get("/cases", requirePermission("legal:read"), async (req, res) => {
 router.post("/cases", requirePermission("legal:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createCaseSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createCaseSchema.safeParse(req.body)) as any;
 
     if (!b.caseType || typeof b.caseType !== "string" || !b.caseType.trim()) {
       throw new ValidationError("نوع القضية مطلوب", { field: "caseType", fix: "اختر نوع القضية (مدنية، تجارية، جنائية، ...)" });
@@ -777,9 +774,7 @@ router.get("/cases/:caseId/sessions", requirePermission("legal:read"), async (re
 router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createSessionSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createSessionSchema.safeParse(req.body)) as any;
     const caseId = parseId(req.params.caseId, "caseId");
 
     const sd = new Date(b.sessionDate);
@@ -980,9 +975,7 @@ router.post("/cases/:caseId/correspondence", requirePermission("legal:create"), 
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
-    const parsed = createCorrespondenceSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createCorrespondenceSchema.safeParse(req.body)) as any;
     const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
     const { insertId } = await rawExecute(
@@ -1015,9 +1008,7 @@ router.post("/cases/:caseId/costs", requirePermission("legal:create"), async (re
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
-    const parsed = createCaseCostSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data;
+    const b = zodParse(createCaseCostSchema.safeParse(req.body));
 
     const [legalCase] = await rawQuery<any>(
       `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -1081,9 +1072,7 @@ router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
-    const parsed = createJudgmentSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createJudgmentSchema.safeParse(req.body)) as any;
     if (b.amount !== undefined && b.amount !== null) {
       const amt = Number(b.amount);
       if (!Number.isFinite(amt) || amt < 0) {
