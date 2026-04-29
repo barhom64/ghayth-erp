@@ -258,21 +258,21 @@ router.post("/bulk-action", requirePermission("admin:write"), async (req, res): 
 
     if (action === "approve") {
       const result = await rawQuery<{ id: number }>(
-        `UPDATE ${table} SET status = 'approved' WHERE id = ANY($1::int[]) AND "companyId" = $2 ${extraWhere} RETURNING id`,
+        `UPDATE ${table} SET status = 'approved' WHERE id = ANY($1::int[]) AND "companyId" = $2 AND status IN ('pending','draft','pending_approval') ${extraWhere} RETURNING id`,
         [validIds, scope.companyId]
       );
       affectedIds = result.map((r) => r.id);
       updated = affectedIds.length;
     } else if (action === "reject") {
       const result = await rawQuery<{ id: number }>(
-        `UPDATE ${table} SET status = 'rejected' WHERE id = ANY($1::int[]) AND "companyId" = $2 ${extraWhere} RETURNING id`,
+        `UPDATE ${table} SET status = 'rejected' WHERE id = ANY($1::int[]) AND "companyId" = $2 AND status IN ('pending','draft','pending_approval') ${extraWhere} RETURNING id`,
         [validIds, scope.companyId]
       );
       affectedIds = result.map((r) => r.id);
       updated = affectedIds.length;
     } else if (action === "delete") {
       const result = await rawQuery<{ id: number }>(
-        `DELETE FROM ${table} WHERE id = ANY($1::int[]) AND "companyId" = $2 ${extraWhere} RETURNING id`,
+        `UPDATE ${table} SET "deletedAt" = NOW() WHERE id = ANY($1::int[]) AND "companyId" = $2 AND "deletedAt" IS NULL ${extraWhere} RETURNING id`,
         [validIds, scope.companyId]
       );
       affectedIds = result.map((r) => r.id);
@@ -280,7 +280,7 @@ router.post("/bulk-action", requirePermission("admin:write"), async (req, res): 
     } else if (action === "close") {
       const closeStatus = entityType === "ticket" ? "closed" : "completed";
       const result = await rawQuery<{ id: number }>(
-        `UPDATE ${table} SET status = $1 WHERE id = ANY($2::int[]) AND "companyId" = $3 ${extraWhere} RETURNING id`,
+        `UPDATE ${table} SET status = $1 WHERE id = ANY($2::int[]) AND "companyId" = $3 AND status NOT IN ('closed','completed','cancelled') ${extraWhere} RETURNING id`,
         [closeStatus, validIds, scope.companyId]
       );
       affectedIds = result.map((r) => r.id);
