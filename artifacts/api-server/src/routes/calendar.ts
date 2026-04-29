@@ -90,7 +90,7 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
                 "nextInspectionDate" as "inspExp",
                 "nextServiceDate" as "svcExp"
          FROM fleet_vehicles
-         WHERE "companyId" = $1
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL
            AND (
              ("registrationExpiry" BETWEEN $2 AND $3)
              OR ("nextInspectionDate" BETWEEN $2 AND $3)

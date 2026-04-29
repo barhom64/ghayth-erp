@@ -484,7 +484,7 @@ router.get("/", async (req, res) => {
                       COUNT(*) FILTER (WHERE status = 'available') AS available,
                       COUNT(*) FILTER (WHERE status = 'in_use') AS in_use,
                       COUNT(*) FILTER (WHERE status = 'maintenance') AS maintenance
-               FROM fleet_vehicles WHERE "companyId" = $1`,
+               FROM fleet_vehicles WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
               [scope.companyId]
             );
             vehiclesSummary = vs;

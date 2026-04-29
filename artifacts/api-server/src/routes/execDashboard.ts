@@ -196,7 +196,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
     const fleetMaintenance = await safe(async () => {
       const [r] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM fleet_vehicles
-         WHERE "companyId"=$1
+         WHERE "companyId"=$1 AND "deletedAt" IS NULL
            AND ("nextServiceDate"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
                 OR "registrationExpiry"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days')`,
         [companyId]
