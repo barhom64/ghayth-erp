@@ -2579,44 +2579,40 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
     // "driver" = fine liability shifted to driver → payroll deduction in current period.
     const liability: 'company' | 'driver' = b.liability === 'driver' ? 'driver' : 'company';
 
-    const { insertId, journalEntryId } = await withTransaction(async (client) => {
-      const violationResult = await client.query(
-        `INSERT INTO fleet_traffic_violations
-         ("companyId","vehicleId","driverId","violationType","violationDate","fineAmount","location","violationNumber",status,notes,"paidAt")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10) RETURNING id`,
-        [scope.companyId, b.vehicleId, b.driverId || null, b.violationType,
-         b.violationDate || todayISO(),
-         fineAmount, b.location || null, b.violationNumber || null,
-         b.notes || null, null]
-      );
-      const violationId = violationResult.rows[0]?.id;
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_traffic_violations
+       ("companyId","vehicleId","driverId","violationType","violationDate","fineAmount","location","violationNumber",status,notes,"paidAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10)`,
+      [scope.companyId, b.vehicleId, b.driverId || null, b.violationType,
+       b.violationDate || todayISO(),
+       fineAmount, b.location || null, b.violationNumber || null,
+       b.notes || null, null]
+    );
 
-      // GL posting — company-borne fines hit expense account immediately. If
-      // the GL fails the transaction rolls back so we never have a visible
-      // fine without its accounting impact.
-      let journalId: number | null = null;
-      if (fineAmount > 0 && liability === 'company') {
-        try {
-          const { fleetEngine } = await import("../lib/engines/index.js");
-          const glResult = await fleetEngine.postTrafficViolationGL(
-            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
-            {
-              id: violationId,
-              vehicleId: b.vehicleId ? Number(b.vehicleId) : 0,
-              driverId: b.driverId ? Number(b.driverId) : undefined,
-              amount: fineAmount,
-              description: `مخالفة مرورية — ${b.violationType}${b.violationNumber ? ` #${b.violationNumber}` : ''}`,
-            }
-          );
-          journalId = glResult.journalId;
-        } catch (jeErr) {
-          console.error("Traffic violation journal entry failed:", jeErr);
-          throw new IntegrationError("تعذّر إنشاء القيد المحاسبي للمخالفة — لم يتم تسجيل المخالفة", { field: "journalEntry", fix: "تحقق من إعدادات ربط الحسابات (fleet_fines_expense / fleet_fines_payable) ثم أعد المحاولة" });
-        }
+    // GL posting — company-borne fines hit expense account immediately. If
+    // the GL fails we roll back the violation row so we never have a visible
+    // fine without its accounting impact.
+    let journalEntryId: number | null = null;
+    if (fineAmount > 0 && liability === 'company') {
+      try {
+        const { fleetEngine } = await import("../lib/engines/index.js");
+        const glResult = await fleetEngine.postTrafficViolationGL(
+          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+          {
+            id: insertId,
+            vehicleId: b.vehicleId ? Number(b.vehicleId) : 0,
+            driverId: b.driverId ? Number(b.driverId) : undefined,
+            amount: fineAmount,
+            description: `مخالفة مرورية — ${b.violationType}${b.violationNumber ? ` #${b.violationNumber}` : ''}`,
+          }
+        );
+        journalEntryId = glResult.journalId;
+      } catch (jeErr) {
+        logger.error(jeErr, "Traffic violation journal entry failed");
+        await rawExecute(`UPDATE fleet_traffic_violations SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]).catch((e) => logger.error(e, "Failed to rollback traffic violation"));
+        throw new IntegrationError("تعذّر إنشاء القيد المحاسبي للمخالفة — لم يتم تسجيل المخالفة", { field: "journalEntry", fix: "تحقق من إعدادات ربط الحسابات (fleet_fines_expense / fleet_fines_payable) ثم أعد المحاولة" });
       }
-
-      return { insertId: violationId, journalEntryId: journalId };
-    });
+    }
 
     // Driver-liability: request a payroll deduction via Fleet Engine →
     // HR Engine event boundary (no direct write to HR-owned table).
