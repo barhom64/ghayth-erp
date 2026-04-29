@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { z } from "zod";
@@ -117,7 +119,7 @@ router.patch("/programs/:id", requirePermission("hr:update"), async (req, res) =
     if (!parsed_patchProgramSchema.success) throw new ValidationError(parsed_patchProgramSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed_patchProgramSchema.data;
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("البرنامج التدريبي غير موجود");
     const sets: string[] = [];
@@ -151,7 +153,7 @@ router.patch("/programs/:id/approve", requirePermission("hr:update"), async (req
     if (!parsed_approveSchema.success) throw new ValidationError(parsed_approveSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_approveSchema.data;
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const row = await applyTransition({
       entity: "training_programs",
       id,
@@ -183,7 +185,7 @@ router.patch("/programs/:id/reject", requirePermission("hr:update"), async (req,
     if (!parsed_rejectSchema.success) throw new ValidationError(parsed_rejectSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_rejectSchema.data;
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { notes } = body;
     if (!String(notes).trim()) throw new ValidationError("يجب ذكر سبب الرفض", { field: "notes" });
     const row = await applyTransition({
@@ -215,7 +217,7 @@ router.patch("/programs/:id/reject", requirePermission("hr:update"), async (req,
 router.delete("/programs/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("البرنامج التدريبي غير موجود");
     await rawExecute(`UPDATE training_programs SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
@@ -304,7 +306,7 @@ router.patch("/enrollments/:id", requirePermission("hr:update"), async (req, res
     if (!parsed_patchEnrollmentSchema.success) throw new ValidationError(parsed_patchEnrollmentSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed_patchEnrollmentSchema.data;
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT e.id FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("التسجيل غير موجود");
     const sets: string[] = [];
@@ -328,7 +330,7 @@ router.patch("/enrollments/:id", requirePermission("hr:update"), async (req, res
 router.delete("/enrollments/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT e.id, e."programId" FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("التسجيل غير موجود");
     await rawExecute(`UPDATE training_enrollments SET "deletedAt" = NOW() WHERE id=$1 AND "deletedAt" IS NULL`, [id]);

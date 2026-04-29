@@ -5,6 +5,7 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -113,7 +114,7 @@ accountsRouter.patch("/accounts/:id", requirePermission("finance:update"), async
   try {
     const scope = req.scope!;
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body;
     const fields: string[] = [];
     const params: any[] = [];
@@ -157,7 +158,7 @@ accountsRouter.delete("/accounts/:id", requirePermission("finance:delete"), asyn
   try {
     const scope = req.scope!;
 
-    const accountId = Number(req.params.id);
+    const accountId = parseId(req.params.id, "id");
 
     const [existing] = await rawQuery<any>(
       `SELECT id, code, name FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,

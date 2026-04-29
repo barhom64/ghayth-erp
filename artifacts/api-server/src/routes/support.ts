@@ -3,6 +3,7 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -296,7 +297,7 @@ router.post("/tickets/:id/replies", requirePermission("support:create"), async (
     const parsed = createReplySchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed.data as any;
-    const ticketId = Number(req.params.id);
+    const ticketId = parseId(req.params.id, "id");
 
     const [ticket] = await rawQuery<any>(`SELECT id, ref, title, "firstResponseAt", "slaDeadline", priority FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
@@ -345,7 +346,7 @@ router.post("/tickets/:id/replies", requirePermission("support:create"), async (
 router.post("/tickets/:id/field-visit", requirePermission("support:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const ticketId = Number(req.params.id);
+    const ticketId = parseId(req.params.id, "id");
     const b = req.body;
 
     let distanceKm: number | null = null;
@@ -419,7 +420,7 @@ const TICKET_TRANSITIONS: Record<string, readonly string[]> = {
 router.patch("/tickets/:id", requirePermission("support:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const ticketId = Number(req.params.id);
+    const ticketId = parseId(req.params.id, "id");
     const b = req.body;
 
     // Pre-read for transition validation and pre-update state snapshot.
@@ -555,7 +556,7 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
 router.delete("/tickets/:id", requirePermission("support:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id, ref, status FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("التذكرة غير موجودة");
     await rawExecute(`UPDATE support_tickets SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
@@ -624,7 +625,7 @@ router.get("/stats", requirePermission("support:read"), async (req, res) => {
 router.post("/tickets/:id/csat", requirePermission("support:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const ticketId = Number(req.params.id);
+    const ticketId = parseId(req.params.id, "id");
     const parsed = createCSATSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed.data as any;
@@ -691,7 +692,7 @@ router.get("/kb", requirePermission("support:read"), async (req, res) => {
 router.get("/kb/:id", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المقالة غير موجودة");
     await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]).catch((e) => logger.error(e, "support background task failed"));
@@ -724,7 +725,7 @@ router.post("/kb", requirePermission("support:write"), async (req, res) => {
 router.patch("/kb/:id", requirePermission("support:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body;
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
@@ -749,7 +750,7 @@ router.patch("/kb/:id", requirePermission("support:write"), async (req, res) => 
 router.delete("/kb/:id", requirePermission("support:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     await rawExecute(`UPDATE kb_articles SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.deleted", entity: "kb_articles", entityId: id, details: "{}" }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
@@ -772,7 +773,7 @@ router.delete("/kb/:id", requirePermission("support:delete"), async (req, res) =
 router.post("/kb/:id/feedback", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { helpful } = req.body;
     const [row] = await rawQuery<any>(
       `SELECT id FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,

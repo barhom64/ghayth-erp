@@ -3,6 +3,7 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -303,7 +304,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
     const parsed = updateOpportunitySchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
-    const oppId = Number(req.params.id);
+    const oppId = parseId(req.params.id, "id");
     const b = req.body;
 
     const [existing] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [oppId, scope.companyId]);
@@ -766,7 +767,7 @@ router.post("/opportunities/:id/convert", requirePermission("crm:update"), async
     const parsed = convertOpportunitySchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -832,7 +833,7 @@ router.post("/opportunities/:id/convert", requirePermission("crm:update"), async
 router.delete("/opportunities/:id", requirePermission("crm:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الفرصة غير موجودة");
     await rawExecute(`UPDATE crm_opportunities SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
@@ -859,7 +860,7 @@ router.delete("/opportunities/:id", requirePermission("crm:delete"), async (req,
 router.get("/opportunities/:id/related", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [base] = await rawQuery<any>(
       `SELECT id, "clientId", "contactName", "contactPhone", "contactEmail"
          FROM crm_opportunities
@@ -922,7 +923,7 @@ router.get("/opportunities/:id/related", requirePermission("crm:read"), async (r
 router.get("/opportunities/:id/activities", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const oppId = Number(req.params.id);
+    const oppId = parseId(req.params.id, "id");
     const [opp] = await rawQuery<any>(
       `SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [oppId, scope.companyId]
@@ -939,7 +940,7 @@ router.post("/opportunities/:id/activities", requirePermission("crm:create"), as
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
     const b = req.body;
-    const oppId = Number(req.params.id);
+    const oppId = parseId(req.params.id, "id");
     const [opp] = await rawQuery<any>(
       `SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [oppId, scope.companyId]

@@ -2,7 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError, ConflictError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError,
+  parseId,
+} from "../lib/errorHandler.js";
 import {
   emitEvent,
   createAuditLog,
@@ -144,7 +146,7 @@ router.get("/seasons", requirePermission("umrah:read"), async (req, res) => {
 router.get("/seasons/:id", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT * FROM umrah_seasons WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
@@ -299,7 +301,7 @@ router.patch("/agents/:id", requirePermission("umrah:write"), async (req, res) =
 router.delete("/agents/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id, name FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الوكيل غير موجود");
     const [inUse] = await rawQuery<any>(`SELECT COUNT(*)::int AS c FROM umrah_pilgrims WHERE "agentId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
@@ -520,7 +522,7 @@ router.patch("/pilgrims/:id", requirePermission("umrah:write"), async (req, res)
   try {
     const scope = req.scope!;
     const b = req.body;
-    const pilgrimId = Number(req.params.id);
+    const pilgrimId = parseId(req.params.id, "id");
     const fieldKeys = ["agentId","packageId","fullName","passportNumber","visaNumber","nationality","gender","dateOfBirth","phone","arrivalDate","departureDate","actualArrival","actualDeparture","hotelName","roomNumber","transportAssigned","notes"] as const;
 
     if (b.status !== undefined) {
@@ -592,7 +594,7 @@ router.get("/pilgrims/:id", requirePermission("umrah:read"), async (req, res): P
 router.delete("/pilgrims/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id, "fullName", status FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المعتمر غير موجود");
     if (existing.status === "arrived") {
@@ -927,7 +929,7 @@ router.get("/penalties", requirePermission("umrah:read"), async (req, res) => {
 router.get("/penalties/:id", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT pen.*, p."fullName" AS "pilgrimName", p."passportNumber", a.name AS "agentName"
        FROM umrah_penalties pen
@@ -944,7 +946,7 @@ router.get("/penalties/:id", requirePermission("umrah:read"), async (req, res) =
 router.patch("/penalties/:id/waive", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { reason } = req.body;
     if (!reason) throw new ValidationError("سبب الإعفاء مطلوب");
     const [penalty] = await rawQuery<any>(`SELECT pen.*, p."fullName" as "pilgrimName" FROM umrah_penalties pen LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id WHERE pen.id=$1 AND pen."companyId"=$2`, [id, scope.companyId]);
@@ -981,7 +983,7 @@ router.patch("/penalties/:id/waive", requirePermission("umrah:write"), async (re
 router.post("/agent-invoices/:id/record-payment", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { amount, paymentMethod, reference } = req.body;
     if (!amount || Number(amount) <= 0) throw new ValidationError("مبلغ الدفع مطلوب");
     const [invoice] = await rawQuery<any>(`SELECT * FROM umrah_agent_invoices WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
@@ -1156,7 +1158,7 @@ router.get("/transport/:id", requirePermission("umrah:read"), async (req, res): 
 router.delete("/transport/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id, status FROM umrah_transport WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("رحلة النقل غير موجودة");
     if (existing.status === "in_progress") {
@@ -1225,7 +1227,7 @@ router.post("/transport", requirePermission("umrah:write"), async (req, res) => 
 router.patch("/transport/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body;
     if (b.vehicleId) {
       const [vehicle] = await rawQuery<any>(`SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2`, [b.vehicleId, scope.companyId]);
@@ -1286,7 +1288,7 @@ router.patch("/transport/:id", requirePermission("umrah:write"), async (req, res
 router.post("/transport/:id/assign-pilgrims", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const transportId = Number(req.params.id);
+    const transportId = parseId(req.params.id, "id");
     const { pilgrimIds } = req.body;
     if (!Array.isArray(pilgrimIds) || pilgrimIds.length === 0) {
       throw new ValidationError("يجب تحديد معتمر واحد على الأقل");
@@ -1416,7 +1418,7 @@ router.post("/violations", requirePermission("umrah:write"), async (req, res) =>
 router.patch("/violations/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body;
     const sets: string[] = ['"updatedAt"=NOW()', `"updatedBy"=${scope.userId}`];
     const params: any[] = [id, scope.companyId];
@@ -1439,7 +1441,7 @@ router.patch("/violations/:id", requirePermission("umrah:write"), async (req, re
 router.delete("/violations/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery(
       `UPDATE umrah_violations SET "deletedAt"=NOW(), "updatedBy"=$3 WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL RETURNING id`,
       [id, scope.companyId, scope.userId]

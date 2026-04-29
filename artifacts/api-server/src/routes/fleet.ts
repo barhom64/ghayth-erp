@@ -4,6 +4,7 @@ import {
   NotFoundError,
   ConflictError,
   IntegrationError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -334,7 +335,7 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
 router.get("/vehicles/:id", requirePermission("fleet:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const vehicleId = Number(req.params.id);
+    const vehicleId = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(`SELECT v.*, d.name AS "driverName", d.phone AS "driverPhone" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" AND d."deletedAt" IS NULL WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`, [vehicleId, scope.companyId]);
     if (!row) throw new NotFoundError("المركبة غير موجودة");
     const [trips, maintenance, fuelLogs, insurance] = await Promise.all([
@@ -367,7 +368,7 @@ router.get("/vehicles/:id", requirePermission("fleet:read"), async (req, res) =>
 router.get("/vehicles/:id/impact-preview", requirePermission("fleet:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { status } = req.query as { status?: string };
     if (!status) {
       throw new ValidationError("الحالة المطلوبة", { field: "status", fix: "أرسل معامل status في الرابط" });
@@ -380,7 +381,7 @@ router.get("/vehicles/:id/impact-preview", requirePermission("fleet:read"), asyn
 router.patch("/vehicles/:id", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -518,7 +519,7 @@ router.patch("/vehicles/:id", requirePermission("fleet:update"), async (req, res
 router.delete("/vehicles/:id", requirePermission("fleet:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id, "plateNumber", status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -578,7 +579,7 @@ router.get("/drivers/:id", requirePermission("fleet:read"), async (req, res) => 
 router.patch("/drivers/:id", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -669,7 +670,7 @@ router.patch("/drivers/:id", requirePermission("fleet:update"), async (req, res)
 router.delete("/drivers/:id", requirePermission("fleet:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id, name, status FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -729,7 +730,7 @@ router.get("/trips", requirePermission("fleet:read"), async (req, res) => {
 router.get("/trips/:id", requirePermission("fleet:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const tripId = Number(req.params.id);
+    const tripId = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT t.*, t."fromLocation" AS origin, t."toLocation" AS destination, t."startDate" AS "tripDate",
               v."plateNumber", v."plateNumber" AS "vehiclePlate", d.name AS "driverName"
@@ -961,7 +962,7 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
 router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const tripId = Number(req.params.id);
+    const tripId = parseId(req.params.id, "id");
     const b = req.body;
 
     const [trip] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2`, [tripId, scope.companyId]);
@@ -1053,7 +1054,7 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
 router.post("/trips/:id/cancel", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const tripId = Number(req.params.id);
+    const tripId = parseId(req.params.id, "id");
     const reason = (req.body?.reason as string | undefined)?.trim();
     if (!reason) {
       throw new ValidationError("سبب الإلغاء مطلوب", {
@@ -1114,7 +1115,7 @@ router.post("/trips/:id/cancel", requirePermission("fleet:update"), async (req, 
 router.post("/trips/:id/waypoints", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const tripId = Number(req.params.id);
+    const tripId = parseId(req.params.id, "id");
     const b = req.body;
     const [trip] = await rawQuery<any>(
       `SELECT "vehicleId","driverId", status FROM fleet_trips WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -1175,7 +1176,7 @@ router.get("/maintenance", requirePermission("fleet:read"), async (req, res) => 
 router.get("/maintenance/:id", requirePermission("fleet:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     if (req.path.includes("/complete") || req.path.includes("/cancel")) return;
     const [row] = await rawQuery<any>(
       `SELECT m.*, m.type AS "maintenanceType", m.cost AS amount,
@@ -1305,7 +1306,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
 router.post("/maintenance/:id/complete", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body;
     const [m] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!m) throw new NotFoundError("سجل الصيانة غير موجود");
@@ -1391,7 +1392,7 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
 router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body || {};
     const [m] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!m) throw new NotFoundError("سجل الصيانة غير موجود");
@@ -1596,7 +1597,7 @@ router.get("/fuel-logs", requirePermission("fleet:read"), async (req, res) => {
 router.get("/fuel-logs/:id", requirePermission("fleet:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT f.*, f.liters AS quantity, f."totalCost" AS cost, f."mileageAtFuel" AS odometer,
               f."stationName" AS station, f."fuelDate" AS date,
@@ -1732,7 +1733,7 @@ router.get("/insurance", requirePermission("fleet:read"), async (req, res) => {
 router.get("/insurance/:id", requirePermission("fleet:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT i.*, v."plateNumber", v.make AS "vehicleMake", v.model AS "vehicleModel"
        FROM fleet_insurance i
@@ -1811,7 +1812,7 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
 router.patch("/trips/:id", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -1921,7 +1922,7 @@ router.patch("/trips/:id", requirePermission("fleet:update"), async (req, res) =
 router.delete("/trips/:id", requirePermission("fleet:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id, status FROM fleet_trips WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -1956,7 +1957,7 @@ router.delete("/trips/:id", requirePermission("fleet:delete"), async (req, res) 
 router.patch("/maintenance/:id", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -2057,7 +2058,7 @@ router.patch("/maintenance/:id", requirePermission("fleet:update"), async (req, 
 router.delete("/maintenance/:id", requirePermission("fleet:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id, status, "vehicleId" FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -2092,7 +2093,7 @@ router.delete("/maintenance/:id", requirePermission("fleet:delete"), async (req,
 router.patch("/fuel-logs/:id", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM fleet_fuel_logs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -2168,7 +2169,7 @@ router.patch("/fuel-logs/:id", requirePermission("fleet:update"), async (req, re
 router.delete("/fuel-logs/:id", requirePermission("fleet:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id FROM fleet_fuel_logs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -2199,7 +2200,7 @@ router.delete("/fuel-logs/:id", requirePermission("fleet:delete"), async (req, r
 router.patch("/insurance/:id", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM fleet_insurance WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
@@ -2278,7 +2279,7 @@ router.patch("/insurance/:id", requirePermission("fleet:update"), async (req, re
 router.delete("/insurance/:id", requirePermission("fleet:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM fleet_insurance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("سجل التأمين غير موجود");
     await rawExecute(`UPDATE fleet_insurance SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
@@ -2425,7 +2426,7 @@ router.post("/preventive-plans", requirePermission("fleet:create"), async (req, 
 router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body;
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
@@ -2524,7 +2525,7 @@ router.get("/traffic-violations", requirePermission("fleet:read"), async (req, r
 router.get("/traffic-violations/:id", requirePermission("fleet:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     if (req.path.includes("/pay")) return;
     const [row] = await rawQuery<any>(
       `SELECT tv.*, v."plateNumber", d.name AS "driverName"
@@ -2680,7 +2681,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
 router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM fleet_traffic_violations WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
@@ -2751,7 +2752,7 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
 router.get("/vehicles/:id/tco", requirePermission("fleet:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const vehicleId = Number(req.params.id);
+    const vehicleId = parseId(req.params.id, "id");
 
     const [vehicle] = await rawQuery<any>(
       `SELECT v.*, d.name AS "driverName"

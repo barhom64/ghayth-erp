@@ -2,7 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import {
   submitWorkflow,
@@ -374,7 +376,7 @@ router.put("/definitions/:id", requirePermission("admin:write"), async (req, res
     if (!parsed_updateDefinitionSchema.success) throw new ValidationError(parsed_updateDefinitionSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_updateDefinitionSchema.data;
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { requestTypeLabel, description, isReturnable, enableEscalation, defaultSlaHours, isActive, steps } = body;
 
     await rawExecute(
@@ -411,7 +413,7 @@ router.put("/definitions/:id", requirePermission("admin:write"), async (req, res
 router.delete("/definitions/:id", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     await rawExecute(`DELETE FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "workflow_definitions", entityId: id, before }).catch((e) => logger.error(e, "workflows background task failed"));

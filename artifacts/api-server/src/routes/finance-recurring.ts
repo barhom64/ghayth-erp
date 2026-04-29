@@ -3,6 +3,7 @@ import {
   ValidationError,
   NotFoundError,
   IntegrationError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -58,7 +59,7 @@ recurringRouter.get("/recurring-journals", requirePermission("finance:read"), as
 recurringRouter.get("/recurring-journals/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = ANY($2) AND "deletedAt" IS NULL`,
       [id, scope.allowedCompanies]
@@ -182,7 +183,7 @@ recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:upda
   try {
     const scope = req.scope!;
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body as any;
 
     const [existing] = await rawQuery<any>(
@@ -269,7 +270,7 @@ recurringRouter.post("/recurring-journals/:id/run-now", requirePermission("finan
   try {
     const scope = req.scope!;
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [recurring] = await rawQuery<any>(
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -321,7 +322,7 @@ recurringRouter.delete("/recurring-journals/:id", requirePermission("finance:del
   try {
     const scope = req.scope!;
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
 
     const [existing] = await rawQuery<any>(
       `SELECT id, name FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,

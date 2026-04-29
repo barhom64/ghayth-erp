@@ -1,4 +1,6 @@
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -70,7 +72,7 @@ router.get("/retention-policies", authMiddleware, async (req, res) => {
 router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res) => {
   try {
     const scope = req.scope!;
-    const employeeId = Number(req.params.employeeId);
+    const employeeId = parseId(req.params.employeeId, "employeeId");
 
     const isOwnData = scope.employeeId === employeeId;
     const isHROrAbove = ["hr_manager", "general_manager", "owner"].includes(scope.role);

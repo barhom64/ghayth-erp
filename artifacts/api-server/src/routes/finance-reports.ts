@@ -3,6 +3,7 @@ import {
   ValidationError,
   NotFoundError,
   ForbiddenError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
@@ -417,7 +418,7 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", requirePermission(
 reportsRouter.get("/reports/customer-statement/:clientId", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const clientId = Number(req.params.clientId);
+    const clientId = parseId(req.params.clientId, "clientId");
     const { startDate, endDate } = req.query as any;
     const asOf = endDate || todayISO();
     const from = startDate || "1900-01-01";
@@ -536,7 +537,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", requirePermission("fi
 reportsRouter.get("/reports/vendor-statement/:supplierId", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const supplierId = Number(req.params.supplierId);
+    const supplierId = parseId(req.params.supplierId, "supplierId");
     const { startDate, endDate } = req.query as any;
     const asOf = endDate || todayISO();
     const from = startDate || "1900-01-01";

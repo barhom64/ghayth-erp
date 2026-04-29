@@ -4,6 +4,7 @@ import {
   NotFoundError,
   ConflictError,
   IntegrationError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -330,7 +331,7 @@ router.post("/units", requirePermission("property:create"), async (req, res) => 
 router.get("/units/:id", requirePermission("property:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الوحدة غير موجودة");
 
@@ -363,7 +364,7 @@ router.get("/units/:id", requirePermission("property:read"), async (req, res) =>
 router.get("/units/:id/impact-preview", requirePermission("property:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { status } = req.query as { status?: string };
     if (!status) {
       throw new ValidationError("الحالة المطلوبة", { field: "status", fix: "أرسل معامل status في الرابط" });
@@ -376,7 +377,7 @@ router.get("/units/:id/impact-preview", requirePermission("property:read"), asyn
 router.patch("/units/:id", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -513,7 +514,7 @@ router.patch("/units/:id", requirePermission("property:update"), async (req, res
 router.delete("/units/:id", requirePermission("property:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id, "unitNumber", status FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -714,7 +715,7 @@ router.get("/contracts", requirePermission("property:read"), async (req, res) =>
 router.get("/contracts/:id", requirePermission("properties:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const contractId = Number(req.params.id);
+    const contractId = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT c.*, u."unitNumber", u."buildingName", t.name AS "tenantFullName", t.phone AS "tenantPhoneFromRecord", t.email AS "tenantEmailFromRecord"
        FROM rental_contracts c
@@ -937,7 +938,7 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
 router.patch("/contracts/:id", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -1087,7 +1088,7 @@ router.patch("/contracts/:id", requirePermission("property:update"), async (req,
 router.delete("/contracts/:id", requirePermission("property:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id, status, "contractNumber", "unitId" FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -1131,7 +1132,7 @@ router.delete("/contracts/:id", requirePermission("property:delete"), async (req
 router.post("/contracts/:id/renew", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body || {};
     // Pre-fetch the contract to compute renewal params. applyTransition will
     // re-fetch with SELECT FOR UPDATE inside the transaction.
@@ -1251,7 +1252,7 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
 router.post("/contracts/:id/terminate", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body || {};
     // Pre-fetch contract to compute termination params. applyTransition will
     // re-fetch with SELECT FOR UPDATE inside its transaction.
@@ -1412,7 +1413,7 @@ router.get("/tenants/list", requirePermission("property:read"), async (req, res)
 router.patch("/tenants/:id", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM tenants WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -1503,7 +1504,7 @@ router.patch("/tenants/:id", requirePermission("property:update"), async (req, r
 router.delete("/tenants/:id", requirePermission("property:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id, name FROM tenants WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -1565,7 +1566,7 @@ router.get("/payments", requirePermission("property:read"), async (req, res) => 
 router.get("/payments/:id", requirePermission("property:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     if (req.path.includes("/pay")) return;
     const [row] = await rawQuery<any>(
       `SELECT rp.*, c."tenantName", u."unitNumber"
@@ -1809,7 +1810,7 @@ router.get("/maintenance-requests", requirePermission("property:read"), async (r
 router.get("/maintenance/:id", requirePermission("property:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [item] = await rawQuery<any>(
       `SELECT mr.*, u."unitNumber", u."buildingName", u.id AS "unitId",
               t.name AS "technicianName", t.name AS "assignedTo",
@@ -1988,7 +1989,7 @@ router.post("/maintenance-requests", requirePermission("property:create"), async
 router.patch("/maintenance-requests/:id/approve", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { approved, notes } = req.body as any;
 
     const [mr] = await rawQuery<any>(
@@ -2055,7 +2056,7 @@ router.patch("/maintenance-requests/:id/approve", requirePermission("property:up
 router.post("/maintenance-requests/:id/complete", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body;
     const [mr] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!mr) throw new NotFoundError("الطلب غير موجود");
@@ -2389,7 +2390,7 @@ router.get("/buildings", requirePermission("property:read"), async (req, res) =>
 router.get("/buildings/:id", requirePermission("property:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [building] = await rawQuery<any>(
       `SELECT b.*,
         COUNT(u.id) AS "totalUnits",
@@ -2481,7 +2482,7 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
 router.patch("/buildings/:id", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM property_buildings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -2558,7 +2559,7 @@ router.patch("/buildings/:id", requirePermission("property:update"), async (req,
 router.delete("/buildings/:id", requirePermission("property:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id, name FROM property_buildings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -2726,7 +2727,7 @@ router.get("/stats", requirePermission("property:read"), async (req, res) => {
 router.patch("/maintenance-requests/:id", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الطلب غير موجود");
     const b = req.body;
@@ -2930,7 +2931,7 @@ router.get("/owners", requirePermission("property:read"), async (req, res) => {
 router.get("/owners/:id", requirePermission("property:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [owner] = await rawQuery<any>(`SELECT * FROM property_owners WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!owner) throw new NotFoundError("المالك غير موجود");
     const buildings = await rawQuery<any>(`SELECT * FROM property_buildings WHERE "ownerId"=$1 AND "companyId"=$2`, [id, scope.companyId]);
@@ -3000,7 +3001,7 @@ router.post("/owners", requirePermission("property:create"), async (req, res) =>
 router.patch("/owners/:id", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المالك غير موجود");
     const b = req.body;
@@ -3051,7 +3052,7 @@ router.patch("/owners/:id", requirePermission("property:update"), async (req, re
 router.delete("/owners/:id", requirePermission("property:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id, name FROM property_owners WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -3105,7 +3106,7 @@ router.delete("/owners/:id", requirePermission("property:delete"), async (req, r
 router.get("/contracts/:id/schedule", requirePermission("property:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const contractId = Number(req.params.id);
+    const contractId = parseId(req.params.id, "id");
     const [contract] = await rawQuery<any>(`SELECT id FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [contractId, scope.companyId]);
     if (!contract) throw new NotFoundError("العقد غير موجود");
     const schedule = await rawQuery<any>(
@@ -3119,8 +3120,8 @@ router.get("/contracts/:id/schedule", requirePermission("property:read"), async 
 router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const contractId = Number(req.params.id);
-    const installmentId = Number(req.params.installmentId);
+    const contractId = parseId(req.params.id, "id");
+    const installmentId = parseId(req.params.installmentId, "installmentId");
     const b = req.body;
     const paidAmount = Number(b.paidAmount ?? b.amount);
     const [existing] = await rawQuery<any>(
@@ -3246,7 +3247,7 @@ router.post("/inspections", requirePermission("property:create"), async (req, re
 router.patch("/inspections/:id", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM property_inspections WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
@@ -3434,7 +3435,7 @@ router.post("/deposits", requirePermission("property:create"), async (req, res) 
 router.patch("/deposits/:id/refund", requirePermission("property:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body;
     const [deposit] = await rawQuery<any>(
       `SELECT * FROM property_security_deposits WHERE id=$1 AND "companyId"=$2`,
@@ -3556,7 +3557,7 @@ router.get("/occupancy-report", requirePermission("property:read"), async (req, 
 router.get("/tenants/:id/letters", requirePermission("property:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const tenantId = Number(req.params.id);
+    const tenantId = parseId(req.params.id, "id");
     const rows = await rawQuery<any>(
       `SELECT l.id, l.subject, l.direction, l.direction AS type, l.status, l."sentAt" AS "letterDate",
               l."senderName" AS "fromEntity", l."recipientName" AS "toEntity", l."createdAt"

@@ -5,6 +5,7 @@ import {
   ConflictError,
   ForbiddenError,
   IntegrationError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -501,7 +502,7 @@ invoicesRouter.post("/invoices/:id/send", requirePermission("finance:create"), a
 invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"), requireOwnership({ table: "invoices", checks: ["company", "branch"] }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
 
     const [invoice] = await rawQuery<any>(
       `SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId"
@@ -565,7 +566,7 @@ invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"
 invoicesRouter.post("/invoices/:id/post", requirePermission("finance:approve"), requireOwnership({ table: "invoices", checks: ["company", "branch"] }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
 
     await applyTransition({
       entity: "invoices",
@@ -730,7 +731,7 @@ invoicesRouter.patch("/invoices/:id", requirePermission("finance:update"), async
   try {
     const scope = req.scope!;
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { status, description, dueDate } = req.body as any;
 
     const [existing] = await rawQuery<any>(
@@ -820,7 +821,7 @@ invoicesRouter.delete("/invoices/:id", requirePermission("finance:delete"), asyn
   try {
     const scope = req.scope!;
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [inv] = await rawQuery<any>(
       `SELECT id, ref, status, "paidAmount" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -993,7 +994,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
   try {
     const scope = req.scope!;
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const parsedMemo = createCreditMemoSchema.safeParse(req.body);
     if (!parsedMemo.success) throw new ValidationError(parsedMemo.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { amount, reason, vatIncluded = true, memoDate } = parsedMemo.data;
@@ -1141,7 +1142,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
   try {
     const scope = req.scope!;
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { amount, reason, vatIncluded = true, memoDate } = req.body as any;
 
     if (!amount || Number(amount) <= 0) {
@@ -1277,7 +1278,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
 invoicesRouter.get("/invoices/:id/memos", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     let creditMemos: any[] = [];
     let debitMemos: any[] = [];
     try {
@@ -1575,7 +1576,7 @@ invoicesRouter.post("/customer-advances/:id/apply", requirePermission("finance:c
   try {
     const scope = req.scope!;
 
-    const advanceId = Number(req.params.id);
+    const advanceId = parseId(req.params.id, "id");
     const { invoiceId, amount } = req.body as any;
 
     if (!invoiceId || !amount || Number(amount) <= 0) {

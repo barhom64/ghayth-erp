@@ -5,6 +5,7 @@ import {
   ConflictError,
   ForbiddenError,
   IntegrationError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -392,7 +393,7 @@ journalRouter.patch("/expenses/:id/approve", requirePermission("finance:update")
   try {
     const scope = req.scope!;
 
-    const expenseId = Number(req.params.id);
+    const expenseId = parseId(req.params.id, "id");
     const { approved, notes } = req.body as any;
 
     // Fetch ref for the audit trail; state gating handled by the engine.
@@ -492,7 +493,7 @@ journalRouter.get("/vouchers", requirePermission("finance:read"), async (req, re
 journalRouter.get("/vouchers/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT je.id, je.ref, je.description,
               CASE WHEN je.ref LIKE 'RV%' THEN 'receipt' ELSE 'payment' END AS "voucherType",
@@ -654,7 +655,7 @@ journalRouter.get("/salary-advances", requirePermission("finance:read"), async (
 journalRouter.get("/salary-advances/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [item] = await rawQuery<any>(
       `SELECT je.id, je.ref, je.description, je.status, je."createdAt", je."updatedAt",
               je."branchId", je."companyId",
@@ -704,7 +705,7 @@ journalRouter.patch("/salary-advances/:id/approve", requirePermission("finance:u
   try {
     const scope = req.scope!;
 
-    const advanceId = Number(req.params.id);
+    const advanceId = parseId(req.params.id, "id");
     const { approved, notes } = req.body as any;
 
     const [entry] = await rawQuery<any>(
@@ -813,7 +814,7 @@ journalRouter.post("/journal", requirePermission("finance:create"), async (req, 
 journalRouter.get("/journal/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     if (!Number.isFinite(id)) { throw new ValidationError("معرّف القيد غير صالح"); return; }
     const [je] = await rawQuery<any>(
       `SELECT je.*,
@@ -854,7 +855,7 @@ journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), 
   try {
     const scope = req.scope!;
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     if (!Number.isFinite(id)) { throw new ValidationError("معرّف القيد غير صالح"); return; }
     const { reason, reverseDate } = req.body as { reason?: string; reverseDate?: string };
     if (!reason || !String(reason).trim()) {

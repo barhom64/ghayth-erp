@@ -2,7 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError, ConflictError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import {
   generateSalesInvoice,
@@ -561,7 +563,7 @@ router.get("/nusk-invoices", requirePermission("umrah:read"), async (req, res) =
 router.get("/employees/:employeeId/assignments", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const employeeId = Number(req.params.employeeId);
+    const employeeId = parseId(req.params.employeeId, "employeeId");
     const rows = await rawQuery(
       `SELECT ea.id, ea."jobTitle" AS title, ea.role, ea."branchId", ea.status
        FROM employee_assignments ea

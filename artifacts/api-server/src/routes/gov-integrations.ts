@@ -1,4 +1,6 @@
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -116,7 +118,7 @@ router.put("/:id", requirePermission("admin:write"), async (req, res) => {
     if (!parsed_updateIntegrationSchema.success) throw new ValidationError(parsed_updateIntegrationSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_updateIntegrationSchema.data;
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { config, enabled, status } = body;
 
     if (config !== undefined && (typeof config !== "object" || config === null || Array.isArray(config))) {
@@ -172,7 +174,7 @@ router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
   try {
     { const _guard = testIntegrationSchema.safeParse(req.body); if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
 
     const [integration] = await rawQuery<any>(
       `SELECT * FROM gov_integrations WHERE id = $1 AND "companyId" = $2`,
@@ -401,7 +403,7 @@ router.patch("/links/:id", requirePermission("admin:write"), async (req, res) =>
     if (!parsed_patchLinkSchema.success) throw new ValidationError(parsed_patchLinkSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_patchLinkSchema.data;
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { enabled, externalRef, syncStatus, notes } = body;
 
     const [existing] = await rawQuery<any>(
@@ -435,7 +437,7 @@ router.patch("/links/:id", requirePermission("admin:write"), async (req, res) =>
 router.delete("/links/:id", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<any>(
       `SELECT * FROM gov_integration_links WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]

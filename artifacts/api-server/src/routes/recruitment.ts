@@ -3,7 +3,9 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
@@ -106,7 +108,7 @@ router.get("/postings/:id", requirePermission("hr:read"), async (req, res) => {
 router.patch("/postings/:id", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const parsed = updatePostingSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed.data as any;
@@ -143,7 +145,7 @@ router.patch("/postings/:id", requirePermission("hr:write"), async (req, res) =>
 router.post("/postings/:id/close", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const reason = (req.body?.reason as string | undefined)?.trim();
     if (!reason) throw new ValidationError("سبب الإغلاق مطلوب", { field: "reason" });
     const updated = await applyTransition({
@@ -193,7 +195,7 @@ router.post("/postings/:id/close", requirePermission("hr:write"), async (req, re
 router.post("/postings/:id/reopen", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const updated = await applyTransition({
       entity: "job_postings",
       id,
@@ -226,7 +228,7 @@ router.post("/postings/:id/reopen", requirePermission("hr:write"), async (req, r
 router.delete("/postings/:id", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!before) throw new NotFoundError("الإعلان الوظيفي غير موجود");
     await rawExecute(`UPDATE job_postings SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
@@ -298,7 +300,7 @@ router.get("/applications/:id", requirePermission("hr:read"), async (req, res) =
 router.patch("/applications/:id", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT a.id FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2 AND a."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("طلب التوظيف غير موجود");
     const parsed = updateApplicationSchema.safeParse(req.body);
@@ -329,7 +331,7 @@ router.patch("/applications/:id", requirePermission("hr:write"), async (req, res
 router.delete("/applications/:id", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<any>(`SELECT a.* FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2`, [id, scope.companyId]);
     if (!before) throw new NotFoundError("طلب التوظيف غير موجود");
     await rawExecute(`UPDATE job_applications SET "deletedAt" = NOW() WHERE id=$1 AND "deletedAt" IS NULL`, [id]);

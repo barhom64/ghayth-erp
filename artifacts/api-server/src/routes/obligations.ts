@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { emitEvent } from "../lib/businessHelpers.js";
@@ -104,7 +106,7 @@ obligationsRouter.post("/", async (req, res) => {
 obligationsRouter.post("/:id/met", async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     await ensureObligationsTable();
     const rows = await rawQuery<any>(
       `UPDATE obligations SET status='met', "metAt"=NOW(), "updatedAt"=NOW()
@@ -142,7 +144,7 @@ obligationsRouter.post("/met-by-entity", async (req, res) => {
 obligationsRouter.post("/:id/cancel", async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     await ensureObligationsTable();
     const rows = await rawQuery<any>(
       `UPDATE obligations SET status='cancelled', "updatedAt"=NOW()

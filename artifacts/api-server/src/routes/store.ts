@@ -2,7 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError,
+  parseId,
+} from "../lib/errorHandler.js";
 import {
   emitEvent,
   createAuditLog,
@@ -112,7 +114,7 @@ router.get("/products/:id", requirePermission("store:read"), async (req, res) =>
 router.patch("/products/:id", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المنتج غير موجود");
     const parsed = updateStoreProductSchema.safeParse(req.body);
@@ -142,7 +144,7 @@ router.patch("/products/:id", requirePermission("store:write"), async (req, res)
 router.delete("/products/:id", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المنتج غير موجود");
     await rawExecute(`UPDATE store_products SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
@@ -224,7 +226,7 @@ router.get("/orders/:id", requirePermission("store:read"), async (req, res) => {
 router.patch("/orders/:id", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const parsed = updateStoreOrderSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed.data as any;
@@ -271,7 +273,7 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
 router.delete("/orders/:id", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الطلب غير موجود");
     await rawExecute(`UPDATE store_orders SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);

@@ -5,6 +5,7 @@ import {
   ConflictError,
   ForbiddenError,
   IntegrationError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -576,7 +577,7 @@ financeAlgorithmsRouter.patch("/fixed-assets/:id", requirePermission("finance:up
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const b = req.body as any;
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
@@ -730,7 +731,7 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", requirePermission("
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { period, unitsThisPeriod } = req.body as any;
     if (!period) {
       throw new ValidationError("الفترة المحاسبية مطلوبة", { field: "period" });
@@ -912,7 +913,7 @@ financeAlgorithmsRouter.get("/inventory-costing", requirePermission("finance:rea
 financeAlgorithmsRouter.get("/inventory-costing/:productId", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const productId = Number(req.params.productId);
+    const productId = parseId(req.params.productId, "productId");
 
     const [product] = await rawQuery<any>(
       `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,

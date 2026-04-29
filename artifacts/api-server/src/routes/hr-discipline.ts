@@ -13,6 +13,7 @@ import {
   NotFoundError,
   ValidationError,
   ForbiddenError,
+  parseId,
 } from "../lib/errorHandler.js";
 import {
   createAuditLog,
@@ -138,7 +139,7 @@ router.get("/regulation", requirePermission("hr:read"), async (req, res) => {
 router.get("/regulation/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT * FROM hr_discipline_regulation
         WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -295,7 +296,7 @@ router.post("/regulation", requirePermission("hr:create"), async (req, res) => {
 router.patch("/regulation/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const parsed_updateRegulationSchema = updateRegulationSchema.safeParse(req.body);
     if (!parsed_updateRegulationSchema.success) throw new ValidationError(parsed_updateRegulationSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_updateRegulationSchema.data;
@@ -370,7 +371,7 @@ router.post("/regulation/reseed", requirePermission("hr:create"), async (req, re
 router.delete("/regulation/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     await rawExecute(
       `UPDATE hr_discipline_regulation
           SET "deletedAt" = NOW(), "isActive" = FALSE
@@ -442,7 +443,7 @@ router.get("/memos", requirePermission("hr:read"), async (req, res) => {
 router.get("/memos/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
     const events = await rawQuery<any>(
@@ -576,7 +577,7 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
 router.post("/memos/:id/justify", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const parsed_justifyMemoSchema = justifyMemoSchema.safeParse(req.body);
     if (!parsed_justifyMemoSchema.success) throw new ValidationError(parsed_justifyMemoSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_justifyMemoSchema.data;
@@ -644,7 +645,7 @@ router.post("/memos/:id/justify", requirePermission("hr:read"), async (req, res)
 router.post("/memos/:id/manager-recommendation", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const parsed_managerRecommendationSchema = managerRecommendationSchema.safeParse(req.body);
     if (!parsed_managerRecommendationSchema.success) throw new ValidationError(parsed_managerRecommendationSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_managerRecommendationSchema.data;
@@ -687,7 +688,7 @@ router.post("/memos/:id/manager-recommendation", requirePermission("hr:update"),
 router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const parsed_gmDecisionSchema = gmDecisionSchema.safeParse(req.body);
     if (!parsed_gmDecisionSchema.success) throw new ValidationError(parsed_gmDecisionSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_gmDecisionSchema.data;
@@ -837,7 +838,7 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
 router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const parsed_cancelMemoSchema = cancelMemoSchema.safeParse(req.body);
     if (!parsed_cancelMemoSchema.success) throw new ValidationError(parsed_cancelMemoSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_cancelMemoSchema.data;
@@ -883,7 +884,7 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
 router.post("/memos/:id/appeal", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { reason } = req.body;
     if (!reason || typeof reason !== "string" || !reason.trim()) {
       throw new ValidationError("سبب الاستئناف مطلوب", { field: "reason", fix: "أدخل مبررات الاستئناف" });
@@ -935,7 +936,7 @@ router.post("/memos/:id/appeal", requirePermission("hr:read"), async (req, res) 
 router.post("/memos/:id/appeal-decision", requirePermission("hr:discipline:approve"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { decision, comment } = req.body;
     if (!decision || !["accepted", "rejected"].includes(decision)) {
       throw new ValidationError("القرار مطلوب (accepted أو rejected)");
@@ -996,7 +997,7 @@ router.post("/memos/:id/appeal-decision", requirePermission("hr:discipline:appro
 router.post("/memos/:id/close", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
 
@@ -1080,7 +1081,7 @@ router.post("/penalty-preview", requirePermission("hr:read"), async (req, res) =
 router.get("/employee/:employeeId/summary", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const employeeId = Number(req.params.employeeId);
+    const employeeId = parseId(req.params.employeeId, "employeeId");
     if (!Number.isFinite(employeeId)) {
       throw new ValidationError("معرف الموظف غير صالح");
     }

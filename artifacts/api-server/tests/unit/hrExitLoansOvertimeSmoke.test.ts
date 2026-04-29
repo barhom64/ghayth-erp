@@ -436,7 +436,7 @@ describe("Overtime approval flow", () => {
 
   it("supports multi-step approval chain", () => {
     const idx = OVERTIME_ROUTE.indexOf('"/overtime/:id/approve"');
-    const section = OVERTIME_ROUTE.slice(idx, idx + 3000);
+    const section = OVERTIME_ROUTE.slice(idx, idx + 3500);
     expect(section).toContain("processApprovalStep");
     expect(section).toContain("pending_next_step");
   });

@@ -5,6 +5,7 @@ import {
   ConflictError,
   ForbiddenError,
   IntegrationError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -782,7 +783,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
 purchaseRouter.get("/purchase-orders/:id/receipts", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const poId = Number(req.params.id);
+    const poId = parseId(req.params.id, "id");
     const rows = await rawQuery<any>(
       `SELECT gr.id, gr.ref, gr."receivedAt", gr."journalId", gr.notes,
               COALESCE(SUM(gri."lineTotal"),0) AS "total",
@@ -811,7 +812,7 @@ purchaseRouter.get("/purchase-orders/:id/receipts", requirePermission("finance:r
 purchaseRouter.get("/purchase-orders/:id/match", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const poId = Number(req.params.id);
+    const poId = parseId(req.params.id, "id");
     const [po] = await rawQuery<any>(
       `SELECT id, ref, status, "totalAmount", 0 AS "vatAmount", "supplierId"
          FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
