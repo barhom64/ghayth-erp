@@ -324,7 +324,7 @@ async function postStoreOrderGl(scope: any, order: any) {
       { id: order.id, subtotal: totalAmount, vatAmount: 0, total: totalAmount, cogsAmount: totalCogs }
     );
   } catch (e) {
-    console.error("Store order GL failed:", e);
+    logger.error(e, "Store order GL failed");
   }
 
   if (result) {
