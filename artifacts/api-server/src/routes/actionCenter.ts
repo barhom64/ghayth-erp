@@ -4,6 +4,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 import { todayISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
+import { LEAVE_APPROVAL_ROLES, PAYROLL_ROLES, FINANCE_ROLES, PR_APPROVAL_ROLES, LETTER_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 
 const router = Router();
 
@@ -19,8 +20,6 @@ router.get("/", async (req, res) => {
     const today = todayISO();
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters);
-
-    const LEAVE_APPROVAL_ROLES = ["branch_manager", "hr_manager", "owner"];
 
     let pendingLeaves: any[] = [];
     if (LEAVE_APPROVAL_ROLES.includes(scope.role)) {
@@ -45,11 +44,6 @@ router.get("/", async (req, res) => {
         logger.error(e, "Action-center pendingLeaves error");
       }
     }
-
-    const PAYROLL_ROLES = ["hr_manager", "finance_manager", "general_manager", "owner"];
-    const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
-    const PR_APPROVAL_ROLES = ["branch_manager", "general_manager", "owner"];
-    const LETTER_APPROVAL_ROLES = ["hr_manager", "branch_manager", "general_manager", "owner"];
 
     let pendingAdvances: any[] = [];
     if (PAYROLL_ROLES.includes(scope.role)) {

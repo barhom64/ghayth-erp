@@ -251,3 +251,23 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
 export function getRolePermissions(role: string): readonly Permission[] {
   return ROLE_PERMISSIONS[role] ?? [];
 }
+
+// ─── Role group constants ──────────────────────────────────────────────
+// Centralised role groups used across route-level authorisation checks.
+// Every route that gates on a role set MUST import from here instead of
+// declaring its own inline constant.
+
+export const ADMIN_ROLES: readonly string[] = ["owner", "admin", "general_manager"];
+export const FINANCE_ROLES: readonly string[] = ["finance_manager", "general_manager", "owner"];
+export const HR_ROLES: readonly string[] = ["hr_manager", "owner", "general_manager"];
+export const MGR_ROLES: readonly string[] = ["branch_manager", "hr_manager", "owner", "general_manager"];
+export const MANAGER_ROLES: readonly string[] = ["owner", "general_manager", "hr_manager", "branch_manager"];
+export const EXEC_ROLES: readonly string[] = ["owner", "general_manager", "finance_manager", "director"];
+export const APPROVE_ROLES: readonly string[] = ["owner", "general_manager", "admin"];
+export const LEAVE_APPROVAL_ROLES: readonly string[] = ["branch_manager", "hr_manager", "owner"];
+export const PAYROLL_ROLES: readonly string[] = ["hr_manager", "finance_manager", "general_manager", "owner"];
+export const PR_APPROVAL_ROLES: readonly string[] = ["branch_manager", "general_manager", "owner"];
+export const LETTER_APPROVAL_ROLES: readonly string[] = ["hr_manager", "branch_manager", "general_manager", "owner"];
+export const HR_APPROVAL_ROLES: readonly string[] = ["hr_manager", "branch_manager", "general_manager", "owner"];
+export const GOV_ADMIN_ROLES: readonly string[] = ["owner", "admin", "general_manager", "hr_manager", "operations"];
+export const GOV_READ_ROLES: readonly string[] = [...GOV_ADMIN_ROLES, "finance_manager", "branch_manager", "supervisor"];

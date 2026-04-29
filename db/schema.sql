@@ -20711,6 +20711,39 @@ ALTER SEQUENCE public.payment_run_items_id_seq OWNED BY public.payment_run_items
 ALTER TABLE ONLY public.payment_run_items ADD CONSTRAINT payment_run_items_pkey PRIMARY KEY (id);
 
 --
+-- Missing primary key constraints (29 tables)
+--
+ALTER TABLE ONLY public.audit_logs_archive ADD CONSTRAINT audit_logs_archive_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.customer_advances ADD CONSTRAINT customer_advances_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.employee_commission_calculations ADD CONSTRAINT employee_commission_calculations_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.employee_commission_plans ADD CONSTRAINT employee_commission_plans_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.employee_commission_tiers ADD CONSTRAINT employee_commission_tiers_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.employee_kpi_snapshots ADD CONSTRAINT employee_kpi_snapshots_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.employee_salary_components ADD CONSTRAINT employee_salary_components_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.financial_posting_failures ADD CONSTRAINT financial_posting_failures_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_employee_loans ADD CONSTRAINT hr_employee_loans_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_excuse_requests ADD CONSTRAINT hr_excuse_requests_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_exit_clearance ADD CONSTRAINT hr_exit_clearance_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_exit_requests ADD CONSTRAINT hr_exit_requests_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_loan_installments ADD CONSTRAINT hr_loan_installments_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_overtime_requests ADD CONSTRAINT hr_overtime_requests_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.integration_logs_archive ADD CONSTRAINT integration_logs_archive_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.payment_runs ADD CONSTRAINT payment_runs_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.property_contracts ADD CONSTRAINT property_contracts_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.purchase_order_lines ADD CONSTRAINT purchase_order_lines_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_groups ADD CONSTRAINT umrah_groups_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_import_batches ADD CONSTRAINT umrah_import_batches_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_import_changes ADD CONSTRAINT umrah_import_changes_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_nusk_invoices ADD CONSTRAINT umrah_nusk_invoices_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_payment_allocations ADD CONSTRAINT umrah_payment_allocations_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_payments ADD CONSTRAINT umrah_payments_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_pricing ADD CONSTRAINT umrah_pricing_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_sales_invoice_items ADD CONSTRAINT umrah_sales_invoice_items_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_sales_invoices ADD CONSTRAINT umrah_sales_invoices_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_sub_agents ADD CONSTRAINT umrah_sub_agents_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_violations ADD CONSTRAINT umrah_violations_pkey PRIMARY KEY (id);
+
+--
 -- Name: request_number_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 

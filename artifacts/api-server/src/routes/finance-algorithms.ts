@@ -12,11 +12,10 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO, roundTo2, roundTo4, generateTimeRef } from "../lib/businessHelpers.js";
+import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
 
 export const financeAlgorithmsRouter = Router();
 financeAlgorithmsRouter.use(authMiddleware);
-
-const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 
 function assertFinanceRole(scope: any): void {
   if (!FINANCE_ROLES.includes(scope.role)) {

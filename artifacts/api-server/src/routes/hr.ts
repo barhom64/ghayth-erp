@@ -40,6 +40,7 @@ import { submitWorkflow } from "../lib/workflowEngine.js";
 import { ensureInquiryMemoForViolation } from "../lib/disciplineEngine.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
+import { HR_ROLES, MGR_ROLES, HR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 
 // ── Zod request-body schemas ──
 
@@ -4230,7 +4231,6 @@ router.delete("/official-letters/:id", requirePermission("hr:delete"), async (re
 router.patch("/official-letters/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const HR_APPROVAL_ROLES = ["hr_manager", "branch_manager", "general_manager", "owner"];
     if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: لا تملك صلاحية اعتماد الخطابات");
     }
@@ -4575,14 +4575,11 @@ router.get("/employees-status", requirePermission("hr:read"), async (req, res) =
 // 360° SMART EVALUATION SYSTEM
 // ─────────────────────────────────────────────────────────────────────────────
 
-const HR_ROLES = ["hr_manager", "owner", "general_manager"] as const;
-const MGR_ROLES = ["branch_manager", "hr_manager", "owner", "general_manager"] as const;
-
 function isHR(scope: { role: string }): boolean {
-  return (HR_ROLES as readonly string[]).includes(scope.role);
+  return HR_ROLES.includes(scope.role);
 }
 function isMgr(scope: { role: string }): boolean {
-  return (MGR_ROLES as readonly string[]).includes(scope.role);
+  return MGR_ROLES.includes(scope.role);
 }
 
 // Helper: compute system evaluation scores for an employee

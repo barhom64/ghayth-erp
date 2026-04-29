@@ -44,7 +44,8 @@ describe("admin — user management endpoints", () => {
   });
 
   it("assertAdmin falls back to ADMIN_ROLES array", () => {
-    expect(SRC).toContain('ADMIN_ROLES = ["owner", "admin", "general_manager"]');
+    expect(SRC).toContain('ADMIN_ROLES');
+    expect(SRC).toContain("from \"../lib/rbacCatalog.js\"");
     expect(SRC).toContain("ADMIN_ROLES.includes(scope.role)");
   });
 });
