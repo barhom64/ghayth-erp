@@ -1130,7 +1130,7 @@ router.get("/governance/system-guards", requirePermission("admin:read"), async (
     const result = await checkSystemGuards(companyId, "all", { date: todayISO() });
     res.json(result);
   } catch (err: any) {
-    logger.error("System guards error:", err?.message ?? err);
+    logger.error(err, "System guards error");
     res.json({ allowed: true, violations: [], error: String(err?.message ?? "unknown") });
   }
 });
