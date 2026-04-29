@@ -2,6 +2,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -81,9 +82,7 @@ function careersAuth(req: Request, res: Response, next: NextFunction): void {
 
 router.post("/auth/register", portalLimiter, async (req: Request, res: Response) => {
   try {
-    const parsed_careersRegisterSchema = careersRegisterSchema.safeParse(req.body);
-    if (!parsed_careersRegisterSchema.success) throw new ValidationError(parsed_careersRegisterSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_careersRegisterSchema.data;
+    const body = zodParse(careersRegisterSchema.safeParse(req.body));
     const { name, email, phone, password } = body;
 
     const existing = await rawQuery(
@@ -118,9 +117,7 @@ router.post("/auth/register", portalLimiter, async (req: Request, res: Response)
 
 router.post("/auth/login", portalLimiter, async (req: Request, res: Response) => {
   try {
-    const parsed_careersLoginSchema = careersLoginSchema.safeParse(req.body);
-    if (!parsed_careersLoginSchema.success) throw new ValidationError(parsed_careersLoginSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_careersLoginSchema.data;
+    const body = zodParse(careersLoginSchema.safeParse(req.body));
     const { email, password } = body;
 
     const rows = await rawQuery<{ id: number; passwordHash: string; isActive: boolean }>(
@@ -213,9 +210,7 @@ router.get("/me", careersAuth, async (req: Request, res: Response) => {
 
 router.patch("/me", careersAuth, async (req: Request, res: Response) => {
   try {
-    const parsed_careersProfileUpdateSchema = careersProfileUpdateSchema.safeParse(req.body);
-    if (!parsed_careersProfileUpdateSchema.success) throw new ValidationError(parsed_careersProfileUpdateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_careersProfileUpdateSchema.data;
+    const body = zodParse(careersProfileUpdateSchema.safeParse(req.body));
     const { name, phone, nationalId, gender, dateOfBirth, city, education, experienceYears, skills } = body;
     await rawExecute(
       `UPDATE applicant_accounts SET
@@ -248,9 +243,7 @@ router.patch("/me", careersAuth, async (req: Request, res: Response) => {
 
 router.patch("/me/resume", careersAuth, async (req: Request, res: Response) => {
   try {
-    const parsed_careersResumeUpdateSchema = careersResumeUpdateSchema.safeParse(req.body);
-    if (!parsed_careersResumeUpdateSchema.success) throw new ValidationError(parsed_careersResumeUpdateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_careersResumeUpdateSchema.data;
+    const body = zodParse(careersResumeUpdateSchema.safeParse(req.body));
     const resumeUrl = body.resumeUrl.trim();
     if (!resumeUrl) {
       throw new ValidationError("رابط السيرة الذاتية مطلوب");
@@ -292,9 +285,7 @@ router.get("/my-applications", careersAuth, async (req: Request, res: Response) 
 
 router.post("/apply", careersAuth, async (req: Request, res: Response) => {
   try {
-    const parsed_careersApplySchema = careersApplySchema.safeParse(req.body);
-    if (!parsed_careersApplySchema.success) throw new ValidationError(parsed_careersApplySchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_careersApplySchema.data;
+    const body = zodParse(careersApplySchema.safeParse(req.body));
     const { postingId, coverLetter } = body;
     const applicantId = (req as any).applicantId;
 

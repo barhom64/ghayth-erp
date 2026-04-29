@@ -5,6 +5,7 @@ import {
   ConflictError,
   IntegrationError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -250,9 +251,7 @@ router.get("/units", requirePermission("property:read"), async (req, res) => {
 router.post("/units", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createUnitSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data;
+    const b = zodParse(createUnitSchema.safeParse(req.body));
 
     const unitNumber = b.unitNumber.trim();
 
@@ -383,9 +382,7 @@ router.patch("/units/:id", requirePermission("property:update"), async (req, res
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("الوحدة غير موجودة");
-    const parsed = updateUnitSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(updateUnitSchema.safeParse(req.body)) as any;
 
     // State machine + business impact guard
     if (b.status !== undefined && b.status !== existing.status) {
@@ -959,9 +956,7 @@ router.patch("/contracts/:id", requirePermission("property:update"), async (req,
       );
     }
 
-    const parsed = updateContractSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(updateContractSchema.safeParse(req.body)) as any;
 
     // State machine: terminated/renewed/expired must go through dedicated
     // lifecycle endpoints (/renew, /terminate) so obligations + JE + unit
@@ -2329,7 +2324,7 @@ router.get("/tenants/:id", requirePermission("property:read"), async (req, res) 
     const contractIds = contracts.map((c: any) => c.id);
     const payments = contractIds.length > 0
       ? await rawQuery<any>(
-          `SELECT rp.*, c."tenantName", u."unitNumber" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" LEFT JOIN property_units u ON u.id=c."unitId" WHERE rp."contractId" = ANY($1::int[]) ORDER BY rp."dueDate" DESC`,
+          `SELECT rp.*, c."tenantName", u."unitNumber" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" LEFT JOIN property_units u ON u.id=c."unitId" WHERE rp."contractId" = ANY($1::int[]) ORDER BY rp."dueDate" DESC LIMIT 500`,
           [contractIds]
         )
       : [];
@@ -2488,9 +2483,7 @@ router.patch("/buildings/:id", requirePermission("property:update"), async (req,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المبنى غير موجود");
-    const parsed = updateBuildingSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(updateBuildingSchema.safeParse(req.body)) as any;
     if (b.ownerId && b.ownerId !== existing.ownerId) {
       const [owner] = await rawQuery<any>(
         `SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -3110,7 +3103,7 @@ router.get("/contracts/:id/schedule", requirePermission("property:read"), async 
     const [contract] = await rawQuery<any>(`SELECT id FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [contractId, scope.companyId]);
     if (!contract) throw new NotFoundError("العقد غير موجود");
     const schedule = await rawQuery<any>(
-      `SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber"`,
+      `SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber" LIMIT 500`,
       [contractId]
     );
     res.json({ data: schedule, total: schedule.length });

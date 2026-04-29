@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { handleRouteError, ValidationError, ForbiddenError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -127,9 +128,7 @@ router.get("/preferences", requirePermission("notifications:read"), async (req: 
 
 router.put("/preferences", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
   try {
-    const parsed_updatePreferencesSchema = updatePreferencesSchema.safeParse(req.body);
-    if (!parsed_updatePreferencesSchema.success) throw new ValidationError(parsed_updatePreferencesSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updatePreferencesSchema.data;
+    const body = zodParse(updatePreferencesSchema.safeParse(req.body));
     const scope = req.scope;
     if (!scope) throw new ForbiddenError("Unauthorized");
     const { companyId } = scope;
@@ -202,9 +201,7 @@ router.get("/routing-rules", requirePermission("admin:write"), async (req: Reque
 
 router.post("/routing-rules", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
   try {
-    const parsed_createRoutingRuleSchema = createRoutingRuleSchema.safeParse(req.body);
-    if (!parsed_createRoutingRuleSchema.success) throw new ValidationError(parsed_createRoutingRuleSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createRoutingRuleSchema.data;
+    const body = zodParse(createRoutingRuleSchema.safeParse(req.body));
     const scope = req.scope!;
     const { eventCategory, channels, priority, description, fallbackChainId, isActive } = body;
 
@@ -248,9 +245,7 @@ router.post("/routing-rules", requirePermission("admin:write"), async (req: Requ
 
 router.put("/routing-rules/:id", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
   try {
-    const parsed_updateRoutingRuleSchema = updateRoutingRuleSchema.safeParse(req.body);
-    if (!parsed_updateRoutingRuleSchema.success) throw new ValidationError(parsed_updateRoutingRuleSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updateRoutingRuleSchema.data;
+    const body = zodParse(updateRoutingRuleSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { channels, priority, description, fallbackChainId, isActive } = body;
@@ -342,9 +337,7 @@ router.get("/templates", requirePermission("admin:write"), async (req: Request, 
 
 router.post("/templates", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
   try {
-    const parsed_createTemplateSchema = createTemplateSchema.safeParse(req.body);
-    if (!parsed_createTemplateSchema.success) throw new ValidationError(parsed_createTemplateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createTemplateSchema.data;
+    const body = zodParse(createTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
     const { templateKey, channel, titleTemplate, bodyTemplate, variables, language, isActive } = body;
 
@@ -388,9 +381,7 @@ router.post("/templates", requirePermission("admin:write"), async (req: Request,
 
 router.put("/templates/:id", requirePermission("admin:write"), async (req: Request, res: Response) => {
   try {
-    const parsed_updateTemplateSchema = updateTemplateSchema.safeParse(req.body);
-    if (!parsed_updateTemplateSchema.success) throw new ValidationError(parsed_updateTemplateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updateTemplateSchema.data;
+    const body = zodParse(updateTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { titleTemplate, bodyTemplate, variables, isActive } = body;
@@ -480,9 +471,7 @@ router.get("/fallback-chains", requirePermission("admin:write"), async (req: Req
 
 router.post("/fallback-chains", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
   try {
-    const parsed_createFallbackChainSchema = createFallbackChainSchema.safeParse(req.body);
-    if (!parsed_createFallbackChainSchema.success) throw new ValidationError(parsed_createFallbackChainSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createFallbackChainSchema.data;
+    const body = zodParse(createFallbackChainSchema.safeParse(req.body));
     const scope = req.scope!;
     const { name, description, steps, isActive } = body;
 
@@ -516,9 +505,7 @@ router.post("/fallback-chains", requirePermission("admin:write"), async (req: Re
 
 router.put("/fallback-chains/:id", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
   try {
-    const parsed_updateFallbackChainSchema = updateFallbackChainSchema.safeParse(req.body);
-    if (!parsed_updateFallbackChainSchema.success) throw new ValidationError(parsed_updateFallbackChainSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updateFallbackChainSchema.data;
+    const body = zodParse(updateFallbackChainSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { name, description, steps, isActive } = body;
@@ -610,9 +597,7 @@ router.get("/webhooks", requirePermission("admin:write"), async (req: Request, r
 
 router.post("/webhooks", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
   try {
-    const parsed_createWebhookSchema = createWebhookSchema.safeParse(req.body);
-    if (!parsed_createWebhookSchema.success) throw new ValidationError(parsed_createWebhookSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createWebhookSchema.data;
+    const body = zodParse(createWebhookSchema.safeParse(req.body));
     const scope = req.scope!;
     const { name, url, secret, events, headers, isActive } = body;
 
@@ -653,9 +638,7 @@ router.post("/webhooks", requirePermission("admin:write"), async (req: Request, 
 
 router.put("/webhooks/:id", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
   try {
-    const parsed_updateWebhookSchema = updateWebhookSchema.safeParse(req.body);
-    if (!parsed_updateWebhookSchema.success) throw new ValidationError(parsed_updateWebhookSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updateWebhookSchema.data;
+    const body = zodParse(updateWebhookSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { name, url, secret, events, headers, isActive } = body;

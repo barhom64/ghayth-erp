@@ -3,6 +3,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -83,9 +84,7 @@ router.get("/programs", requirePermission("hr:read"), async (req, res) => {
 
 router.post("/programs", requirePermission("hr:create"), async (req, res) => {
   try {
-    const parsed_createProgramSchema = createProgramSchema.safeParse(req.body);
-    if (!parsed_createProgramSchema.success) throw new ValidationError(parsed_createProgramSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createProgramSchema.data;
+    const body = zodParse(createProgramSchema.safeParse(req.body));
     const scope = req.scope!;
     const { title, description, category, startDate, endDate, location, trainer, capacity, status, type, provider, duration, durationUnit, cost, maxParticipants } = body;
     if (!String(title).trim()) {
@@ -126,9 +125,7 @@ router.get("/programs/:id", requirePermission("hr:read"), async (req, res) => {
 
 router.patch("/programs/:id", requirePermission("hr:update"), async (req, res) => {
   try {
-    const parsed_patchProgramSchema = patchProgramSchema.safeParse(req.body);
-    if (!parsed_patchProgramSchema.success) throw new ValidationError(parsed_patchProgramSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed_patchProgramSchema.data;
+    const b = zodParse(patchProgramSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id, status FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
@@ -166,9 +163,7 @@ router.patch("/programs/:id", requirePermission("hr:update"), async (req, res) =
 
 router.patch("/programs/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
-    const parsed_approveSchema = approveSchema.safeParse(req.body);
-    if (!parsed_approveSchema.success) throw new ValidationError(parsed_approveSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_approveSchema.data;
+    const body = zodParse(approveSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const row = await applyTransition({
@@ -198,9 +193,7 @@ router.patch("/programs/:id/approve", requirePermission("hr:update"), async (req
 
 router.patch("/programs/:id/reject", requirePermission("hr:update"), async (req, res) => {
   try {
-    const parsed_rejectSchema = rejectSchema.safeParse(req.body);
-    if (!parsed_rejectSchema.success) throw new ValidationError(parsed_rejectSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_rejectSchema.data;
+    const body = zodParse(rejectSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { notes } = body;
@@ -262,9 +255,7 @@ router.get("/enrollments", requirePermission("hr:read"), async (req, res) => {
 
 router.post("/enrollments", requirePermission("hr:create"), async (req, res) => {
   try {
-    const parsed_createEnrollmentSchema = createEnrollmentSchema.safeParse(req.body);
-    if (!parsed_createEnrollmentSchema.success) throw new ValidationError(parsed_createEnrollmentSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createEnrollmentSchema.data;
+    const body = zodParse(createEnrollmentSchema.safeParse(req.body));
     const scope = req.scope!;
     const { programId, employeeId, employeeName, status } = body;
     if (!programId) {
@@ -320,9 +311,7 @@ router.get("/enrollments/:id", requirePermission("hr:read"), async (req, res) =>
 
 router.patch("/enrollments/:id", requirePermission("hr:update"), async (req, res) => {
   try {
-    const parsed_patchEnrollmentSchema = patchEnrollmentSchema.safeParse(req.body);
-    if (!parsed_patchEnrollmentSchema.success) throw new ValidationError(parsed_patchEnrollmentSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed_patchEnrollmentSchema.data;
+    const b = zodParse(patchEnrollmentSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT e.id FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [id, scope.companyId]);

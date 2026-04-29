@@ -1,5 +1,6 @@
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -146,9 +147,7 @@ router.get("/accounting-mappings", requirePermission("finance:read"), async (req
 
 router.post("/accounting-mappings/batch", requirePermission("finance:write"), async (req, res) => {
   try {
-    const parsed_batchAccountingMappingsSchema = batchAccountingMappingsSchema.safeParse(req.body);
-    if (!parsed_batchAccountingMappingsSchema.success) throw new ValidationError(parsed_batchAccountingMappingsSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const parsedBody = parsed_batchAccountingMappingsSchema.data;
+    const parsedBody = zodParse(batchAccountingMappingsSchema.safeParse(req.body));
     const scope = req.scope!;
     requireFinance(scope);
     const { mappings } = parsedBody;
@@ -203,9 +202,7 @@ router.get("/accounting-mappings/:operationType", requirePermission("finance:rea
 
 router.put("/accounting-mappings/:operationType", requirePermission("finance:write"), async (req, res) => {
   try {
-    const parsed_updateAccountingMappingSchema = updateAccountingMappingSchema.safeParse(req.body);
-    if (!parsed_updateAccountingMappingSchema.success) throw new ValidationError(parsed_updateAccountingMappingSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updateAccountingMappingSchema.data;
+    const body = zodParse(updateAccountingMappingSchema.safeParse(req.body));
     const scope = req.scope!;
     requireFinance(scope);
     const { operationType } = req.params;
@@ -322,9 +319,7 @@ router.get("/journal-templates", requirePermission("finance:read"), async (req, 
 
 router.post("/journal-templates", requirePermission("finance:write"), async (req, res) => {
   try {
-    const parsed_createJournalTemplateSchema = createJournalTemplateSchema.safeParse(req.body);
-    if (!parsed_createJournalTemplateSchema.success) throw new ValidationError(parsed_createJournalTemplateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createJournalTemplateSchema.data;
+    const body = zodParse(createJournalTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
     requireFinance(scope);
     const { name, operationType, description, branchId, activityType, lines = [] } = body;
@@ -372,9 +367,7 @@ router.post("/journal-templates", requirePermission("finance:write"), async (req
 
 router.put("/journal-templates/:id", requirePermission("finance:write"), async (req, res) => {
   try {
-    const parsed_updateJournalTemplateSchema = updateJournalTemplateSchema.safeParse(req.body);
-    if (!parsed_updateJournalTemplateSchema.success) throw new ValidationError(parsed_updateJournalTemplateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updateJournalTemplateSchema.data;
+    const body = zodParse(updateJournalTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
     requireFinance(scope);
     const { id } = req.params;
@@ -494,9 +487,7 @@ router.get("/subsidiary-accounts/entity/:entityType/:entityId", requirePermissio
 
 router.post("/subsidiary-accounts", requirePermission("finance:write"), async (req, res) => {
   try {
-    const parsed_createSubsidiaryAccountSchema = createSubsidiaryAccountSchema.safeParse(req.body);
-    if (!parsed_createSubsidiaryAccountSchema.success) throw new ValidationError(parsed_createSubsidiaryAccountSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createSubsidiaryAccountSchema.data;
+    const body = zodParse(createSubsidiaryAccountSchema.safeParse(req.body));
     const scope = req.scope!;
     requireFinance(scope);
     const { entityType, entityId, accountType, accountId } = body;

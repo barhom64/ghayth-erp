@@ -15,6 +15,7 @@ import {
   ConflictError,
   ForbiddenError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import {
   createAuditLog,
@@ -222,9 +223,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
-    const parsed_createOvertimeSchema = createOvertimeSchema.safeParse(req.body);
-    if (!parsed_createOvertimeSchema.success) throw new ValidationError(parsed_createOvertimeSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed_createOvertimeSchema.data;
+    const b = zodParse(createOvertimeSchema.safeParse(req.body));
 
     const hours = b.hours;
 
@@ -452,9 +451,7 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
       throw new ForbiddenError("صلاحية رفض طلبات الوقت الإضافي محصورة بالمدير أو HR أو المالك");
     }
 
-    const parsed_rejectOvertimeSchema = rejectOvertimeSchema.safeParse(req.body);
-    if (!parsed_rejectOvertimeSchema.success) throw new ValidationError(parsed_rejectOvertimeSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed_rejectOvertimeSchema.data;
+    const b = zodParse(rejectOvertimeSchema.safeParse(req.body));
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_overtime_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [req.params.id, scope.companyId]

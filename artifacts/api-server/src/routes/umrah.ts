@@ -4,6 +4,7 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import {
   emitEvent,
@@ -159,9 +160,7 @@ router.get("/seasons/:id", requirePermission("umrah:read"), async (req, res) => 
 router.post("/seasons", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createSeasonSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createSeasonSchema.safeParse(req.body)) as any;
     const rows = await rawQuery(
       `INSERT INTO umrah_seasons ("companyId",title,"startDate","endDate",notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
       [scope.companyId, b.title, b.startDate, b.endDate, b.notes]
@@ -252,9 +251,7 @@ router.get("/agents/:id", requirePermission("umrah:read"), async (req, res): Pro
 router.post("/agents", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createAgentSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createAgentSchema.safeParse(req.body)) as any;
     const rows = await rawQuery(
       `INSERT INTO umrah_agents ("companyId",name,"contactPerson",phone,email,country,"profitMargin","contractRef",currency,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [scope.companyId, b.name, b.contactPerson, b.phone, b.email, b.country, b.profitMargin || 0, b.contractRef, b.currency || "SAR", b.notes]
@@ -327,9 +324,7 @@ router.get("/packages", requirePermission("umrah:read"), async (req, res) => {
 router.post("/packages", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createPackageSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createPackageSchema.safeParse(req.body)) as any;
     const rows = await rawQuery(
       `INSERT INTO umrah_packages ("companyId",name,"seasonId","costPrice","sellPrice","includesTransport","includesHotel","includesMeals","includesZiyarat",duration,description) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
       [scope.companyId, b.name, b.seasonId, b.costPrice, b.sellPrice, b.includesTransport || false, b.includesHotel || false, b.includesMeals || false, b.includesZiyarat || false, b.duration || 7, b.description]
@@ -431,9 +426,7 @@ router.get("/pilgrims", requirePermission("umrah:read"), async (req, res) => {
 router.post("/pilgrims", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createPilgrimSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createPilgrimSchema.safeParse(req.body)) as any;
 
     if (!b.fullName || !String(b.fullName).trim()) {
       throw new ValidationError("اسم المعتمر مطلوب", {
@@ -1177,9 +1170,7 @@ router.delete("/transport/:id", requirePermission("umrah:write"), async (req, re
 router.post("/transport", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createTransportSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createTransportSchema.safeParse(req.body)) as any;
     if (b.vehicleId) {
       const [vehicle] = await rawQuery<any>(
         `SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2`,

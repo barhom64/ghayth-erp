@@ -8,6 +8,7 @@ import {
   ConflictError,
   ForbiddenError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -86,9 +87,7 @@ budgetRouter.post("/budget", requirePermission("finance:create"), async (req, re
   try {
     const scope = req.scope!;
 
-    const parsed = createBudgetSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { accountCode, period, amount, branchId } = parsed.data;
+    const { accountCode, period, amount, branchId } = zodParse(createBudgetSchema.safeParse(req.body));
     const { insertId } = await rawExecute(
       `INSERT INTO budgets ("companyId","branchId","accountCode",period,amount,used)
        VALUES ($1,$2,$3,$4,$5,0)

@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError , zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -138,9 +138,7 @@ router.get("/role-permissions", requirePermission("permissions:read"), async (re
 router.post("/role-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = rolePermissionSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { role, permission } = parsed.data;
+    const { role, permission } = zodParse(rolePermissionSchema.safeParse(req.body));
 
     await rawExecute(
       `INSERT INTO role_permissions (role, permission, "companyId")
@@ -163,9 +161,7 @@ router.post("/role-permissions", requirePermission("admin:write"), requirePermis
 router.delete("/role-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = rolePermissionSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { role, permission } = parsed.data;
+    const { role, permission } = zodParse(rolePermissionSchema.safeParse(req.body));
     const [before] = await rawQuery<any>(
       `SELECT * FROM role_permissions WHERE role = $1 AND permission = $2 AND "companyId" = $3`,
       [role, permission, scope.companyId]
@@ -206,9 +202,7 @@ router.get("/user-permissions", requirePermission("permissions:read"), async (re
 router.post("/user-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = userPermissionCreateSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { userId, permission, type = "grant" } = parsed.data;
+    const { userId, permission, type = "grant" } = zodParse(userPermissionCreateSchema.safeParse(req.body));
 
     await rawExecute(
       `INSERT INTO permissions ("userId", permission, type, "companyId", "grantedBy")
@@ -230,9 +224,7 @@ router.post("/user-permissions", requirePermission("admin:write"), requirePermis
 router.delete("/user-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = userPermissionDeleteSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { userId, permission } = parsed.data;
+    const { userId, permission } = zodParse(userPermissionDeleteSchema.safeParse(req.body));
     const [before] = await rawQuery<any>(
       `SELECT * FROM permissions WHERE "userId" = $1 AND permission = $2 AND "companyId" = $3`,
       [userId, permission, scope.companyId]

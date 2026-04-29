@@ -5,6 +5,7 @@ import {
   ConflictError,
   IntegrationError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -158,9 +159,7 @@ router.get("/vehicles", requirePermission("fleet:read"), async (req, res) => {
 router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createVehicleSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createVehicleSchema.safeParse(req.body)) as any;
 
     const plateNumber = b.plateNumber.trim();
     if (b.year !== undefined && b.year !== null) {
@@ -268,9 +267,7 @@ router.get("/drivers", requirePermission("fleet:read"), async (req, res) => {
 router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createDriverSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createDriverSchema.safeParse(req.body)) as any;
 
     const name = b.name.trim();
     const phone = b.phone.trim();
@@ -1199,9 +1196,7 @@ router.get("/maintenance/:id", requirePermission("fleet:read"), async (req, res)
 router.post("/maintenance", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createMaintenanceSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createMaintenanceSchema.safeParse(req.body)) as any;
 
     // FK pre-check: vehicle must exist and not be deleted
     const [vehicleRow] = await rawQuery<any>(
@@ -1618,9 +1613,7 @@ router.get("/fuel-logs/:id", requirePermission("fleet:read"), async (req, res) =
 router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createFuelLogSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createFuelLogSchema.safeParse(req.body)) as any;
 
     const vehicleId = b.vehicleId || null;
     const vehiclePlate = b.vehiclePlate || null;
@@ -1750,9 +1743,7 @@ router.get("/insurance/:id", requirePermission("fleet:read"), async (req, res) =
 router.post("/insurance", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createInsuranceSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createInsuranceSchema.safeParse(req.body)) as any;
 
     const startD = new Date(b.startDate);
     const endD = new Date(b.endDate);
