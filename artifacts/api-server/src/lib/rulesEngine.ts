@@ -234,7 +234,7 @@ async function logRuleExecution(
       ]
     );
   } catch (err) {
-    console.error("[RulesEngine] Failed to log rule execution:", err);
+    logger.error(err, "[RulesEngine] Failed to log rule execution:");
   }
 }
 
@@ -269,11 +269,11 @@ export async function evaluateRulesForEvent(eventName: string, payload: EventPay
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         await logRuleExecution(rule, payload, errMsg, "error");
-        console.error(`[RulesEngine] Rule "${rule.name}" failed:`, err);
+        logger.error(err, `[RulesEngine] Rule "${rule.name}" failed:`);
       }
     }
   } catch (err) {
-    console.error("[RulesEngine] Failed to evaluate rules:", err);
+    logger.error(err, "[RulesEngine] Failed to evaluate rules:");
   }
 }
 

@@ -71,7 +71,7 @@ async function logCronJob(
       [jobId, jobName, status, duration, result, error ?? null]
     );
   } catch (err) {
-    console.error("Failed to log cron job:", err);
+    logger.error(err, "Failed to log cron job:");
   }
 }
 
@@ -131,7 +131,7 @@ async function runJob(def: CronJobDef): Promise<void> {
     const duration = Date.now() - start;
     const errMsg = err instanceof Error ? err.message : String(err);
     await logCronJob(def.name, "failed", duration, "Job failed", errMsg);
-    console.error(`[CRON] ${def.name} failed:`, err);
+    logger.error(err, `[CRON] ${def.name} failed:`);
   } finally {
     await releaseCronLock(def.name);
   }
@@ -423,7 +423,7 @@ async function leaveEscalationCheck(): Promise<string> {
         `UPDATE approval_requests SET status = 'approved', "decidedAt" = NOW()
          WHERE "refType" = 'leave_request' AND "refId" = $1`,
         [stage.leaveRequestId]
-      ).catch(console.error);
+      ).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
 
       const allAssignments = await rawQuery<any>(
         `SELECT id, "companyId", "branchId" FROM employee_assignments
@@ -439,7 +439,7 @@ async function leaveEscalationCheck(): Promise<string> {
             `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
              VALUES ($1,$2,$3,$4,'on_leave',$5) ON CONFLICT DO NOTHING`,
             [asn.id, asn.companyId, asn.branchId, dateStr, `إجازة معتمدة تلقائياً - طلب رقم ${stage.leaveRequestId}`]
-          ).catch(console.error);
+          ).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
         }
         const [managerAId] = await rawQuery<any>(
           `SELECT ea.id FROM employee_assignments ea
@@ -455,21 +455,21 @@ async function leaveEscalationCheck(): Promise<string> {
                AND status NOT IN ('completed','cancelled')
                AND ("dueDate" IS NULL OR "dueDate" BETWEEN $3 AND $4)`,
             [managerAId.id, asn.id, stage.startDate, stage.endDate]
-          ).catch(console.error);
+          ).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
         }
         createNotification({
           companyId: asn.companyId, assignmentId: asn.id,
           type: "leave_approved", title: "تمت الموافقة التلقائية على طلب الإجازة",
           body: `تمت الموافقة تلقائياً على إجازة ${stage.leaveTypeName} من ${stage.startDate} إلى ${stage.endDate} بسبب تجاوز المهلة`,
           priority: "high", refType: "leave_request", refId: stage.leaveRequestId,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
         if (managerAId) {
           createNotification({
             companyId: asn.companyId, assignmentId: managerAId.id,
             type: "leave_approved", title: "موظف في إجازة معتمدة تلقائياً",
             body: `تمت الموافقة تلقائياً على إجازة موظف من ${stage.startDate} إلى ${stage.endDate}. تم إعادة توزيع المهام.`,
             priority: "normal", refType: "leave_request", refId: stage.leaveRequestId,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
         }
       }
       // Emit the canonical leave.approved event so downstream listeners
@@ -490,7 +490,7 @@ async function leaveEscalationCheck(): Promise<string> {
           endDate: stage.endDate,
           leaveTypeId: stage.leaveTypeId,
         }),
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
       autoApprovals++;
     } else if (hoursSinceCreation >= 24 && !stage.escalatedAt) {
       const [hrAssignment] = await rawQuery<any>(
@@ -588,7 +588,7 @@ async function leaveReturnToWorkClosure(): Promise<string> {
           priority: "normal",
           refType: "leave_request",
           refId: lv.id,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
 
         // Also nudge the direct manager so staffing dashboards update.
         const managerAssignmentId = await getManagerAssignmentId(lv.companyId, asn.branchId).catch(() => null);
@@ -602,7 +602,7 @@ async function leaveReturnToWorkClosure(): Promise<string> {
             priority: "low",
             refType: "leave_request",
             refId: lv.id,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
         }
       }
 
@@ -613,11 +613,11 @@ async function leaveReturnToWorkClosure(): Promise<string> {
         entity: "hr_leave_requests",
         entityId: lv.id,
         details: JSON.stringify({ leaveTypeId: lv.leaveTypeId, endDate: lv.endDate }),
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
 
       closed++;
     } catch (err) {
-      console.error(`[leaveReturnToWorkClosure] failed to close leave ${lv.id}:`, err);
+      logger.error(err, `[leaveReturnToWorkClosure] failed to close leave ${lv.id}:`);
     }
   }
 
@@ -672,7 +672,7 @@ async function inquiryMemoEscalation(): Promise<string> {
           priority: "high",
           refType: "hr_inquiry_memo",
           refId: memo.id,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
       }
 
       const managerAssignmentId = await getManagerAssignmentId(memo.companyId, memo.branchId).catch(() => null);
@@ -686,7 +686,7 @@ async function inquiryMemoEscalation(): Promise<string> {
           priority: "high",
           refType: "hr_inquiry_memo",
           refId: memo.id,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
       }
 
       emitEvent({
@@ -696,11 +696,11 @@ async function inquiryMemoEscalation(): Promise<string> {
         entity: "hr_inquiry_memos",
         entityId: memo.id,
         details: JSON.stringify({ reason: "employee_no_response_72h" }),
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
 
       advanced++;
     } catch (err) {
-      console.error(`[inquiryMemoEscalation] failed memo ${memo.id}:`, err);
+      logger.error(err, `[inquiryMemoEscalation] failed memo ${memo.id}:`);
     }
   }
 
@@ -857,26 +857,26 @@ async function hourlyApprovalEscalation(): Promise<string> {
             await rawExecute(
               `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1`,
               [req.refId]
-            ).catch((e) => console.error("[hourly_escalation] domain update failed:", e));
+            ).catch((e) => logger.error(e, "[hourly_escalation] domain update failed:"));
           }
           const journalRefTypes = ["expense", "salary_advance", "custody"];
           if (journalRefTypes.includes(req.refType)) {
             await rawExecute(
               `UPDATE journal_entries SET status = 'posted' WHERE id = $1 AND status = 'pending_approval'`,
               [req.refId]
-            ).catch((e) => console.error("[hourly_escalation] journal update failed:", e));
+            ).catch((e) => logger.error(e, "[hourly_escalation] journal update failed:"));
           }
           // Audit + event so the auto-approval is visible in reports.
           createAuditLog({
             companyId: req.companyId, branchId: req.branchId, userId: 0,
             action: "auto_approved", entity: req.refType, entityId: req.refId,
             reason: "Auto-approved on timeout by hourly escalation cron",
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
           emitEvent({
             companyId: req.companyId, userId: 0,
             action: `${req.refType}.auto_approved`, entity: req.refType, entityId: req.refId,
             details: `Auto-approved on timeout after ${Math.round(hoursSinceCreation)}h`,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
         }
         autoApprovals++;
       } else {
@@ -968,7 +968,7 @@ async function dailyDeductionCheck(): Promise<string> {
         });
         if (result.created) memos++;
       } catch (err) {
-        console.error("absence memo error:", err);
+        logger.error(err, "absence memo error:");
       }
     }
   }
@@ -1379,7 +1379,7 @@ async function monthlyRentPenalties(): Promise<string> {
             details: `قضية إيجار متأخر — ${p.tenantName}`,
           });
         } catch (err) {
-          console.error("[monthlyRentPenalties] legal_cases insert failed:", err);
+          logger.error(err, "[monthlyRentPenalties] legal_cases insert failed:");
         }
         actionLabel = 'تحويل للقسم القانوني';
       } else if (targetStage === 'alert') actionLabel = 'تنبيه بالتأخر';
@@ -1769,7 +1769,7 @@ async function retryStuckOfficialLetters(): Promise<string> {
       });
       retried++;
     } catch (err) {
-      console.error("[retryStuckOfficialLetters] emit failed:", err);
+      logger.error(err, "[retryStuckOfficialLetters] emit failed:");
     }
   }
   return `Stuck official letters retried: ${retried}`;
@@ -1840,7 +1840,7 @@ async function processEmailQueue(): Promise<string> {
       await rawExecute(
         `UPDATE email_queue SET status = 'failed', "errorMessage" = $1, "attemptCount" = COALESCE("attemptCount",0) + 1, "updatedAt" = NOW() WHERE id = $2`,
         [errMsg, email.id]
-      ).catch(console.error);
+      ).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
       failed++;
     }
   }
@@ -1858,7 +1858,7 @@ async function hourlyWorkflowSlaCheck(): Promise<string> {
       totalEscalations += result.escalations;
       totalAutoApprovals += result.autoApprovals;
     } catch (err) {
-      console.error(`[CRON] Workflow SLA check failed for company ${company.id}:`, err);
+      logger.error(err, `[CRON] Workflow SLA check failed for company ${company.id}:`);
     }
   }
   return `Workflow SLA: ${totalWarnings} warnings, ${totalEscalations} escalations, ${totalAutoApprovals} auto-approvals`;
@@ -2053,7 +2053,7 @@ async function weeklyLogsArchiving(): Promise<string> {
     );
     auditArchived = auditResult.length;
   } catch (err) {
-    console.error("[CRON] weeklyLogsArchiving: audit_logs archiving failed:", err);
+    logger.error(err, "[CRON] weeklyLogsArchiving: audit_logs archiving failed:");
   }
 
   try {
@@ -2072,7 +2072,7 @@ async function weeklyLogsArchiving(): Promise<string> {
     );
     integrationArchived = integrationResult.length;
   } catch (err) {
-    console.error("[CRON] weeklyLogsArchiving: integration_logs archiving failed:", err);
+    logger.error(err, "[CRON] weeklyLogsArchiving: integration_logs archiving failed:");
   }
 
   return `Archived ${auditArchived} audit logs (>${AUDIT_LOG_RETENTION_DAYS}d old), ${integrationArchived} integration logs (>${INTEGRATION_LOG_RETENTION_DAYS}d old)`;
@@ -2105,7 +2105,7 @@ async function monthlyAutoDepreciation(): Promise<string> {
       [company.id]
     );
     if (!systemUser) {
-      console.warn(`[CRON] monthlyAutoDepreciation: No finance/owner user found for company ${company.id}, skipping`);
+      logger.warn(`[CRON] monthlyAutoDepreciation: No finance/owner user found for company ${company.id}, skipping`);
       continue;
     }
     const createdBy = systemUser.id;
@@ -2168,12 +2168,12 @@ async function monthlyAutoDepreciation(): Promise<string> {
           totalDepreciated += depAmount;
         } catch (err) {
           await client.query("ROLLBACK");
-          console.error(`[CRON] Depreciation failed for asset ${asset.id}:`, err);
+          logger.error(err, `[CRON] Depreciation failed for asset ${asset.id}:`);
         } finally {
           client.release();
         }
       } catch (err) {
-        console.error(`[CRON] Depreciation pool error for asset ${asset.id}:`, err);
+        logger.error(err, `[CRON] Depreciation pool error for asset ${asset.id}:`);
       }
     }
   }
@@ -2286,7 +2286,7 @@ async function runScheduledReports(): Promise<string> {
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      console.error(`[CRON] runScheduledReports: failed for report ${report.id}:`, err);
+      logger.error(err, `[CRON] runScheduledReports: failed for report ${report.id}:`);
       await rawExecute(
         `INSERT INTO scheduled_report_history ("scheduledReportId", status, "sentAt", error)
          VALUES ($1, 'failed', NOW(), $2)`,
@@ -2655,7 +2655,7 @@ async function dailyDunningAutoSend(): Promise<string> {
         totalSent++;
       }
     } catch (err) {
-      console.error(`Dunning auto-send error for company ${c.id}:`, err);
+      logger.error(err, `Dunning auto-send error for company ${c.id}:`);
     }
   }
   return `Dunning auto-send: sent=${totalSent}, skipped=${totalSkipped}`;
@@ -2690,7 +2690,7 @@ async function monthlyBadDebtReminder(): Promise<string> {
       });
       notified++;
     } catch (err) {
-      console.error(`Bad debt reminder error for company ${c.id}:`, err);
+      logger.error(err, `Bad debt reminder error for company ${c.id}:`);
     }
   }
   return `Bad debt reminders sent: ${notified}`;
@@ -2733,7 +2733,7 @@ async function monthlyFxRevaluationReminder(): Promise<string> {
       });
       notified++;
     } catch (err) {
-      console.error(`FX reminder error for company ${c.id}:`, err);
+      logger.error(err, `FX reminder error for company ${c.id}:`);
     }
   }
   return `FX revaluation reminders sent: ${notified}`;
@@ -2805,7 +2805,7 @@ async function dailyBudgetVarianceAlert(): Promise<string> {
       });
       alerted++;
     } catch (err) {
-      console.error(`Budget variance alert error for company ${c.id}:`, err);
+      logger.error(err, `Budget variance alert error for company ${c.id}:`);
     }
   }
   return `Budget variance alerts sent: ${alerted}`;
@@ -3065,7 +3065,7 @@ export async function seedCronJobs(): Promise<void> {
         [job.name, job.description, job.schedule]
       );
     } catch (err) {
-      console.error(`Failed to seed cron job ${job.name}:`, err);
+      logger.error(err, `Failed to seed cron job ${job.name}:`);
     }
   }
 }
@@ -3087,7 +3087,7 @@ export async function startCronScheduler(): Promise<void> {
       scheduledTasks.push(task);
       logger.info({ job: def.name, schedule: def.schedule }, "CRON job scheduled");
     } catch (err) {
-      console.error(`[CRON] Failed to schedule ${def.name}:`, err);
+      logger.error(err, `[CRON] Failed to schedule ${def.name}:`);
     }
   }
 

@@ -1,6 +1,7 @@
 import type { Request } from "express";
 import { pool } from "./rawdb.js";
 import { computeDiff } from "./auditDiff.js";
+import { logger } from "./logger.js";
 
 export type AuditAction = "create" | "update" | "delete" | "approve" | "reject" | "view" | string;
 
@@ -43,6 +44,6 @@ export async function auditLog(
       ]
     );
   } catch (err) {
-    console.error("Audit log error (non-fatal):", err);
+    logger.error(err, "Audit log error (non-fatal):");
   }
 }

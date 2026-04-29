@@ -1,5 +1,6 @@
 import { rawQuery } from "./rawdb.js";
 import { haversineDistance } from "./algorithms.js";
+import { logger } from "./logger.js";
 
 export interface ScheduleItem {
   type: "task" | "appointment" | "maintenance" | "ticket";
@@ -141,7 +142,7 @@ export async function buildAllSchedules(companyId: number, date: string): Promis
       const schedule = await buildEmployeeSchedule(companyId, emp.id, date);
       schedules.push(schedule);
     } catch (err) {
-      console.error(`Schedule build error for employee ${emp.id}:`, err);
+      logger.error(err, `Schedule build error for employee ${emp.id}:`);
     }
   }
   return schedules;

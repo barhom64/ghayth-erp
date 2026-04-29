@@ -21,7 +21,7 @@ async function logEvent(event: string, payload: EventPayload) {
       ]
     );
   } catch (err) {
-    console.error(`[EventLog] Failed to log ${event}:`, err);
+    logger.error(err, `[EventLog] Failed to log ${event}:`);
   }
 }
 
@@ -56,7 +56,7 @@ async function logAudit(event: string, payload: EventPayload) {
       ]
     );
   } catch (err) {
-    console.error(`[AuditLog] Failed to audit ${event}:`, err);
+    logger.error(err, `[AuditLog] Failed to audit ${event}:`);
   }
 }
 
@@ -1216,7 +1216,7 @@ export function registerEventListeners() {
       [payload.entityId, payload.companyId]
     );
     if (!glEntry) {
-      console.warn(`[EventReaction] Invoice #${payload.entityId} missing GL entry — will be posted on approval`);
+      logger.warn(`[EventReaction] Invoice #${payload.entityId} missing GL entry — will be posted on approval`);
     }
 
     // Cross-module: register receivable obligation for payment tracking
@@ -1268,7 +1268,7 @@ export function registerEventListeners() {
       [payload.entityId, payload.companyId]
     );
     if (!glEntry) {
-      console.warn(`[EventReaction] Payment #${payload.entityId} missing GL entry — attempting recovery`);
+      logger.warn(`[EventReaction] Payment #${payload.entityId} missing GL entry — attempting recovery`);
       try {
         const sarAmount = Number(details.sarAmount) || 0;
         const method = (details.method as string) || "bank_transfer";
@@ -1347,7 +1347,7 @@ export function registerEventListeners() {
         [planId, payload.companyId]
       );
       if (!glEntry) {
-        console.warn(`[EventReaction] Commission plan #${planId} missing GL accrual — attempting recovery`);
+        logger.warn(`[EventReaction] Commission plan #${planId} missing GL accrual — attempting recovery`);
         try {
           const [expenseCode, payableCode] = await Promise.all([
             getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "6200"),

@@ -1,5 +1,6 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { createNotification, todayISO } from "./businessHelpers.js";
+import { logger } from "./logger.js";
 
 interface AuditViolation {
   type: string;
@@ -259,7 +260,7 @@ export async function runSelfAudit(companyId: number): Promise<{ total: number; 
       const results = await check(companyId);
       allViolations.push(...results);
     } catch (err) {
-      console.error(`[AUDIT] Check failed for company ${companyId}:`, err);
+      logger.error(err, `[AUDIT] Check failed for company ${companyId}:`);
     }
   }
 

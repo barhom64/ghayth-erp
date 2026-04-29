@@ -1,5 +1,6 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { roundTo2 } from "./businessHelpers.js";
+import { logger } from "./logger.js";
 
 export interface ClientRFM {
   clientId: number;
@@ -127,7 +128,7 @@ export async function calculateAllClientsRFM(companyId: number): Promise<number>
       );
       saved++;
     } catch (err) {
-      console.error(`RFM error for client ${c.id}:`, err);
+      logger.error(err, `RFM error for client ${c.id}:`);
     }
   }
   return saved;

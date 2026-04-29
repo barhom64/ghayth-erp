@@ -1,4 +1,5 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
+import { logger } from "./logger.js";
 
 export interface SmartRecommendation {
   id: string;
@@ -48,7 +49,7 @@ export async function getPersonalizedRecommendations(
         });
       }
     }
-  } catch (err) { console.error("Shortcut recommendations error:", err); }
+  } catch (err) { logger.error(err, "Shortcut recommendations error:"); }
 
   // 2. Clients that stopped ordering (churn risk alerts)
   if (["branch_manager", "general_manager", "owner", "finance_manager", "sales"].includes(role)) {
@@ -75,7 +76,7 @@ export async function getPersonalizedRecommendations(
           metadata: { clientId: cl.id, recencyDays: cl.recencyDays },
         });
       }
-    } catch (err) { console.error("Churn alert recs error:", err); }
+    } catch (err) { logger.error(err, "Churn alert recs error:"); }
   }
 
   // 3. Best time to contact clients with pending tasks
@@ -118,7 +119,7 @@ export async function getPersonalizedRecommendations(
           });
         }
       }
-    } catch (err) { console.error("Contact time recs error:", err); }
+    } catch (err) { logger.error(err, "Contact time recs error:"); }
   }
 
   // 4. Employees with productivity drop
@@ -163,7 +164,7 @@ export async function getPersonalizedRecommendations(
           priority: "high",
         });
       }
-    } catch (err) { console.error("Productivity drop recs error:", err); }
+    } catch (err) { logger.error(err, "Productivity drop recs error:"); }
   }
 
   // 5. Budget overspend warnings
@@ -190,7 +191,7 @@ export async function getPersonalizedRecommendations(
           priority: b.utilization >= 100 ? "urgent" : "high",
         });
       }
-    } catch (err) { console.error("Budget recs error:", err); }
+    } catch (err) { logger.error(err, "Budget recs error:"); }
   }
 
   // 6. Clients with 3+ consecutive unpaid invoices
@@ -219,7 +220,7 @@ export async function getPersonalizedRecommendations(
           priority: "urgent",
         });
       }
-    } catch (err) { console.error("Unpaid invoices recs error:", err); }
+    } catch (err) { logger.error(err, "Unpaid invoices recs error:"); }
   }
 
   return recs;
@@ -248,7 +249,7 @@ export async function saveRecommendationsForUser(
          rec.actionLink ?? null, rec.priority, rec.metadata ? JSON.stringify(rec.metadata) : null]
       );
       saved++;
-    } catch (err) { console.error("Save recommendation error:", err); }
+    } catch (err) { logger.error(err, "Save recommendation error:"); }
   }
   return saved;
 }

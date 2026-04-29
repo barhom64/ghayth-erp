@@ -1,6 +1,7 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { broadcastAlert } from "./notificationService.js";
 import { createNotification } from "./businessHelpers.js";
+import { logger } from "./logger.js";
 
 export interface AlertResult {
   fired: number;
@@ -68,7 +69,7 @@ async function checkEmployeeOverload(companyId: number): Promise<number> {
           });
         }
       }
-    } catch (e) { console.error("Overload redistribution error:", e); }
+    } catch (e) { logger.error(e, "Overload redistribution error:"); }
   }
   return rows.length;
 }
@@ -120,7 +121,7 @@ async function checkTaskTakingTooLong(companyId: number): Promise<number> {
             priority: "high", refType: "task", refId: row.id,
           });
         }
-      } catch (e) { console.error("Task delay supervisor notify error:", e); }
+      } catch (e) { logger.error(e, "Task delay supervisor notify error:"); }
     }
   }
   return rows.length;
@@ -158,7 +159,7 @@ async function checkRepeatedMaintenanceAtProperty(companyId: number): Promise<nu
          )`,
         [companyId, row.unitId, `فحص شامل مجدول تلقائياً بسبب ${row.cnt} بلاغ صيانة خلال شهر`]
       );
-    } catch (e) { console.error("Auto inspection creation error:", e); }
+    } catch (e) { logger.error(e, "Auto inspection creation error:"); }
   }
   return rows.length;
 }
@@ -201,7 +202,7 @@ async function checkLowEmployeeRating(companyId: number): Promise<number> {
           priority: "high", refType: "employee", refId: row.employeeId,
         });
       }
-    } catch (e) { console.error("Low rating meeting notify error:", e); }
+    } catch (e) { logger.error(e, "Low rating meeting notify error:"); }
   }
   return rows.length;
 }
@@ -282,7 +283,7 @@ async function checkTechnicianNoUpdate(companyId: number): Promise<number> {
             priority: "high", refType: "task", refId: row.id,
           });
         }
-      } catch (e) { console.error("No-update reminder error:", e); }
+      } catch (e) { logger.error(e, "No-update reminder error:"); }
     }
   }
   return rows.length;
@@ -325,7 +326,7 @@ async function checkGeofenceViolation(companyId: number): Promise<number> {
         );
         fired++;
       }
-    } catch (e) { console.error("Geofence check error:", e); }
+    } catch (e) { logger.error(e, "Geofence check error:"); }
   }
   return fired;
 }
@@ -430,7 +431,7 @@ async function checkInventoryBelowThreshold(companyId: number): Promise<number> 
          )`,
         [companyId, `طلب شراء تلقائي: ${row.name}`, `%${row.name}%`]
       );
-    } catch (e) { console.error("Auto PO creation error:", e); }
+    } catch (e) { logger.error(e, "Auto PO creation error:"); }
   }
   return rows.length;
 }
@@ -489,7 +490,7 @@ async function checkProductivityDeviation(companyId: number): Promise<number> {
           priority: "high", refType: "employee", refId: row.employeeId,
         });
       }
-    } catch (e) { console.error("Productivity alert notify error:", e); }
+    } catch (e) { logger.error(e, "Productivity alert notify error:"); }
   }
   return rows.length;
 }
@@ -641,7 +642,7 @@ export async function runSmartAlerts(companyId: number): Promise<AlertResult> {
         details.push(`${name}: ${count}`);
       }
     } catch (err) {
-      console.error(`Smart alert check ${name} failed:`, err);
+      logger.error(err, `Smart alert check ${name} failed:`);
     }
   }
 

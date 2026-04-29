@@ -1,6 +1,7 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { createNotification, getAssignmentIdByRole, createAuditLog, emitEvent, toDateISO, currentPeriod } from "./businessHelpers.js";
 import { NotFoundError, ValidationError, ForbiddenError } from "./errorHandler.js";
+import { logger } from "./logger.js";
 
 async function handleLeaveApproval(refId: number, approvedBy?: number | null): Promise<void> {
   await rawExecute(
@@ -421,7 +422,7 @@ export async function submitWorkflow(params: SubmitParams) {
       priority: "high",
       refType: refTable ?? requestType,
       refId: refId ?? insertId,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
   }
 
   return { instanceId: insertId, definitionId, currentStep: firstStep?.stepOrder ?? 1, currentAssignee };
@@ -612,7 +613,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
             priority: "high",
             refType: instance.refTable ?? instance.requestType,
             refId: instance.refId ?? instanceId,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
           actualImpact.notifications!.push(`إشعار للمعتمد التالي (${nextStep.stepName})`);
         }
         message = `تمت الموافقة - انتقل للخطوة التالية: ${nextStep.stepName}`;
@@ -626,9 +627,9 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         try {
           await propagateDomainStatus(instance.refTable, instance.refId, "approved", actionBy);
         } catch (err) {
-          console.error(
-            `[WorkflowEngine] Domain propagation failed for ${instance.refTable}/${instance.refId} on approve:`,
-            err
+          logger.error(
+            err as Error,
+            `[WorkflowEngine] Domain propagation failed for ${instance.refTable}/${instance.refId} on approve`
           );
           const msg = err instanceof Error ? err.message : String(err);
           throw new Error(`تعذّر تحديث السجل الأساسي بعد الموافقة: ${msg}`);
@@ -647,7 +648,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
             priority: "normal",
             refType: instance.refTable ?? instance.requestType,
             refId: instance.refId ?? instanceId,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
           actualImpact.notifications!.push("إشعار لمقدم الطلب بالموافقة النهائية");
         }
         message = "تمت الموافقة النهائية";
@@ -663,9 +664,9 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
       try {
         await propagateDomainStatus(instance.refTable, instance.refId, "rejected");
       } catch (err) {
-        console.error(
-          `[WorkflowEngine] Domain propagation failed for ${instance.refTable}/${instance.refId} on reject:`,
-          err
+        logger.error(
+          err as Error,
+          `[WorkflowEngine] Domain propagation failed for ${instance.refTable}/${instance.refId} on reject`
         );
         const msg = err instanceof Error ? err.message : String(err);
         throw new Error(`تعذّر تحديث السجل الأساسي بعد الرفض: ${msg}`);
@@ -683,7 +684,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
           priority: "high",
           refType: instance.refTable ?? instance.requestType,
           refId: instance.refId ?? instanceId,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
         actualImpact.notifications!.push("إشعار لمقدم الطلب بالرفض");
       }
       actualImpact.statusChange = { from: instance.status, to: "rejected" };
@@ -696,9 +697,9 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
       try {
         await propagateDomainStatus(instance.refTable, instance.refId, "returned");
       } catch (err) {
-        console.error(
-          `[WorkflowEngine] Domain propagation failed for ${instance.refTable}/${instance.refId} on return:`,
-          err
+        logger.error(
+          err as Error,
+          `[WorkflowEngine] Domain propagation failed for ${instance.refTable}/${instance.refId} on return`
         );
         const msg = err instanceof Error ? err.message : String(err);
         throw new Error(`تعذّر تحديث السجل الأساسي بعد الإرجاع: ${msg}`);
@@ -716,7 +717,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
           priority: "normal",
           refType: instance.refTable ?? instance.requestType,
           refId: instance.refId ?? instanceId,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
         actualImpact.notifications!.push("إشعار لمقدم الطلب بالإرجاع");
       }
       actualImpact.statusChange = { from: instance.status, to: "returned" };
@@ -738,7 +739,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         priority: "high",
         refType: instance.refTable ?? instance.requestType,
         refId: instance.refId ?? instanceId,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
       actualImpact.notifications!.push(`إشعار إحالة إلى ${referredToName || "المعني"}`);
       message = `تمت الإحالة إلى ${referredToName || "المعني"}`;
       break;
@@ -769,7 +770,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
           priority: "urgent",
           refType: instance.refTable ?? instance.requestType,
           refId: instance.refId ?? instanceId,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
         actualImpact.notifications!.push(`تصعيد إلى ${escalateRole}`);
       }
       actualImpact.statusChange = { from: instance.status, to: "escalated" };
@@ -801,7 +802,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
     before: beforeData,
     after: { ...afterData, refTable: instance.refTable, refId: instance.refId },
     reason: notes ?? undefined,
-  }).catch(console.error);
+  }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
 
   emitEvent({
     companyId,
@@ -812,7 +813,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
     details: `${instance.requestTypeLabel || instance.requestType}: ${action} → ${newStatus}`,
     before: beforeData,
     after: afterData,
-  }).catch(console.error);
+  }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
 
   return { status: newStatus, stepOrder: newStepOrder, assignee: newAssignee, message, actualImpact, isOverride };
 }
@@ -904,7 +905,7 @@ export async function checkSlaStatus(companyId: number) {
             priority: "normal",
             refType: inst.refTable ?? inst.requestType,
             refId: inst.refId ?? inst.id,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
         }
         autoApprovals++;
       } else {
@@ -932,7 +933,7 @@ export async function checkSlaStatus(companyId: number) {
             priority: "urgent",
             refType: inst.refTable ?? inst.requestType,
             refId: inst.refId ?? inst.id,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
         }
         escalations++;
       }
@@ -950,7 +951,7 @@ export async function checkSlaStatus(companyId: number) {
           priority: "urgent",
           refType: inst.refTable ?? inst.requestType,
           refId: inst.refId ?? inst.id,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
       }
       warnings++;
     } else if (hoursSince >= warningH && inst.slaStatus === "normal") {
@@ -967,7 +968,7 @@ export async function checkSlaStatus(companyId: number) {
           priority: "high",
           refType: inst.refTable ?? inst.requestType,
           refId: inst.refId ?? inst.id,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
       }
       warnings++;
     }
