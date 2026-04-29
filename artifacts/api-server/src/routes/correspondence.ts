@@ -7,6 +7,7 @@ import {
   handleRouteError,
   ValidationError,
   NotFoundError,
+  ConflictError,
   parseId,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, currentYear, generateRef as makeRef } from "../lib/businessHelpers.js";
@@ -201,9 +202,10 @@ correspondenceRouter.post("/:id/send", requirePermission("communications:write")
     const sentField = existing.direction === "outgoing" ? '"sentAt"' : '"receivedAt"';
     const [updated] = await rawQuery<any>(
       `UPDATE correspondence SET status = 'sent', ${sentField} = NOW(), "updatedAt" = NOW()
-       WHERE id = $1 AND "companyId" = $2 RETURNING *`,
+       WHERE id = $1 AND "companyId" = $2 AND status = 'draft' RETURNING *`,
       [id, scope.companyId]
     );
+    if (!updated) throw new ConflictError("المراسلة تم إرسالها مسبقاً — أعد التحميل");
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "correspondence_sent", entity: "correspondence", entityId: id, after: { ref: existing.ref } });
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.sent", entity: "correspondence", entityId: id, details: JSON.stringify({ ref: existing.ref, direction: existing.direction }) }).catch((e) => logger.error(e, "correspondence background task failed"));

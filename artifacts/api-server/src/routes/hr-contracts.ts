@@ -8,6 +8,7 @@ import {
   ValidationError,
   NotFoundError,
   ForbiddenError,
+  ConflictError,
   parseId,
 } from "../lib/errorHandler.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, generateRef } from "../lib/businessHelpers.js";
@@ -239,9 +240,10 @@ contractsRouter.post("/:id/approve", requirePermission("hr:approve"), async (req
     const [updated] = await rawQuery<any>(
       `UPDATE employee_contracts
        SET "approvalStatus" = 'approved', "approvedBy" = $2, "approvedAt" = NOW(), "updatedAt" = NOW()
-       WHERE id = $1 AND "companyId" = $3 RETURNING *`,
+       WHERE id = $1 AND "companyId" = $3 AND "approvalStatus" = 'pending_approval' RETURNING *`,
       [id, scope.userId, scope.companyId]
     );
+    if (!updated) throw new ConflictError("تم تحديث العقد مسبقاً — أعد التحميل");
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_approved", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
     await createNotification({ companyId: scope.companyId, assignmentId: contract.assignmentId, type: "contract_approved", title: "تم اعتماد العقد", body: `تم اعتماد العقد رقم ${contract.ref}`, refType: "contract", refId: id }).catch((e) => logger.error(e, "hr-contracts background task failed"));
@@ -270,9 +272,10 @@ contractsRouter.post("/:id/reject", requirePermission("hr:approve"), async (req,
     const [updated] = await rawQuery<any>(
       `UPDATE employee_contracts
        SET "approvalStatus" = 'rejected', notes = COALESCE(notes, '') || E'\nسبب الرفض: ' || $2, "updatedAt" = NOW()
-       WHERE id = $1 AND "companyId" = $3 RETURNING *`,
+       WHERE id = $1 AND "companyId" = $3 AND "approvalStatus" = 'pending_approval' RETURNING *`,
       [id, reason || "لم يتم تحديد السبب", scope.companyId]
     );
+    if (!updated) throw new ConflictError("تم تحديث العقد مسبقاً — أعد التحميل");
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_rejected", entity: "employee_contract", entityId: id, after: { ref: contract.ref, reason } });
 
@@ -300,9 +303,10 @@ contractsRouter.post("/:id/sign-company", requirePermission("hr:approve"), async
       `UPDATE employee_contracts
        SET "signedByCompany" = TRUE, "companySignedAt" = NOW(), "companySignedBy" = $2, "updatedAt" = NOW(),
            "approvalStatus" = CASE WHEN "signedByEmployee" = TRUE THEN 'signed' ELSE "approvalStatus" END
-       WHERE id = $1 AND "companyId" = $3 RETURNING *`,
+       WHERE id = $1 AND "companyId" = $3 AND "signedByCompany" = FALSE RETURNING *`,
       [id, scope.userId, scope.companyId]
     );
+    if (!updated) throw new ConflictError("العقد تم توقيعه مسبقاً — أعد التحميل");
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_signed_company", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
 

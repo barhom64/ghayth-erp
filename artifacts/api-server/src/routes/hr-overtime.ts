@@ -356,10 +356,11 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
 
     const rejectionReason = reason || notes;
     if (!approved) {
-      await rawExecute(
-        `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2`,
+      const { affectedRows } = await rawExecute(
+        `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND status = 'pending'`,
         [rejectionReason || null, item.id]
       );
+      if (!affectedRows) throw new ConflictError("تم تحديث الطلب مسبقاً — أعد التحميل");
       processApprovalStep({
         companyId: scope.companyId, branchId: scope.branchId,
         refType: "hr_overtime_request", refId: item.id,
@@ -403,12 +404,13 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
       return;
     }
 
-    await rawExecute(
+    const { affectedRows } = await rawExecute(
       `UPDATE hr_overtime_requests
        SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW()
-       WHERE id = $2`,
+       WHERE id = $2 AND status = 'pending'`,
       [scope.userId, item.id]
     );
+    if (!affectedRows) throw new ConflictError("تم تحديث الطلب مسبقاً — أعد التحميل");
 
     createNotification({
       companyId: scope.companyId, assignmentId: item.assignmentId,
@@ -464,10 +466,11 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
       approved: false, decidedBy: scope.activeAssignmentId, reason: b.reason,
     }).catch((e) => logger.error(e, "hr-overtime background task failed"));
 
-    await rawExecute(
-      `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2`,
+    const { affectedRows } = await rawExecute(
+      `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND status = 'pending'`,
       [b.reason || null, item.id]
     );
+    if (!affectedRows) throw new ConflictError("تم تحديث الطلب مسبقاً — أعد التحميل");
 
     createNotification({
       companyId: scope.companyId, assignmentId: item.assignmentId,

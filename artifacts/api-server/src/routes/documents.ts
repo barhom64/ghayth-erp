@@ -4,7 +4,7 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { Readable } from "stream";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, ConflictError,
   parseId,
 } from "../lib/errorHandler.js";
 import { z } from "zod";
@@ -400,10 +400,11 @@ router.patch("/:id/status", requirePermission("documents:update"), async (req: R
     if (!beforeDoc) throw new NotFoundError("المستند غير موجود");
 
     const result = await rawExecute(
-      `UPDATE documents SET status=$1, "updatedAt"=NOW() WHERE id=$2 AND ("companyId"=$3 OR "companyId" IS NULL)`,
+      `UPDATE documents SET status=$1, "updatedAt"=NOW() WHERE id=$2 AND ("companyId"=$3 OR "companyId" IS NULL) AND status != $1`,
       [status, docId, scope.companyId]
     );
-    if (result.affectedRows === 0) throw new NotFoundError("المستند غير موجود");
+    if (result.affectedRows === 0 && beforeDoc.status === status) throw new ConflictError("المستند في هذه الحالة مسبقاً");
+    if (result.affectedRows === 0) throw new ConflictError("تم تحديث المستند مسبقاً — أعد التحميل");
 
     const CATEGORY_EFFECTS: Record<string, string> = {
       contracts: "التزام قانوني/مالي",

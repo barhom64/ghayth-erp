@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError, ForbiddenError, NotFoundError,
+import { handleRouteError, ValidationError, ForbiddenError, NotFoundError, ConflictError,
   parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
@@ -901,10 +901,11 @@ router.patch("/violations/:id/resolve", requirePermission("admin:write"), async 
     if (!existing) { throw new NotFoundError("المخالفة غير موجودة"); }
     if (existing.status === "resolved") { throw new ValidationError("المخالفة تم حلها مسبقاً"); }
 
-    await rawExecute(
-      `UPDATE audit_violations SET status='resolved', "resolvedBy"=$1, "resolvedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+    const { affectedRows } = await rawExecute(
+      `UPDATE audit_violations SET status='resolved', "resolvedBy"=$1, "resolvedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status != 'resolved'`,
       [scope.activeAssignmentId || scope.userId, id, scope.companyId]
     );
+    if (!affectedRows) throw new ConflictError("المخالفة تم حلها مسبقاً — أعد التحميل");
 
     const [updated] = await rawQuery(`SELECT * FROM audit_violations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({

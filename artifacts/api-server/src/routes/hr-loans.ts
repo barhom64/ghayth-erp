@@ -361,10 +361,11 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
 
     const rejectionReason = reason || notes;
     if (!approved) {
-      await rawExecute(
-        `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3`,
+      const { affectedRows } = await rawExecute(
+        `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
         [rejectionReason || null, loan.id, scope.companyId]
       );
+      if (!affectedRows) throw new ConflictError("تم تحديث السلفة مسبقاً — أعد التحميل");
       processApprovalStep({
         companyId: scope.companyId, branchId: scope.branchId,
         refType: "hr_employee_loan", refId: loan.id,
@@ -411,12 +412,13 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
     }
 
     // ── الموافقة النهائية: تفعيل السلفة ──
-    await rawExecute(
+    const { affectedRows } = await rawExecute(
       `UPDATE hr_employee_loans
        SET status = 'active', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW()
-       WHERE id = $2`,
+       WHERE id = $2 AND status = 'pending'`,
       [scope.userId, loan.id]
     );
+    if (!affectedRows) throw new ConflictError("تم تحديث السلفة مسبقاً — أعد التحميل");
 
     // توليد جدول الأقساط
     let period = loan.startDeductionPeriod || nextPeriod();
