@@ -84,6 +84,7 @@ purchaseRouter.post("/purchase-requests/impact-preview", requirePermission("fina
         `SELECT COALESCE(SUM(total - COALESCE("paidAmount",0)),0)::numeric AS outstanding
          FROM purchase_orders
          WHERE "supplierId" = $1 AND "companyId" = $2
+           AND "deletedAt" IS NULL
            AND status NOT IN ('paid','cancelled','completed')`,
         [Number(supplierId), scope.companyId]
       );

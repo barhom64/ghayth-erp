@@ -423,6 +423,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", requirePermiss
       `SELECT jl.id FROM journal_lines jl
        JOIN journal_entries je ON je.id = jl."journalId"
        WHERE jl.id=$1 AND je."companyId"=$2
+         AND je."deletedAt" IS NULL
          AND jl."accountCode"=$3
          AND NOT EXISTS (SELECT 1 FROM bank_statements bs2 WHERE bs2."matchedJournalLineId"=jl.id)`,
       [journalLineId, scope.companyId, bs.accountCode]
@@ -1180,6 +1181,7 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", requirePermission("financ
       `SELECT id, "poNumber", currency, "exchangeRate", total, status, "supplierId"
        FROM purchase_orders
        WHERE "companyId"=$1
+         AND "deletedAt" IS NULL
          AND currency IS NOT NULL AND currency <> 'SAR'
          AND status NOT IN ('paid','cancelled','draft')
          AND "orderDate"::date <= $2::date`,
@@ -1312,7 +1314,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:
     const openPOs = await rawQuery<any>(
       `SELECT id, "poNumber", currency, "exchangeRate", total
        FROM purchase_orders
-       WHERE "companyId"=$1 AND currency IS NOT NULL AND currency<>'SAR'
+       WHERE "companyId"=$1 AND "deletedAt" IS NULL AND currency IS NOT NULL AND currency<>'SAR'
          AND status NOT IN ('paid','cancelled','draft')
          AND "orderDate"::date <= $2::date`,
       [scope.companyId, periodEnd]
@@ -1583,7 +1585,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", requirePermission("fina
         `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName", ca.type AS "accountType",
                 COALESCE((SELECT SUM(jl.debit) - SUM(jl.credit) FROM journal_lines jl
                   JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
-                  WHERE jl."accountCode" = ca.code AND je.status = 'posted'), 0) AS balance
+                  WHERE jl."accountCode" = ca.code AND je.status = 'posted' AND je."deletedAt" IS NULL), 0) AS balance
          FROM subsidiary_accounts sa
          JOIN chart_of_accounts ca ON ca.id = sa."accountId"
          WHERE sa."companyId" = $1 AND sa."entityType" = $2 AND sa."entityId" = $3`,
@@ -1598,7 +1600,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", requirePermission("fina
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
          LEFT JOIN chart_of_accounts ca ON ca.code = jl."accountCode" AND ca."companyId" = $1
-         WHERE ${safeCol} = $2
+         WHERE ${safeCol} = $2 AND je."deletedAt" IS NULL
          ORDER BY je."createdAt" DESC
          LIMIT 50`,
         [cid, eid]
@@ -1613,7 +1615,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", requirePermission("fina
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
          LEFT JOIN chart_of_accounts ca ON ca.code = jl."accountCode" AND ca."companyId" = $1
-         WHERE ${safeCol} = $2 AND je.status = 'posted'
+         WHERE ${safeCol} = $2 AND je.status = 'posted' AND je."deletedAt" IS NULL
          GROUP BY ca.code, ca.name
          ORDER BY SUM(jl.debit) DESC`,
         [cid, eid]
@@ -1628,7 +1630,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", requirePermission("fina
            MAX(je."createdAt") AS "lastTransaction"
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
-         WHERE ${safeCol} = $2 AND je.status = 'posted'`,
+         WHERE ${safeCol} = $2 AND je.status = 'posted' AND je."deletedAt" IS NULL`,
         [cid, eid]
       ),
     ]);
