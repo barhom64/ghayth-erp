@@ -132,13 +132,13 @@ router.get("/", requirePermission("tasks:read"), async (req, res) => {
       }
     }
     const bulkQueryMap: Record<string, string> = {
-      property_unit: `SELECT id, "unitNumber" AS name FROM property_units WHERE id = ANY($1) AND "companyId"=$2`,
-      vehicle: `SELECT id, COALESCE("plateNumber", make || ' ' || model) AS name FROM fleet_vehicles WHERE id = ANY($1) AND "companyId"=$2`,
-      client: `SELECT id, name FROM clients WHERE id = ANY($1) AND "companyId"=$2`,
+      property_unit: `SELECT id, "unitNumber" AS name FROM property_units WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      vehicle: `SELECT id, COALESCE("plateNumber", make || ' ' || model) AS name FROM fleet_vehicles WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      client: `SELECT id, name FROM clients WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
       project: `SELECT id, name FROM projects WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
       contract: `SELECT id, COALESCE(ref, 'عقد #' || id) AS name FROM property_contracts WHERE id = ANY($1) AND "companyId"=$2`,
-      legal_case: `SELECT id, COALESCE(title, "caseNumber", 'قضية #' || id) AS name FROM legal_cases WHERE id = ANY($1) AND "companyId"=$2`,
-      maintenance_request: `SELECT id, COALESCE(description, category, 'طلب #' || id) AS name FROM maintenance_requests WHERE id = ANY($1) AND "companyId"=$2`,
+      legal_case: `SELECT id, COALESCE(title, "caseNumber", 'قضية #' || id) AS name FROM legal_cases WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      maintenance_request: `SELECT id, COALESCE(description, category, 'طلب #' || id) AS name FROM maintenance_requests WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
     };
     const namesByType = new Map<string, Map<number, string>>();
     await Promise.all(

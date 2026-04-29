@@ -981,13 +981,13 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
 
     if (status === "active" && before.status !== "active") {
       await rawExecute(
-        `UPDATE employee_assignments SET status = 'active' WHERE id = $1 AND "companyId" = $2`,
-        [employee.assignmentId, scope.companyId]
+        `UPDATE employee_assignments SET status = 'active' WHERE id = $1 AND "companyId" = $2 AND status = $3`,
+        [employee.assignmentId, scope.companyId, before.status]
       );
     } else if (status === "suspended" && before.status !== "suspended") {
       await rawExecute(
-        `UPDATE employee_assignments SET status = 'suspended' WHERE id = $1 AND "companyId" = $2`,
-        [employee.assignmentId, scope.companyId]
+        `UPDATE employee_assignments SET status = 'suspended' WHERE id = $1 AND "companyId" = $2 AND status = $3`,
+        [employee.assignmentId, scope.companyId, before.status]
       );
     }
 

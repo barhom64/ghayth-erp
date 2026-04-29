@@ -349,7 +349,7 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
     }
 
     const approvalResult = await initiateApprovalChain({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, chainType: "expenses", refType: "expense", refId: journalId, amount: Number(amount ?? 0) });
-    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2`, [journalId, effectiveCompanyId]); }
+    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft'`, [journalId, effectiveCompanyId]); }
 
     emitEvent({ companyId: effectiveCompanyId, userId: scope.userId, action: "expense.created", entity: "expenses", entityId: journalId, details: JSON.stringify({ ref, accountCode, amount: baseAmount, vatAmount: computedVat, totalWithVat, sourceAccountCode: sourceAcct, approvalRequired: approvalResult.requiresApproval, operationType, expenseType, relatedEntityType, relatedEntityId }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
@@ -699,7 +699,7 @@ journalRouter.post("/salary-advances", requirePermission("finance:create"), asyn
 
     const { journalId } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: description ?? `سلفة راتب ${employeeName} – خصم على ${deductMonths} شهر`, type: "salary_advance", sourceType: "salary_advance", sourceId: 0, sourceKey: `finance:salary_advance:${Date.now()}`, lines: [{ accountCode: advanceAccountCode, debit: Number(amount), credit: 0, employeeId: employeeId ? Number(employeeId) : undefined }, { accountCode: sourceAcct, debit: 0, credit: Number(amount) }] });
     const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "advances", refType: "salary_advance", refId: journalId, amount: Number(amount) });
-    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2`, [journalId, scope.companyId]); }
+    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft'`, [journalId, scope.companyId]); }
     res.status(201).json({ id: journalId, ref, employeeName, amount, deductMonths, description, approval: approvalResult });
   } catch (err) {
     handleRouteError(err, res, "Finance journal error:");

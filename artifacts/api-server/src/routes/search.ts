@@ -90,7 +90,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
         `SELECT v.id, CONCAT(v.make, ' ', v.model) AS name, v."plateNumber", v.status, v.year,
                 'vehicle' AS type
          FROM fleet_vehicles v
-         WHERE v."companyId" = $1
+         WHERE v."companyId" = $1 AND v."deletedAt" IS NULL
            AND (v."plateNumber" ILIKE $2 OR v.make ILIKE $2 OR v.model ILIKE $2
                 OR v."vinNumber" ILIKE $2)
          LIMIT 10`,
@@ -113,7 +113,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
                 'contract' AS type
          FROM rental_contracts rc
          LEFT JOIN property_units pu ON pu.id = rc."unitId"
-         WHERE rc."companyId" = $1
+         WHERE rc."companyId" = $1 AND rc."deletedAt" IS NULL
            AND (rc."tenantName" ILIKE $2 OR rc."tenantPhone" ILIKE $2 OR rc."tenantIdNumber" ILIKE $2
                 OR pu."unitNumber" ILIKE $2)
          LIMIT 10`,
