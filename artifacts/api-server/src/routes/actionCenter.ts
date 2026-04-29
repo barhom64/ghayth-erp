@@ -3,6 +3,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 import { todayISO } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -41,7 +42,7 @@ router.get("/", async (req, res) => {
           [scope.allowedCompanies, scope.role, scope.activeAssignmentId]
         );
       } catch (e) {
-        console.error("Action-center pendingLeaves error:", e);
+        logger.error(e, "Action-center pendingLeaves error");
       }
     }
 
@@ -68,7 +69,7 @@ router.get("/", async (req, res) => {
           [scope.allowedCompanies]
         );
       } catch (e) {
-        console.error("Action-center pendingAdvances error:", e);
+        logger.error(e, "Action-center pendingAdvances error");
       }
     }
 
@@ -89,7 +90,7 @@ router.get("/", async (req, res) => {
           [scope.allowedCompanies]
         );
       } catch (e) {
-        console.error("Action-center pendingCustodies error:", e);
+        logger.error(e, "Action-center pendingCustodies error");
       }
     }
 
@@ -105,7 +106,7 @@ router.get("/", async (req, res) => {
           [scope.allowedCompanies]
         );
       } catch (e) {
-        console.error("Action-center pendingLetters error:", e);
+        logger.error(e, "Action-center pendingLetters error");
       }
     }
 
@@ -120,7 +121,7 @@ router.get("/", async (req, res) => {
           [scope.allowedCompanies]
         );
       } catch (e) {
-        console.error("Action-center pendingPurchases error:", e);
+        logger.error(e, "Action-center pendingPurchases error");
       }
     }
 
@@ -135,7 +136,7 @@ router.get("/", async (req, res) => {
           [scope.allowedCompanies]
         );
       } catch (e) {
-        console.error("Action-center pendingExpenses error:", e);
+        logger.error(e, "Action-center pendingExpenses error");
       }
     }
 
@@ -149,7 +150,7 @@ router.get("/", async (req, res) => {
         [scope.allowedCompanies]
       );
     } catch (e) {
-      console.error("Action-center slaBreached error:", e);
+      logger.error(e, "Action-center slaBreached error");
     }
 
     let escalations: any[] = [];
@@ -162,7 +163,7 @@ router.get("/", async (req, res) => {
         [scope.activeAssignmentId]
       );
     } catch (e) {
-      console.error("Action-center escalations error:", e);
+      logger.error(e, "Action-center escalations error");
     }
 
     let todayTasks: any[] = [];
@@ -181,7 +182,7 @@ router.get("/", async (req, res) => {
         [...tp, today]
       );
     } catch (e) {
-      console.error("Action-center todayTasks error:", e);
+      logger.error(e, "Action-center todayTasks error");
     }
 
     let criticalAlerts: any[] = [];
@@ -194,7 +195,7 @@ router.get("/", async (req, res) => {
         [scope.activeAssignmentId]
       );
     } catch (e) {
-      console.error("Action-center criticalAlerts error:", e);
+      logger.error(e, "Action-center criticalAlerts error");
     }
 
     let pendingLoans: any[] = [];
@@ -211,7 +212,7 @@ router.get("/", async (req, res) => {
           [scope.allowedCompanies]
         );
       } catch (e) {
-        console.error("Action-center pendingLoans error:", e);
+        logger.error(e, "Action-center pendingLoans error");
       }
     }
 
@@ -229,7 +230,7 @@ router.get("/", async (req, res) => {
           [scope.allowedCompanies]
         );
       } catch (e) {
-        console.error("Action-center pendingOvertime error:", e);
+        logger.error(e, "Action-center pendingOvertime error");
       }
     }
 
@@ -247,7 +248,7 @@ router.get("/", async (req, res) => {
           [scope.allowedCompanies]
         );
       } catch (e) {
-        console.error("Action-center pendingExitRequests error:", e);
+        logger.error(e, "Action-center pendingExitRequests error");
       }
     }
 
@@ -268,7 +269,7 @@ router.get("/", async (req, res) => {
         [scope.activeAssignmentId, scope.allowedCompanies]
       );
     } catch (e) {
-      console.error("Action-center pendingWorkflows error:", e);
+      logger.error(e, "Action-center pendingWorkflows error");
     }
 
     const totalPending =

@@ -3,6 +3,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { logPageView } from "../lib/activityTracker.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
 
@@ -38,8 +39,8 @@ router.post("/intelligence/activity", activityLimiter, authMiddleware, async (re
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "create", entity: "user_activity", entityId: 0,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "activity.ingested", entity: "activity_logs", entityId: 0, details: JSON.stringify({ page, sessionId }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "activity ingest background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "activity.ingested", entity: "activity_logs", entityId: 0, details: JSON.stringify({ page, sessionId }) }).catch((e) => logger.error(e, "activity ingest background task failed"));
     res.json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "Activity ingest error:");
