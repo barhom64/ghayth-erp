@@ -98,9 +98,8 @@ async function updateWeightedAverageCost(
       );
     }
   } catch (err) {
-    console.warn(
-      `[warehouse] updateWeightedAverageCost failed for product ${productId}:`,
-      err
+    logger.warn(
+      `[warehouse] updateWeightedAverageCost failed for product ${productId}: ${err}`
     );
   }
 }
@@ -158,9 +157,8 @@ async function postInventoryMovementGl(params: {
           ]
         );
       } catch (noteErr) {
-        console.warn(
-          "[warehouse-gl] failed to append closed-period note:",
-          noteErr
+        logger.warn(
+          `[warehouse-gl] failed to append closed-period note: ${noteErr}`
         );
       }
       return null;
@@ -657,7 +655,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
             reference: b.reference ?? null,
           });
         } else {
-          console.warn(
+          logger.warn(
             `[warehouse-gl] receipt movement ${insertId} has no unitCost — GL posting skipped`
           );
         }
@@ -668,7 +666,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
         if (!(issueCost > 0)) {
           issueCost = productCost;
           if (issueCost > 0) {
-            console.warn(
+            logger.warn(
               `[warehouse-gl] issue movement ${insertId}: using product.costPrice fallback (${issueCost}) — weighted-average unavailable`
             );
           }
@@ -687,7 +685,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
             reference: b.reference ?? null,
           });
         } else {
-          console.warn(
+          logger.warn(
             `[warehouse-gl] issue movement ${insertId} has no unit cost (WA or fallback) — GL posting skipped`
           );
         }
@@ -1396,7 +1394,7 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
               preCost,
             });
           } else if (preCost <= 0) {
-            console.warn(
+            logger.warn(
               `[warehouse-gl] inventory count variance for product ${item.productId}: no unit cost — GL posting skipped`
             );
             glSkipped.push({

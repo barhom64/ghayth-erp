@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { verifyToken, type JWTPayload } from "../lib/auth.js";
 import { rawQuery } from "../lib/rawdb.js";
+import { logger } from "../lib/logger.js";
 
 export interface RequestScope {
   userId: number;
@@ -46,7 +47,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     req.scope = scope;
     next();
   } catch (err: any) {
-    console.error("[AUTH] Token verification failed:", err?.message || err);
+    logger.error(err, "[AUTH] Token verification failed");
     const isExpired = /expired/i.test(String(err?.message ?? ""));
     res.status(401).json({
       error: isExpired ? "انتهت صلاحية الجلسة" : "توكن غير صالح",

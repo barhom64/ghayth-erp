@@ -164,7 +164,7 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
         }
       }
       if (!companyId) {
-        console.warn(`[WhatsApp] Could not resolve companyId for phone_number_id=${metaPhoneId ?? "unknown"} display=${value.metadata?.display_phone_number ?? "unknown"} — message from ${from} dropped (unmapped tenant)`);
+        logger.warn(`[WhatsApp] Could not resolve companyId for phone_number_id=${metaPhoneId ?? "unknown"} display=${value.metadata?.display_phone_number ?? "unknown"} — message from ${from} dropped (unmapped tenant)`);
         continue;
       }
 
@@ -255,7 +255,7 @@ router.post("/pbx/incoming", async (req, res): Promise<void> => {
       if (byCompanyPhone.length > 0) pbxCompanyId = byCompanyPhone[0]!.id;
     }
     if (!pbxCompanyId) {
-      console.warn(`[PBX] Could not resolve companyId for calledNumber=${calledNumber} — call from ${callerNumber} dropped (unmapped tenant)`);
+      logger.warn(`[PBX] Could not resolve companyId for calledNumber=${calledNumber} — call from ${callerNumber} dropped (unmapped tenant)`);
       res.status(200).json({ status: "ok", warning: "company not mapped to this DID" });
       return;
     }

@@ -1802,7 +1802,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
       if (amount > 0) {
         const period = await checkFinancialPeriodOpen(scope.companyId, costDate);
         if (!period.open) {
-          console.warn(
+          logger.warn(
             `[projects-gl] project cost ${insertId}: financial period "${period.periodName}" is closed — GL posting skipped`
           );
           // Stamp a note in the cost row so users see the reason.
@@ -1880,7 +1880,7 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
         const today = todayISO();
         const period = await checkFinancialPeriodOpen(scope.companyId, today);
         if (!period.open) {
-          console.warn(
+          logger.warn(
             `[projects-gl] project close ${projectId}: financial period "${period.periodName}" is closed — GL posting skipped`
           );
         } else {
