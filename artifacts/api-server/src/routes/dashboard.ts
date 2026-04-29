@@ -3,6 +3,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { todayISO } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -80,7 +81,7 @@ router.get("/", async (req, res) => {
          LIMIT 5`,
         fp
       );
-    } catch (_e) { console.error("Dashboard: failed to load pending expense claims:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard: failed to load pending expense claims:"); }
 
     let pendingPurchaseRequests: any[] = [];
     try {
@@ -93,7 +94,7 @@ router.get("/", async (req, res) => {
          LIMIT 5`,
         pp
       );
-    } catch (_e) { console.error("Dashboard: failed to load pending purchase requests:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard: failed to load pending purchase requests:"); }
 
     const notifications = await rawQuery<any>(
       `SELECT id, type, title, body, priority, "isRead", "createdAt"
@@ -171,7 +172,7 @@ router.get("/summary", async (req, res) => {
         [...params]
       );
       vehicles = { total: Number(v?.total ?? 0), active: Number(v?.active ?? 0) };
-    } catch (_e) { console.error("Dashboard summary: failed to load fleet vehicles:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard summary: failed to load fleet vehicles:"); }
 
     let tickets = { open: 0, breached: 0 };
     try {
@@ -180,7 +181,7 @@ router.get("/summary", async (req, res) => {
         [...noBranchParams]
       );
       tickets = { open: Number(t?.open ?? 0), breached: Number(t?.breached ?? 0) };
-    } catch (_e) { console.error("Dashboard summary: failed to load support tickets:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard summary: failed to load support tickets:"); }
 
     let projects = { active: 0, total: 0 };
     try {
@@ -189,7 +190,7 @@ router.get("/summary", async (req, res) => {
         [...noBranchParams]
       );
       projects = { total: Number(p?.total ?? 0), active: Number(p?.active ?? 0) };
-    } catch (_e) { console.error("Dashboard summary: failed to load projects:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard summary: failed to load projects:"); }
 
     let contracts = { active: 0, expiringSoon: 0 };
     try {
@@ -198,7 +199,7 @@ router.get("/summary", async (req, res) => {
         [...noBranchParams]
       );
       contracts = { active: Number(c?.active ?? 0), expiringSoon: Number(c?.expiringSoon ?? 0) };
-    } catch (_e) { console.error("Dashboard summary: failed to load contracts:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard summary: failed to load contracts:"); }
 
     let opportunities = { total: 0, value: 0 };
     try {
@@ -207,7 +208,7 @@ router.get("/summary", async (req, res) => {
         [...noBranchParams]
       );
       opportunities = { total: Number(o?.total ?? 0), value: Number(o?.value ?? 0) };
-    } catch (_e) { console.error("Dashboard summary: failed to load CRM opportunities:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard summary: failed to load CRM opportunities:"); }
 
     let warehouseAlerts = 0;
     try {
@@ -216,7 +217,7 @@ router.get("/summary", async (req, res) => {
         [...params]
       );
       warehouseAlerts = Number(w?.total ?? 0);
-    } catch (_e) { console.error("Dashboard summary: failed to load warehouse alerts:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard summary: failed to load warehouse alerts:"); }
 
     let pendingLeaveRequests = 0;
     try {
@@ -225,7 +226,7 @@ router.get("/summary", async (req, res) => {
         [...noBranchParams]
       );
       pendingLeaveRequests = Number(lr?.total ?? 0);
-    } catch (_e) { console.error("Dashboard summary: failed to load pending leave requests:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard summary: failed to load pending leave requests:"); }
 
     res.json({
       totalEmployees: Number(employees?.total ?? 0),

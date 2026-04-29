@@ -5,6 +5,7 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import dns from "node:dns/promises";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
 
 const updateIntegrationSchema = z.object({
   config: z.record(z.unknown()).optional(),
@@ -159,8 +160,8 @@ router.put("/:id", requirePermission("admin:write"), async (req, res) => {
       entity: "gov_integrations", entityId: id,
       before: { enabled: existing.enabled, status: existing.status },
       after: { enabled, status, configUpdated: config !== undefined },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.integration.updated", entity: "gov_integrations", entityId: id, details: JSON.stringify({ enabled, status, configUpdated: config !== undefined }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "gov-integrations background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.integration.updated", entity: "gov_integrations", entityId: id, details: JSON.stringify({ enabled, status, configUpdated: config !== undefined }) }).catch((e) => logger.error(e, "gov-integrations background task failed"));
 
     const [updated] = await rawQuery<any>(`SELECT * FROM gov_integrations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(updated);
@@ -264,8 +265,8 @@ router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
       companyId: scope.companyId, userId: scope.userId, action: "test_gov_integration",
       entity: "gov_integrations", entityId: id,
       after: { checkStatus, checkMessage },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.integration.tested", entity: "gov_integrations", entityId: id, details: JSON.stringify({ checkStatus, checkMessage }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "gov-integrations background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.integration.tested", entity: "gov_integrations", entityId: id, details: JSON.stringify({ checkStatus, checkMessage }) }).catch((e) => logger.error(e, "gov-integrations background task failed"));
 
     res.json({
       success: checkStatus === "connected",
@@ -379,8 +380,8 @@ router.post("/links", requirePermission("admin:write"), async (req, res) => {
         companyId: scope.companyId, userId: scope.userId, action: "create_gov_link",
         entity: "gov_integration_links", entityId: insertId,
         after: { integrationId, entityType, entityId: Number(entityId), externalRef, enabled },
-      }).catch(console.error);
-      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.link.created", entity: "gov_integration_links", entityId: insertId, details: JSON.stringify({ integrationId, entityType, entityId: Number(entityId) }) }).catch(console.error);
+      }).catch((e) => logger.error(e, "gov-integrations background task failed"));
+      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.link.created", entity: "gov_integration_links", entityId: insertId, details: JSON.stringify({ integrationId, entityType, entityId: Number(entityId) }) }).catch((e) => logger.error(e, "gov-integrations background task failed"));
 
       const [row] = await rawQuery<any>(`SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl.id=$1 AND gl."companyId"=$2`, [insertId, scope.companyId]);
       res.status(201).json(row);
@@ -423,8 +424,8 @@ router.patch("/links/:id", requirePermission("admin:write"), async (req, res) =>
       companyId: scope.companyId, userId: scope.userId, action: "update_gov_link",
       entity: "gov_integration_links", entityId: id,
       after: { enabled, externalRef, syncStatus, notes },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.link.updated", entity: "gov_integration_links", entityId: id, details: JSON.stringify({ enabled, externalRef, syncStatus }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "gov-integrations background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.link.updated", entity: "gov_integration_links", entityId: id, details: JSON.stringify({ enabled, externalRef, syncStatus }) }).catch((e) => logger.error(e, "gov-integrations background task failed"));
 
     const [row] = await rawQuery<any>(`SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl.id=$1 AND gl."companyId"=$2`, [id, scope.companyId]);
     res.json(row);
@@ -448,8 +449,8 @@ router.delete("/links/:id", requirePermission("admin:write"), async (req, res) =
       companyId: scope.companyId, userId: scope.userId, action: "delete_gov_link",
       entity: "gov_integration_links", entityId: id,
       before,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.link.deleted", entity: "gov_integration_links", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "gov-integrations background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.link.deleted", entity: "gov_integration_links", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "gov-integrations background task failed"));
 
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Gov link delete error:"); }

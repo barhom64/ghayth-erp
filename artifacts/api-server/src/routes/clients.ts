@@ -7,6 +7,7 @@ import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { hashPassword } from "../lib/auth.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { logger } from "../lib/logger.js";
 
 const createClientSchema = z.object({
   name: z.string().min(1, "اسم العميل مطلوب"),
@@ -124,11 +125,11 @@ router.post("/", requirePermission("crm:create"), async (req, res) => {
       entity: "clients",
       entityId: insertId,
       after: { name, phone, email, classification, source },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "clients background task failed"));
 
-    createSubsidiaryAccountsForEntity(scope.companyId, "client", insertId, name).catch(console.error);
+    createSubsidiaryAccountsForEntity(scope.companyId, "client", insertId, name).catch((e) => logger.error(e, "clients background task failed"));
 
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "clients", entityId: insertId, details: JSON.stringify({ name, phone, email, classification, source }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "clients", entityId: insertId, details: JSON.stringify({ name, phone, email, classification, source }) }).catch((e) => logger.error(e, "clients background task failed"));
 
     res.status(201).json(client);
   } catch (err) {
@@ -275,8 +276,8 @@ router.patch("/:id", requirePermission("crm:write"), async (req, res) => {
     const [updated] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
     if (!updated) throw new NotFoundError("العميل غير موجود");
 
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.updated", entity: "clients", entityId: Number(id), details: JSON.stringify({ name: b.name, phone: b.phone, email: b.email, classification: b.classification }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "clients", entityId: Number(id), after: { name: b.name, phone: b.phone, email: b.email, classification: b.classification } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.updated", entity: "clients", entityId: Number(id), details: JSON.stringify({ name: b.name, phone: b.phone, email: b.email, classification: b.classification }) }).catch((e) => logger.error(e, "clients background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "clients", entityId: Number(id), after: { name: b.name, phone: b.phone, email: b.email, classification: b.classification } }).catch((e) => logger.error(e, "clients background task failed"));
 
     res.json(updated);
   } catch (err) {
@@ -322,9 +323,9 @@ router.post("/auto-create", requirePermission("crm:create"), async (req, res) =>
       entity: "clients",
       entityId: insertId,
       after: { name: clientName, phone, source, classification: "prospect", code },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "clients background task failed"));
 
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "clients", entityId: insertId, details: JSON.stringify({ name: clientName, phone, source }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "clients", entityId: insertId, details: JSON.stringify({ name: clientName, phone, source }) }).catch((e) => logger.error(e, "clients background task failed"));
 
     res.status(201).json({ ...newClient, isNew: true });
   } catch (err) {
@@ -343,8 +344,8 @@ router.delete("/:id", requirePermission("crm:delete"), async (req, res) => {
     if (!existing) { throw new NotFoundError("العميل غير موجود"); }
     await rawExecute(`UPDATE clients SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
 
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.deleted", entity: "clients", entityId: Number(id), details: JSON.stringify({ id: Number(id) }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delete", entity: "clients", entityId: Number(id) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.deleted", entity: "clients", entityId: Number(id), details: JSON.stringify({ id: Number(id) }) }).catch((e) => logger.error(e, "clients background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delete", entity: "clients", entityId: Number(id) }).catch((e) => logger.error(e, "clients background task failed"));
 
     res.json({ message: "تم حذف العميل بنجاح" });
   } catch (err) {
@@ -419,8 +420,8 @@ router.post("/:id/portal-account", requirePermission("crm:write"), async (req, r
       `SELECT id, email, "isActive", "mustChangePassword", "createdAt" FROM client_portal_accounts WHERE id = $1 AND "companyId" = $2`,
       [insertId, scope.companyId]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "client_portal_accounts", entityId: insertId, details: JSON.stringify({ clientId: Number(id), email }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "client_portal_accounts", entityId: insertId, after: { clientId: Number(id), email } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "client_portal_accounts", entityId: insertId, details: JSON.stringify({ clientId: Number(id), email }) }).catch((e) => logger.error(e, "clients background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "client_portal_accounts", entityId: insertId, after: { clientId: Number(id), email } }).catch((e) => logger.error(e, "clients background task failed"));
 
     res.status(201).json({ account });
   } catch (err) {
@@ -471,8 +472,8 @@ router.patch("/:id/portal-account", requirePermission("crm:write"), async (req, 
       `SELECT id, email, "isActive", "mustChangePassword", "lastLoginAt", "createdAt" FROM client_portal_accounts WHERE id = $1 AND "companyId" = $2`,
       [account.id, scope.companyId]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.updated", entity: "client_portal_accounts", entityId: account.id, details: JSON.stringify({ clientId: Number(id), isActive }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "client_portal_accounts", entityId: account.id, after: { clientId: Number(id), isActive, passwordChanged: !!password } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.updated", entity: "client_portal_accounts", entityId: account.id, details: JSON.stringify({ clientId: Number(id), isActive }) }).catch((e) => logger.error(e, "clients background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "client_portal_accounts", entityId: account.id, after: { clientId: Number(id), isActive, passwordChanged: !!password } }).catch((e) => logger.error(e, "clients background task failed"));
 
     res.json({ account: updated });
   } catch (err) {

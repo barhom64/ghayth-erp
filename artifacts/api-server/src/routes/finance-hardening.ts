@@ -18,6 +18,7 @@ import {
 
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { logger } from "../lib/logger.js";
 
 export const financeHardeningRouter = Router();
 financeHardeningRouter.use(authMiddleware);
@@ -80,7 +81,7 @@ financeHardeningRouter.post("/fiscal-periods-v2", requirePermission("finance:cre
       entity: "financial_periods",
       entityId: insertId,
       after: { name, startDate, endDate },
-    }).catch((err) => console.error("[audit] fiscal_period.created:", err));
+    }).catch((err) => logger.error(err, "[audit] fiscal_period.created:"));
 
     res.status(201).json(row);
   } catch (err) {
@@ -274,7 +275,7 @@ financeHardeningRouter.post("/journal-manual", requirePermission("finance:create
       entity: "journal_entries",
       entityId: journalId,
       after: { ref, totalDebit, lineCount: lines.length, approvalStatus: "draft", isManual: true },
-    }).catch((err) => console.error("[audit] journal.manual_created:", err));
+    }).catch((err) => logger.error(err, "[audit] journal.manual_created:"));
 
     res.status(201).json({
       id: journalId, ref, description, totalDebit, totalCredit,
@@ -628,7 +629,7 @@ financeHardeningRouter.post("/bank-guarantees", requirePermission("finance:creat
       entity: "bank_guarantees",
       entityId: insertId,
       after: { ref, bank, amount: Number(amount), expiryDate },
-    }).catch((err) => console.error("[audit] bank_guarantee.created:", err));
+    }).catch((err) => logger.error(err, "[audit] bank_guarantee.created:"));
 
     res.status(201).json(row);
   } catch (err) {
@@ -677,7 +678,7 @@ financeHardeningRouter.patch("/bank-guarantees/:id", requirePermission("finance:
       entity: "bank_guarantees",
       entityId: Number(id),
       after: { fields: Object.keys(b) },
-    }).catch((err) => console.error("[audit] bank_guarantee.updated:", err));
+    }).catch((err) => logger.error(err, "[audit] bank_guarantee.updated:"));
 
     res.json(row);
   } catch (err) {
@@ -735,7 +736,7 @@ financeHardeningRouter.delete("/bank-guarantees/:id", requirePermission("finance
       entity: "bank_guarantees",
       entityId: guaranteeId,
       after: { ref: existing.ref, bank: existing.bank, amount: Number(existing.amount), softDelete: true },
-    }).catch((err) => console.error("[audit] bank_guarantee.deleted:", err));
+    }).catch((err) => logger.error(err, "[audit] bank_guarantee.deleted:"));
 
     res.json({ success: true });
   } catch (err) {
@@ -962,7 +963,7 @@ financeHardeningRouter.post("/intercompany", requirePermission("finance:create")
       entity: "intercompany_transactions",
       entityId: fromJournalId,
       after: { ref, toCompanyId: Number(toCompanyId), amount: Number(amount), txDate },
-    }).catch((err) => console.error("[audit] intercompany.created:", err));
+    }).catch((err) => logger.error(err, "[audit] intercompany.created:"));
 
     res.status(201).json({
       ref, fromJournalId, toJournalId, amount: Number(amount),
@@ -1080,7 +1081,7 @@ financeHardeningRouter.post("/projects", requirePermission("finance:create"), as
       entity: "projects",
       entityId: insertId,
       after: { ref: projectRef, name, budget: Number(budget ?? 0), startDate, endDate },
-    }).catch((err) => console.error("[audit] finance_project.created:", err));
+    }).catch((err) => logger.error(err, "[audit] finance_project.created:"));
 
     res.status(201).json(row);
   } catch (err) {
@@ -1300,7 +1301,7 @@ financeHardeningRouter.patch("/posting-failures/:id/resolve", requirePermission(
       [scope.userId, id, scope.companyId]
     );
     if (!affectedRows) throw new NotFoundError("السجل غير موجود أو مغلق مسبقاً");
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "posting_failure.resolved", entity: "financial_posting_failures", entityId: id }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "posting_failure.resolved", entity: "financial_posting_failures", entityId: id }).catch((e) => logger.error(e, "finance-hardening background task failed"));
     res.json({ message: "تم إغلاق المشكلة" });
   } catch (err) {
     handleRouteError(err, res, "Resolve posting failure error:");

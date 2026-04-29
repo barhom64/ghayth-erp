@@ -101,7 +101,7 @@ async function sendWhatsAppMessage(to: string, message: string): Promise<boolean
     );
     return resp.ok;
   } catch (err) {
-    console.error("[WhatsApp] Send error:", err);
+    logger.error(err, "[WhatsApp] Send error:");
     return false;
   }
 }
@@ -219,11 +219,11 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
         });
       }
 
-      emitEvent({ companyId, userId: 0, action: "communication.whatsapp.received", entity: "communication_logs", entityId: 0, details: JSON.stringify({ from, msgType, senderName: sender.name, senderType: sender.type }) }).catch(console.error);
-      createAuditLog({ companyId, userId: 0, action: "create", entity: "communication_logs", entityId: 0, after: { channel: "whatsapp", direction: "inbound", from, senderName: sender.name, senderType: sender.type } }).catch(console.error);
+      emitEvent({ companyId, userId: 0, action: "communication.whatsapp.received", entity: "communication_logs", entityId: 0, details: JSON.stringify({ from, msgType, senderName: sender.name, senderType: sender.type }) }).catch((e) => logger.error(e, "communications background task failed"));
+      createAuditLog({ companyId, userId: 0, action: "create", entity: "communication_logs", entityId: 0, after: { channel: "whatsapp", direction: "inbound", from, senderName: sender.name, senderType: sender.type } }).catch((e) => logger.error(e, "communications background task failed"));
     }
   } catch (err) {
-    console.error("[WhatsApp] Webhook error:", err);
+    logger.error(err, "[WhatsApp] Webhook error:");
   }
 });
 
@@ -284,8 +284,8 @@ router.post("/pbx/incoming", async (req, res): Promise<void> => {
       refId: pbxId,
     });
 
-    emitEvent({ companyId, userId: 0, action: "communication.pbx.incoming", entity: "communication_logs", entityId: pbxId, details: JSON.stringify({ callId, callerNumber, calledNumber, direction, senderName: sender.name, senderType: sender.type }) }).catch(console.error);
-    createAuditLog({ companyId, userId: 0, action: "create", entity: "communication_logs", entityId: pbxId, after: { channel: "pbx", direction, callId, callerNumber, calledNumber, senderName: sender.name } }).catch(console.error);
+    emitEvent({ companyId, userId: 0, action: "communication.pbx.incoming", entity: "communication_logs", entityId: pbxId, details: JSON.stringify({ callId, callerNumber, calledNumber, direction, senderName: sender.name, senderType: sender.type }) }).catch((e) => logger.error(e, "communications background task failed"));
+    createAuditLog({ companyId, userId: 0, action: "create", entity: "communication_logs", entityId: pbxId, after: { channel: "pbx", direction, callId, callerNumber, calledNumber, senderName: sender.name } }).catch((e) => logger.error(e, "communications background task failed"));
 
     res.status(200).json({
       status: "ok",
@@ -349,8 +349,8 @@ router.post("/pbx/completed", async (req, res): Promise<void> => {
       });
     }
 
-    emitEvent({ companyId, userId: 0, action: "communication.pbx.completed", entity: "communication_logs", entityId: call.id, details: JSON.stringify({ callId, duration, status }) }).catch(console.error);
-    createAuditLog({ companyId, userId: 0, action: "create", entity: "communication_logs", entityId: call.id, after: { channel: "pbx", callId, duration, status, recordingUrl } }).catch(console.error);
+    emitEvent({ companyId, userId: 0, action: "communication.pbx.completed", entity: "communication_logs", entityId: call.id, details: JSON.stringify({ callId, duration, status }) }).catch((e) => logger.error(e, "communications background task failed"));
+    createAuditLog({ companyId, userId: 0, action: "create", entity: "communication_logs", entityId: call.id, after: { channel: "pbx", callId, duration, status, recordingUrl } }).catch((e) => logger.error(e, "communications background task failed"));
 
     res.status(200).json({ status: "ok", callId, duration, callStatus: status });
   } catch (err) {
@@ -368,8 +368,8 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
       [status ?? "in_progress", answeredBy ?? null, callId]
     );
 
-    emitEvent({ companyId: 0, userId: 0, action: "communication.pbx.status", entity: "communication_logs", entityId: 0, details: JSON.stringify({ callId, status: status ?? "in_progress", answeredBy }) }).catch(console.error);
-    createAuditLog({ companyId: 0, userId: 0, action: "create", entity: "communication_logs", entityId: 0, after: { channel: "pbx", callId, status: status ?? "in_progress", answeredBy } }).catch(console.error);
+    emitEvent({ companyId: 0, userId: 0, action: "communication.pbx.status", entity: "communication_logs", entityId: 0, details: JSON.stringify({ callId, status: status ?? "in_progress", answeredBy }) }).catch((e) => logger.error(e, "communications background task failed"));
+    createAuditLog({ companyId: 0, userId: 0, action: "create", entity: "communication_logs", entityId: 0, after: { channel: "pbx", callId, status: status ?? "in_progress", answeredBy } }).catch((e) => logger.error(e, "communications background task failed"));
 
     res.status(200).json({ status: "ok" });
   } catch (err) {
@@ -434,7 +434,7 @@ router.post("/send", requirePermission("communications:write"), async (req, res)
     );
     const [row] = await rawQuery<any>(`SELECT * FROM communications_log WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     if (!row) throw new NotFoundError("فشل في استرجاع السجل");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "communications_log", entityId: insertId, after: { channel: String(b.channel).toLowerCase(), toNumber: b.toNumber ?? b.toEmail } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "communications_log", entityId: insertId, after: { channel: String(b.channel).toLowerCase(), toNumber: b.toNumber ?? b.toEmail } }).catch((e) => logger.error(e, "communications background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -442,7 +442,7 @@ router.post("/send", requirePermission("communications:write"), async (req, res)
       entity: "communications_log",
       entityId: insertId,
       details: JSON.stringify({ channel: String(b.channel).toLowerCase(), toNumber: b.toNumber ?? b.toEmail }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "communications background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Send communication error:"); }
 });
@@ -514,14 +514,14 @@ router.patch("/log/:id", requirePermission("communications:write"), async (req, 
       params
     );
     if (!row) { throw new NotFoundError("السجل غير موجود"); }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "communications_log", entityId: Number(req.params.id) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "communications_log", entityId: Number(req.params.id) }).catch((e) => logger.error(e, "communications background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "communications.log.updated",
       entity: "communications_log",
       entityId: Number(req.params.id),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "communications background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -590,7 +590,7 @@ router.post("/log/:id/convert", requirePermission("communications:write"), async
     }
 
     const typeLabels: Record<string, string> = { task: "مهمة متابعة", ticket: "تذكرة دعم", request: "طلب داخلي" };
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: targetType, entityId: createdId!, after: { sourceLogId: logId, targetType } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: targetType, entityId: createdId!, after: { sourceLogId: logId, targetType } }).catch((e) => logger.error(e, "communications background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -598,7 +598,7 @@ router.post("/log/:id/convert", requirePermission("communications:write"), async
       entity: "communications_log",
       entityId: logId,
       details: JSON.stringify({ targetType, createdId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "communications background task failed"));
     res.json({
       success: true,
       message: `تم تحويل الاتصال إلى ${typeLabels[targetType]}`,
@@ -619,14 +619,14 @@ router.delete("/log/:id", requirePermission("communications:write"), async (req,
       [id, scope.companyId]
     );
     if (!row) { throw new NotFoundError("السجل غير موجود"); }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "communications_log", entityId: id, before }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "communications_log", entityId: id, before }).catch((e) => logger.error(e, "communications background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "communications.log.deleted",
       entity: "communications_log",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "communications background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -755,14 +755,14 @@ router.post("/push/subscribe", requirePermission("communications:write"), async 
       [scope.companyId, scope.activeAssignmentId ?? null, encryptedEndpoint, endpointHash, keys.p256dh, keys.auth, userAgent, isEncrypted]
     );
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "push_subscriptions", entityId: 0 }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "push_subscriptions", entityId: 0 }).catch((e) => logger.error(e, "communications background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "communications.push.subscribed",
       entity: "push_subscriptions",
       entityId: 0,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "communications background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Push subscribe error:"); }
 });
@@ -783,14 +783,14 @@ router.delete("/push/unsubscribe", requirePermission("communications:write"), as
       [scope.companyId, endpointHash, endpoint]
     );
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "push_subscriptions", entityId: 0 }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "push_subscriptions", entityId: 0 }).catch((e) => logger.error(e, "communications background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "communications.push.unsubscribed",
       entity: "push_subscriptions",
       entityId: 0,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "communications background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Push unsubscribe error:"); }
 });
@@ -807,8 +807,8 @@ router.post("/push/test", requirePermission("communications:write"), async (req,
       "تم تفعيل إشعارات المتصفح بنجاح! ستصلك الإشعارات حتى بدون فتح التطبيق.",
       { type: "test" }
     );
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "communications.push.test", entity: "push_subscriptions", entityId: 0 }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "push_notifications", entityId: 0, after: { type: "test" } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "communications.push.test", entity: "push_subscriptions", entityId: 0 }).catch((e) => logger.error(e, "communications background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "push_notifications", entityId: 0, after: { type: "test" } }).catch((e) => logger.error(e, "communications background task failed"));
     res.json({ success: true, ...result });
   } catch (err) { handleRouteError(err, res, "Push test error:"); }
 });

@@ -8,6 +8,7 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { rawQuery } from "../lib/rawdb.js";
 import rateLimit from "express-rate-limit";
+import { logger } from "../lib/logger.js";
 
 const ALLOWED_CONTENT_TYPES = new Set([
   "image/jpeg",
@@ -74,8 +75,8 @@ router.post("/storage/uploads/request-url", uploadLimiter, authMiddleware, requi
         companyId: scope.companyId, userId: scope.userId, action: "request_upload_url",
         entity: "storage", entityId: 0,
         after: { name, size, contentType, objectPath },
-      }).catch(console.error);
-      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "storage.upload_requested", entity: "storage", entityId: 0, details: JSON.stringify({ name, size, contentType, objectPath }) }).catch(console.error);
+      }).catch((e) => logger.error(e, "storage background task failed"));
+      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "storage.upload_requested", entity: "storage", entityId: 0, details: JSON.stringify({ name, size, contentType, objectPath }) }).catch((e) => logger.error(e, "storage background task failed"));
     }
 
     res.json(

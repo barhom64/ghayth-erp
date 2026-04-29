@@ -12,6 +12,7 @@ import { emitEvent, createAuditLog, currentPeriod } from "../lib/businessHelpers
 import { applyTransition } from "../lib/lifecycleEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
+import { logger } from "../lib/logger.js";
 
 
 export const vendorsRouter = Router();
@@ -64,7 +65,7 @@ vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, 
       entity: "suppliers",
       entityId: insertId,
       after: { name },
-    }).catch((err) => console.error("[audit] vendor.created:", err));
+    }).catch((err) => logger.error(err, "[audit] vendor.created:"));
 
     res.status(201).json({ id: insertId, ...req.body });
   } catch (err) {
@@ -115,7 +116,7 @@ vendorsRouter.patch("/vendors/:id", requirePermission("finance:update"), async (
       entity: "suppliers",
       entityId: vendorId,
       after: { fields: Object.keys(req.body || {}) },
-    }).catch((err) => console.error("[audit] vendor.updated:", err));
+    }).catch((err) => logger.error(err, "[audit] vendor.updated:"));
 
     res.json(row);
   } catch (err) {
@@ -180,7 +181,7 @@ vendorsRouter.delete("/vendors/:id", requirePermission("finance:delete"), async 
       entity: "suppliers",
       entityId: vendorId,
       after: { name: existing.name, softDelete: true },
-    }).catch((err) => console.error("[audit] vendor.deleted:", err));
+    }).catch((err) => logger.error(err, "[audit] vendor.deleted:"));
 
     res.json({ success: true });
   } catch (err) {

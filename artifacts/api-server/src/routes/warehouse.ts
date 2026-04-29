@@ -22,6 +22,7 @@ import {
   generateTimeRef,
 } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -177,10 +178,7 @@ async function postInventoryMovementGl(params: {
     );
     return glResult.journalId;
   } catch (glErr) {
-    console.error(
-      `[warehouse-gl] journal entry failed for movement ${params.movementId}:`,
-      glErr
-    );
+    logger.error(glErr, `[warehouse-gl] journal entry failed for movement ${params.movementId}:`);
     return null;
   }
 }
@@ -272,7 +270,7 @@ router.post("/products", requirePermission("warehouse:create"), async (req, res)
       entity: "warehouse_products",
       entityId: insertId,
       after: { sku: b.sku, name: b.name, categoryId: b.categoryId, costPrice, sellPrice },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -282,7 +280,7 @@ router.post("/products", requirePermission("warehouse:create"), async (req, res)
       entity: "warehouse_products",
       entityId: insertId,
       details: `منتج جديد: ${b.name} (${b.sku})`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
 
     res.status(201).json({ ...row, sellPriceWarning: sellPriceWarning ? "سعر البيع أقل من سعر التكلفة" : null });
   } catch (err) { handleRouteError(err, res, "Create product error:"); }
@@ -424,7 +422,7 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
         entityId: id,
         before,
         after,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "warehouse background task failed"));
 
       emitEvent({
         companyId: scope.companyId,
@@ -435,7 +433,7 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
         entityId: id,
         before,
         after,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "warehouse background task failed"));
     }
 
     res.json({ ...row, sellPriceWarning: sellPriceWarning ? "سعر البيع أقل من سعر التكلفة" : null });
@@ -694,10 +692,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
       }
       // transfer_in / transfer_out: internal movement, no GL impact
     } catch (glOuterErr) {
-      console.error(
-        `[warehouse-gl] unexpected error posting GL for movement ${insertId}:`,
-        glOuterErr
-      );
+      logger.error(glOuterErr, `[warehouse-gl] unexpected error posting GL for movement ${insertId}:`);
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1`, [insertId]);
@@ -719,20 +714,20 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
         unitCost: row?.unitCost,
         reference: row?.reference,
       }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "warehouse_movements", entityId: insertId,
       after: { productId: b.productId, type: b.type, quantity: b.quantity, unitCost, reference: b.reference },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
 
     if (updatedProduct && Number(updatedProduct.currentStock) <= Number(updatedProduct.minStock)) {
       let autoRequestId: number | null = null;
       try {
         autoRequestId = await triggerMinStockPipeline(scope.companyId, updatedProduct, scope.userId);
       } catch (e) {
-        console.error("[MinStock] Pipeline error (non-critical, movement already committed):", e);
+        logger.error(e, "[MinStock] Pipeline error (non-critical, movement already committed):");
       }
       res.status(201).json({ ...row, autoRequestId, lowStockAlert: true });
       return;
@@ -834,13 +829,13 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
       entity: "warehouse_movements",
       entityId: outId,
       details: JSON.stringify({ transferRef, fromLocation, toLocation, quantity: b.quantity, productId: b.productId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "warehouse_transfers", entityId: outId,
       after: { transferRef, fromLocation, toLocation, quantity: b.quantity, productId: b.productId, unitCost },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
 
     res.status(201).json({
       transferRef,
@@ -918,12 +913,12 @@ router.post("/categories", requirePermission("warehouse:create"), async (req, re
       entity: "warehouse_categories",
       entityId: insertId,
       details: JSON.stringify({ name: b.name.trim(), parentId: b.parentId || null }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "warehouse_categories", entityId: insertId,
       after: { name: b.name.trim(), parentId: b.parentId || null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create category error:"); }
 });
@@ -991,12 +986,12 @@ router.post("/suppliers", requirePermission("warehouse:create"), async (req, res
       entity: "suppliers",
       entityId: insertId,
       details: JSON.stringify({ name: b.name.trim() }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "warehouse_suppliers", entityId: insertId,
       after: { name: b.name.trim(), contactPerson: b.contactPerson, phone: b.phone, email: b.email, taxNumber: b.taxNumber },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create supplier error:"); }
 });
@@ -1022,12 +1017,12 @@ router.patch("/categories/:id", requirePermission("warehouse:update"), async (re
       entity: "warehouse_categories",
       entityId: id,
       details: JSON.stringify({ name: b.name, parentId: b.parentId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "warehouse_categories", entityId: id,
       after: { name: b.name, parentId: b.parentId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update category error:"); }
 });
@@ -1072,12 +1067,12 @@ router.delete("/categories/:id", requirePermission("warehouse:delete"), async (r
       entity: "warehouse_categories",
       entityId: id,
       details: JSON.stringify({ name: existing.name }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "warehouse_categories", entityId: id,
       after: { name: existing.name },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     res.json({ message: "تم حذف الفئة" });
   } catch (err) { handleRouteError(err, res, "Delete category error:"); }
 });
@@ -1109,12 +1104,12 @@ router.patch("/suppliers/:id", requirePermission("warehouse:update"), async (req
       entity: "suppliers",
       entityId: id,
       details: JSON.stringify({ name: b.name }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "warehouse_suppliers", entityId: id,
       after: { name: b.name, contactPerson: b.contactPerson, phone: b.phone, email: b.email, taxNumber: b.taxNumber },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update supplier error:"); }
 });
@@ -1134,12 +1129,12 @@ router.delete("/suppliers/:id", requirePermission("warehouse:delete"), async (re
       entity: "suppliers",
       entityId: id,
       details: JSON.stringify({ id }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "warehouse_suppliers", entityId: id,
       after: { id },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     res.json({ message: "تم حذف المورد" });
   } catch (err) { handleRouteError(err, res, "Delete supplier error:"); }
 });
@@ -1199,12 +1194,12 @@ router.post("/inventory-counts", requirePermission("warehouse:create"), async (r
       entity: "inventory_counts",
       entityId: insertId,
       details: JSON.stringify({ countDate: b.countDate, warehouseLocation: b.warehouseLocation }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "inventory_counts", entityId: insertId,
       after: { countDate: b.countDate, warehouseLocation: b.warehouseLocation },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create count error:"); }
 });
@@ -1304,12 +1299,12 @@ router.post("/inventory-counts/:id/items", requirePermission("warehouse:create")
       entity: "inventory_count_items",
       entityId: countId,
       details: JSON.stringify({ productId: b.productId, systemStock, physicalCount, variance }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "inventory_count_items", entityId: countId,
       after: { productId: b.productId, systemStock, physicalCount, variance },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     res.json({ productId: b.productId, systemStock, physicalCount, variance });
   } catch (err) { handleRouteError(err, res, "Count item error:"); }
 });
@@ -1430,10 +1425,7 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
           reference: `INV-COUNT-${countId}`,
         });
       } catch (glErr: any) {
-        console.error(
-          `[warehouse-gl] inventory count variance GL failed for count ${countId}, product ${pending.productId}:`,
-          glErr
-        );
+        logger.error(glErr, `[warehouse-gl] inventory count variance GL failed for count ${countId}, product ${pending.productId}:`);
         glFailures.push({
           productId: pending.productId,
           productName: pending.productName,

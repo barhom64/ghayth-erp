@@ -312,16 +312,16 @@ router.post("/units", requirePermission("property:create"), async (req, res) => 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "property_units", entityId: insertId,
       after: { unitNumber, buildingId: b.buildingId ?? null, type: row?.type, status: row?.status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "property.unit.created", entity: "property_units", entityId: insertId,
       details: `وحدة جديدة ${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ''}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
     createSubsidiaryAccountsForEntity(
       scope.companyId, "property", insertId,
       `${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ""}`
-    ).catch(console.error);
+    ).catch((e) => logger.error(e, "properties background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create unit error:"); }
@@ -493,7 +493,7 @@ router.patch("/units/:id", requirePermission("property:update"), async (req, res
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -504,7 +504,7 @@ router.patch("/units/:id", requirePermission("property:update"), async (req, res
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update unit error:"); }
@@ -552,13 +552,13 @@ router.delete("/units/:id", requirePermission("property:delete"), async (req, re
       entityId: id,
       before: { unitNumber: existing.unitNumber, status: existing.status },
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "property_units", entityId: id,
       after: { unitNumber: existing.unitNumber, status: existing.status, deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.json({ message: "تم حذف الوحدة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete unit error:"); }
@@ -671,13 +671,13 @@ router.post("/contracts/impact-preview", requirePermission("properties:read"), a
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "property.contract.impact_preview", entity: "property_contracts", entityId: 0,
       details: JSON.stringify({ unitId, tenantId, monthlyRent, startDate, endDate }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "preview", entity: "property_contracts", entityId: 0,
       after: { unitId, tenantId, monthlyRent, startDate, endDate },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.json({
       actionType: "create_rental_contract",
@@ -908,7 +908,7 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
         dedupeKey: `contract-${insertId}-expiry`,
         escalationSteps: [{ hoursAfterDue: 0, notifyRole: "property_manager" }],
       });
-    } catch (obErr) { console.error("Contract obligation registration failed:", obErr); }
+    } catch (obErr) { logger.error(obErr, "Contract obligation registration failed:"); }
 
     const [row] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     const schedule = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber"`, [insertId]);
@@ -918,13 +918,13 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
       companyId: scope.companyId, userId: scope.userId,
       action: "lease.created", entity: "rental_contracts", entityId: insertId,
       details: `عقد إيجار جديد — ${b.tenantName || ''} — ${b.startDate} → ${b.endDate}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "property_contracts", entityId: insertId,
       after: { contractNumber, unitId: b.unitId, tenantName: b.tenantName, startDate: b.startDate, endDate: b.endDate, monthlyRent, totalContractValue },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.status(201).json({ ...row, paymentSchedule: schedule });
   } catch (err) {
@@ -1067,7 +1067,7 @@ router.patch("/contracts/:id", requirePermission("property:update"), async (req,
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -1078,7 +1078,7 @@ router.patch("/contracts/:id", requirePermission("property:update"), async (req,
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update contract error:"); }
@@ -1110,13 +1110,13 @@ router.delete("/contracts/:id", requirePermission("property:delete"), async (req
       entityId: id,
       before: { status: existing.status, contractNumber: existing.contractNumber },
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "property_contracts", entityId: id,
       after: { contractNumber: existing.contractNumber, status: existing.status, unitId: existing.unitId, deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.json({ message: "تم حذف العقد" });
   } catch (err) { handleRouteError(err, res, "Delete contract error:"); }
@@ -1236,7 +1236,7 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
       action: "renew", entity: "rental_contracts", entityId: id,
       before: { endDate: contract.endDate, totalContractValue: contract.totalContractValue },
       after: { endDate: toDateISO(newEndDate), totalContractValue: newTotal },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ ...updated, event: "property.contract.renewed", renewalMonths });
@@ -1328,7 +1328,7 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
       action: "terminate", entity: "rental_contracts", entityId: id,
       before: { status: contract.status },
       after: { status: "terminated", reason: b.reason, earlyFee, journalEntryId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     const [updated] = await rawQuery<any>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ ...updated, event: "property.contract.terminated", earlyFee, journalEntryId });
@@ -1483,7 +1483,7 @@ router.patch("/tenants/:id", requirePermission("property:update"), async (req, r
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -1494,7 +1494,7 @@ router.patch("/tenants/:id", requirePermission("property:update"), async (req, r
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update tenant error:"); }
@@ -1534,13 +1534,13 @@ router.delete("/tenants/:id", requirePermission("property:delete"), async (req, 
       entityId: id,
       before: { name: existing.name },
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "property_tenants", entityId: id,
       after: { name: existing.name, deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.json({ message: "تم حذف المستأجر" });
   } catch (err) { handleRouteError(err, res, "Delete tenant error:"); }
@@ -1630,7 +1630,7 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
       );
       journalEntryId = glResult.journalId;
     } catch (jErr) {
-      console.error("Rent payment journal entry failed:", jErr);
+      logger.error(jErr, "Rent payment journal entry failed:");
       throw new IntegrationError(
         "فشل قيد تحصيل الإيجار — لم يتم تسجيل السداد",
         { field: "journalEntry", fix: "راجع إعدادات التوجيه المحاسبي (rental_revenue / rental_cash_receipt) ثم أعد المحاولة" }
@@ -1657,13 +1657,13 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
       companyId: scope.companyId, userId: scope.userId,
       action: "rent_payment.received", entity: "rent_payments", entityId: Number(id),
       details: `تحصيل ${paidAmount} — JE ${journalEntryId ?? '-'}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "property_payments", entityId: Number(id),
       after: { paidAmount, method: b.method || 'bank_transfer', journalEntryId, status: row?.status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Record rent payment error:"); }
@@ -1726,7 +1726,7 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
               description: `إيجار متأخر ${lateDays} يوم - وحدة ${payment.unitNumber} - مبلغ ${payment.amount} ريال`,
               priority: "high",
             }
-          ).catch((e: unknown) => console.error("Property legal case creation error:", e));
+          ).catch((e: unknown) => logger.error(e, "Property legal case creation error:"));
 
           if (responsible) {
             createNotification({
@@ -1739,10 +1739,10 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
               refType: "legal_case",
               refId: payment.id,
               actionUrl: `/legal/cases`,
-            }).catch(console.error);
+            }).catch((e) => logger.error(e, "properties background task failed"));
           }
         } catch (legalErr) {
-          console.error("Failed to create legal case:", legalErr);
+          logger.error(legalErr, "Failed to create legal case:");
         }
       } else if (targetStage === 'penalty_applied') {
         const lateFee = Number(payment.amount) * 0.02;
@@ -1769,7 +1769,7 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
           [payment.contractId, payment.id, targetStage, action, `إيجار متأخر ${lateDays} يوم — المرحلة: ${targetStage}`]
         );
       } catch (logErr) {
-        console.error("Failed to log late_rent_action:", logErr);
+        logger.error(logErr, "Failed to log late_rent_action:");
       }
 
       if (payment.unitId) {
@@ -1781,7 +1781,7 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
             before: null,
             after: { stage: targetStage, lateDays, action, paymentId: payment.id, tenant: payment.tenantName, ...(financialMutation || {}) },
           });
-        } catch (auditErr) { console.error("Penalty audit log error:", auditErr); }
+        } catch (auditErr) { logger.error(auditErr, "Penalty audit log error:"); }
       }
 
       results.push({ paymentId: payment.id, tenant: payment.tenantName, unit: payment.unitNumber, lateDays, stage: targetStage, action, financialMutation });
@@ -1923,9 +1923,9 @@ router.post("/maintenance-requests", requirePermission("property:create"), async
             priority: autoPriority === 'critical' ? 'high' : 'normal',
             refType: "maintenance_requests",
             refId: insertId,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "properties background task failed"));
         }
-      } catch (notifErr) { console.error("Technician notification error:", notifErr); }
+      } catch (notifErr) { logger.error(notifErr, "Technician notification error:"); }
     }
 
     if (b.tenantPhone) {
@@ -1936,7 +1936,7 @@ router.post("/maintenance-requests", requirePermission("property:create"), async
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "maintenance_requests", entityId: insertId,
       after: { category: b.category, priority: autoPriority, assignedTo: assignedTechnicianId, isEmergency },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -1946,7 +1946,7 @@ router.post("/maintenance-requests", requirePermission("property:create"), async
       entity: "property_maintenance_requests",
       entityId: insertId,
       details: JSON.stringify({ unitId: b.unitId, category: b.category, priority: autoPriority, isEmergency, assignedTo: assignedTechnicianId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     try {
       let techAssignmentId = null;
@@ -1969,7 +1969,7 @@ router.post("/maintenance-requests", requirePermission("property:create"), async
           insertId,
         ]
       );
-    } catch (taskErr) { console.error("Auto-task creation failed:", taskErr); }
+    } catch (taskErr) { logger.error(taskErr, "Auto-task creation failed:"); }
 
     const [row] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json({
@@ -2030,7 +2030,7 @@ router.patch("/maintenance-requests/:id/approve", requirePermission("property:up
             `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('maintenance_request',$1,$2,$3,$4,$5)`,
             [id, newStatus, notes || null, scope.userId, scope.companyId]
           );
-        } catch (e) { console.error("Failed to log approval action:", e); }
+        } catch (e) { logger.error(e, "Failed to log approval action:"); }
       },
       notifications: mr.createdBy ? [{
         assignmentId: Number(mr.createdBy),
@@ -2136,7 +2136,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
           sourceType: "maintenance_requests",
           sourceId: id,
         }
-      ).catch(console.error);
+      ).catch((e) => logger.error(e, "properties background task failed"));
       try {
         await createAuditLog({
           companyId: scope.companyId,
@@ -2146,7 +2146,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
           entityId: id,
           after: { message: `تم طلب إنشاء فاتورة مسودة تلقائياً بقيمة ${cost.toFixed(2)} ريال`, ref },
         });
-      } catch (aErr) { console.error("Auto-invoice audit log failed:", aErr); }
+      } catch (aErr) { logger.error(aErr, "Auto-invoice audit log failed:"); }
     }
 
     if (mr.assignedTo) {
@@ -2158,7 +2158,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
         const newRating = Math.min(5, 3 + Math.log10(Number(completedCount[0]?.cnt || 1) + 1));
         await rawExecute(`UPDATE technicians SET rating=$1 WHERE id=$2`, [parseFloat(newRating.toFixed(2)), mr.assignedTo]);
       } catch (ratingErr) {
-        console.error("Failed to update technician rating:", ratingErr);
+        logger.error(ratingErr, "Failed to update technician rating:");
       }
     }
 
@@ -2195,9 +2195,9 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
             entityId: id,
             after: { message: `تم إنشاء مهمة متابعة رضا المستأجر تلقائياً`, taskId: followUpTaskId },
           });
-        } catch (auditErr) { console.error("Cross-module audit log failed:", auditErr); }
+        } catch (auditErr) { logger.error(auditErr, "Cross-module audit log failed:"); }
       }
-    } catch (taskErr) { console.error("Failed to create follow-up task:", taskErr); }
+    } catch (taskErr) { logger.error(taskErr, "Failed to create follow-up task:"); }
 
     logger.info({ maintenanceId: id, followUpTaskId, tenantName: mr.tenantName }, "Maintenance completed — follow-up survey task created");
 
@@ -2211,7 +2211,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
           entityId: mr.unitId,
           after: { message: `تم إتمام صيانة #${id} — ${mr.category || ""}`, maintenanceId: id, cost },
         });
-      } catch (e) { console.error("Unit audit log for maintenance completion failed:", e); }
+      } catch (e) { logger.error(e, "Unit audit log for maintenance completion failed:"); }
     }
 
     const [updated] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
@@ -2280,12 +2280,12 @@ router.post("/tenants", requirePermission("property:create"), async (req, res) =
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "tenants", entityId: insertId,
       after: { name: b.name, phone: b.phone ?? null, tenantType: b.tenantType ?? 'individual' },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "tenant.created", entity: "tenants", entityId: insertId,
       details: `مستأجر جديد: ${b.name}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create tenant error:"); }
 });
@@ -2435,12 +2435,12 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "property_buildings", entityId: insertId,
       after: { name: b.name, city: b.city ?? null, type: b.type ?? 'residential', ownerId: b.ownerId ?? null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "property.building.created", entity: "property_buildings", entityId: insertId,
       details: `مبنى جديد: ${b.name}${b.city ? ` — ${b.city}` : ''}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
     if (b.purchasePrice && Number(b.purchasePrice) > 0) {
       (async () => {
         try {
@@ -2463,15 +2463,15 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
               salvageValue: salvage,
               usefulLifeYears: usefulYears,
             }
-          ).catch((e: unknown) => console.error("Property asset registration error:", e));
+          ).catch((e: unknown) => logger.error(e, "Property asset registration error:"));
           createNotification({
             companyId: scope.companyId, assignmentId: scope.activeAssignmentId,
             type: "auto_journal", title: "قيد تلقائي — إثبات أصل عقاري",
             body: `تم إنشاء قيد محاسبي تلقائي لإثبات أصل المبنى "${b.name}" بقيمة ${Number(b.purchasePrice).toLocaleString("ar-SA")} ريال، وتسجيله كأصل ثابت يخضع للإهلاك`,
             priority: "normal", refType: "property_building", refId: insertId,
             actionUrl: `/properties/buildings`,
-          }).catch(console.error);
-        } catch (e) { console.error("Building asset JE/fixed-asset failed:", e); }
+          }).catch((e) => logger.error(e, "properties background task failed"));
+        } catch (e) { logger.error(e, "Building asset JE/fixed-asset failed:"); }
       })();
     }
     res.status(201).json(row);
@@ -2538,7 +2538,7 @@ router.patch("/buildings/:id", requirePermission("property:update"), async (req,
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -2549,7 +2549,7 @@ router.patch("/buildings/:id", requirePermission("property:update"), async (req,
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update building error:"); }
@@ -2587,13 +2587,13 @@ router.delete("/buildings/:id", requirePermission("property:delete"), async (req
       entityId: id,
       before: { name: existing.name },
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "property_buildings", entityId: id,
       after: { name: existing.name, deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.json({ message: "تم حذف المبنى" });
   } catch (err) { handleRouteError(err, res, "Delete building error:"); }
@@ -2644,13 +2644,13 @@ router.post("/maintenance", requirePermission("property:create"), async (req, re
       entity: "property_maintenance",
       entityId: insertId,
       details: JSON.stringify({ unitId: b.unitId, category: b.category || 'general', priority: b.priority || 'medium' }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "property_maintenance_requests", entityId: insertId,
       after: { unitId: b.unitId, category: b.category || 'general', description: b.description, priority: b.priority || 'medium' },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create property maintenance error:"); }
@@ -2803,7 +2803,7 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
       entity: "property_maintenance_requests",
       entityId: id,
       details: JSON.stringify({ status: b.status, category: b.category, priority: b.priority }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
     if (b.status === "completed" && existing.status !== "completed") {
       const updatedCost = Number(b.actualCost ?? existing.actualCost ?? 0);
       if (updatedCost > 0) {
@@ -2825,13 +2825,13 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
               sourceType: "maintenance_requests",
               sourceId: id,
             }
-          ).catch(console.error);
+          ).catch((e) => logger.error(e, "properties background task failed"));
           await createAuditLog({
             userId: scope.userId, entity: "maintenance_requests", entityId: id,
             action: "auto_invoice_requested", companyId: scope.companyId,
             before: null, after: { ref, amount: updatedCost + vatAmount },
           });
-        } catch (invErr) { console.error("PATCH completion invoice error:", invErr); }
+        } catch (invErr) { logger.error(invErr, "PATCH completion invoice error:"); }
 
         try {
           const { propertiesEngine } = await import("../lib/engines/index.js");
@@ -2839,7 +2839,7 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
             { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
             { id, propertyId: existing.unitId ? Number(existing.unitId) : 0, totalCost: updatedCost, type: existing.category }
           );
-        } catch (jeErr) { console.error("PATCH maintenance GL posting via engine failed:", jeErr); }
+        } catch (jeErr) { logger.error(jeErr, "PATCH maintenance GL posting via engine failed:"); }
       }
       try {
         await rawQuery<any>(
@@ -2852,7 +2852,7 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
           action: "auto_task", companyId: scope.companyId,
           before: null, after: { taskType: "tenant_satisfaction_followup", reason: "maintenance_completed" },
         });
-      } catch (taskErr) { console.error("PATCH completion follow-up task error:", taskErr); }
+      } catch (taskErr) { logger.error(taskErr, "PATCH completion follow-up task error:"); }
     }
     const [row] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1`, [id]);
     res.json(row);
@@ -2987,12 +2987,12 @@ router.post("/owners", requirePermission("property:create"), async (req, res) =>
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "property_owners", entityId: insertId,
       after: { name: b.name, ownerType: b.ownerType ?? 'individual', phone: b.phone ?? null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "property.owner.created", entity: "property_owners", entityId: insertId,
       details: `مالك جديد: ${b.name}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create owner error:"); }
 });
@@ -3033,7 +3033,7 @@ router.patch("/owners/:id", requirePermission("property:update"), async (req, re
       action: "update",
       entity: "property_owners",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -3042,7 +3042,7 @@ router.patch("/owners/:id", requirePermission("property:update"), async (req, re
       action: "property.owner.updated",
       entity: "property_owners",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update owner error:"); }
@@ -3090,13 +3090,13 @@ router.delete("/owners/:id", requirePermission("property:delete"), async (req, r
       entityId: id,
       before: { name: existing.name },
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "property_owners", entityId: id,
       after: { name: existing.name, deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.json({ message: "تم حذف المالك" });
   } catch (err) { handleRouteError(err, res, "Delete owner error:"); }
@@ -3147,7 +3147,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
           method: b.method,
           description: `تحصيل قسط إيجار #${existing.installmentNumber} / ${existing.tenantName || ''} / ${existing.unitNumber || ''}`,
         }
-      ).catch(console.error);
+      ).catch((e) => logger.error(e, "properties background task failed"));
     }
     const [row] = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE id=$1`, [installmentId]);
     emitEvent({
@@ -3158,13 +3158,13 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
       entity: "property_contracts",
       entityId: contractId,
       details: JSON.stringify({ installmentId, paidAmount, newStatus, receiptNumber, tenantName: existing.tenantName }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "property_payment_schedules", entityId: installmentId,
       after: { contractId, installmentId, paidAmount, newStatus, receiptNumber, method: b.method || 'bank_transfer' },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Pay installment error:"); }
@@ -3231,13 +3231,13 @@ router.post("/inspections", requirePermission("property:create"), async (req, re
       entity: "property_inspections",
       entityId: insertId,
       details: JSON.stringify({ unitId: b.unitId, type: b.type, scheduledDate: b.scheduledDate }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "property_inspections", entityId: insertId,
       after: { unitId: b.unitId, type: b.type, scheduledDate: b.scheduledDate, inspectorName: b.inspectorName },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create inspection error:"); }
@@ -3313,7 +3313,7 @@ router.patch("/inspections/:id", requirePermission("property:update"), async (re
         entity: "property_inspections",
         entityId: id,
         after: afterPatch,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "properties background task failed"));
 
       emitEvent({
         companyId: scope.companyId,
@@ -3323,7 +3323,7 @@ router.patch("/inspections/:id", requirePermission("property:update"), async (re
         entity: "property_inspections",
         entityId: id,
         after: afterPatch,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "properties background task failed"));
     }
 
     const [updatedInspection] = await rawQuery<any>(
@@ -3407,8 +3407,8 @@ router.post("/deposits", requirePermission("property:create"), async (req, res) 
         { id: insertId, contractId: Number(b.contractId), propertyId: 0, amount: Number(b.amount), type: "received" }
       );
     } catch (jErr) {
-      console.error("Deposit journal entry failed:", jErr);
-      await rawExecute(`DELETE FROM property_security_deposits WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]).catch(console.error);
+      logger.error(jErr, "Deposit journal entry failed:");
+      await rawExecute(`DELETE FROM property_security_deposits WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]).catch((e) => logger.error(e, "properties background task failed"));
       throw new IntegrationError(
         "تعذّر إنشاء القيد المحاسبي للوديعة — لم يتم تسجيل الوديعة",
         { field: "journalEntry", fix: "راجع إعدادات شجرة الحسابات (1100/2300) ثم أعد المحاولة" }
@@ -3419,12 +3419,12 @@ router.post("/deposits", requirePermission("property:create"), async (req, res) 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "property_security_deposits", entityId: insertId,
       after: { contractId: b.contractId, amount: b.amount, status: "held" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "deposit.received", entity: "property_security_deposits", entityId: insertId,
       details: `وديعة عقد #${b.contractId} بقيمة ${b.amount}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "properties background task failed"));
 
     const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1`, [insertId]);
     res.status(201).json(row);
@@ -3461,7 +3461,7 @@ router.patch("/deposits/:id/refund", requirePermission("property:update"), async
         { id: Number(id), contractId: deposit.contractId ? Number(deposit.contractId) : 0, propertyId: 0, amount: refundAmount, type: "refunded" }
       );
     } catch (jErr) {
-      console.error("Deposit refund journal entry failed:", jErr);
+      logger.error(jErr, "Deposit refund journal entry failed:");
       throw new IntegrationError(
         "تعذّر إنشاء القيد المحاسبي لإرجاع الوديعة — لم يتم تنفيذ الإرجاع",
         { field: "journalEntry", fix: "راجع إعدادات شجرة الحسابات (2300/1100) ثم أعد المحاولة" }

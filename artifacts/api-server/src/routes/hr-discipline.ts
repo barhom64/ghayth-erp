@@ -41,6 +41,7 @@ import {
   applyTransition,
   lifecycleErrorResponse,
 } from "../lib/lifecycleEngine.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -284,7 +285,7 @@ router.post("/regulation", requirePermission("hr:create"), async (req, res) => {
       entity: "hr_discipline_regulations",
       entityId: insertId,
       details: JSON.stringify({ section, articleNumber, title, severity: severity ?? "medium" }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-discipline background task failed"));
     res.status(201).json({ id: insertId });
   } catch (err) {
     handleRouteError(err, res, "Create regulation article error:");
@@ -332,7 +333,7 @@ router.patch("/regulation/:id", requirePermission("hr:update"), async (req, res)
       entity: "hr_discipline_regulations",
       entityId: id,
       details: JSON.stringify(body),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-discipline background task failed"));
     res.json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "Update regulation article error:");
@@ -353,12 +354,12 @@ router.post("/regulation/reseed", requirePermission("hr:create"), async (req, re
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "discipline_regulations", entityId: 0,
       after: { inserted },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-discipline background task failed"));
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "discipline_regulations.reseeded", entity: "discipline_regulations", entityId: 0,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-discipline background task failed"));
 
     res.json({ ok: true, inserted });
   } catch (err) {
@@ -389,7 +390,7 @@ router.delete("/regulation/:id", requirePermission("hr:delete"), async (req, res
       entity: "hr_discipline_regulations",
       entityId: id,
       details: JSON.stringify({ id }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-discipline background task failed"));
     res.json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "Delete regulation article error:");
@@ -551,19 +552,19 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
       priority: "high",
       refType: "hr_inquiry_memo",
       refId: memoId,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-discipline background task failed"));
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "hr.memo.created", entity: "hr_inquiry_memo", entityId: memoId,
       details: JSON.stringify({ memoNumber, incidentType, source: "manual" }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-discipline background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "discipline_memos", entityId: memoId,
       after: { memoNumber, incidentType, incidentDate, assignmentId, regulationId: resolvedRegulationId, source: "manual" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-discipline background task failed"));
 
     res.status(201).json({ id: memoId, memoNumber, regulationId: resolvedRegulationId, penaltyPreview });
   } catch (err) {
@@ -1061,12 +1062,12 @@ router.post("/penalty-preview", requirePermission("hr:read"), async (req, res) =
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "preview", entity: "discipline_regulations", entityId: assignmentId,
       after: { incidentType, incidentDate, assignmentId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-discipline background task failed"));
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "discipline_regulations.penalty_previewed", entity: "discipline_regulations", entityId: assignmentId,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-discipline background task failed"));
 
     res.json({ dailyWage, resolution });
   } catch (err) {
@@ -1173,7 +1174,7 @@ router.put("/auto-detection/settings", requirePermission("hr:update"), async (re
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "discipline.auto_detection_settings_updated", entity: "system_settings", entityId: 0,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-discipline background task failed"));
 
     const updated = await getAutoDetectionSettings(scope.companyId);
     res.json({ success: true, settings: updated });
@@ -1207,7 +1208,7 @@ router.post("/auto-detection/run", requirePermission("hr:update"), async (req, r
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "discipline.auto_detection_run", entity: "auto_detection_log", entityId: 0,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-discipline background task failed"));
 
     res.json(result);
   } catch (err) {

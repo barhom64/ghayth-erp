@@ -21,6 +21,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { hashPassword } from "../lib/auth.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
 
 const createEmployeeSchema = z.object({
   name: z.string().min(1),
@@ -135,7 +136,7 @@ async function registerEmployeeExpiryObligations(
         { hoursAfterDue: 0, notifyRole: "hr_manager" },
         { hoursAfterDue: 72, notifyRole: "general_manager" },
       ],
-    }).catch((e) => console.error(`Failed to register ${code} obligation for emp ${empId}:`, e));
+    }).catch((e) => logger.error(e, `Failed to register ${code} obligation for emp ${empId}:`));
   }
 }
 
@@ -517,7 +518,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
            VALUES ${valuesSql.join(",")}
            ON CONFLICT DO NOTHING`,
           params
-        ).catch(console.error);
+        ).catch((e) => logger.error(e, "employees background task failed"));
       }
 
       return { empId, assignmentId, finalEmpNumber, userId, tempPassword };
@@ -533,7 +534,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         type: "employee_created", title: "موظف جديد في فريقك",
         body: `تم إضافة الموظف ${name} (${finalEmpNumber}) إلى فريقك. يرجى متابعة مهام التهيئة.`,
         priority: "high", refType: "employee", refId: empId,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "employees background task failed"));
     }
     const [hrAssignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager') AND status = 'active' ORDER BY CASE role WHEN 'hr_manager' THEN 1 ELSE 2 END LIMIT 1`,
@@ -545,14 +546,14 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
       type: "employee_created", title: "تم إضافة موظف جديد — مطلوب متابعة HR",
       body: `تم إضافة الموظف ${name} برقم ${finalEmpNumber} بنجاح. تم إنشاء ${4} مهام تهيئة. يرجى مراجعة ملف الموظف.`,
       priority: "high", refType: "employee", refId: empId,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
     if (hrTargetId !== scope.activeAssignmentId) {
       createNotification({
         companyId: scope.companyId, assignmentId: scope.activeAssignmentId,
         type: "employee_created", title: "تم إضافة موظف جديد",
         body: `تم إضافة الموظف ${name} برقم ${finalEmpNumber} بنجاح.`,
         priority: "low", refType: "employee", refId: empId,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "employees background task failed"));
     }
 
     // ── Step 9: Welcome notification/email ──
@@ -561,7 +562,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
       type: "welcome", title: "مرحباً في فريق العمل",
       body: `أهلاً ${name}، رقمك الوظيفي ${finalEmpNumber}. يسعدنا انضمامك إلى الفريق. فترة التجربة: ${probationDays} يوم.`,
       priority: "normal", refType: "employee", refId: empId,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
     if (email) {
       rawExecute(
         `INSERT INTO email_queue ("companyId","toEmail","recipientName",subject,body,status,"createdAt","refType","refId")
@@ -569,7 +570,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         [scope.companyId, email, name, `مرحباً في فريق العمل - ${finalEmpNumber}`,
           `أهلاً ${name}،\n\nرقمك الوظيفي: ${finalEmpNumber}\nالمسمى الوظيفي: ${jobTitle}\nتاريخ الالتحاق: ${effectiveHireDate}\nفترة التجربة: ${probationDays} يوم\n\nيسعدنا انضمامك إلى الفريق.`,
           empId]
-      ).catch(console.error);
+      ).catch((e) => logger.error(e, "employees background task failed"));
     }
     if (email && tempPassword) {
       rawExecute(
@@ -578,7 +579,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         [scope.companyId, email, name, `بيانات الدخول إلى النظام - ${finalEmpNumber}`,
           `أهلاً ${name}،\n\nتم إنشاء حساب لك في نظام غيث ERP.\n\nالبريد الإلكتروني: ${email}\nكلمة المرور المؤقتة: ${tempPassword}\n\nيرجى تغيير كلمة المرور فور تسجيل الدخول الأول.\n\nهذه الرسالة تلقائية، يرجى عدم الرد عليها.`,
           empId]
-      ).catch(console.error);
+      ).catch((e) => logger.error(e, "employees background task failed"));
     }
 
     // ── Step 10: Event log ──
@@ -605,7 +606,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
     });
 
     // ── Step 12: Auto-create subsidiary accounting accounts ──
-    createSubsidiaryAccountsForEntity(scope.companyId, "employee", empId, name).catch(console.error);
+    createSubsidiaryAccountsForEntity(scope.companyId, "employee", empId, name).catch((e) => logger.error(e, "employees background task failed"));
 
     const [employee] = await rawQuery<any>(
       `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
@@ -654,7 +655,7 @@ router.get("/onboarding-tasks", requirePermission("hr:read"), async (req, res) =
       params
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) { console.error("Onboarding tasks error:", err); res.json({ data: [], total: 0 }); }
+  } catch (err) { logger.error(err, "Onboarding tasks error:"); res.json({ data: [], total: 0 }); }
 });
 
 router.patch("/onboarding-tasks/:id", requirePermission("hr:update"), async (req, res) => {
@@ -676,12 +677,12 @@ router.patch("/onboarding-tasks/:id", requirePermission("hr:update"), async (req
       companyId: scope.companyId, userId: scope.userId,
       action: "onboarding_task.updated", entity: "onboarding_tasks", entityId: Number(req.params.id),
       details: JSON.stringify({ status }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "onboarding_tasks", entityId: Number(req.params.id),
       after: { status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -1038,7 +1039,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
             `INSERT INTO salary_history ("employeeId","assignmentId","companyId","oldSalary","newSalary","effectiveDate","changedBy","createdAt")
              VALUES ($1,$2,$3,$4,$5,CURRENT_DATE,$6,NOW())`,
             [Number(id), employee.assignmentId, scope.companyId, oldSalary, newSalary, scope.activeAssignmentId]
-          ).catch(console.error);
+          ).catch((e) => logger.error(e, "employees background task failed"));
         }
       }
       if (branchId) { vals.push(branchId); fields.push(`"branchId" = $${vals.length}`); }
@@ -1099,7 +1100,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       before,
       after,
       reason: `حقول معدّلة: ${Object.keys(changedFields).join(", ") || "بلا تغيير"}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
 
     // Emit the canonical employee.updated event — the listener in
     // eventListeners.ts:82 already writes to event_logs + audit_logs but
@@ -1116,7 +1117,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       before,
       after,
       details: JSON.stringify({ changedFields }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
 
     res.json(after);
   } catch (err) {
@@ -1211,13 +1212,13 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       entityId: Number(id),
       before: { status: "active" },
       after: { status: "terminated", reason: reason || null, assignmentId: employee.assignmentId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "employees", entityId: Number(id),
       after: { reason: reason || null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
     res.json({ message: "تم إنهاء خدمة الموظف بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "Delete employee error:");
@@ -1259,12 +1260,12 @@ router.post("/obligations/seed", requirePermission("hr:update"), async (req, res
       companyId: scope.companyId, userId: scope.userId,
       action: "obligations.seeded", entity: "employees", entityId: 0,
       details: JSON.stringify({ scannedEmployees: emps.length, employeesProcessed: registered }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "obligations", entityId: 0,
       after: { scannedEmployees: emps.length, employeesProcessed: registered },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
     res.json({ scannedEmployees: emps.length, employeesProcessed: registered });
   } catch (err) { handleRouteError(err, res, "Seed HR obligations error:"); }
 });

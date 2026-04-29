@@ -12,6 +12,7 @@ import { createNotification, createAuditLog, emitEvent, getLegalResponsible, tod
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -176,7 +177,7 @@ router.post("/contracts", requirePermission("legal:create"), async (req, res) =>
       entity: "legal_contracts",
       entityId: insertId,
       after: { title: b.title, partyName: b.partyName, startDate: b.startDate, endDate: b.endDate, value: b.value },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -186,7 +187,7 @@ router.post("/contracts", requirePermission("legal:create"), async (req, res) =>
       entity: "legal_contracts",
       entityId: insertId,
       details: `عقد جديد: ${b.title} — ${b.partyName}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create legal contract error:"); }
@@ -322,7 +323,7 @@ router.patch("/contracts/:id", requirePermission("legal:write"), async (req, res
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -333,7 +334,7 @@ router.patch("/contracts/:id", requirePermission("legal:write"), async (req, res
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update contract error:"); }
@@ -360,7 +361,7 @@ router.delete("/contracts/:id", requirePermission("legal:delete"), async (req, r
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "legal_contracts", entityId: id,
       after: { title: existing.title, status: existing.status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -370,7 +371,7 @@ router.delete("/contracts/:id", requirePermission("legal:delete"), async (req, r
       entityId: id,
       before: { title: existing.title, status: existing.status },
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     res.json({ message: "تم حذف العقد بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete contract error:"); }
@@ -438,7 +439,7 @@ router.post("/contracts/:id/renew", requirePermission("legal:write"), async (req
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "legal_contracts", entityId: id,
       after: { newEndDate, newValue: newValue ?? current.value, renewalCount: (current.renewalCount ?? 0) + 1 },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -447,7 +448,7 @@ router.post("/contracts/:id/renew", requirePermission("legal:write"), async (req
       entity: "legal_contracts",
       entityId: id,
       details: JSON.stringify({ newEndDate, newValue, renewalCount: (current.renewalCount ?? 0) + 1 }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     res.json({ ...updated, event: "legal.contract.renewed" });
   } catch (err) {
@@ -492,7 +493,7 @@ router.post("/contracts/:id/terminate", requirePermission("legal:write"), async 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "legal_contracts", entityId: id,
       after: { status: "terminated", terminationReason: reason, terminationDate: effectiveDate ?? new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -501,7 +502,7 @@ router.post("/contracts/:id/terminate", requirePermission("legal:write"), async 
       entity: "legal_contracts",
       entityId: id,
       details: JSON.stringify({ reason, effectiveDate }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     res.json({ ...updated, event: "legal.contract.terminated" });
   } catch (err) {
@@ -569,13 +570,13 @@ router.post("/cases", requirePermission("legal:create"), async (req, res) => {
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "legal_cases", entityId: insertId,
       after: { title: b.title, caseType: b.caseType, status: 'open', priority: b.priority || 'medium', lawyerName },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "legal.case.created", entity: "legal_cases", entityId: insertId,
       details: `قضية جديدة: ${b.title || b.caseNumber || ''}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     // Notify the responsible lawyer so the case appears in their inbox.
     if (responsible) {
@@ -589,7 +590,7 @@ router.post("/cases", requirePermission("legal:create"), async (req, res) => {
         refType: "legal_case",
         refId: insertId,
         actionUrl: `/legal/cases/${insertId}`,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "legal background task failed"));
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
@@ -653,7 +654,7 @@ router.patch("/cases/:id", requirePermission("legal:write"), async (req, res) =>
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "legal_cases", entityId: id,
       before: { status: existing.status }, after: { status: b.status || existing.status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     // Lifecycle events + closure notification so no case ends silently.
     if (b.status !== undefined && b.status !== existing.status) {
@@ -662,7 +663,7 @@ router.patch("/cases/:id", requirePermission("legal:write"), async (req, res) =>
         action: `legal.case.${b.status}`, entity: "legal_cases", entityId: id,
         details: `القضية #${id} انتقلت من ${existing.status} إلى ${b.status}`,
         before: { status: existing.status }, after: { status: b.status },
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "legal background task failed"));
 
       if (b.status === 'closed') {
         const responsible = await getLegalResponsible(scope.companyId);
@@ -677,7 +678,7 @@ router.patch("/cases/:id", requirePermission("legal:write"), async (req, res) =>
             refType: "legal_case",
             refId: id,
             actionUrl: `/legal/cases/${id}`,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "legal background task failed"));
         }
       }
     }
@@ -708,7 +709,7 @@ router.delete("/cases/:id", requirePermission("legal:delete"), async (req, res) 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "legal_cases", entityId: id,
       after: { title: existing.title, status: existing.status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -718,7 +719,7 @@ router.delete("/cases/:id", requirePermission("legal:delete"), async (req, res) 
       entityId: id,
       before: { title: existing.title, status: existing.status },
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     res.json({ message: "تم حذف القضية بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete case error:"); }
@@ -822,9 +823,9 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
             priority: legalCase.priority === 'high' ? 'high' : 'normal',
             refType: "legal_sessions",
             refId: insertId,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "legal background task failed"));
         }
-      } catch (notifErr) { console.error("Lawyer notification error:", notifErr); }
+      } catch (notifErr) { logger.error(notifErr, "Lawyer notification error:"); }
     }
 
     if (legalCase.status === 'open') {
@@ -877,7 +878,7 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
           });
         }
       }
-    } catch (obErr) { console.error("Legal session obligation failed:", obErr); }
+    } catch (obErr) { logger.error(obErr, "Legal session obligation failed:"); }
 
     let invoiceId: number | null = null;
     let invoiceError: string | null = null;
@@ -907,7 +908,7 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
         );
         invoiceId = insertId;
       } catch (invoiceErr) {
-        console.error("Failed to request legal session invoice:", invoiceErr);
+        logger.error(invoiceErr, "Failed to request legal session invoice:");
         invoiceError = "فشل إنشاء فاتورة الأتعاب";
       }
 
@@ -918,7 +919,7 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
         );
         journalEntryId = glResult.journalId;
       } catch (glErr) {
-        console.error("Legal session fee GL failed:", glErr);
+        logger.error(glErr, "Legal session fee GL failed:");
       }
     }
 
@@ -926,7 +927,7 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "legal_case_sessions", entityId: insertId,
       after: { caseId, sessionDate: b.sessionDate, location: b.location, judge: b.judge },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -935,7 +936,7 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
       entity: "legal_sessions",
       entityId: insertId,
       details: JSON.stringify({ caseId, sessionDate: b.sessionDate, location: b.location, judge: b.judge }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     const [row] = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE id=$1`, [insertId]);
     res.status(201).json({ ...row, distanceToCourtKm, invoiceId, invoiceError, journalEntryId, calendarTaskCreated: !!legalCase.lawyerName });
@@ -990,7 +991,7 @@ router.post("/cases/:caseId/correspondence", requirePermission("legal:create"), 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "legal_case_correspondence", entityId: insertId,
       after: { caseId, direction: b.direction, subject: b.subject },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -999,7 +1000,7 @@ router.post("/cases/:caseId/correspondence", requirePermission("legal:create"), 
       entity: "legal_case_correspondence",
       entityId: insertId,
       details: JSON.stringify({ caseId, direction: b.direction, subject: b.subject }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create correspondence error:"); }
@@ -1034,14 +1035,14 @@ router.post("/cases/:caseId/costs", requirePermission("legal:create"), async (re
         { caseId, amount: b.amount, type: b.type },
       );
     } catch (glErr) {
-      console.error("Legal case cost GL error:", glErr);
+      logger.error(glErr, "Legal case cost GL error:");
     }
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "legal_case_costs", entityId: caseId,
       after: { caseId, amount: b.amount, type: b.type, notes: b.notes },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -1051,7 +1052,7 @@ router.post("/cases/:caseId/costs", requirePermission("legal:create"), async (re
       entity: "legal_cases",
       entityId: caseId,
       details: `مصروف قانوني: ${b.type} — ${b.amount.toLocaleString()} ريال — قضية #${caseId}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     const [updated] = await rawQuery<any>(
       `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -1147,7 +1148,7 @@ router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async
         entityId: insertId,
         details: `حكم بقضية ${lc.title}: ${b.verdict || ""} — ${b.amount || 0} ريال`,
       });
-    } catch (obErr) { console.error("Legal judgment obligation failed:", obErr); }
+    } catch (obErr) { logger.error(obErr, "Legal judgment obligation failed:"); }
 
     if (b.amount && Number(b.amount) > 0) {
       const { legalEngine } = await import("../lib/engines/index.js");
@@ -1155,14 +1156,14 @@ router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async
       legalEngine.postSettlementGL(
         { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
         { caseId, amount: Number(b.amount), isInFavor },
-      ).catch((e: unknown) => console.error("Legal settlement GL error:", e));
+      ).catch((e: unknown) => logger.error(e, "Legal settlement GL error:"));
     }
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "legal_case_judgments", entityId: insertId,
       after: { caseId, judgmentDate: b.judgmentDate, judgmentType: b.judgmentType, verdict: b.verdict, amount: b.amount },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1`, [insertId]);
     res.status(201).json(row);
@@ -1212,14 +1213,14 @@ router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), a
         "legal_case",
         caseId,
         "payment"
-      ).catch(console.error);
+      ).catch((e) => logger.error(e, "legal background task failed"));
     }
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "legal_case_judgments", entityId: id,
       after: { caseId, paidAmount: b.paidAmount, verdict: b.verdict, dueDate: b.dueDate },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1228,7 +1229,7 @@ router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), a
       entity: "legal_judgments",
       entityId: id,
       details: JSON.stringify({ caseId, paidAmount: b.paidAmount, verdict: b.verdict, dueDate: b.dueDate }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update judgment error:"); }
@@ -1273,7 +1274,7 @@ router.patch("/cases/:id/financial-risk", requirePermission("legal:write"), asyn
       entityId: id,
       before: { financialRisk: existing.financialRisk, riskLevel: existing.riskLevel },
       after: { financialRisk: financialRisk || 0, riskLevel: riskLevel || 'medium' },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -1283,7 +1284,7 @@ router.patch("/cases/:id/financial-risk", requirePermission("legal:write"), asyn
       entity: "legal_cases",
       entityId: id,
       details: JSON.stringify({ financialRisk: financialRisk || 0, riskLevel: riskLevel || 'medium' }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "legal background task failed"));
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Financial risk update error:"); }

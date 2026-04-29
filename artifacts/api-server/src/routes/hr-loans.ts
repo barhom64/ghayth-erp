@@ -29,6 +29,7 @@ import { submitWorkflow } from "../lib/workflowEngine.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { generateSequentialNumber, nextPeriod as nextPeriodHelper, advancePeriod as advancePeriodHelper } from "../lib/hrHelpers.js";
 import { HR_TABLES, NUMBER_PREFIXES, LOAN_STATUS } from "../lib/hrEnums.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -59,7 +60,7 @@ async function ensureLoanTables(): Promise<void> {
       "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
       "deletedAt" TIMESTAMPTZ
     )
-  `).catch(console.error);
+  `).catch((e) => logger.error(e, "hr-loans background task failed"));
 
   await rawExecute(`
     CREATE TABLE IF NOT EXISTS hr_loan_installments (
@@ -75,7 +76,7 @@ async function ensureLoanTables(): Promise<void> {
       "payrollLineId" INTEGER,
       "createdAt" TIMESTAMPTZ DEFAULT NOW()
     )
-  `).catch(console.error);
+  `).catch((e) => logger.error(e, "hr-loans background task failed"));
 }
 
 // ─── رقم السلفة المتسلسل (يستخدم الأداة الموحّدة من hrHelpers) ──────────
@@ -290,7 +291,7 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
       submittedBy: scope.activeAssignmentId,
       submittedByName: scope.userName,
       data: { loanNumber, amount, installmentCount, loanType: b.loanType },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
     // ── إشعار المدير (fallback إذا لم توجد سلسلة) ──
     if (!approvalResult?.requiresApproval) {
@@ -301,7 +302,7 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
           type: "loan_request", title: "طلب سلفة جديد",
           body: `طلب سلفة بمبلغ ${amount.toLocaleString()} ريال — ${loanNumber}`,
           priority: "high", refType: "hr_employee_loan", refId: insertId,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "hr-loans background task failed"));
       }
     }
 
@@ -318,7 +319,7 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
       entity: "hr_employee_loans",
       entityId: insertId,
       details: JSON.stringify({ loanNumber, amount, installmentCount, assignmentId: b.assignmentId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
     res.status(201).json({
       id: insertId, loanNumber,
@@ -368,13 +369,13 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
         companyId: scope.companyId, branchId: scope.branchId,
         refType: "hr_employee_loan", refId: loan.id,
         approved: false, decidedBy: scope.activeAssignmentId, reason: rejectionReason,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr-loans background task failed"));
       createNotification({
         companyId: scope.companyId, assignmentId: loan.assignmentId,
         type: "loan_rejected", title: "تم رفض طلب السلفة",
         body: `تم رفض السلفة ${loan.loanNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
         priority: "normal", refType: "hr_employee_loan", refId: loan.id,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr-loans background task failed"));
       emitEvent({
         companyId: scope.companyId,
         branchId: scope.branchId,
@@ -383,7 +384,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
         entity: "hr_employee_loans",
         entityId: loan.id,
         details: JSON.stringify({ loanNumber: loan.loanNumber, reason: rejectionReason }),
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr-loans background task failed"));
       res.json({ success: true, message: "تم رفض السلفة" });
       return;
     }
@@ -438,14 +439,14 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
     hrEngine.postLoanDisbursementGL(
       { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
       { id: loan.id, employeeId: loan.employeeId, amount: Number(loan.amount) },
-    ).catch((e: unknown) => console.error("Loan disbursement GL error:", e));
+    ).catch((e: unknown) => logger.error(e, "Loan disbursement GL error:"));
 
     createNotification({
       companyId: scope.companyId, assignmentId: loan.assignmentId,
       type: "loan_approved", title: "تمت الموافقة على سلفتك",
       body: `تمت الموافقة على السلفة ${loan.loanNumber} بمبلغ ${Number(loan.amount).toLocaleString()} ريال — سيبدأ الخصم من فترة ${loan.startDeductionPeriod}`,
       priority: "high", refType: "hr_employee_loan", refId: loan.id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
     await createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
@@ -460,7 +461,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
       entity: "hr_employee_loans",
       entityId: loan.id,
       details: JSON.stringify({ loanNumber: loan.loanNumber, amount: loan.amount, installmentCount: loan.installmentCount }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
     res.json({ success: true, message: "تم اعتماد السلفة وتوليد جدول الأقساط" });
   } catch (err) {
@@ -497,7 +498,7 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
       approved: false,
       decidedBy: scope.activeAssignmentId,
       reason: b.reason,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
     await rawExecute(
       `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3`,
@@ -509,7 +510,7 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
       type: "loan_rejected", title: "تم رفض طلب السلفة",
       body: `تم رفض السلفة ${loan.loanNumber}${b.reason ? " — السبب: " + b.reason : ""}`,
       priority: "normal", refType: "hr_employee_loan", refId: loan.id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-loans background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -518,12 +519,12 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
       entity: "hr_employee_loans",
       entityId: loan.id,
       details: JSON.stringify({ loanNumber: loan.loanNumber, reason: b.reason }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-loans background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "hr_employee_loans", entityId: Number(req.params.id),
       after: { status: "rejected", rejectionReason: b.reason || null, loanNumber: loan.loanNumber },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
     res.json({ success: true });
   } catch (err) {

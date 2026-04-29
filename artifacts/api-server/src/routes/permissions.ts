@@ -5,6 +5,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
 import { auditLog } from "../lib/audit.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -151,8 +152,8 @@ router.post("/role-permissions", requirePermission("admin:write"), requirePermis
 
     invalidatePermissionCache(role, scope.companyId);
     await auditLog(req, "role_permissions", scope.companyId, "create", null, { role, permission, companyId: scope.companyId });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "role_permissions", entityId: scope.companyId, after: { role, permission } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "permissions.role_permission.created", entity: "role_permissions", entityId: scope.companyId, details: JSON.stringify({ role, permission }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "role_permissions", entityId: scope.companyId, after: { role, permission } }).catch((e) => logger.error(e, "permissions background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "permissions.role_permission.created", entity: "role_permissions", entityId: scope.companyId, details: JSON.stringify({ role, permission }) }).catch((e) => logger.error(e, "permissions background task failed"));
     res.status(201).json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Add role permission error:");
@@ -175,8 +176,8 @@ router.delete("/role-permissions", requirePermission("admin:write"), requirePerm
     );
     invalidatePermissionCache(role, scope.companyId);
     await auditLog(req, "role_permissions", scope.companyId, "delete", { role, permission }, null);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "role_permissions", entityId: scope.companyId, before: before ?? { role, permission } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "permissions.role_permission.deleted", entity: "role_permissions", entityId: scope.companyId, details: JSON.stringify({ role, permission }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "role_permissions", entityId: scope.companyId, before: before ?? { role, permission } }).catch((e) => logger.error(e, "permissions background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "permissions.role_permission.deleted", entity: "role_permissions", entityId: scope.companyId, details: JSON.stringify({ role, permission }) }).catch((e) => logger.error(e, "permissions background task failed"));
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete role permission error:");
@@ -218,8 +219,8 @@ router.post("/user-permissions", requirePermission("admin:write"), requirePermis
     );
 
     await auditLog(req, "permissions", userId, "create", null, { userId, permission, type, companyId: scope.companyId });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "permissions", entityId: userId, after: { userId, permission, type } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "permissions.user_permission.created", entity: "permissions", entityId: userId, details: JSON.stringify({ userId, permission, type }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "permissions", entityId: userId, after: { userId, permission, type } }).catch((e) => logger.error(e, "permissions background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "permissions.user_permission.created", entity: "permissions", entityId: userId, details: JSON.stringify({ userId, permission, type }) }).catch((e) => logger.error(e, "permissions background task failed"));
     res.status(201).json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Add user permission error:");
@@ -241,8 +242,8 @@ router.delete("/user-permissions", requirePermission("admin:write"), requirePerm
       [userId, permission, scope.companyId]
     );
     await auditLog(req, "permissions", userId, "delete", { userId, permission }, null);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "permissions", entityId: userId, before: before ?? { userId, permission } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "permissions.user_permission.deleted", entity: "permissions", entityId: userId, details: JSON.stringify({ userId, permission }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "permissions", entityId: userId, before: before ?? { userId, permission } }).catch((e) => logger.error(e, "permissions background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "permissions.user_permission.deleted", entity: "permissions", entityId: userId, details: JSON.stringify({ userId, permission }) }).catch((e) => logger.error(e, "permissions background task failed"));
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete user permission error:");

@@ -12,6 +12,7 @@ import { checkFinancialPeriodOpen, emitEvent, createAuditLog, todayISO, toDateIS
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
+import { logger } from "../lib/logger.js";
 
 export const accountsRouter = Router();
 accountsRouter.use(authMiddleware);
@@ -100,7 +101,7 @@ accountsRouter.post("/accounts", requirePermission("finance:create"), async (req
       entity: "chart_of_accounts",
       entityId: row.id,
       after: { code: b.code, name: b.name, type: b.type },
-    }).catch((err) => console.error("[audit] account.created:", err));
+    }).catch((err) => logger.error(err, "[audit] account.created:"));
 
     res.status(201).json({ id: row.id, ...b });
   } catch (err) {
@@ -146,7 +147,7 @@ accountsRouter.patch("/accounts/:id", requirePermission("finance:update"), async
       entity: "chart_of_accounts",
       entityId: id,
       after: { fields: Object.keys(b) },
-    }).catch((err) => console.error("[audit] account.updated:", err));
+    }).catch((err) => logger.error(err, "[audit] account.updated:"));
 
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update account error:"); }
@@ -204,7 +205,7 @@ accountsRouter.delete("/accounts/:id", requirePermission("finance:delete"), asyn
       entity: "chart_of_accounts",
       entityId: accountId,
       after: { code: existing.code, name: existing.name, hardDelete: true },
-    }).catch((err) => console.error("[audit] account.deleted:", err));
+    }).catch((err) => logger.error(err, "[audit] account.deleted:"));
 
     res.json({ message: "تم حذف الحساب" });
   } catch (err) { handleRouteError(err, res, "Delete account error:"); }
@@ -284,7 +285,7 @@ accountsRouter.post("/journal", requirePermission("finance:create"), async (req,
       entity: "journal_entries",
       entityId: journalId,
       after: { ref, lineCount: lines.length, date: journalDate },
-    }).catch((err) => console.error("[audit] journal.created:", err));
+    }).catch((err) => logger.error(err, "[audit] journal.created:"));
 
     res.status(201).json({ id: journalId, ref, description, lines });
   } catch (err) {

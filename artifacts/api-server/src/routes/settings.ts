@@ -14,6 +14,7 @@ import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { reloadCronScheduler } from "../lib/cronScheduler.js";
 import { bootstrapCompany } from "../lib/companyBootstrap.js";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
 
 /* ── Zod Schemas ────────────────────────────────────────────── */
 
@@ -170,8 +171,8 @@ router.put("/", requirePermission("settings:write"), async (req, res) => {
       companyId: scope.companyId, userId: scope.userId, action: "update_setting",
       entity: "settings", entityId: scopeId ?? 0,
       after: { scope: requestedScope, scopeId, key, value },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: scopeId ?? 0, details: JSON.stringify({ key }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: scopeId ?? 0, details: JSON.stringify({ key }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Upsert setting error:");
@@ -204,8 +205,8 @@ router.delete("/", requirePermission("settings:write"), async (req, res) => {
       companyId: scope.companyId, userId: scope.userId, action: "delete_setting",
       entity: "settings", entityId: scopeId ?? 0,
       before: { scope: requestedScope, scopeId, key },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: scopeId ?? 0, details: JSON.stringify({ key }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: scopeId ?? 0, details: JSON.stringify({ key }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete setting error:");
@@ -274,15 +275,15 @@ router.put("/general", requirePermission("settings:write"), async (req, res) => 
       }
     }
     if (hasTimezoneChange) {
-      reloadCronScheduler().catch((err) => console.error("[SETTINGS] Failed to reload cron after timezone change:", err));
+      reloadCronScheduler().catch((err) => logger.error(err, "[SETTINGS] Failed to reload cron after timezone change:"));
     }
     const scope = req.scope!;
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_general_settings",
       entity: "system_settings", entityId: 0,
       after: { keys: Object.keys(entries) },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "general_settings" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "general_settings" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -359,8 +360,8 @@ router.post("/branches", requirePermission("settings:write"), async (req, res) =
       companyId: scope.companyId, userId: scope.userId, action: "create_branch",
       entity: "branches", entityId: r.insertId,
       after: { name, nameEn, city, phone, companyId: targetCompanyId },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "branch" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "branch" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.status(201).json({ id: r.insertId, companyId: targetCompanyId, ...req.body });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -396,8 +397,8 @@ router.put("/branches/:id", requirePermission("settings:write"), async (req, res
       companyId: scope.companyId, userId: scope.userId, action: "update_branch",
       entity: "branches", entityId: id,
       before: existing, after: req.body,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: id, details: JSON.stringify({ key: "branch" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: id, details: JSON.stringify({ key: "branch" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json(updated);
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -434,8 +435,8 @@ router.delete("/branches/:id", requirePermission("settings:write"), async (req, 
       companyId: scope.companyId, userId: scope.userId, action: "delete_branch",
       entity: "branches", entityId: branchId,
       before: beforeBranch,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: branchId, details: JSON.stringify({ key: "branch" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: branchId, details: JSON.stringify({ key: "branch" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -452,8 +453,8 @@ router.post("/departments", requirePermission("settings:write"), async (req, res
       companyId: scope.companyId, userId: scope.userId, action: "create_department",
       entity: "departments", entityId: r.insertId,
       after: { name, nameEn, manager },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "department" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "department" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.status(201).json({ id: r.insertId, ...req.body });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -471,8 +472,8 @@ router.put("/departments/:id", requirePermission("settings:write"), async (req, 
       companyId: scope.companyId, userId: scope.userId, action: "update_department",
       entity: "departments", entityId: Number(id),
       after: { name, manager },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "department" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "department" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -495,8 +496,8 @@ router.delete("/departments/:id", requirePermission("settings:write"), async (re
       companyId: scope.companyId, userId: scope.userId, action: "delete_department",
       entity: "departments", entityId: Number(id),
       before: beforeDept,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "department" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "department" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -525,9 +526,9 @@ router.post("/companies", requirePermission("settings:write"), async (req, res) 
         entity: "companies",
         entityId: companyId,
         details: JSON.stringify({ name, nameEn, taxNumber, crNumber, branchId }),
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "settings background task failed"));
     } catch (bootstrapErr: any) {
-      console.error("[CompanyBootstrap] Partial failure, cleaning up company:", bootstrapErr);
+      logger.error(bootstrapErr, "[CompanyBootstrap] Partial failure, cleaning up company:");
       try {
         await rawExecute(`DELETE FROM companies WHERE id = $1`, [companyId]);
       } catch (_cleanupErr) {}
@@ -539,8 +540,8 @@ router.post("/companies", requirePermission("settings:write"), async (req, res) 
       companyId: scope.companyId, userId: scope.userId, action: "create_company",
       entity: "companies", entityId: companyId,
       after: { name, nameEn, taxNumber, crNumber, branchId },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: companyId, details: JSON.stringify({ key: "company" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: companyId, details: JSON.stringify({ key: "company" }) }).catch((e) => logger.error(e, "settings background task failed"));
 
     res.status(201).json({
       id: companyId,
@@ -577,8 +578,8 @@ router.put("/companies/:id", requirePermission("settings:write"), async (req, re
       companyId: scope.companyId, userId: scope.userId, action: "update_company",
       entity: "companies", entityId: Number(id),
       after: { name, nameEn, taxNumber, crNumber },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "company" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "company" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -593,8 +594,8 @@ router.delete("/companies/:id", requirePermission("settings:write"), async (req,
       companyId: scope.companyId, userId: scope.userId, action: "delete_company",
       entity: "companies", entityId: Number(id),
       before: beforeCompany,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "company" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "company" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -641,8 +642,8 @@ router.put("/system-controls", requirePermission("settings:write"), async (req, 
       companyId: scope.companyId, userId: scope.userId, action: "update_system_controls",
       entity: "settings", entityId: 0,
       after: { keys: Object.keys(entries) },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "system_controls" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "system_controls" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -686,8 +687,8 @@ router.put("/role-modules/:roleKey", requirePermission("settings:write"), async 
       companyId: scope.companyId, userId: scope.userId, action: "update_role_modules",
       entity: "user_roles", entityId: 0,
       after: { roleKey, modules },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "role_modules" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "role_modules" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -718,8 +719,8 @@ router.post("/approval-config", requirePermission("settings:write"), async (req,
       companyId: scope.companyId, userId: scope.userId, action: "create_approval_config",
       entity: "approval_chains", entityId: r.insertId,
       after: { chainType, name, minAmount, maxAmount, isActive },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "approval_config" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "approval_config" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -734,8 +735,8 @@ router.delete("/approval-config/:id", requirePermission("settings:write"), async
       companyId: scope.companyId, userId: scope.userId, action: "delete_approval_config",
       entity: "approval_chains", entityId: Number(req.params.id),
       before: beforeChain,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: Number(req.params.id), details: JSON.stringify({ key: "approval_config" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: Number(req.params.id), details: JSON.stringify({ key: "approval_config" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -821,8 +822,8 @@ router.put("/channels", requirePermission("settings:write"), async (req, res) =>
       companyId: scope.companyId, userId: scope.userId, action: "update_channels",
       entity: "settings", entityId: 0,
       after: { keys: Object.keys(entries) },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "channels" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "channels" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });

@@ -24,6 +24,7 @@ import {
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { logger } from "../lib/logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ZOD VALIDATION SCHEMAS
@@ -273,7 +274,7 @@ router.post("/impact-preview", requirePermission("projects:read"), async (req, r
       entity: "projects",
       entityId: 0,
       after: { managerId, budget, startDate, endDate, type },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -283,7 +284,7 @@ router.post("/impact-preview", requirePermission("projects:read"), async (req, r
       entity: "projects",
       entityId: 0,
       after: { managerId, budget, startDate, endDate, type },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     res.json({
       actionType: "create_project",
@@ -455,7 +456,7 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
       entity: "projects",
       entityId: insertId,
       after: { name: b.name, clientId: b.clientId, budget: b.budget, status: b.status || 'planning' },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     // Register delivery obligation for the project's endDate
     if (b.endDate) {
@@ -478,7 +479,7 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
             ],
           });
         }
-      } catch (obErr) { console.error("Project delivery obligation failed:", obErr); }
+      } catch (obErr) { logger.error(obErr, "Project delivery obligation failed:"); }
     }
 
     await emitEvent({
@@ -488,7 +489,7 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
       entity: "projects",
       entityId: insertId,
       details: `إنشاء مشروع ${b.name}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create project error:"); }
@@ -664,7 +665,7 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -675,7 +676,7 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update project error:"); }
@@ -714,7 +715,7 @@ router.delete("/:id", requirePermission("projects:delete"), async (req, res) => 
       entity: "projects",
       entityId: id,
       after: { name: existing.name, status: existing.status, deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -725,7 +726,7 @@ router.delete("/:id", requirePermission("projects:delete"), async (req, res) => 
       entityId: id,
       before: { name: existing.name, status: existing.status },
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     res.json({ message: "تم حذف المشروع بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete project error:"); }
@@ -757,7 +758,7 @@ router.post("/:id/phases", requirePermission("projects:create"), async (req, res
       entity: "project_phases",
       entityId: insertId,
       after: { projectId, name: b.name.trim(), orderIndex: b.orderIndex || 0 },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -767,7 +768,7 @@ router.post("/:id/phases", requirePermission("projects:create"), async (req, res
       entity: "project_phases",
       entityId: insertId,
       after: { projectId, name: b.name.trim() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create phase error:"); }
@@ -812,7 +813,7 @@ router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update
       entityId: phaseId,
       before: { status: phase.status ?? "pending" },
       after: { status: "completed" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     let milestoneInvoiceCreated = false;
     if (project?.clientId) {
@@ -841,7 +842,7 @@ router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update
         );
         milestoneInvoiceCreated = true;
       } catch (milestoneInvoiceErr) {
-        console.error("Failed to create milestone invoice for phase", phaseId, milestoneInvoiceErr);
+        logger.error({ err: phaseId, detail: milestoneInvoiceErr }, "Failed to create milestone invoice for phase");
       }
     }
 
@@ -906,7 +907,7 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
           params
         );
       } catch (depErr) {
-        console.error(`Failed to create task dependencies for ${insertId}:`, depErr);
+        logger.error(depErr, `Failed to create task dependencies for ${insertId}:`);
       }
 
       const placeholders = b.dependsOn.map((_: any, i: number) => `$${i + 1}`).join(',');
@@ -937,7 +938,7 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
           priority: "normal",
           refType: "project_tasks",
           refId: insertId,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "projects background task failed"));
       }
     }
 
@@ -949,7 +950,7 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
       entity: "project_tasks",
       entityId: insertId,
       after: { title: b.title, projectId, assigneeId: b.assigneeId, priority: b.priority },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -959,7 +960,7 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
       entity: "project_tasks",
       entityId: insertId,
       details: JSON.stringify({ projectId, title: b.title, assigneeId: b.assigneeId, priority: b.priority }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create project task error:"); }
@@ -1042,7 +1043,7 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
       entityId: taskId,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -1053,7 +1054,7 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
       entityId: taskId,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     const [task] = await rawQuery<any>(`SELECT * FROM project_tasks WHERE id=$1`, [taskId]);
 
@@ -1110,9 +1111,9 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
                 priority: "normal",
                 refType: "project_tasks",
                 refId: t.id,
-              }).catch(console.error);
+              }).catch((e) => logger.error(e, "projects background task failed"));
             }
-          } catch (e) { console.error("Unlock notification error:", e); }
+          } catch (e) { logger.error(e, "Unlock notification error:"); }
         }
       }
     }
@@ -1143,7 +1144,7 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
             priority: pct >= 100 ? "urgent" : "high",
             refType: "project",
             refId: project.id,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "projects background task failed"));
         }
       }
 
@@ -1167,7 +1168,7 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
             priority: "high",
             refType: "project",
             refId: project.id,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "projects background task failed"));
         }
       }
     }
@@ -1394,7 +1395,7 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
           ],
         });
       }
-    } catch (obErr) { console.error("Milestone obligation failed:", obErr); }
+    } catch (obErr) { logger.error(obErr, "Milestone obligation failed:"); }
 
     createAuditLog({
       companyId: scope.companyId,
@@ -1404,7 +1405,7 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
       entity: "project_milestones",
       entityId: insertId,
       after: { projectId, title: b.title, targetDate: b.targetDate },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -1414,7 +1415,7 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
       entity: "project_milestones",
       entityId: insertId,
       details: JSON.stringify({ projectId, title: b.title, targetDate: b.targetDate }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     const [row] = await rawQuery<any>(`SELECT * FROM project_milestones WHERE id=$1`, [insertId]);
     res.status(201).json(row);
@@ -1479,7 +1480,7 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
     if (rows.length === 0) throw new NotFoundError("المرحلة غير موجودة");
 
     if (b.status === 'completed') {
-      await markObligationMet(scope.companyId, "project_milestone", id, "delivery").catch(console.error);
+      await markObligationMet(scope.companyId, "project_milestone", id, "delivery").catch((e) => logger.error(e, "projects background task failed"));
     }
 
     createAuditLog({
@@ -1490,7 +1491,7 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
       entity: "project_milestones",
       entityId: id,
       after: { title: b.title, status: b.status, targetDate: b.targetDate },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -1500,7 +1501,7 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
       entity: "project_milestones",
       entityId: id,
       details: JSON.stringify({ title: b.title, status: b.status, targetDate: b.targetDate }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update milestone error:"); }
@@ -1555,7 +1556,7 @@ router.post("/:id/risks", requirePermission("projects:create"), async (req, res)
       entity: "project_risks",
       entityId: insertId,
       after: { projectId, title: b.title, riskScore, riskLevel },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -1565,7 +1566,7 @@ router.post("/:id/risks", requirePermission("projects:create"), async (req, res)
       entity: "project_risks",
       entityId: insertId,
       details: JSON.stringify({ projectId, title: b.title, riskScore, riskLevel }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create risk error:"); }
@@ -1644,7 +1645,7 @@ router.patch("/risks/:riskId", requirePermission("projects:update"), async (req,
       entity: "project_risks",
       entityId: id,
       after: { title: b.title, status: b.status, probability: b.probability, impact: b.impact },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -1654,7 +1655,7 @@ router.patch("/risks/:riskId", requirePermission("projects:update"), async (req,
       entity: "project_risks",
       entityId: id,
       details: JSON.stringify({ title: b.title, status: b.status, probability: b.probability, impact: b.impact }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update risk error:"); }
@@ -1708,7 +1709,7 @@ router.post("/:id/resources", requirePermission("projects:create"), async (req, 
       entity: "project_resources",
       entityId: insertId,
       after: { projectId, employeeId: b.employeeId, role: b.role },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -1718,7 +1719,7 @@ router.post("/:id/resources", requirePermission("projects:create"), async (req, 
       entity: "project_resources",
       entityId: insertId,
       details: JSON.stringify({ projectId, employeeId: b.employeeId, role: b.role }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create resource error:"); }
@@ -1809,7 +1810,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
               ` [GL skipped: الفترة المالية "${period.periodName ?? ""}" مغلقة]`,
               insertId,
             ]
-          ).catch(console.error);
+          ).catch((e) => logger.error(e, "projects background task failed"));
         } else {
           const { projectsEngine } = await import("../lib/engines/index.js");
           const glResult = await projectsEngine.postProjectCostGL(
@@ -1820,10 +1821,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
         }
       }
     } catch (glErr) {
-      console.error(
-        `[projects-gl] journal entry failed for project cost ${insertId}:`,
-        glErr
-      );
+      logger.error(glErr, `[projects-gl] journal entry failed for project cost ${insertId}:`);
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM project_costs WHERE id=$1`, [insertId]);
@@ -1836,7 +1834,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
       entity: "project_costs",
       entityId: insertId,
       after: { projectId, description: b.description, amount: b.amount, category: b.category },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -1846,7 +1844,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
       entity: "project_costs",
       entityId: insertId,
       details: JSON.stringify({ projectId, description: b.description, amount: b.amount, category: b.category }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     res.status(201).json({ ...row, journalEntryId });
   } catch (err) { handleRouteError(err, res, "Create project cost error:"); }
@@ -1892,10 +1890,7 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
           journalEntryId = glResult.journalId;
         }
       } catch (glErr) {
-        console.error(
-          `[projects-gl] WIP→COGS journal entry failed for project ${projectId}:`,
-          glErr
-        );
+        logger.error(glErr, `[projects-gl] WIP→COGS journal entry failed for project ${projectId}:`);
       }
     }
 
@@ -1934,7 +1929,7 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
       entity: "projects",
       entityId: projectId,
       after: { status: "completed", totalWip, journalEntryId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -1944,7 +1939,7 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
       entity: "projects",
       entityId: projectId,
       after: { status: "completed", totalWip, journalEntryId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "projects background task failed"));
 
     // Cancel all outstanding delivery/milestone obligations for this project
     // (runs after the transition commits so a failure here doesn't undo the
@@ -1956,10 +1951,10 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
         [projectId, scope.companyId]
       );
       for (const m of msRows) {
-        await cancelObligation(scope.companyId, "project_milestone", m.id).catch(console.error);
+        await cancelObligation(scope.companyId, "project_milestone", m.id).catch((e) => logger.error(e, "projects background task failed"));
       }
     } catch (obErr) {
-      console.error(`[projects] cancel obligations on close failed for project ${projectId}:`, obErr);
+      logger.error(obErr, `[projects] cancel obligations on close failed for project ${projectId}:`);
     }
 
     // Notify the project team that the project is closed.
@@ -1993,10 +1988,10 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
           priority: "normal",
           refType: "project",
           refId: projectId,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "projects background task failed"));
       }
     } catch (notifyErr) {
-      console.error(`[projects] notify team on close failed:`, notifyErr);
+      logger.error(notifyErr, `[projects] notify team on close failed:`);
     }
 
     res.json({

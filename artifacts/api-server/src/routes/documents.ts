@@ -6,6 +6,7 @@ import { Readable } from "stream";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
 
 /* ── Zod Schemas ────────────────────────────────────────────── */
 
@@ -163,7 +164,7 @@ router.post("/", requirePermission("documents:create"), async (req: Request, res
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "documents", entityId: r.insertId,
       after: { title, type: type || "document", department: department ?? null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -171,7 +172,7 @@ router.post("/", requirePermission("documents:create"), async (req: Request, res
       entity: "documents",
       entityId: r.insertId,
       details: JSON.stringify({ title, type: type || "document" }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     res.status(201).json({ id: r.insertId, title, type, department });
   } catch (err) { handleRouteError(err, res, "Create document error:"); }
 });
@@ -222,7 +223,7 @@ router.post("/upload", requirePermission("documents:create"), async (req: Reques
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "documents", entityId: docId,
       after: { title, fileName, category: category || null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -230,7 +231,7 @@ router.post("/upload", requirePermission("documents:create"), async (req: Reques
       entity: "documents",
       entityId: docId,
       details: JSON.stringify({ title, fileName, category: category || null }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     res.status(201).json(doc);
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -349,7 +350,7 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "document_versions", entityId: docId,
       after: { versionNumber: newVersion, fileName, storageKey },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -357,7 +358,7 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
       entity: "documents",
       entityId: docId,
       details: JSON.stringify({ version: newVersion, fileName }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     res.json(updated);
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -417,7 +418,7 @@ router.patch("/:id/status", requirePermission("documents:update"), async (req: R
       action: "update", entity: "documents", entityId: docId,
       before: { status: beforeDoc.status },
       after: { status, impact: impact || undefined },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -425,7 +426,7 @@ router.patch("/:id/status", requirePermission("documents:update"), async (req: R
       entity: "documents",
       entityId: docId,
       details: JSON.stringify({ from: beforeDoc.status, to: status }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
 
     const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [docId, scope.companyId]);
     res.json({ ...(doc as any), impact });
@@ -456,7 +457,7 @@ router.post("/:id/entity-links", requirePermission("documents:update"), async (r
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "document_entity_links", entityId: docId,
       after: { entityType, entityId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -464,7 +465,7 @@ router.post("/:id/entity-links", requirePermission("documents:update"), async (r
       entity: "document_entity_links",
       entityId: docId,
       details: JSON.stringify({ entityType, entityId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     res.json({ message: "تم الربط بنجاح" });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -529,7 +530,7 @@ router.post("/folders", requirePermission("documents:create"), async (req, res) 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "document_folders", entityId: r.insertId,
       after: { name, parentId: parentId ? Number(parentId) : null, color: color ?? null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -537,7 +538,7 @@ router.post("/folders", requirePermission("documents:create"), async (req, res) 
       entity: "document_folders",
       entityId: r.insertId,
       details: JSON.stringify({ name }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     res.status(201).json({ id: r.insertId, name, parentId: parentId ? Number(parentId) : null });
   } catch (err) { handleRouteError(err, res, "Create folder error:"); }
 });
@@ -589,7 +590,7 @@ router.post("/templates", requirePermission("documents:create"), async (req, res
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "document_templates", entityId: r.insertId,
       after: { name, type: type || "letter", category: category ?? null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -597,7 +598,7 @@ router.post("/templates", requirePermission("documents:create"), async (req, res
       entity: "document_templates",
       entityId: r.insertId,
       details: JSON.stringify({ name, type: type || "letter" }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     res.status(201).json({ id: r.insertId, name, type: type || "letter" });
   } catch (err) { handleRouteError(err, res, "Create template error:"); }
 });
@@ -637,7 +638,7 @@ router.put("/templates/:id", requirePermission("documents:update"), async (req, 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "document_templates", entityId: id,
       after: { name, description, category, type },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -645,7 +646,7 @@ router.put("/templates/:id", requirePermission("documents:update"), async (req, 
       entity: "document_templates",
       entityId: id,
       details: JSON.stringify({ name }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     res.json(row);
   } catch (e: any) { handleRouteError(e, res, "Update document template error"); }
 });
@@ -662,14 +663,14 @@ router.delete("/templates/:id", requirePermission("documents:delete"), async (re
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "document_templates", entityId: id,
       after: { name: existing.name },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "documents.template.deleted",
       entity: "document_templates",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     res.json({ message: "تم حذف القالب بنجاح" });
   } catch (e: any) { handleRouteError(e, res, "Delete document template error"); }
 });
@@ -823,7 +824,7 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "documents", entityId: id,
       after: { templateName: template.name, entityType, entityId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -831,7 +832,7 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
       entity: "documents",
       entityId: id,
       details: JSON.stringify({ templateName: template.name, entityType, entityId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
 
     res.json({
       html: filledHtml,
@@ -908,14 +909,14 @@ router.patch("/:id", requirePermission("documents:update"), async (req, res) => 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "documents", entityId: id,
       after: { title: b.title, description: b.description, category: b.category, fileName: b.fileName },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "documents.document.updated",
       entity: "documents",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -930,14 +931,14 @@ router.delete("/:id", requirePermission("documents:delete"), async (req, res) =>
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "documents", entityId: id,
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "documents.document.deleted",
       entity: "documents",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "documents background task failed"));
     res.json({ message: "تم حذف المستند بنجاح" });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });

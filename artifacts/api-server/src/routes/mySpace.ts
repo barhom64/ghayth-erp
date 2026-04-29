@@ -2,6 +2,7 @@ import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { todayISO, currentPeriod, currentYear, toDateISO } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -17,7 +18,7 @@ router.get("/", async (req, res) => {
        FROM attendance
        WHERE "assignmentId" = $1 AND date = $2`,
       [scope.activeAssignmentId, today]
-    ).catch((e) => { console.error("my-space attendance error:", e); return [null]; });
+    ).catch((e) => { logger.error(e, "my-space attendance error:"); return [null]; });
 
     let leaveBalances: any[] = [];
     try {
@@ -57,7 +58,7 @@ router.get("/", async (req, res) => {
         }));
       }
     } catch (e) {
-      console.error("my-space leaveBalances error:", e);
+      logger.error(e, "my-space leaveBalances error:");
     }
 
     let openRequests: any[] = [];
@@ -69,7 +70,7 @@ router.get("/", async (req, res) => {
          WHERE lr."employeeId" = $1 AND lr.status IN ('pending','under_review')
          ORDER BY lr."createdAt" DESC LIMIT 10`,
         [scope.employeeId]
-      ).catch((e) => { console.error("my-space leaveReqs error:", e); return []; });
+      ).catch((e) => { logger.error(e, "my-space leaveReqs error:"); return []; });
 
       let advanceReqs: any[] = [];
       try {
@@ -82,7 +83,7 @@ router.get("/", async (req, res) => {
           [scope.activeAssignmentId]
         );
       } catch (e) {
-        console.error("my-space advanceReqs error:", e);
+        logger.error(e, "my-space advanceReqs error:");
       }
 
       let letterReqs: any[] = [];
@@ -95,7 +96,7 @@ router.get("/", async (req, res) => {
           [scope.employeeId]
         );
       } catch (e) {
-        console.error("my-space letterReqs error:", e);
+        logger.error(e, "my-space letterReqs error:");
       }
 
       let custodyReqs: any[] = [];
@@ -109,7 +110,7 @@ router.get("/", async (req, res) => {
           [scope.activeAssignmentId]
         );
       } catch (e) {
-        console.error("my-space custodyReqs error:", e);
+        logger.error(e, "my-space custodyReqs error:");
       }
 
       let loanReqs: any[] = [];
@@ -122,7 +123,7 @@ router.get("/", async (req, res) => {
           [scope.activeAssignmentId]
         );
       } catch (e) {
-        console.error("my-space loanReqs error:", e);
+        logger.error(e, "my-space loanReqs error:");
       }
 
       let overtimeReqs: any[] = [];
@@ -135,7 +136,7 @@ router.get("/", async (req, res) => {
           [scope.activeAssignmentId]
         );
       } catch (e) {
-        console.error("my-space overtimeReqs error:", e);
+        logger.error(e, "my-space overtimeReqs error:");
       }
 
       let exitReqs: any[] = [];
@@ -148,13 +149,13 @@ router.get("/", async (req, res) => {
           [scope.activeAssignmentId]
         );
       } catch (e) {
-        console.error("my-space exitReqs error:", e);
+        logger.error(e, "my-space exitReqs error:");
       }
 
       openRequests = [...leaveReqs, ...advanceReqs, ...letterReqs, ...custodyReqs, ...loanReqs, ...overtimeReqs, ...exitReqs]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } catch (e) {
-      console.error("my-space openRequests error:", e);
+      logger.error(e, "my-space openRequests error:");
     }
 
     let pendingApprovals: any[] = [];
@@ -174,7 +175,7 @@ router.get("/", async (req, res) => {
              )
            ORDER BY lr."createdAt" DESC LIMIT 10`,
           [scope.companyId, scope.role, scope.activeAssignmentId]
-        ).catch((e) => { console.error("my-space leaveApprovals error:", e); return []; });
+        ).catch((e) => { logger.error(e, "my-space leaveApprovals error:"); return []; });
 
         let loanApprovals: any[] = [];
         try {
@@ -188,7 +189,7 @@ router.get("/", async (req, res) => {
              ORDER BY l."createdAt" DESC LIMIT 5`,
             [scope.companyId]
           );
-        } catch (e) { console.error("my-space loanApprovals error:", e); }
+        } catch (e) { logger.error(e, "my-space loanApprovals error:"); }
 
         let overtimeApprovals: any[] = [];
         try {
@@ -202,7 +203,7 @@ router.get("/", async (req, res) => {
              ORDER BY o."createdAt" DESC LIMIT 5`,
             [scope.companyId]
           );
-        } catch (e) { console.error("my-space overtimeApprovals error:", e); }
+        } catch (e) { logger.error(e, "my-space overtimeApprovals error:"); }
 
         let exitApprovals: any[] = [];
         try {
@@ -216,13 +217,13 @@ router.get("/", async (req, res) => {
              ORDER BY x."createdAt" DESC LIMIT 5`,
             [scope.companyId]
           );
-        } catch (e) { console.error("my-space exitApprovals error:", e); }
+        } catch (e) { logger.error(e, "my-space exitApprovals error:"); }
 
         pendingApprovals = [...leaveApprovals, ...loanApprovals, ...overtimeApprovals, ...exitApprovals]
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       }
     } catch (e) {
-      console.error("my-space pendingApprovals error:", e);
+      logger.error(e, "my-space pendingApprovals error:");
     }
 
     let documents: any[] = [];
@@ -235,7 +236,7 @@ router.get("/", async (req, res) => {
         [scope.employeeId]
       );
     } catch (e) {
-      console.error("my-space documents error:", e);
+      logger.error(e, "my-space documents error:");
     }
 
     let lastPayslip: any = null;
@@ -255,7 +256,7 @@ router.get("/", async (req, res) => {
       );
       lastPayslip = ps || null;
     } catch (e) {
-      console.error("my-space lastPayslip error:", e);
+      logger.error(e, "my-space lastPayslip error:");
     }
 
     let todayTasks: any[] = [];
@@ -268,7 +269,7 @@ router.get("/", async (req, res) => {
         [scope.activeAssignmentId, today]
       );
     } catch (e) {
-      console.error("my-space todayTasks error:", e);
+      logger.error(e, "my-space todayTasks error:");
     }
 
     let notifications: any[] = [];
@@ -281,7 +282,7 @@ router.get("/", async (req, res) => {
         [scope.activeAssignmentId]
       );
     } catch (e) {
-      console.error("my-space notifications error:", e);
+      logger.error(e, "my-space notifications error:");
     }
 
     let custodies: any[] = [];
@@ -297,7 +298,7 @@ router.get("/", async (req, res) => {
         [scope.activeAssignmentId]
       );
     } catch (e) {
-      console.error("my-space custodies error:", e);
+      logger.error(e, "my-space custodies error:");
     }
 
     let violations: any[] = [];
@@ -310,7 +311,7 @@ router.get("/", async (req, res) => {
         [scope.activeAssignmentId]
       );
     } catch (e) {
-      console.error("my-space violations error:", e);
+      logger.error(e, "my-space violations error:");
     }
 
     let activeLoans: any[] = [];
@@ -324,7 +325,7 @@ router.get("/", async (req, res) => {
         [scope.activeAssignmentId]
       );
     } catch (e) {
-      console.error("my-space activeLoans error:", e);
+      logger.error(e, "my-space activeLoans error:");
     }
 
     let currentShift: any = null;
@@ -350,7 +351,7 @@ router.get("/", async (req, res) => {
         currentShift = defaultShift || null;
       }
     } catch (e) {
-      console.error("my-space currentShift error:", e);
+      logger.error(e, "my-space currentShift error:");
     }
 
     let monthlyStats: any = null;
@@ -363,7 +364,7 @@ router.get("/", async (req, res) => {
       );
       monthlyStats = ms || null;
     } catch (e) {
-      console.error("my-space monthlyStats error:", e);
+      logger.error(e, "my-space monthlyStats error:");
     }
 
     let recentActions: any[] = [];
@@ -376,7 +377,7 @@ router.get("/", async (req, res) => {
         [scope.userId]
       );
     } catch (e) {
-      console.error("my-space recentActions error:", e);
+      logger.error(e, "my-space recentActions error:");
     }
 
     let performanceReviews: any[] = [];
@@ -390,7 +391,7 @@ router.get("/", async (req, res) => {
         [scope.employeeId]
       );
     } catch (e) {
-      console.error("my-space performanceReviews error:", e);
+      logger.error(e, "my-space performanceReviews error:");
     }
 
     let overdueItems: any[] = [];
@@ -414,7 +415,7 @@ router.get("/", async (req, res) => {
       ).catch(() => []);
       overdueItems = [...overdueTasks, ...overdueRequests];
     } catch (e) {
-      console.error("my-space overdueItems error:", e);
+      logger.error(e, "my-space overdueItems error:");
     }
 
     let expiringSoon: any[] = [];
@@ -449,11 +450,11 @@ router.get("/", async (req, res) => {
            ORDER BY fi."endDate" ASC LIMIT 5`,
           [scope.companyId, today, toDateISO(thirtyDaysLater)]
         );
-      } catch (e) { console.error("my-space expiringInsurance error:", e); }
+      } catch (e) { logger.error(e, "my-space expiringInsurance error:"); }
       expiringSoon = [...expiringDocs, ...expiringContracts, ...expiringInsurance]
         .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
     } catch (e) {
-      console.error("my-space expiringSoon error:", e);
+      logger.error(e, "my-space expiringSoon error:");
     }
 
     let roleEntities: any = null;
@@ -472,7 +473,7 @@ router.get("/", async (req, res) => {
               [scope.companyId]
             );
             unitsSummary = us;
-          } catch (e) { console.error("my-space roleEntities units error:", e); }
+          } catch (e) { logger.error(e, "my-space roleEntities units error:"); }
         }
         let vehiclesSummary: any = null;
         if (["owner", "branch_manager", "general_manager", "fleet_manager", "operations_manager"].includes(scope.role)) {
@@ -486,7 +487,7 @@ router.get("/", async (req, res) => {
               [scope.companyId]
             );
             vehiclesSummary = vs;
-          } catch (e) { console.error("my-space roleEntities vehicles error:", e); }
+          } catch (e) { logger.error(e, "my-space roleEntities vehicles error:"); }
         }
         let casesSummary: any = null;
         if (["owner", "branch_manager", "general_manager", "legal_manager"].includes(scope.role)) {
@@ -499,7 +500,7 @@ router.get("/", async (req, res) => {
               [scope.companyId]
             );
             casesSummary = cs;
-          } catch (e) { console.error("my-space roleEntities cases error:", e); }
+          } catch (e) { logger.error(e, "my-space roleEntities cases error:"); }
         }
         let hrSummary: any = null;
         if (["owner", "branch_manager", "general_manager", "hr_manager"].includes(scope.role)) {
@@ -513,7 +514,7 @@ router.get("/", async (req, res) => {
               [scope.companyId]
             );
             hrSummary = hs;
-          } catch (e) { console.error("my-space roleEntities hr error:", e); }
+          } catch (e) { logger.error(e, "my-space roleEntities hr error:"); }
         }
         let financeSummary: any = null;
         if (["owner", "branch_manager", "general_manager", "finance_manager"].includes(scope.role)) {
@@ -527,7 +528,7 @@ router.get("/", async (req, res) => {
               [scope.companyId]
             );
             financeSummary = fs;
-          } catch (e) { console.error("my-space roleEntities finance error:", e); }
+          } catch (e) { logger.error(e, "my-space roleEntities finance error:"); }
         }
         roleEntities = {
           units: unitsSummary,
@@ -538,7 +539,7 @@ router.get("/", async (req, res) => {
         };
       }
     } catch (e) {
-      console.error("my-space roleEntities error:", e);
+      logger.error(e, "my-space roleEntities error:");
     }
 
     res.json({

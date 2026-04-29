@@ -4,6 +4,7 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError, Forbid
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
 
 const createCommentSchema = z.object({
   body: z.string().min(1, "نص التعليق مطلوب"),
@@ -60,8 +61,8 @@ router.post("/comments/:entityType/:entityId", requirePermission("admin:write"),
       companyId: scope.companyId, userId: scope.userId, action: "create_comment",
       entity: String(entityType), entityId: Number(entityId),
       after: { body: body.trim() },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.comment.created", entity: "entity_comments", entityId: Number(entityId), details: JSON.stringify({ entityType, body: body.trim() }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "entityMeta background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.comment.created", entity: "entity_comments", entityId: Number(entityId), details: JSON.stringify({ entityType, body: body.trim() }) }).catch((e) => logger.error(e, "entityMeta background task failed"));
 
     if (!rows[0]) throw new NotFoundError("فشل في إنشاء التعليق");
     res.json(rows[0]);
@@ -87,8 +88,8 @@ router.delete("/comments/:id", requirePermission("admin:write"), async (req, res
       companyId: scope.companyId, userId: scope.userId, action: "delete_comment",
       entity: "entity_comments", entityId: Number(id),
       before,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.comment.deleted", entity: "entity_comments", entityId: Number(id), details: JSON.stringify({ id: Number(id) }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "entityMeta background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.comment.deleted", entity: "entity_comments", entityId: Number(id), details: JSON.stringify({ id: Number(id) }) }).catch((e) => logger.error(e, "entityMeta background task failed"));
 
     res.json({ success: true });
   } catch (err) {
@@ -139,8 +140,8 @@ router.post("/tags/:entityType/:entityId", requirePermission("admin:write"), asy
       companyId: scope.companyId, userId: scope.userId, action: "create_tag",
       entity: String(entityType), entityId: Number(entityId),
       after: { tag: tag.trim(), color: color || "blue" },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.tag.created", entity: "entity_tags", entityId: Number(entityId), details: JSON.stringify({ entityType, tag: tag.trim(), color: color || "blue" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "entityMeta background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.tag.created", entity: "entity_tags", entityId: Number(entityId), details: JSON.stringify({ entityType, tag: tag.trim(), color: color || "blue" }) }).catch((e) => logger.error(e, "entityMeta background task failed"));
 
     res.json(rows[0]);
   } catch (err) {
@@ -165,8 +166,8 @@ router.delete("/tags/:id", requirePermission("admin:write"), async (req, res) =>
       companyId: scope.companyId, userId: scope.userId, action: "delete_tag",
       entity: "entity_tags", entityId: Number(id),
       before,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.tag.deleted", entity: "entity_tags", entityId: Number(id), details: JSON.stringify({ id: Number(id) }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "entityMeta background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.tag.deleted", entity: "entity_tags", entityId: Number(id), details: JSON.stringify({ id: Number(id) }) }).catch((e) => logger.error(e, "entityMeta background task failed"));
 
     res.json({ success: true });
   } catch (err) {
@@ -310,8 +311,8 @@ router.post("/bulk-action", requirePermission("admin:write"), async (req, res): 
       companyId: scope.companyId, userId: scope.userId, action: `bulk_${action}`,
       entity: entityType, entityId: 0,
       after: { action, entityType, affectedIds, updated },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: `entity.bulk.${action}`, entity: entityType, entityId: 0, details: JSON.stringify({ action, entityType, affectedIds, updated }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "entityMeta background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: `entity.bulk.${action}`, entity: entityType, entityId: 0, details: JSON.stringify({ action, entityType, affectedIds, updated }) }).catch((e) => logger.error(e, "entityMeta background task failed"));
 
     res.json({ success: true, updated, message: `تم تنفيذ الإجراء على ${updated} سجل` });
   } catch (err) {

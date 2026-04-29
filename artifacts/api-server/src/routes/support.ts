@@ -186,7 +186,7 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
           priority: priority === 'critical' ? 'high' : 'normal',
           refType: "support_tickets",
           refId: insertId,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "support background task failed"));
       }
     }
 
@@ -198,7 +198,7 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
       entity: "support_tickets",
       entityId: insertId,
       after: { ref, title, priority, aiDetectedPriority, category: b.category, clientId: b.clientId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
 
     // Canonical creation event — mirrors employee.created in HR so the
     // support inbox audit trail finally sees every new ticket the same
@@ -218,7 +218,7 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
         assigneeId,
         clientId: b.clientId ?? null,
       }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
 
     res.status(201).json({
       ...row,
@@ -253,18 +253,18 @@ router.post("/tickets/check-sla", requirePermission("support:read"), async (req,
           refType: "support_tickets",
           refId: ticket.id,
         });
-      } catch (e) { console.error("SLA breach notification error:", e); }
+      } catch (e) { logger.error(e, "SLA breach notification error:"); }
     }
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "support.sla.checked", entity: "support_tickets", entityId: 0,
       details: JSON.stringify({ breachedCount: breached.length }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "preview", entity: "support_tickets", entityId: 0,
       after: { breachedCount: breached.length },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
     res.json({ breached: breached.length, tickets: breached });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -327,17 +327,17 @@ router.post("/tickets/:id/replies", requirePermission("support:create"), async (
         });
         logger.info({ ticketRef: ticket.ref }, "SLA escalation — priority escalated to critical, notification created");
       } catch (slaErr) {
-        console.error("Failed to handle SLA breach:", slaErr);
+        logger.error(slaErr, "Failed to handle SLA breach:");
       }
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE id=$1`, [insertId]);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.reply.created", entity: "ticket_replies", entityId: insertId, details: JSON.stringify({ ticketId, isInternal: b.isInternal || false }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.reply.created", entity: "ticket_replies", entityId: insertId, details: JSON.stringify({ ticketId, isInternal: b.isInternal || false }) }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "ticket_replies", entityId: insertId,
       after: { ticketId, message: b.message, isInternal: b.isInternal || false },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create reply error:"); }
 });
@@ -379,16 +379,16 @@ router.post("/tickets/:id/field-visit", requirePermission("support:write"), asyn
             priority: "high",
             refType: "support_tickets",
             refId: ticketId,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "support background task failed"));
         }
-      } catch (e) { console.error("Field visit notification error:", e); }
+      } catch (e) { logger.error(e, "Field visit notification error:"); }
     }
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "field_visits", entityId: ticketId,
       after: { ticketId, distanceKm, visitDate: b.visitDate, assigneeId: row.assigneeId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
     res.json({
       ticketId, status: 'field_visit', distanceKm,
       visitDate: b.visitDate, assigneeId: row.assigneeId,
@@ -486,7 +486,7 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
         entityId: ticketId,
         before: { assigneeId: ticket.assigneeId },
         after: { assigneeId: b.assigneeId },
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "support background task failed"));
     }
 
     // Post-commit: resolution side-effects (billing + survey).
@@ -507,7 +507,7 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
             { id: ticketId, ref: ticket.ref, clientId: ticket.clientId, billableAmount }
           );
         } catch (glErr) {
-          console.error("Support billing GL failed:", glErr);
+          logger.error(glErr, "Support billing GL failed:");
         }
       }
 
@@ -535,7 +535,7 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
             surveyQueued = true;
           }
         } catch (e) {
-          console.error("[SURVEY] Failed to queue satisfaction survey:", e);
+          logger.error(e, "[SURVEY] Failed to queue satisfaction survey:");
         }
       }
     }
@@ -569,13 +569,13 @@ router.delete("/tickets/:id", requirePermission("support:delete"), async (req, r
       entityId: id,
       before: { status: existing.status, ref: existing.ref },
       after: { status: "deleted" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "support_tickets", entityId: id,
       after: { ref: existing.ref, status: existing.status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
 
     res.json({ message: "تم حذف التذكرة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete ticket error:"); }
@@ -642,12 +642,12 @@ router.post("/tickets/:id/csat", requirePermission("support:write"), async (req,
       `INSERT INTO ticket_csat_ratings ("ticketId","companyId","assigneeId",score,comment) VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("ticketId") DO UPDATE SET score=$4, comment=$5, "updatedAt"=NOW()`,
       [ticketId, scope.companyId, ticket.assigneeId, score, comment || null]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.ticket.csat_rated", entity: "ticket_csat_ratings", entityId: ticketId, details: JSON.stringify({ score }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.ticket.csat_rated", entity: "ticket_csat_ratings", entityId: ticketId, details: JSON.stringify({ score }) }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "ticket_csat", entityId: ticketId,
       after: { ticketId, score, comment: comment || null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
     res.status(201).json({ ticketId, score, comment });
   } catch (err) { handleRouteError(err, res, "CSAT error:"); }
 });
@@ -694,7 +694,7 @@ router.get("/kb/:id", requirePermission("support:read"), async (req, res) => {
     const id = Number(req.params.id);
     const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المقالة غير موجودة");
-    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]).catch(console.error);
+    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]).catch((e) => logger.error(e, "support background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "KB article error:"); }
 });
@@ -711,12 +711,12 @@ router.post("/kb", requirePermission("support:write"), async (req, res) => {
       [title, content || '', category || 'general', tags || null, scope.companyId, scope.userId]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1`, [insertId]);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.created", entity: "kb_articles", entityId: insertId, details: JSON.stringify({ title, category: category || 'general' }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.created", entity: "kb_articles", entityId: insertId, details: JSON.stringify({ title, category: category || 'general' }) }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "knowledge_base", entityId: insertId,
       after: { title, category: category || 'general', tags },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "KB create error:"); }
 });
@@ -736,12 +736,12 @@ router.patch("/kb/:id", requirePermission("support:write"), async (req, res) => 
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE kb_articles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1`, [id]);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.updated", entity: "kb_articles", entityId: id, details: JSON.stringify({ title: b.title }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.updated", entity: "kb_articles", entityId: id, details: JSON.stringify({ title: b.title }) }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "knowledge_base", entityId: id,
       after: { title: b.title, content: b.content, category: b.category, tags: b.tags, status: b.status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "KB update error:"); }
 });
@@ -751,12 +751,12 @@ router.delete("/kb/:id", requirePermission("support:delete"), async (req, res) =
     const scope = req.scope!;
     const id = Number(req.params.id);
     await rawExecute(`UPDATE kb_articles SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.deleted", entity: "kb_articles", entityId: id, details: "{}" }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.deleted", entity: "kb_articles", entityId: id, details: "{}" }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "knowledge_base", entityId: id,
       after: { id },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
     res.json({ message: "تم حذف المقالة بنجاح" });
   } catch (err) { handleRouteError(err, res, "KB delete error:"); }
 });
@@ -794,12 +794,12 @@ router.post("/kb/:id/feedback", requirePermission("support:read"), async (req, r
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "support.kb.feedback", entity: "kb_articles", entityId: id,
       details: JSON.stringify({ helpful: helpful === true || helpful === 'true' }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "kb_feedback", entityId: id,
       after: { articleId: id, helpful: helpful === true || helpful === 'true' },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "KB feedback error:"); }
 });

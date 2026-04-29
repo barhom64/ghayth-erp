@@ -4,6 +4,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -289,8 +290,8 @@ router.post("/", requirePermission("admin:read"), async (req, res): Promise<void
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "preview", entity: "impact_preview", entityId: Number(entityId) || 0,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "impact.previewed", entity: entityType, entityId: Number(entityId) || 0, details: JSON.stringify({ entityType, entityId, action }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "impactPreview background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "impact.previewed", entity: entityType, entityId: Number(entityId) || 0, details: JSON.stringify({ entityType, entityId, action }) }).catch((e) => logger.error(e, "impactPreview background task failed"));
     res.json({ impacts });
   } catch (err) {
     handleRouteError(err, res, "Impact preview error:");

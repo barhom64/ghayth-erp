@@ -5,6 +5,7 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
 import { createAuditLog, createNotification, emitEvent, getLegalResponsible, currentPeriod, currentYear, generateRef } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 /* ── Zod Schemas ───────────────────────────────────────────────── */
 
@@ -163,7 +164,7 @@ async function logCommunication(companyId: number, direction: string, subject: s
       [companyId, direction, subject, body, direction === 'inbound' ? 'received' : 'sent', relatedType, relatedId]
     );
   } catch (e) {
-    console.error("Failed to log communication:", e);
+    logger.error(e, "Failed to log communication:");
   }
 }
 
@@ -246,8 +247,8 @@ router.post("/", requirePermission("requests:write"), async (req, res) => {
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "requests", entityId: r.insertId,
       after: { typeId: typeId ? Number(typeId) : null, title, description, priority: priority || "medium", ref },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.created", entity: "approval_requests", entityId: r.insertId }).catch(console.error);
+    }).catch((e) => logger.error(e, "requests background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.created", entity: "approval_requests", entityId: r.insertId }).catch((e) => logger.error(e, "requests background task failed"));
     res.status(201).json({ id: r.insertId, ref, title, description, priority: priority || "medium", status: "pending" });
   } catch (err) { handleRouteError(err, res, "Create request error:"); }
 });
@@ -339,8 +340,8 @@ router.post("/types", requirePermission("requests:write"), async (req, res) => {
       `INSERT INTO request_types (name, description, category, "requiredFields", "approvalFlow", "isActive", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [name, description, category, requiredFields ? JSON.stringify(requiredFields) : '[]', approvalFlow ? JSON.stringify(approvalFlow) : '[]', isActive !== false, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "request_types", entityId: r.insertId, after: { name, category, isActive: isActive !== false } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request_type.created", entity: "request_types", entityId: r.insertId }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "request_types", entityId: r.insertId, after: { name, category, isActive: isActive !== false } }).catch((e) => logger.error(e, "requests background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request_type.created", entity: "request_types", entityId: r.insertId }).catch((e) => logger.error(e, "requests background task failed"));
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
@@ -363,8 +364,8 @@ router.post("/workflows", requirePermission("requests:write"), async (req, res) 
       `INSERT INTO workflows (name, description, steps, "companyId") VALUES ($1,$2,$3,$4)`,
       [name, description, steps ? JSON.stringify(steps) : '[]', scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflows", entityId: r.insertId, after: { name, description } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "workflow.created", entity: "workflow_definitions", entityId: r.insertId }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflows", entityId: r.insertId, after: { name, description } }).catch((e) => logger.error(e, "requests background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "workflow.created", entity: "workflow_definitions", entityId: r.insertId }).catch((e) => logger.error(e, "requests background task failed"));
     res.status(201).json({ id: r.insertId });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
@@ -501,7 +502,7 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
       const result = await rawExecute(`UPDATE requests SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
       if (result.affectedRows === 0) throw new NotFoundError("الطلب غير موجود");
       const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [id, scope.companyId]);
-      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.updated", entity: "approval_requests", entityId: id }).catch(console.error);
+      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.updated", entity: "approval_requests", entityId: id }).catch((e) => logger.error(e, "requests background task failed"));
       res.json(row);
     }
   } catch (err) {
@@ -753,9 +754,9 @@ router.delete("/:id", requirePermission("requests:write"), async (req, res) => {
       entityId: id,
       action: "request_deleted",
       before: { status: request.status, requesterId: request.requesterId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "requests background task failed"));
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.deleted", entity: "approval_requests", entityId: id }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.deleted", entity: "approval_requests", entityId: id }).catch((e) => logger.error(e, "requests background task failed"));
     res.json({ message: "تم حذف الطلب بنجاح" });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
@@ -826,7 +827,7 @@ router.post("/:id/convert", requirePermission("requests:write"), async (req, res
           priority: "high",
           refType: "legal_case",
           refId: insertId,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "requests background task failed"));
       }
       emitEvent({
         companyId: scope.companyId,
@@ -836,7 +837,7 @@ router.post("/:id/convert", requirePermission("requests:write"), async (req, res
         entity: "legal_case",
         entityId: insertId,
         after: { title: `قضية: ${request.title}`, lawyerName: legalResp?.employeeName ?? null, sourceRequestId: id },
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "requests background task failed"));
     }
 
     const updated = await applyTransition({

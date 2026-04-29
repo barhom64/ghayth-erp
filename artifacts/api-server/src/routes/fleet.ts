@@ -197,16 +197,16 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "fleet_vehicles", entityId: insertId,
       after: { plateNumber: b.plateNumber, make: b.make, model: b.model, year: b.year, status: 'available' },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "fleet.vehicle.created", entity: "fleet_vehicles", entityId: insertId,
       details: `مركبة جديدة: ${b.plateNumber}${b.make ? ` — ${b.make}` : ''}${b.model ? ` ${b.model}` : ''}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
     createSubsidiaryAccountsForEntity(
       scope.companyId, "vehicle", insertId,
       `${b.plateNumber} ${b.make || ""} ${b.model || ""}`.trim()
-    ).catch(console.error);
+    ).catch((e) => logger.error(e, "fleet background task failed"));
     if (b.purchasePrice && Number(b.purchasePrice) > 0) {
       (async () => {
         try {
@@ -230,15 +230,15 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
               salvageValue: salvage,
               usefulLifeYears: usefulYears,
             }
-          ).catch((e: unknown) => console.error("Fleet asset registration error:", e));
+          ).catch((e: unknown) => logger.error(e, "Fleet asset registration error:"));
           createNotification({
             companyId: scope.companyId, assignmentId: scope.activeAssignmentId,
             type: "auto_journal", title: "قيد تلقائي — إثبات أصل مركبة",
             body: `تم إنشاء قيد محاسبي تلقائي لإثبات أصل المركبة ${vName} بقيمة ${Number(b.purchasePrice).toLocaleString("ar-SA")} ريال، وتسجيلها كأصل ثابت يخضع للإهلاك الشهري`,
             priority: "normal", refType: "fleet_vehicle", refId: insertId,
             actionUrl: `/fleet`,
-          }).catch(console.error);
-        } catch (e) { console.error("Vehicle asset JE/fixed-asset failed:", e); }
+          }).catch((e) => logger.error(e, "fleet background task failed"));
+        } catch (e) { logger.error(e, "Vehicle asset JE/fixed-asset failed:"); }
       })();
     }
     res.status(201).json(row);
@@ -310,7 +310,7 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
     );
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
-    createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name).catch(console.error);
+    createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId,
@@ -320,12 +320,12 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
       entity: "fleet_drivers",
       entityId: insertId,
       after: { name: b.name, phone: b.phone, licenseNumber: b.licenseNumber, employeeId: b.employeeId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "fleet.driver.created", entity: "fleet_drivers", entityId: insertId,
       details: `سائق جديد: ${b.name}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create driver error:"); }
@@ -483,7 +483,7 @@ router.patch("/vehicles/:id", requirePermission("fleet:update"), async (req, res
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     // If the status changed, emit a dedicated lifecycle event so listeners fire.
     // Other edits get a generic `fleet.vehicle.updated` so BI / rules engine see them.
@@ -497,7 +497,7 @@ router.patch("/vehicles/:id", requirePermission("fleet:update"), async (req, res
         entityId: id,
         before,
         after,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "fleet background task failed"));
     } else {
       emitEvent({
         companyId: scope.companyId,
@@ -508,7 +508,7 @@ router.patch("/vehicles/:id", requirePermission("fleet:update"), async (req, res
         entityId: id,
         before,
         after,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "fleet background task failed"));
     }
 
     res.json(row);
@@ -554,13 +554,13 @@ router.delete("/vehicles/:id", requirePermission("fleet:delete"), async (req, re
       entityId: id,
       before: { plateNumber: existing.plateNumber, status: existing.status },
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "fleet_vehicles", entityId: id,
       after: { plateNumber: existing.plateNumber, status: existing.status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.json({ message: "تم حذف المركبة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete vehicle error:"); }
@@ -649,7 +649,7 @@ router.patch("/drivers/:id", requirePermission("fleet:update"), async (req, res)
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -660,7 +660,7 @@ router.patch("/drivers/:id", requirePermission("fleet:update"), async (req, res)
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update driver error:"); }
@@ -695,13 +695,13 @@ router.delete("/drivers/:id", requirePermission("fleet:delete"), async (req, res
       entityId: id,
       before: { name: existing.name, status: existing.status },
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "fleet_drivers", entityId: id,
       after: { name: existing.name, status: existing.status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.json({ message: "تم حذف السائق بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete driver error:"); }
@@ -930,9 +930,9 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
             priority: "normal",
             refType: "fleet_trips",
             refId: insertId,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "fleet background task failed"));
         }
-      } catch (notifErr) { console.error("Trip notification error:", notifErr); }
+      } catch (notifErr) { logger.error(notifErr, "Trip notification error:"); }
 
       logger.info({ tripId: insertId, clientId: b.clientId || "N/A" }, "New trip SMS notification for client");
     }
@@ -941,14 +941,14 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "fleet_trips", entityId: insertId,
       after: { vehicleId: selectedVehicleId, driverId: selectedDriverId, distance: estimatedDistanceKm, cost: totalEstimatedCost },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.trip.created", entity: "fleet_trips", entityId: insertId,
       details: JSON.stringify({ vehicleId: selectedVehicleId, driverId: selectedDriverId, distance: estimatedDistanceKm, fromLocation: b.fromLocation, toLocation: b.toLocation }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
     res.status(201).json({
       ...row,
       estimatedCostBreakdown: { fuel: estimatedFuelCost, driverFare, depreciation, total: totalEstimatedCost },
@@ -1026,18 +1026,18 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
         status: "completed", distance: actualDistanceKm, cost: totalCost,
         fuelCost: actualFuelCost, driverFare, depreciation, journalEntryId,
       },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "fleet.trip.completed", entity: "fleet_trips", entityId: tripId,
       details: `رحلة #${tripId} — ${actualDistanceKm.toFixed(1)} كم — تكلفة ${totalCost.toFixed(2)} ريال`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.trip.completed", entity: "fleet_trips", entityId: tripId,
       details: JSON.stringify({ status: "completed", distance: actualDistanceKm, cost: totalCost, fuelCost: actualFuelCost, driverFare, depreciation, journalEntryId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     const [updated] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2`, [tripId, scope.companyId]);
     res.json({
@@ -1095,13 +1095,13 @@ router.post("/trips/:id/cancel", requirePermission("fleet:update"), async (req, 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.trip.cancelled", entity: "fleet_trips", entityId: tripId,
       details: JSON.stringify({ tripId, reason }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "fleet_trips", entityId: tripId,
       after: { status: "cancelled", reason },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.json({ ...updated, event: "fleet.trip.cancelled" });
   } catch (err) {
@@ -1137,13 +1137,13 @@ router.post("/trips/:id/waypoints", requirePermission("fleet:update"), async (re
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.trip.waypoint_added", entity: "fleet_trip_waypoints", entityId: insertId,
       details: JSON.stringify({ tripId, lat, lon }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "fleet_trip_waypoints", entityId: insertId,
       after: { tripId, lat, lon, speed: b.speed || 0 },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.status(201).json({ id: insertId, tripId, lat, lon });
   } catch (err) { handleRouteError(err, res, "Waypoint error:"); }
@@ -1241,7 +1241,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
       fleetEngine.requestWarehouseDeduction(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
         { maintenanceId: insertId, parts: b.partsUsed }
-      ).catch((e: unknown) => console.error("Fleet warehouse deduction error:", e));
+      ).catch((e: unknown) => logger.error(e, "Fleet warehouse deduction error:"));
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
@@ -1261,7 +1261,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
         cost: b.cost || 0,
         serviceDate: b.serviceDate || todayISO(),
       },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     if (b.type && ["breakdown", "emergency"].includes(b.type)) {
       const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [b.vehicleId]);
@@ -1269,7 +1269,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
         companyId: scope.companyId, branchId: scope.branchId ?? 0, userId: scope.userId,
         action: "fleet.vehicle.breakdown", entity: "fleet_vehicles", entityId: b.vehicleId,
         details: JSON.stringify({ plateNumber: vehicle?.plateNumber, description: b.description, source: "manual_maintenance" }),
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "fleet background task failed"));
     }
 
     // Register obligation for the scheduled service date (for previews, inspections, etc.)
@@ -1290,13 +1290,13 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
           escalationSteps: [{ hoursAfterDue: 24, notifyRole: "fleet_manager" }],
         });
       }
-    } catch (obErr) { console.error("Maintenance obligation registration failed:", obErr); }
+    } catch (obErr) { logger.error(obErr, "Maintenance obligation registration failed:"); }
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "fleet_maintenance", entityId: insertId,
       after: { vehicleId: b.vehicleId, type: b.type, description: b.description, cost: b.cost || 0 },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create maintenance error:"); }
@@ -1345,7 +1345,7 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
       await fleetEngine.postMaintenanceGL(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
         { id, vehicleId: m.vehicleId, totalCost: finalCost, type: m.type, description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}` }
-      ).catch((e: unknown) => console.error("Maintenance GL failed:", e));
+      ).catch((e: unknown) => logger.error(e, "Maintenance GL failed:"));
     }
 
     // Mark the scheduled obligation as met and register the next one
@@ -1366,7 +1366,7 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
           dedupeKey: `vehicle-${m.vehicleId}-next-service-${toDateISO(nextDate)}`,
         });
       }
-    } catch (obErr) { console.error("Maintenance obligation update failed:", obErr); }
+    } catch (obErr) { logger.error(obErr, "Maintenance obligation update failed:"); }
 
     await emitEvent({
       companyId: scope.companyId,
@@ -1381,7 +1381,7 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "fleet_maintenance", entityId: id,
       after: { status: "completed", cost: finalCost, vehicleId: m.vehicleId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.json({ ...m, status: 'completed', cost: finalCost, event: "fleet.maintenance.completed" });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
@@ -1435,7 +1435,7 @@ router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "fleet_maintenance", entityId: id,
       after: { status: "cancelled", reason: b.reason },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     const [updated] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ ...updated, event: "fleet.maintenance.cancelled" });
@@ -1692,7 +1692,7 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
       await fleetEngine.postFuelExpenseGL(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
         { id: insertId, vehicleId: resolvedVehicleId, amount: totalCost, description: `مصروف وقود${plateLabel} / ${liters} لتر / ${stationName ?? ""}` }
-      ).catch((e: unknown) => console.error("Fuel GL failed:", e));
+      ).catch((e: unknown) => logger.error(e, "Fuel GL failed:"));
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_fuel_logs WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
@@ -1700,13 +1700,13 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.fuel_log.created", entity: "fleet_fuel_logs", entityId: insertId,
       details: JSON.stringify({ vehicleId: resolvedVehicleId, liters, totalCost }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "fleet_fuel_logs", entityId: insertId,
       after: { vehicleId: resolvedVehicleId, liters, totalCost, fuelDate, stationName },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create fuel log error:"); }
@@ -1788,7 +1788,7 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
       await fleetEngine.postInsuranceGL(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
         { id: insertId, vehicleId: Number(b.vehicleId), premium, description: `مصروف تأمين${plateLabel} / ${insuranceTypeLabel} / ${b.provider ?? ""}` }
-      ).catch((e: unknown) => console.error("Insurance GL failed:", e));
+      ).catch((e: unknown) => logger.error(e, "Insurance GL failed:"));
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_insurance WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
@@ -1796,13 +1796,13 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.insurance.created", entity: "fleet_insurance", entityId: insertId,
       details: JSON.stringify({ vehicleId: b.vehicleId, provider: b.provider, premium }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "fleet_insurance", entityId: insertId,
       after: { vehicleId: b.vehicleId, provider: b.provider, policyNumber: b.policyNumber, premium },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create insurance error:"); }
@@ -1901,7 +1901,7 @@ router.patch("/trips/:id", requirePermission("fleet:update"), async (req, res) =
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -1912,7 +1912,7 @@ router.patch("/trips/:id", requirePermission("fleet:update"), async (req, res) =
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update trip error:"); }
@@ -1941,13 +1941,13 @@ router.delete("/trips/:id", requirePermission("fleet:delete"), async (req, res) 
       entityId: id,
       before: { status: existing.status },
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "fleet_trips", entityId: id,
       after: { status: existing.status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.json({ success: true, message: "تم حذف الرحلة" });
   } catch (err) { handleRouteError(err, res, "Delete trip error:"); }
@@ -2037,7 +2037,7 @@ router.patch("/maintenance/:id", requirePermission("fleet:update"), async (req, 
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -2048,7 +2048,7 @@ router.patch("/maintenance/:id", requirePermission("fleet:update"), async (req, 
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update maintenance error:"); }
@@ -2077,13 +2077,13 @@ router.delete("/maintenance/:id", requirePermission("fleet:delete"), async (req,
       entityId: id,
       before: { status: existing.status, vehicleId: existing.vehicleId },
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "fleet_maintenance", entityId: id,
       after: { status: existing.status, vehicleId: existing.vehicleId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.json({ success: true, message: "تم حذف سجل الصيانة" });
   } catch (err) { handleRouteError(err, res, "Delete maintenance error:"); }
@@ -2154,13 +2154,13 @@ router.patch("/fuel-logs/:id", requirePermission("fleet:update"), async (req, re
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.fuel_log.updated", entity: "fleet_fuel_logs", entityId: id,
       details: JSON.stringify({ id, ...after }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update fuel log error:"); }
 });
@@ -2184,13 +2184,13 @@ router.delete("/fuel-logs/:id", requirePermission("fleet:delete"), async (req, r
       entity: "fleet_fuel_logs",
       entityId: id,
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "fleet_fuel_logs", entityId: id,
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.json({ success: true, message: "تم حذف سجل الوقود" });
   } catch (err) { handleRouteError(err, res, "Delete fuel log error:"); }
@@ -2264,13 +2264,13 @@ router.patch("/insurance/:id", requirePermission("fleet:update"), async (req, re
       entityId: id,
       before,
       after,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.insurance.updated", entity: "fleet_insurance", entityId: id,
       details: JSON.stringify({ id, ...after }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update insurance error:"); }
 });
@@ -2291,13 +2291,13 @@ router.delete("/insurance/:id", requirePermission("fleet:delete"), async (req, r
       entity: "fleet_insurance",
       entityId: id,
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "fleet_insurance", entityId: id,
       after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.json({ success: true, message: "تم حذف سجل التأمين" });
   } catch (err) { handleRouteError(err, res, "Delete insurance error:"); }
@@ -2410,13 +2410,13 @@ router.post("/preventive-plans", requirePermission("fleet:create"), async (req, 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.preventive.created", entity: "fleet_preventive_plans", entityId: insertId,
       details: JSON.stringify({ vehicleId: b.vehicleId, serviceType: b.serviceType }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "fleet_preventive_plans", entityId: insertId,
       after: { vehicleId: b.vehicleId, serviceType: b.serviceType, intervalKm: b.intervalKm, intervalDays: b.intervalDays },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create preventive plan error:"); }
@@ -2477,20 +2477,20 @@ router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (
       fleetEngine.requestWarehouseDeduction(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
         { maintenanceId: id, parts: b.partsUsed }
-      ).catch((e: unknown) => console.error("Fleet warehouse deduction error:", e));
+      ).catch((e: unknown) => logger.error(e, "Fleet warehouse deduction error:"));
     }
 
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.preventive.updated", entity: "fleet_preventive_plans", entityId: id,
       details: JSON.stringify({ id }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "fleet_preventive_plans", entityId: id,
       after: { ...b },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update preventive plan error:"); }
@@ -2640,7 +2640,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
           driverAssignmentId = driver.assignmentId ?? null;
         }
       } catch (pdErr) {
-        console.error("Traffic violation payroll deduction request failed:", pdErr);
+        logger.error(pdErr, "Traffic violation payroll deduction request failed:");
       }
       if (driverAssignmentId) {
         createNotification({
@@ -2653,7 +2653,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
           refType: "fleet_traffic_violation",
           refId: insertId,
           actionUrl: `/fleet/violations/${insertId}`,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "fleet background task failed"));
       }
     }
 
@@ -2665,12 +2665,12 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
         violationType: b.violationType, fineAmount, liability,
         journalEntryId, deductionRequested: liability === 'driver',
       },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "fleet.traffic_violation.created", entity: "fleet_traffic_violations", entityId: insertId,
       details: `${b.violationType} — ${fineAmount} ﷼ — ${liability === 'driver' ? 'على السائق' : 'على الشركة'}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json({ ...row, journalEntryId, liability });
@@ -2711,7 +2711,7 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
           { id, vehicleId: existing.vehicleId ? Number(existing.vehicleId) : undefined, amount: fineAmount }
         );
       } catch (jeErr) {
-        console.error("Traffic violation payment JE failed:", jeErr);
+        logger.error(jeErr, "Traffic violation payment JE failed:");
         throw new IntegrationError("فشل قيد السداد — لم يتم تسجيل العملية", { field: "journalEntry", fix: "راجع إعدادات الحسابات المالية (2100 / 1100) ثم أعد المحاولة" });
       }
     }
@@ -2731,12 +2731,12 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "pay", entity: "fleet_traffic_violations", entityId: id,
       before: { status: existing.status }, after: { status: "paid", fineAmount },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "fleet.traffic_violation.paid", entity: "fleet_traffic_violations", entityId: id,
       details: `سداد مخالفة ${existing.violationNumber ?? id} بقيمة ${fineAmount}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "fleet background task failed"));
 
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);

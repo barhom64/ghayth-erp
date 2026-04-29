@@ -314,7 +314,7 @@ describe("Loan approval flow", () => {
 
   it("supports multi-step approval chain", () => {
     const idx = LOANS_ROUTE.indexOf('"/loans/:id/approve"');
-    const section = LOANS_ROUTE.slice(idx, idx + 3000);
+    const section = LOANS_ROUTE.slice(idx, idx + 3500);
     expect(section).toContain("processApprovalStep");
     expect(section).toContain("pending_next_step");
   });

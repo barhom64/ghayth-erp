@@ -4,6 +4,7 @@ import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHa
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
 
 const createRuleSchema = z.object({
   name: z.string().min(1),
@@ -120,8 +121,8 @@ router.post("/", requirePermission("admin:write"), async (req, res) => {
       companyId: scope.companyId, userId: scope.userId, action: "create_business_rule",
       entity: "business_rules", entityId: insertId,
       after: { name: b.name, triggerEvent: b.triggerEvent, actionType: b.actionType },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "rules.created", entity: "business_rules", entityId: insertId, details: JSON.stringify({ name: b.name, triggerEvent: b.triggerEvent }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "rules background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "rules.created", entity: "business_rules", entityId: insertId, details: JSON.stringify({ name: b.name, triggerEvent: b.triggerEvent }) }).catch((e) => logger.error(e, "rules background task failed"));
 
     res.status(201).json(rule);
   } catch (err) {
@@ -170,8 +171,8 @@ router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
       companyId: scope.companyId, userId: scope.userId, action: "update_business_rule",
       entity: "business_rules", entityId: id,
       before: existing, after: b,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "rules.updated", entity: "business_rules", entityId: id, details: JSON.stringify({ name: b.name }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "rules background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "rules.updated", entity: "business_rules", entityId: id, details: JSON.stringify({ name: b.name }) }).catch((e) => logger.error(e, "rules background task failed"));
 
     res.json(rule);
   } catch (err) {
@@ -196,8 +197,8 @@ router.delete("/:id", requirePermission("admin:write"), async (req, res) => {
       companyId: scope.companyId, userId: scope.userId, action: "delete_business_rule",
       entity: "business_rules", entityId: id,
       before: existing,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "rules.deleted", entity: "business_rules", entityId: id }).catch(console.error);
+    }).catch((e) => logger.error(e, "rules background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "rules.deleted", entity: "business_rules", entityId: id }).catch((e) => logger.error(e, "rules background task failed"));
 
     res.json({ message: "تم حذف القاعدة بنجاح" });
   } catch (err) {
@@ -224,8 +225,8 @@ router.patch("/:id/toggle", requirePermission("admin:write"), async (req, res) =
       companyId: scope.companyId, userId: scope.userId, action: "toggle_business_rule",
       entity: "business_rules", entityId: id,
       before: { isActive: existing.isActive }, after: { isActive: newActive },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "rules.toggled", entity: "business_rules", entityId: id, details: JSON.stringify({ isActive: newActive }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "rules background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "rules.toggled", entity: "business_rules", entityId: id, details: JSON.stringify({ isActive: newActive }) }).catch((e) => logger.error(e, "rules background task failed"));
 
     res.json({ id, isActive: newActive, message: newActive ? "تم تفعيل القاعدة" : "تم تعطيل القاعدة" });
   } catch (err) {
