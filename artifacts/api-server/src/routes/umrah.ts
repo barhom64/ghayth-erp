@@ -1448,6 +1448,7 @@ router.delete("/violations/:id", requirePermission("umrah:write"), async (req, r
     );
     if (!row) throw new NotFoundError("المخالفة غير موجودة");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_violations", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.violation.deleted", entity: "umrah_violations", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete violation error"); }
 });
@@ -1488,6 +1489,7 @@ router.post("/penalties", requirePermission("umrah:write"), async (req, res) => 
       }
     }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_penalties", entityId: rows[0]?.id, after: { amount: b.amount, type: b.type } }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.penalty.created", entity: "umrah_penalties", entityId: rows[0]?.id }).catch((e) => logger.error(e, "umrah background task failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create penalty error"); }
 });

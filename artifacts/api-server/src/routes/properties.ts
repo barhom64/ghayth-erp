@@ -1785,6 +1785,10 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
       results.push({ paymentId: payment.id, tenant: payment.tenantName, unit: payment.unitNumber, lateDays, stage: targetStage, action, financialMutation });
     }
 
+    if (results.length > 0) {
+      emitEvent({ companyId: cid, branchId: scope.branchId, userId: scope.userId, action: "property.late_rent.escalated", entity: "rent_payments", entityId: 0, details: JSON.stringify({ processed: results.length }) }).catch((e) => logger.error(e, "properties background task failed"));
+    }
+
     res.json({ processed: results.length, results });
   } catch (err) { handleRouteError(err, res, "Late rent escalation error:"); }
 });
