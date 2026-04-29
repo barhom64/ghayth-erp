@@ -89,7 +89,7 @@ router.get("/", async (req, res) => {
       pendingPurchaseRequests = await rawQuery<any>(
         `SELECT id, title, status, "createdAt"
          FROM purchase_requests
-         WHERE ${pw} AND status = 'pending'
+         WHERE ${pw} AND status = 'pending' AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC
          LIMIT 5`,
         pp

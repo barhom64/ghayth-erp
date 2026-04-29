@@ -64,7 +64,7 @@ async function loadThresholds(companyId: number): Promise<Thresholds> {
       }
       return merged;
     }
-  } catch (_e) {}
+  } catch (_e) { logger.error(_e, "silent catch"); }
   return DEFAULT_THRESHOLDS;
 }
 
@@ -74,7 +74,7 @@ async function getApprovalSlaHours(): Promise<number> {
       `SELECT value FROM system_settings WHERE key = 'approval_sla_hours' LIMIT 1`
     );
     if (setting?.value) return Number(setting.value);
-  } catch (_) {}
+  } catch (_) { logger.error(_, "silent catch"); }
   return 48;
 }
 
@@ -271,7 +271,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
         hoursOverdue: Math.round(Number(m.hoursOverdue ?? 0)),
         entityLink: "/properties/maintenance",
       })));
-    } catch (_e) {}
+    } catch (_e) { logger.error(_e, "silent catch"); }
 
     try {
       const ticketSla = await rawQuery<any>(
@@ -288,7 +288,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
         hoursOverdue: Math.round(Number(t.hoursOverdue ?? 0)),
         entityLink: `/support/${t.id}`,
       })));
-    } catch (_e) {}
+    } catch (_e) { logger.error(_e, "silent catch"); }
 
     try {
       const slaHours = await getApprovalSlaHours();
@@ -513,7 +513,7 @@ router.get("/daily-close/checklist", requirePermission("operations:read"), async
         [scope.companyId, today]
       );
       closedToday = !!existing;
-    } catch (_e) {}
+    } catch (_e) { logger.error(_e, "silent catch"); }
 
     res.json({
       date: today,

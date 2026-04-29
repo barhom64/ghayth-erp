@@ -116,7 +116,7 @@ router.get("/", async (req, res) => {
         pendingPurchases = await rawQuery<any>(
           `SELECT id, title, status, "createdAt"
            FROM purchase_requests
-           WHERE "companyId" = ANY($1::int[]) AND status = 'pending'
+           WHERE "companyId" = ANY($1::int[]) AND status = 'pending' AND "deletedAt" IS NULL
            ORDER BY "createdAt" DESC LIMIT 20`,
           [scope.allowedCompanies]
         );

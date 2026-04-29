@@ -1320,7 +1320,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         [scope.activeAssignmentId, scope.companyId]
       );
       managerAssignmentId = directManagerRow?.managerAssignmentId ?? null;
-    } catch (_e) {}
+    } catch (_e) { logger.error(_e, "silent catch"); }
     if (!managerAssignmentId) {
       managerAssignmentId = await getManagerAssignmentId(scope.companyId, scope.branchId);
     }
@@ -1358,7 +1358,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
-    } catch (_e) {}
+    } catch (_e) { logger.error(_e, "silent catch"); }
 
     if (chainSteps.length === 0) {
       chainSteps = [
@@ -1679,7 +1679,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
-    } catch (_e) {}
+    } catch (_e) { logger.error(_e, "silent catch"); }
 
     if (chainSteps.length === 0) {
       chainSteps = [
@@ -1910,7 +1910,7 @@ router.get("/leave-requests/:id/stages", requirePermission("hr:read"), async (re
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
-    } catch (_e) {}
+    } catch (_e) { logger.error(_e, "silent catch"); }
 
     if (chainSteps.length === 0) {
       chainSteps = [

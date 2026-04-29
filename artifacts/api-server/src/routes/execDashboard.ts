@@ -99,7 +99,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
     const slaBreaches = await safe(async () => {
       const [support] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM support_tickets
-         WHERE "companyId"=$1 AND status='open' AND "slaDeadline" < NOW()`,
+         WHERE "companyId"=$1 AND status='open' AND "deletedAt" IS NULL AND "slaDeadline" < NOW()`,
         [companyId]
       );
       const [workflow] = await rawQuery<any>(

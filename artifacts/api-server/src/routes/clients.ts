@@ -223,7 +223,7 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
     const activeServices = {
       activeContracts: await rawQuery<any>(
         `SELECT id, title, "endDate" FROM legal_contracts
-         WHERE "companyId" = $2 AND status = 'active'
+         WHERE "companyId" = $2 AND status = 'active' AND "deletedAt" IS NULL
            AND ("partyName" = $3 OR id IN (
              SELECT "contractId" FROM rental_contracts WHERE "tenantName" = $3 AND "companyId" = $2 AND "deletedAt" IS NULL
            ))

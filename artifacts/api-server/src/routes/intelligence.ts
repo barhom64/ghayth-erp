@@ -232,7 +232,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
       `SELECT id, title, "endDate",
               (lc."endDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM legal_contracts lc
-       WHERE lc."companyId" = $1 AND lc.status = 'active'
+       WHERE lc."companyId" = $1 AND lc.status = 'active' AND lc."deletedAt" IS NULL
          AND lc."endDate"::date - CURRENT_DATE BETWEEN 0 AND 30
        ORDER BY "daysLeft" ASC LIMIT 5`,
       [cid]
