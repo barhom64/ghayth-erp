@@ -1,4 +1,4 @@
-import { ValidationError, NotFoundError, ForbiddenError, isTypedError, handleRouteError } from "../lib/errorHandler.js";
+import { ValidationError, NotFoundError, ForbiddenError, isTypedError, handleRouteError , zodParse } from "../lib/errorHandler.js";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
 import { z } from "zod";
@@ -57,10 +57,7 @@ const uploadLimiter = rateLimit({
 
 router.post("/storage/uploads/request-url", uploadLimiter, authMiddleware, requirePermission("documents:write"), async (req: Request, res: Response) => {
   try {
-    const parsed = RequestUploadUrlBody.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message || "Missing or invalid required fields");
-
-    const { name, size, contentType } = parsed.data;
+    const { name, size, contentType } = zodParse(RequestUploadUrlBody.safeParse(req.body));
 
     if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
       throw new ValidationError(`نوع الملف غير مسموح به: ${contentType}. الأنواع المسموحة: PDF، Word، Excel، الصور، النصوص`);

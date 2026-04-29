@@ -4,6 +4,7 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import {
@@ -190,14 +191,8 @@ router.get("/sub-agents", requirePermission("umrah:read"), async (req, res) => {
 router.post("/sub-agents", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createSubAgentSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const b = parsed.data;
+    const parsed = zodParse(createSubAgentSchema.safeParse(req.body));
+    const b = parsed;
     const rows = await rawQuery(
       `INSERT INTO umrah_sub_agents
        ("companyId","branchId","nuskCode",name,"agentId","clientId","paymentTerms",
@@ -249,14 +244,8 @@ router.patch("/sub-agents/:id", requirePermission("umrah:write"), async (req, re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const parsed = updateSubAgentSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const b = parsed.data as Record<string, any>;
+    const parsed = zodParse(updateSubAgentSchema.safeParse(req.body));
+    const b = parsed as Record<string, any>;
     const params: any[] = [];
     const sets: string[] = [];
     for (const key of ["nuskCode","name","agentId","clientId","paymentTerms","defaultPricePerMutamer","phone","email","country","isActive","notes"]) {
@@ -293,14 +282,8 @@ router.put("/sub-agents/:id/link", requirePermission("umrah:write"), async (req,
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const parsed = linkSubAgentSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const { clientId, createNew, clientName, clientPhone } = parsed.data;
+    const parsed = zodParse(linkSubAgentSchema.safeParse(req.body));
+    const { clientId, createNew, clientName, clientPhone } = parsed;
 
     let finalClientId = clientId;
 
@@ -343,14 +326,8 @@ router.put("/sub-agents/:id/link", requirePermission("umrah:write"), async (req,
 router.post("/sub-agents/link-by-nusk", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = linkByNuskSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const { nuskCode, clientId } = parsed.data;
+    const parsed = zodParse(linkByNuskSchema.safeParse(req.body));
+    const { nuskCode, clientId } = parsed;
     await rawExecute(
       `UPDATE umrah_sub_agents SET "clientId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
        WHERE "companyId"=$3 AND "nuskCode"=$4 AND "deletedAt" IS NULL`,
@@ -366,14 +343,8 @@ router.post("/sub-agents/:id/link-client", requirePermission("umrah:write"), asy
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const parsed = linkClientSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const { clientId } = parsed.data;
+    const parsed = zodParse(linkClientSchema.safeParse(req.body));
+    const { clientId } = parsed;
     await rawExecute(
       `UPDATE umrah_sub_agents SET "clientId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
        WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
@@ -410,14 +381,8 @@ router.get("/pricing", requirePermission("umrah:read"), async (req, res) => {
 router.post("/pricing", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createPricingSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const b = parsed.data;
+    const parsed = zodParse(createPricingSchema.safeParse(req.body));
+    const b = parsed;
     const overlap = await rawQuery(
       `SELECT id FROM umrah_pricing
        WHERE "companyId" = $1 AND "agentId" = $2 AND "deletedAt" IS NULL
@@ -448,14 +413,8 @@ router.patch("/pricing/:id", requirePermission("umrah:write"), async (req, res) 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const parsed = updatePricingSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const b = parsed.data as Record<string, any>;
+    const parsed = zodParse(updatePricingSchema.safeParse(req.body));
+    const b = parsed as Record<string, any>;
     const params: any[] = [];
     const sets: string[] = [];
     for (const key of ["subAgentId","agentId","seasonId","pricePerMutamer","includesHotel","includesTransport","validFrom","validTo","notes"]) {
@@ -629,14 +588,8 @@ router.get("/commission-plans/:id", requirePermission("umrah:read"), async (req,
 router.post("/commission-plans", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createCommissionPlanSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const b = parsed.data;
+    const parsed = zodParse(createCommissionPlanSchema.safeParse(req.body));
+    const b = parsed;
 
     const result = await withTransaction(async (client) => {
       const planRes = await client.query(
@@ -682,14 +635,8 @@ router.patch("/commission-plans/:id", requirePermission("umrah:write"), async (r
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const parsed = updateCommissionPlanSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const b = parsed.data as Record<string, any>;
+    const parsed = zodParse(updateCommissionPlanSchema.safeParse(req.body));
+    const b = parsed as Record<string, any>;
 
     await withTransaction(async (client) => {
       const params: any[] = [];
@@ -745,14 +692,8 @@ router.patch("/commission-plans/:id", requirePermission("umrah:write"), async (r
 
 router.post("/commission-plans/:id/simulate", requirePermission("umrah:read"), async (req, res) => {
   try {
-    const parsed = simulateCommissionSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const { month, year } = parsed.data;
+    const parsed = zodParse(simulateCommissionSchema.safeParse(req.body));
+    const { month, year } = parsed;
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const result = await simulateCommission(id, month, year, scope.companyId);
@@ -766,14 +707,8 @@ router.post("/commission-plans/:id/calculate", requirePermission("umrah:write"),
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const parsed = simulateCommissionSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const { month, year } = parsed.data;
+    const parsed = zodParse(simulateCommissionSchema.safeParse(req.body));
+    const { month, year } = parsed;
     const result = await calculateCommissionForPlan(id, month, year, scope.userId, scope.companyId);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission.calculated", entity: "employee_commission_plans", entityId: id, details: JSON.stringify({ month, year }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_commissions", entityId: id, after: { month, year } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
@@ -866,14 +801,8 @@ router.get("/invoices", requirePermission("umrah:read"), async (req, res) => {
 router.post("/invoices/generate", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = generateInvoiceSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const { subAgentId, groupIds, seasonId } = parsed.data;
+    const parsed = zodParse(generateInvoiceSchema.safeParse(req.body));
+    const { subAgentId, groupIds, seasonId } = parsed;
     const result = await generateSalesInvoice(
       { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       { subAgentId, groupIds, seasonId }
@@ -888,14 +817,8 @@ router.patch("/invoices/:id", requirePermission("umrah:write"), async (req, res)
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const parsed = updateInvoiceSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const b = parsed.data as Record<string, any>;
+    const parsed = zodParse(updateInvoiceSchema.safeParse(req.body));
+    const b = parsed as Record<string, any>;
     const params: any[] = [];
     const sets: string[] = [];
     for (const key of ["status","notes","dueDate"]) {
@@ -945,14 +868,8 @@ router.get("/payments", requirePermission("umrah:read"), async (req, res) => {
 router.post("/payments", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createPaymentSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const b = parsed.data;
+    const parsed = zodParse(createPaymentSchema.safeParse(req.body));
+    const b = parsed;
     const result = await registerPayment(
       { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       {

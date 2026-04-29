@@ -6,6 +6,7 @@ import {
   ForbiddenError,
   IntegrationError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -380,8 +381,7 @@ function assertProjectMutable(project: any): void {
 
 router.post("/", requirePermission("projects:create"), async (req, res) => {
   try {
-    const parsed = createProjectSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createProjectSchema.safeParse(req.body));
     const scope = req.scope!;
     if (!isFullAccess(scope) && scope.role !== "projects_manager") {
       throw new ForbiddenError("لا تملك صلاحية إنشاء مشاريع", { fix: "راجع مدير الحساب للحصول على صلاحية projects_manager" });
@@ -569,8 +569,7 @@ router.get("/:id", requirePermission("projects:read"), async (req, res) => {
 
 router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
   try {
-    const parsed = updateProjectSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(updateProjectSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     if (!isFullAccess(scope) && scope.role !== "projects_manager") {
@@ -736,8 +735,7 @@ router.delete("/:id", requirePermission("projects:delete"), async (req, res) => 
 
 router.post("/:id/phases", requirePermission("projects:create"), async (req, res) => {
   try {
-    const parsed = createPhaseSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createPhaseSchema.safeParse(req.body));
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
     const b = req.body;
@@ -859,8 +857,7 @@ router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update
 
 router.post("/:id/tasks", requirePermission("projects:create"), async (req, res) => {
   try {
-    const parsed = createTaskSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createTaskSchema.safeParse(req.body));
     const scope = req.scope!;
     const b = req.body;
     const projectId = parseId(req.params.id, "id");
@@ -983,8 +980,7 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
 // per-role gates apply.
 router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req, res) => {
   try {
-    const parsed = updateTaskSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(updateTaskSchema.safeParse(req.body));
     const scope = req.scope!;
     const taskId = parseId(req.params.taskId, "taskId");
     const b = req.body;
@@ -1359,8 +1355,7 @@ router.get("/:id/milestones", requirePermission("projects:read"), async (req, re
 
 router.post("/:id/milestones", requirePermission("projects:create"), async (req, res) => {
   try {
-    const parsed = createMilestoneSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createMilestoneSchema.safeParse(req.body));
     const scope = req.scope!;
     const b = req.body;
     const projectId = parseId(req.params.id, "id");
@@ -1438,8 +1433,7 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
 // after the company-scoped lookup so the same role gates apply.
 router.patch("/milestones/:milestoneId", requirePermission("projects:update"), async (req, res) => {
   try {
-    const parsed = updateMilestoneSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(updateMilestoneSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.milestoneId, "milestoneId");
     const [existing] = await rawQuery<any>(
@@ -1528,8 +1522,7 @@ router.get("/:id/risks", requirePermission("projects:read"), async (req, res) =>
 
 router.post("/:id/risks", requirePermission("projects:create"), async (req, res) => {
   try {
-    const parsed = createRiskSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createRiskSchema.safeParse(req.body));
     const scope = req.scope!;
     const b = req.body;
     const projectId = parseId(req.params.id, "id");
@@ -1581,8 +1574,7 @@ router.post("/:id/risks", requirePermission("projects:create"), async (req, res)
 // not have read access to via `assertProjectAccess`.
 router.patch("/risks/:riskId", requirePermission("projects:update"), async (req, res) => {
   try {
-    const parsed = updateRiskSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(updateRiskSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.riskId, "riskId");
     const [existingRisk] = await rawQuery<any>(
@@ -1687,8 +1679,7 @@ router.get("/:id/resources", requirePermission("projects:read"), async (req, res
 
 router.post("/:id/resources", requirePermission("projects:create"), async (req, res) => {
   try {
-    const parsed = createResourceSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createResourceSchema.safeParse(req.body));
     const scope = req.scope!;
     const b = req.body;
     const projectId = parseId(req.params.id, "id");
@@ -1759,8 +1750,7 @@ router.get("/:id/costs", requirePermission("projects:read"), async (req, res) =>
 
 router.post("/:id/costs", requirePermission("projects:create"), async (req, res) => {
   try {
-    const parsed = createCostSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createCostSchema.safeParse(req.body));
     const scope = req.scope!;
     const b = req.body;
     const projectId = parseId(req.params.id, "id");
@@ -1860,8 +1850,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/:id/close", requirePermission("projects:update"), async (req, res) => {
   try {
-    const parsed = closeProjectSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(closeProjectSchema.safeParse(req.body));
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);

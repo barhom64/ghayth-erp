@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError, NotFoundError, ConflictError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError , zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -72,8 +72,7 @@ router.get("/", requirePermission("crm:read"), async (req, res) => {
 router.post("/", requirePermission("crm:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createClientSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createClientSchema.safeParse(req.body));
     const {
       name,
       phone,
@@ -84,7 +83,7 @@ router.post("/", requirePermission("crm:create"), async (req, res) => {
       type,
       nationality,
       language,
-    } = parsed.data;
+    } = parsed;
 
     // Pre-check: reject duplicate email within same company
     if (email) {
