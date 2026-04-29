@@ -80,7 +80,7 @@ async function validateRequestTransition(
   scope: any,
 ): Promise<any> {
   const [request] = await rawQuery<any>(
-    `SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL)`,
+    `SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`,
     [id, companyId]
   );
   if (!request) throw new NotFoundError("الطلب غير موجود");
@@ -373,9 +373,9 @@ router.get("/stats", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [total] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]);
-    const [pending] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='pending' AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
-    const [approved] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='approved' AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
+    const [total] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
+    const [pending] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='pending' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
+    const [approved] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='approved' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
     const [types] = await rawQuery(`SELECT COUNT(*) as count FROM request_types WHERE "isActive"=true AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
     res.json({
       totalRequests: Number(total.count),
@@ -389,7 +389,7 @@ router.get("/stats", requirePermission("requests:read"), async (req, res) => {
 router.get("/:id", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
     if (!row) throw new NotFoundError("الطلب غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "requests"); }
@@ -485,7 +485,7 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
           }
         },
       });
-      const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL)`, [id, scope.companyId]);
+      const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [id, scope.companyId]);
       res.json(row ?? updated);
     } else {
       // No status change — simple field update
@@ -500,7 +500,7 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
       params.push(id); params.push(scope.companyId);
       const result = await rawExecute(`UPDATE requests SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
       if (result.affectedRows === 0) throw new NotFoundError("الطلب غير موجود");
-      const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL)`, [id, scope.companyId]);
+      const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [id, scope.companyId]);
       emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.updated", entity: "approval_requests", entityId: id }).catch(console.error);
       res.json(row);
     }
@@ -721,7 +721,7 @@ router.delete("/:id", requirePermission("requests:write"), async (req, res) => {
     // would erase the audit trail of an already-processed decision and orphan
     // any downstream entities created via convert.
     const [request] = await rawQuery<any>(
-      `SELECT id, status, "requesterId", "convertedTo" FROM requests WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      `SELECT id, status, "requesterId", "convertedTo" FROM requests WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!request) throw new NotFoundError("الطلب غير موجود");
@@ -773,7 +773,7 @@ router.post("/:id/convert", requirePermission("requests:write"), async (req, res
     }
 
     const [request] = await rawQuery<any>(
-      `SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL)`,
+      `SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!request) throw new NotFoundError("الطلب غير موجود");

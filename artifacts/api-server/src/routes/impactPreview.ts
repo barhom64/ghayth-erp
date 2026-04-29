@@ -40,7 +40,7 @@ router.post("/", requirePermission("admin:read"), async (req, res): Promise<void
 
     if (entityType === "request" || entityType === "requests") {
       const [request] = await rawQuery<any>(
-        `SELECT * FROM requests WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL)`,
+        `SELECT * FROM requests WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
         [entityId, scope.companyId]
       );
       if (request) {
