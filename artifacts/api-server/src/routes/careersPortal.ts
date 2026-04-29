@@ -299,7 +299,7 @@ router.post("/apply", careersAuth, async (req: Request, res: Response) => {
     const applicantId = (req as any).applicantId;
 
     const posting = await rawQuery(
-      `SELECT id, status FROM job_postings WHERE id = $1 AND status = 'open'`,
+      `SELECT id, status FROM job_postings WHERE id = $1 AND status = 'open' AND "deletedAt" IS NULL`,
       [postingId]
     );
     if (posting.length === 0) {
@@ -307,7 +307,7 @@ router.post("/apply", careersAuth, async (req: Request, res: Response) => {
     }
 
     const existing = await rawQuery(
-      `SELECT id FROM job_applications WHERE "postingId" = $1 AND "applicantAccountId" = $2`,
+      `SELECT id FROM job_applications WHERE "postingId" = $1 AND "applicantAccountId" = $2 AND "deletedAt" IS NULL`,
       [postingId, applicantId]
     );
     if (existing.length > 0) {

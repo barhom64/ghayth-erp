@@ -181,8 +181,8 @@ router.get("/overview", requirePermission("admin:read"), async (req, res): Promi
     const cid = scope.companyId;
 
     const [employees] = await rawQuery<any>(`SELECT COUNT(*) as total FROM employee_assignments WHERE "companyId"=$1 AND status='active'`, [cid]);
-    const [vehicles] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_vehicles WHERE "companyId"=$1`, [cid]);
-    const [properties] = await rawQuery<any>(`SELECT COUNT(*) as total FROM property_units WHERE "companyId"=$1`, [cid]);
+    const [vehicles] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [properties] = await rawQuery<any>(`SELECT COUNT(*) as total FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [projects] = await rawQuery<any>(`SELECT COUNT(*) as active FROM projects WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]);
     const [tickets] = await rawQuery<any>(`SELECT COUNT(*) as open FROM support_tickets WHERE "companyId"=$1 AND status='open' AND "deletedAt" IS NULL`, [cid]);
     const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as total FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt" >= date_trunc('month', CURRENT_DATE)`, [cid]);
@@ -738,7 +738,7 @@ router.get("/insights-summary", requireRole("branch_manager", "general_manager",
     ]);
 
     const [totalEmployees] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM employee_assignments WHERE "companyId"=$1 AND status='active'`, [cid]);
-    const [totalClients] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM clients WHERE "companyId"=$1`, [cid]);
+    const [totalClients] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM clients WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [monthRevenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) AS total FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt" >= date_trunc('month',CURRENT_DATE)`, [cid]);
     const [prevMonthRevenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) AS total FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt" >= date_trunc('month',CURRENT_DATE - INTERVAL '1 month') AND "createdAt" < date_trunc('month',CURRENT_DATE)`, [cid]);
 

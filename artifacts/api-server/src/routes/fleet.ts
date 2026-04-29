@@ -193,7 +193,7 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
       `INSERT INTO fleet_vehicles ("companyId","plateNumber",make,model,year,color,"vinNumber","fuelType","currentMileage",status,"branchId",notes,"registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","insuranceExpiry","fuelCapacity") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
       [scope.companyId, plateNumber, b.make.trim(), b.model.trim(), b.year ? Number(b.year) : null, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null, b.fuelCapacity ? Number(b.fuelCapacity) : null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "fleet_vehicles", entityId: insertId,
@@ -472,7 +472,7 @@ router.patch("/vehicles/:id", requirePermission("fleet:update"), async (req, res
     params.push(id, scope.companyId);
     await rawExecute(`UPDATE fleet_vehicles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
 
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     // Audit diff for any tracked field change.
     createAuditLog({
@@ -1266,7 +1266,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
     }).catch((e) => logger.error(e, "fleet background task failed"));
 
     if (b.type && ["breakdown", "emergency"].includes(b.type)) {
-      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [b.vehicleId]);
+      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "deletedAt" IS NULL`, [b.vehicleId]);
       emitEvent({
         companyId: scope.companyId, branchId: scope.branchId ?? 0, userId: scope.userId,
         action: "fleet.vehicle.breakdown", entity: "fleet_vehicles", entityId: b.vehicleId,
@@ -1278,7 +1278,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
     try {
       const serviceDate = new Date(b.serviceDate || new Date().toISOString());
       if (serviceDate > new Date()) {
-        const [veh] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [b.vehicleId]);
+        const [veh] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "deletedAt" IS NULL`, [b.vehicleId]);
         await registerObligation({
           companyId: scope.companyId,
           branchId: scope.branchId ?? null,
@@ -1341,7 +1341,7 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
 
     // Auto journal entry for maintenance cost
     if (finalCost > 0) {
-      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [m.vehicleId]);
+      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "deletedAt" IS NULL`, [m.vehicleId]);
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
       const { fleetEngine } = await import("../lib/engines/index.js");
       await fleetEngine.postMaintenanceGL(
@@ -1354,7 +1354,7 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
     try {
       await markObligationMet(scope.companyId, "fleet_maintenance", id, "maintenance");
       if (m.nextServiceDate) {
-        const [veh] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [m.vehicleId]);
+        const [veh] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "deletedAt" IS NULL`, [m.vehicleId]);
         const nextDate = new Date(m.nextServiceDate);
         await registerObligation({
           companyId: scope.companyId,
@@ -1688,7 +1688,7 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
 
     // Auto journal entry for fuel cost
     if (totalCost > 0) {
-      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [resolvedVehicleId]);
+      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "deletedAt" IS NULL`, [resolvedVehicleId]);
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
       const { fleetEngine } = await import("../lib/engines/index.js");
       await fleetEngine.postFuelExpenseGL(
@@ -1782,7 +1782,7 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
 
     // Auto journal entry for insurance premium
     if (premium > 0) {
-      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1`, [b.vehicleId]);
+      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "deletedAt" IS NULL`, [b.vehicleId]);
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
       const insuranceType = b.type || b.insuranceType || 'comprehensive';
       const insuranceTypeLabel = insuranceType === 'comprehensive' ? 'شامل' : insuranceType === 'third_party' ? 'طرف ثالث' : insuranceType;
@@ -2389,7 +2389,7 @@ router.post("/preventive-plans", requirePermission("fleet:create"), async (req, 
     // If neither interval was provided, also try fetching vehicle current mileage
     if (!nextServiceMileage && b.intervalKm) {
       const [vehicle] = await rawQuery<any>(
-        `SELECT "currentMileage" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2`,
+        `SELECT "currentMileage" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [b.vehicleId, scope.companyId]
       );
       if (vehicle?.currentMileage) {

@@ -140,7 +140,7 @@ router.get("/summary", async (req, res) => {
     );
     const { where: noBranchWhere, params: noBranchParams, nextParamIndex: noBranchNextIdx } = buildFilterNoBranch(scope, req);
     const [clients] = await rawQuery<any>(
-      `SELECT COUNT(*) AS total FROM clients WHERE ${noBranchWhere}`,
+      `SELECT COUNT(*) AS total FROM clients WHERE ${noBranchWhere} AND "deletedAt" IS NULL`,
       [...noBranchParams]
     );
     const [invoices] = await rawQuery<any>(
