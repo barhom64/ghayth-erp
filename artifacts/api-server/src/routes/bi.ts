@@ -43,7 +43,7 @@ const muteAlertSchema = z.object({
 router.get("/dashboards", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM bi_dashboards WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM bi_dashboards WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
@@ -72,7 +72,7 @@ router.post("/dashboards", requirePermission("bi:write"), async (req, res) => {
 router.get("/kpis", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM bi_kpis WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY module, name`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM bi_kpis WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY module, name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
@@ -101,7 +101,7 @@ router.post("/kpis", requirePermission("bi:write"), async (req, res) => {
 router.get("/reports", requirePermission("bi:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM bi_reports WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM bi_reports WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });

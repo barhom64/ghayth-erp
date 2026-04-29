@@ -257,7 +257,7 @@ router.get("/drivers", requirePermission("fleet:read"), async (req, res) => {
        LEFT JOIN employees e ON e.id = d."employeeId"
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
        WHERE ${where} AND d."deletedAt" IS NULL
-       ORDER BY d.name`,
+       ORDER BY d.name LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -719,7 +719,7 @@ router.get("/trips", requirePermission("fleet:read"), async (req, res) => {
     const rows = await rawQuery<any>(
       `SELECT t.*, t."fromLocation" AS origin, t."toLocation" AS destination, t."startDate" AS "tripDate",
               v."plateNumber", v."plateNumber" AS "vehiclePlate", d.name AS "driverName"
-       FROM fleet_trips t LEFT JOIN fleet_vehicles v ON v.id=t."vehicleId" AND v."deletedAt" IS NULL LEFT JOIN fleet_drivers d ON d.id=t."driverId" AND d."deletedAt" IS NULL WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC`,
+       FROM fleet_trips t LEFT JOIN fleet_vehicles v ON v.id=t."vehicleId" AND v."deletedAt" IS NULL LEFT JOIN fleet_drivers d ON d.id=t."driverId" AND d."deletedAt" IS NULL WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -1165,7 +1165,7 @@ router.get("/maintenance", requirePermission("fleet:read"), async (req, res) => 
               m."performedBy" AS workshop,
               v."plateNumber", v."plateNumber" AS "vehiclePlateNumber", v."plateNumber" AS "vehiclePlate",
               v.make AS "vehicleMake", v.model AS "vehicleModel"
-       FROM fleet_maintenance m LEFT JOIN fleet_vehicles v ON v.id=m."vehicleId" WHERE ${where} AND m."deletedAt" IS NULL ORDER BY m.id DESC`,
+       FROM fleet_maintenance m LEFT JOIN fleet_vehicles v ON v.id=m."vehicleId" WHERE ${where} AND m."deletedAt" IS NULL ORDER BY m.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -2342,7 +2342,7 @@ router.get("/preventive-plans", requirePermission("fleet:read"), async (req, res
        FROM fleet_preventive_plans p
        JOIN fleet_vehicles v ON v.id=p."vehicleId"
        WHERE ${conditions.join(" AND ")}
-       ORDER BY p."nextServiceDate" ASC`,
+       ORDER BY p."nextServiceDate" ASC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });
@@ -2514,7 +2514,7 @@ router.get("/traffic-violations", requirePermission("fleet:read"), async (req, r
        LEFT JOIN fleet_vehicles v ON v.id=tv."vehicleId" AND v."deletedAt" IS NULL
        LEFT JOIN fleet_drivers d ON d.id=tv."driverId" AND d."deletedAt" IS NULL
        WHERE ${conditions.join(" AND ")} AND tv."deletedAt" IS NULL
-       ORDER BY tv."violationDate" DESC`,
+       ORDER BY tv."violationDate" DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });

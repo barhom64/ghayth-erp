@@ -89,6 +89,7 @@ router.get("/users", requirePermission("admin:read"), async (req, res) => {
       WHERE ea."companyId" = $1
          OR u.id IN (SELECT "userId" FROM user_roles WHERE "companyId" = $1)
       ORDER BY u."createdAt" DESC
+      LIMIT 500
     `, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (e: any) { logger.error(e, "Get users error"); handleRouteError(e, res, "خطأ غير متوقع"); }
@@ -321,7 +322,7 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
 router.get("/roles", requirePermission("admin:read"), async (req, res) => {
   try {
     await assertAdmin(req);
-    const rows = await rawQuery(`SELECT * FROM roles ORDER BY name`);
+    const rows = await rawQuery(`SELECT * FROM roles ORDER BY name LIMIT 500`);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (e: any) { logger.error(e, "Get roles error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
@@ -403,7 +404,7 @@ router.get("/predefined-roles", requirePermission("admin:read"), async (req, res
     await assertAdmin(req);
     const scope = req.scope!;
     const customRows = await rawQuery<any>(
-      `SELECT "roleKey", label, level, modules FROM custom_roles WHERE "companyId"=$1 ORDER BY level DESC`,
+      `SELECT "roleKey", label, level, modules FROM custom_roles WHERE "companyId"=$1 ORDER BY level DESC LIMIT 500`,
       [scope.companyId]
     ).catch(() => [] as any[]);
     const customRoles = customRows.map((r: any) => ({
@@ -433,7 +434,7 @@ router.get("/user-roles/:userId", requirePermission("admin:read"), async (req, r
       throw new ForbiddenError("المستخدم لا ينتمي لشركتك");
     }
     const rows = await rawQuery(
-      `SELECT * FROM user_roles WHERE "userId"=$1 AND "companyId"=$2 ORDER BY level DESC`,
+      `SELECT * FROM user_roles WHERE "userId"=$1 AND "companyId"=$2 ORDER BY level DESC LIMIT 500`,
       [userId, scope.companyId]
     );
     res.json({ data: rows });
@@ -522,7 +523,7 @@ router.get("/integrations", requirePermission("admin:read"), async (req, res) =>
     await assertAdmin(req);
     const scope = req.scope!;
     const rows = await rawQuery(
-      `SELECT id, "companyId", type, name, status, "lastSuccessAt", "lastFailureAt", "retryCount", "maxRetries", "createdAt", "updatedAt" FROM integrations WHERE "companyId"=$1 ORDER BY "createdAt" DESC`,
+      `SELECT id, "companyId", type, name, status, "lastSuccessAt", "lastFailureAt", "retryCount", "maxRetries", "createdAt", "updatedAt" FROM integrations WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
@@ -995,7 +996,7 @@ router.get("/role-permissions", requirePermission("admin:read"), async (req, res
     const params: any[] = [scope.companyId];
     if (role) { params.push(role); conditions.push(`"role" = $${params.length}`); }
     const rows = await rawQuery<any>(
-      `SELECT id, role, permission, "companyId", "createdAt" FROM role_permissions WHERE ${conditions.join(" AND ")} ORDER BY role, permission`,
+      `SELECT id, role, permission, "companyId", "createdAt" FROM role_permissions WHERE ${conditions.join(" AND ")} ORDER BY role, permission LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });
