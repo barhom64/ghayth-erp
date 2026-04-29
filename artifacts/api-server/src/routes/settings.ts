@@ -533,7 +533,7 @@ router.post("/companies", requirePermission("settings:write"), async (req, res) 
       logger.error(bootstrapErr, "[CompanyBootstrap] Partial failure, cleaning up company:");
       try {
         await rawExecute(`DELETE FROM companies WHERE id = $1`, [companyId]);
-      } catch (_cleanupErr) {}
+      } catch (_cleanupErr) { logger.error(_cleanupErr, "cleanup error"); }
       handleRouteError(bootstrapErr, res, "Bootstrap company error");
       return;
     }

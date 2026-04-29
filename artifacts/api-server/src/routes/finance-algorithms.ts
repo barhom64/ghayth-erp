@@ -141,7 +141,7 @@ financeAlgorithmsRouter.get("/ap-aging", requirePermission("finance:read"), asyn
          s.email AS "supplierEmail"
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id = po."supplierId"
-       WHERE po."companyId" = $2
+       WHERE po."companyId" = $2 AND po."deletedAt" IS NULL
          AND po.status NOT IN ('cancelled','draft','delivered')
          AND po."totalAmount" > 0.009
          AND po."createdAt"::date <= $1::date
@@ -161,7 +161,7 @@ financeAlgorithmsRouter.get("/ap-aging", requirePermission("finance:read"), asyn
          s2.email AS "supplierEmail"
        FROM purchase_requests pr
        LEFT JOIN suppliers s2 ON s2.id = pr."supplierId"
-       WHERE pr."companyId" = $2
+       WHERE pr."companyId" = $2 AND pr."deletedAt" IS NULL
          AND pr.status NOT IN ('cancelled','rejected','completed','draft')
          AND pr."supplierId" IS NOT NULL
          AND COALESCE(pr."totalAmount", 0) > 0.009
