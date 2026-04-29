@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError,
+import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
 } from "../lib/errorHandler.js";
 import {
@@ -10,6 +10,13 @@ import {
   createAuditLog,
 } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
+
+const VALID_ORDER_TRANSITIONS: Record<string, string[]> = {
+  pending: ["processing", "cancelled"],
+  processing: ["completed", "cancelled"],
+  completed: [],
+  cancelled: ["pending"],
+};
 
 const createStoreProductSchema = z.object({
   name: z.string().min(1, "اسم المنتج مطلوب"),
@@ -247,6 +254,12 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
       );
       const existing = lockRes.rows[0];
       if (!existing) throw new NotFoundError("الطلب غير موجود");
+      if (b.status && b.status !== existing.status) {
+        const allowed = VALID_ORDER_TRANSITIONS[existing.status];
+        if (allowed && !allowed.includes(b.status)) {
+          throw new ConflictError(`لا يمكن نقل الطلب من "${existing.status}" إلى "${b.status}"`);
+        }
+      }
       if (sets.length === 0) return existing;
 
       params.push(id); params.push(scope.companyId);

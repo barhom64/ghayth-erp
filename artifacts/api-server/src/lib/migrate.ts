@@ -127,11 +127,10 @@ export async function runMigrations(): Promise<void> {
         logger.info({ file }, "Migration applied");
       } catch (err) {
         await client.query("ROLLBACK");
-        console.error(`Migration failed: ${file}`, err);
+        logger.error(err as Error, `Migration failed: ${file}`);
         if (isDev) {
-          // In dev mode: record the first error but continue remaining migrations
           if (!firstError) firstError = err;
-          console.warn(`Skipping failed migration in dev mode, continuing with remaining migrations`);
+          logger.warn(`Skipping failed migration in dev mode, continuing with remaining migrations`);
         } else {
           throw err;
         }
