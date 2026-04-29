@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
+import { handleRouteError, NotFoundError, ForbiddenError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";

@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError , zodParse } from "../lib/errorHandler.js";
+import { handleRouteError, zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";

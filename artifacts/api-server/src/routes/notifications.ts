@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError, NotFoundError , zodParse } from "../lib/errorHandler.js";
+import { handleRouteError, NotFoundError, zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";

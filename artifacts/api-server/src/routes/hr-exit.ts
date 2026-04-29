@@ -11,7 +11,6 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   handleRouteError,
   NotFoundError,
-  ValidationError,
   ConflictError,
   ForbiddenError,
   parseId,

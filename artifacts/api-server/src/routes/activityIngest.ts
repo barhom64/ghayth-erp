@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { logPageView } from "../lib/activityTracker.js";
-import { handleRouteError, ValidationError , zodParse } from "../lib/errorHandler.js";
+import { handleRouteError, zodParse } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import rateLimit from "express-rate-limit";
