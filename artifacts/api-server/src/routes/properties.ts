@@ -225,7 +225,9 @@ router.get("/units", requirePermission("property:read"), async (req, res) => {
     if (status) { params.push(status); conditions.push(`u.status = $${params.length}`); }
     if (search) { params.push(`%${search}%`); conditions.push(`(u."unitNumber" ILIKE $${params.length} OR u."buildingName" ILIKE $${params.length})`); }
     if (buildingId) {
-      params.push(Number(buildingId));
+      const bid = Number(buildingId);
+      if (!Number.isFinite(bid)) throw new ValidationError("buildingId يجب أن يكون رقمًا صحيحًا");
+      params.push(bid);
       conditions.push(`u."buildingId" = $${params.length}`);
     }
     const page = Math.max(1, Number(req.query.page) || 1);
@@ -3504,7 +3506,7 @@ router.get("/occupancy-report", requirePermission("property:read"), async (req, 
 
     const conditions = [`u."companyId"=$1`, `u."deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
-    if (buildingId) { params.push(Number(buildingId)); conditions.push(`u."buildingId"=$${params.length}`); }
+    if (buildingId) { const bid = Number(buildingId); if (!Number.isFinite(bid)) throw new ValidationError("buildingId يجب أن يكون رقمًا صحيحًا"); params.push(bid); conditions.push(`u."buildingId"=$${params.length}`); }
 
     const units = await rawQuery<any>(
       `SELECT u.id, u."unitNumber", u."buildingName", u."buildingId", u.status,

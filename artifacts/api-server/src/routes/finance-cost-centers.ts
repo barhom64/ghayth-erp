@@ -58,9 +58,10 @@ router.get("/cost-centers", requirePermission("finance:read"), async (req, res) 
 router.get("/cost-centers/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT * FROM cost_centers WHERE id = $1 AND "companyId" = $2`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("مركز التكلفة غير موجود");
     res.json(row);
@@ -99,7 +100,7 @@ router.post("/cost-centers", requirePermission("finance:create"), async (req, re
 router.patch("/cost-centers/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = req.params.id;
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM cost_centers WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
@@ -140,7 +141,7 @@ router.delete("/cost-centers/:id", requirePermission("finance:delete"), async (r
     const id = parseId(req.params.id, "id");
     await rawExecute(
       `UPDATE cost_centers SET status = 'deleted', "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "cost_center.deleted", entity: "cost_centers", entityId: id });
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "cost_center.deleted", entity: "cost_centers", entityId: id, details: JSON.stringify({ id: id }) }).catch((e) => logger.error(e, "finance-cost-centers background task failed"));

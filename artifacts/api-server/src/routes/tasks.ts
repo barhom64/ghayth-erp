@@ -194,8 +194,9 @@ router.get("/entity-search", requirePermission("tasks:read"), async (req, res) =
 router.get("/:id", requirePermission("tasks:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     let scopeCondition = ` AND t."companyId" = $2`;
-    const params: any[] = [req.params.id, scope.companyId];
+    const params: any[] = [id, scope.companyId];
     if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {
       scopeCondition += ` AND t."assignedTo" = $3`;
       params.push(scope.activeAssignmentId);

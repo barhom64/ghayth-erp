@@ -254,9 +254,9 @@ router.patch("/sub-agents/:id", requirePermission("umrah:write"), async (req, re
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(scope.userId); sets.push(`"updatedBy"=$${params.length}`);
     sets.push(`"updatedAt"=NOW()`);
-    params.push(req.params.id); params.push(scope.companyId);
+    params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE umrah_sub_agents SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery(`SELECT * FROM umrah_sub_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [req.params.id, scope.companyId]);
+    const [row] = await rawQuery(`SELECT * FROM umrah_sub_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الوكيل الفرعي غير موجود");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: id, after: b }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.updated", entity: "umrah_sub_agents", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
@@ -270,7 +270,7 @@ router.delete("/sub-agents/:id", requirePermission("umrah:write"), async (req, r
     const id = parseId(req.params.id, "id");
     await rawExecute(
       `UPDATE umrah_sub_agents SET "deletedAt"=NOW(), "updatedBy"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
-      [scope.userId, req.params.id, scope.companyId]
+      [scope.userId, id, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_sub_agents", entityId: id }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.deleted", entity: "umrah_sub_agents", entityId: id, details: "{}" }).catch((e) => logger.error(e, "umrah-entities background task failed"));
@@ -306,14 +306,14 @@ router.put("/sub-agents/:id/link", requirePermission("umrah:write"), async (req,
     await rawExecute(
       `UPDATE umrah_sub_agents SET "clientId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
        WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
-      [finalClientId, scope.userId, req.params.id, scope.companyId]
+      [finalClientId, scope.userId, id, scope.companyId]
     );
 
     const [row] = await rawQuery(
       `SELECT sa.*, c.name AS "clientName" FROM umrah_sub_agents sa
        LEFT JOIN clients c ON c.id = sa."clientId"
        WHERE sa.id=$1 AND sa."companyId"=$2 AND sa."deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.agent.linked", entity: "umrah_sub_agents", entityId: id, details: JSON.stringify({ clientId: finalClientId, createNew: !!createNew }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
@@ -348,9 +348,9 @@ router.post("/sub-agents/:id/link-client", requirePermission("umrah:write"), asy
     await rawExecute(
       `UPDATE umrah_sub_agents SET "clientId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
        WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
-      [clientId, scope.userId, req.params.id, scope.companyId]
+      [clientId, scope.userId, id, scope.companyId]
     );
-    const [row] = await rawQuery(`SELECT * FROM umrah_sub_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [req.params.id, scope.companyId]);
+    const [row] = await rawQuery(`SELECT * FROM umrah_sub_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: id, after: { clientId } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.client_linked", entity: "umrah_sub_agents", entityId: id, details: JSON.stringify({ clientId }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json(row);
@@ -422,7 +422,7 @@ router.patch("/pricing/:id", requirePermission("umrah:write"), async (req, res) 
     }
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     if (b.validFrom || b.validTo) {
-      const [current] = await rawQuery(`SELECT * FROM umrah_pricing WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [req.params.id, scope.companyId]);
+      const [current] = await rawQuery(`SELECT * FROM umrah_pricing WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
       if (current) {
         const vf = b.validFrom || current.validFrom;
         const vt = b.validTo || current.validTo;
@@ -435,7 +435,7 @@ router.patch("/pricing/:id", requirePermission("umrah:write"), async (req, res) 
              AND (("subAgentId" IS NULL AND $4::int IS NULL) OR "subAgentId" = $4)
              AND (("seasonId" IS NULL AND $5::int IS NULL) OR "seasonId" = $5)
              AND "validFrom" <= $7 AND "validTo" >= $6`,
-          [scope.companyId, agId, req.params.id, saId || null, sId || null, vf, vt]
+          [scope.companyId, agId, id, saId || null, sId || null, vf, vt]
         );
         if (overlap.length > 0) {
           throw new ConflictError("يوجد تداخل في فترات الأسعار لنفس الوكيل والموسم", { field: "validFrom" });
@@ -444,9 +444,9 @@ router.patch("/pricing/:id", requirePermission("umrah:write"), async (req, res) 
     }
     params.push(scope.userId); sets.push(`"updatedBy"=$${params.length}`);
     sets.push(`"updatedAt"=NOW()`);
-    params.push(req.params.id); params.push(scope.companyId);
+    params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE umrah_pricing SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery(`SELECT * FROM umrah_pricing WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [req.params.id, scope.companyId]);
+    const [row] = await rawQuery(`SELECT * FROM umrah_pricing WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pricing", entityId: id, after: b }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pricing.updated", entity: "umrah_pricing", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json(row);
@@ -459,7 +459,7 @@ router.delete("/pricing/:id", requirePermission("umrah:write"), async (req, res)
     const id = parseId(req.params.id, "id");
     await rawExecute(
       `UPDATE umrah_pricing SET "deletedAt"=NOW(), "updatedBy"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
-      [scope.userId, req.params.id, scope.companyId]
+      [scope.userId, id, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_pricing", entityId: id }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pricing.deleted", entity: "umrah_pricing", entityId: id, details: "{}" }).catch((e) => logger.error(e, "umrah-entities background task failed"));
@@ -564,22 +564,23 @@ router.get("/commission-plans", requirePermission("umrah:read"), async (req, res
 router.get("/commission-plans/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [plan] = await rawQuery(
       `SELECT cp.*, s.title AS "seasonTitle"
        FROM employee_commission_plans cp
        LEFT JOIN umrah_seasons s ON cp."seasonId" = s.id
        WHERE cp.id = $1 AND cp."companyId" = $2 AND cp."deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
     if (!plan) { throw new NotFoundError("الخطة غير موجودة"); }
     const tiers = await rawQuery(
       `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 ORDER BY "tierOrder"`,
-      [req.params.id]
+      [id]
     );
     const calculations = await rawQuery(
       `SELECT * FROM employee_commission_calculations
        WHERE "planId" = $1 AND "deletedAt" IS NULL ORDER BY year DESC, month DESC LIMIT 12`,
-      [req.params.id]
+      [id]
     );
     res.json({ ...plan, tiers, calculations });
   } catch (err) { handleRouteError(err, res, "Get commission plan"); }
@@ -655,7 +656,7 @@ router.patch("/commission-plans/:id", requirePermission("umrah:write"), async (r
       if (sets.length > 0) {
         params.push(scope.userId); sets.push(`"updatedBy"=$${params.length}`);
         sets.push(`"updatedAt"=NOW()`);
-        params.push(req.params.id); params.push(scope.companyId);
+        params.push(id); params.push(scope.companyId);
         await client.query(
           `UPDATE employee_commission_plans SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`,
           params
@@ -665,16 +666,16 @@ router.patch("/commission-plans/:id", requirePermission("umrah:write"), async (r
       if (Array.isArray(b.tiers)) {
         const [owned] = (await client.query(
           `SELECT id FROM employee_commission_plans WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
-          [req.params.id, scope.companyId]
+          [id, scope.companyId]
         )).rows;
         if (!owned) throw new NotFoundError("خطة العمولة غير موجودة");
-        await client.query(`DELETE FROM employee_commission_tiers WHERE "planId" = $1`, [req.params.id]);
+        await client.query(`DELETE FROM employee_commission_tiers WHERE "planId" = $1`, [id]);
         for (let i = 0; i < b.tiers.length; i++) {
           const t = b.tiers[i];
           await client.query(
             `INSERT INTO employee_commission_tiers ("planId","fromCount","toCount","bonusPerUnit","isCumulative","tierOrder")
              VALUES ($1,$2,$3,$4,$5,$6)`,
-            [req.params.id, t.fromCount, t.toCount ?? null, t.bonusPerUnit, t.isCumulative ?? true, i + 1]
+            [id, t.fromCount, t.toCount ?? null, t.bonusPerUnit, t.isCumulative ?? true, i + 1]
           );
         }
       }
@@ -682,7 +683,7 @@ router.patch("/commission-plans/:id", requirePermission("umrah:write"), async (r
 
     const [row] = await rawQuery(
       `SELECT * FROM employee_commission_plans WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission_plan.updated", entity: "employee_commission_plans", entityId: id, details: JSON.stringify({ planName: b.planName }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_commission_plans", entityId: id, after: { planName: b.planName } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
@@ -759,14 +760,15 @@ router.get("/import/batches", requirePermission("umrah:read"), async (req, res) 
 router.get("/import/batches/:id/changes", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [batch] = await rawQuery(
       `SELECT id FROM umrah_import_batches WHERE id = $1 AND "companyId" = $2`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
     if (!batch) throw new NotFoundError("الدفعة غير موجودة");
     const rows = await rawQuery(
       `SELECT * FROM umrah_import_changes WHERE "batchId" = $1 ORDER BY id`,
-      [req.params.id]
+      [id]
     );
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List batch changes"); }
@@ -827,14 +829,14 @@ router.patch("/invoices/:id", requirePermission("umrah:write"), async (req, res)
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(scope.userId); sets.push(`"updatedBy"=$${params.length}`);
     sets.push(`"updatedAt"=NOW()`);
-    params.push(req.params.id); params.push(scope.companyId);
+    params.push(id); params.push(scope.companyId);
     await rawExecute(
       `UPDATE umrah_sales_invoices SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`,
       params
     );
     const [row] = await rawQuery(
       `SELECT * FROM umrah_sales_invoices WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sales_invoices", entityId: id, after: b }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.invoice.updated", entity: "umrah_sales_invoices", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah-entities background task failed"));

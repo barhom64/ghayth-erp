@@ -259,7 +259,7 @@ router.put("/routing-rules/:id", requirePermission("admin:write"), async (req: R
            "isActive" = COALESCE($6, "isActive"),
            "updatedAt" = NOW()
        WHERE id = $1 AND "companyId" = $7`,
-      [req.params.id, channels ? JSON.stringify(channels) : null, priority ?? null,
+      [id, channels ? JSON.stringify(channels) : null, priority ?? null,
        description ?? null, fallbackChainId ?? null, isActive ?? null, scope.companyId]
     );
 
@@ -290,11 +290,11 @@ router.delete("/routing-rules/:id", requirePermission("admin:write"), async (req
     const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM notification_routing_rules WHERE id = $1 AND "companyId" = $2`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
     await rawExecute(
       `DELETE FROM notification_routing_rules WHERE id = $1 AND "companyId" = $2`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
 
     createAuditLog({
@@ -394,7 +394,7 @@ router.put("/templates/:id", requirePermission("admin:write"), async (req: Reque
            "isActive" = COALESCE($5, "isActive"),
            "updatedAt" = NOW()
        WHERE id = $1 AND "companyId" = $6`,
-      [req.params.id, titleTemplate ?? null, bodyTemplate ?? null,
+      [id, titleTemplate ?? null, bodyTemplate ?? null,
        variables ? JSON.stringify(variables) : null, isActive ?? null, scope.companyId]
     );
 
@@ -425,11 +425,11 @@ router.delete("/templates/:id", requirePermission("admin:write"), async (req: Re
     const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM notification_templates WHERE id = $1 AND "companyId" = $2`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
     await rawExecute(
       `DELETE FROM notification_templates WHERE id = $1 AND "companyId" = $2 AND "isDefault" = false`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
 
     createAuditLog({
@@ -518,7 +518,7 @@ router.put("/fallback-chains/:id", requirePermission("admin:write"), async (req:
            "isActive" = COALESCE($5, "isActive"),
            "updatedAt" = NOW()
        WHERE id = $1 AND "companyId" = $6`,
-      [req.params.id, name ?? null, description ?? null,
+      [id, name ?? null, description ?? null,
        steps ? JSON.stringify(steps) : null, isActive ?? null, scope.companyId]
     );
 
@@ -549,11 +549,11 @@ router.delete("/fallback-chains/:id", requirePermission("admin:write"), async (r
     const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM notification_fallback_chains WHERE id = $1 AND "companyId" = $2`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
     await rawExecute(
       `DELETE FROM notification_fallback_chains WHERE id = $1 AND "companyId" = $2`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
 
     createAuditLog({
@@ -663,10 +663,10 @@ router.put("/webhooks/:id", requirePermission("admin:write"), async (req: Reques
            "updatedAt" = NOW()
        WHERE id = $1 AND "companyId" = $7`,
       secretValue !== undefined
-        ? [req.params.id, name ?? null, url ?? null,
+        ? [id, name ?? null, url ?? null,
            events ? JSON.stringify(events) : null, headers ? JSON.stringify(headers) : null,
            isActive ?? null, scope.companyId, null, secretValue]
-        : [req.params.id, name ?? null, url ?? null,
+        : [id, name ?? null, url ?? null,
            events ? JSON.stringify(events) : null, headers ? JSON.stringify(headers) : null,
            isActive ?? null, scope.companyId]
     );
@@ -698,11 +698,11 @@ router.delete("/webhooks/:id", requirePermission("admin:write"), async (req: Req
     const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM notification_webhooks WHERE id = $1 AND "companyId" = $2`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
     await rawExecute(
       `DELETE FROM notification_webhooks WHERE id = $1 AND "companyId" = $2`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
 
     createAuditLog({

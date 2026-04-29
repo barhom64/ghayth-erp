@@ -198,6 +198,7 @@ router.get("/overtime/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [item] = await rawQuery<any>(
       `SELECT o.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", ea.salary, b.name AS "branchName"
@@ -206,7 +207,7 @@ router.get("/overtime/:id", requirePermission("hr:read"), async (req, res) => {
        JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN branches b ON b.id = ea."branchId"
        WHERE o.id = $1 AND o."companyId" = $2 AND o."deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("طلب الوقت الإضافي غير موجود");
     res.json(item);
@@ -334,6 +335,7 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
   try {
     const { approved = true, reason, notes } = (req.body ?? {}) as { approved?: boolean; reason?: string; notes?: string };
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     if (!["owner", "hr_manager", "general_manager", "branch_manager"].includes(scope.role)) {
       throw new ForbiddenError(
         "صلاحية اعتماد الوقت الإضافي محصورة بالمدير أو HR أو المالك",
@@ -343,7 +345,7 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
 
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_overtime_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (item.status !== "pending") throw new ConflictError("لا يمكن اعتماد طلب بحالة: " + item.status);
@@ -453,7 +455,7 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
     const b = zodParse(rejectOvertimeSchema.safeParse(req.body));
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_overtime_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (item.status !== "pending") throw new ConflictError("لا يمكن رفض طلب بحالة: " + item.status);
