@@ -90,13 +90,14 @@ describe("Guard business rules", () => {
     expect(source).toContain("count.cnt >= 25");
   });
 
-  it("posting failures guard threshold is 10", () => {
-    expect(source).toContain("result.cnt >= 10");
+  it("posting failures guard threshold is 25", () => {
+    expect(source).toContain("result.cnt >= 25");
   });
 
-  it("audit violations guard threshold is 5 for critical/high", () => {
-    expect(source).toContain("result.cnt >= 5");
-    expect(source).toContain("'critical', 'high'");
+  it("audit violations guard blocks on 10+ critical violations with role bypass", () => {
+    expect(source).toContain("result.cnt >= 10");
+    expect(source).toContain("'critical'");
+    expect(source).toContain('context?.role === "owner"');
   });
 });
 

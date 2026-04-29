@@ -74,11 +74,11 @@ const postingFailuresGuard: GuardFn = async (companyId) => {
      WHERE "companyId" = $1 AND resolved = false`,
     [companyId]
   );
-  if (result && result.cnt >= 10) {
+  if (result && result.cnt >= 25) {
     return {
       allowed: false,
       guardName: "posting_failures_threshold",
-      reason: `يوجد ${result.cnt} فشل قيد مالي غير محلول — يجب معالجتها قبل المتابعة`,
+      reason: `يوجد ${result.cnt} فشل قيد مالي غير محلول — راجعها في لوحة الحوكمة`,
     };
   }
   return { allowed: true, guardName: "posting_failures_threshold" };
@@ -86,17 +86,20 @@ const postingFailuresGuard: GuardFn = async (companyId) => {
 
 // ─── Guard: Unresolved Audit Violations ───────────────────────────────────
 
-const auditViolationsGuard: GuardFn = async (companyId) => {
+const auditViolationsGuard: GuardFn = async (companyId, context) => {
+  if (context?.role === "owner" || context?.role === "general_manager") {
+    return { allowed: true, guardName: "audit_violations" };
+  }
   const [result] = await rawQuery<{ cnt: number }>(
     `SELECT COUNT(*)::int AS cnt FROM audit_violations
-     WHERE "companyId" = $1 AND status = 'open' AND priority IN ('critical', 'high')`,
+     WHERE "companyId" = $1 AND status = 'open' AND priority = 'critical'`,
     [companyId]
   );
-  if (result && result.cnt >= 5) {
+  if (result && result.cnt >= 10) {
     return {
       allowed: false,
       guardName: "audit_violations",
-      reason: `يوجد ${result.cnt} مخالفة تدقيق عاجلة غير محلولة — يجب معالجتها`,
+      reason: `يوجد ${result.cnt} مخالفة تدقيق حرجة غير محلولة — راجعها في لوحة الحوكمة`,
     };
   }
   return { allowed: true, guardName: "audit_violations" };
@@ -145,11 +148,13 @@ import type { Request, Response, NextFunction } from "express";
 export function requireGuards(scope: GuardScope = "financial") {
   return async (req: Request, _res: Response, next: NextFunction) => {
     if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return next();
-    const companyId = (req as any).scope?.companyId;
+    const s = (req as any).scope;
+    const companyId = s?.companyId;
     if (!companyId) return next();
     const result = await checkSystemGuards(companyId, scope, {
       date: todayISO(),
       entity: req.path.split("/")[1],
+      role: s?.role,
     });
     if (!result.allowed) {
       const reasons = result.violations.map(v => v.reason).join(" | ");

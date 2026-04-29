@@ -75,30 +75,34 @@ accountsRouter.post("/accounts", requirePermission("finance:create"), async (req
         fix: "أدخل رمز الحساب واسمه",
       });
     }
-    const r = await rawExecute(
-      `INSERT INTO chart_of_accounts ("companyId", code, name, type, "parentCode", "nameEn", nature, "allowPosting", "isAnalytical") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    const [row] = await rawQuery<any>(
+      `INSERT INTO chart_of_accounts ("companyId", code, name, type, "parentCode", "nameEn", nature, "allowPosting", "isAnalytical")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       ON CONFLICT ("companyId", code) DO NOTHING
+       RETURNING *`,
       [scope.companyId, b.code, b.name, b.type || "asset", b.parentCode, b.nameEn ?? null, b.nature ?? "debit", b.allowPosting ?? true, b.isAnalytical ?? false]
     );
+    if (!row) throw new ConflictError("رمز الحساب مستخدم مسبقاً", { field: "code", fix: "استخدم رمزاً مختلفاً للحساب" });
 
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "account.created",
       entity: "chart_of_accounts",
-      entityId: r.insertId,
+      entityId: row.id,
       details: JSON.stringify({ code: b.code, name: b.name, type: b.type }),
-    }).catch((err) => pushToDLQ("event", { action: "account.created", entityId: r.insertId }, err, scope.companyId));
+    }).catch((err) => pushToDLQ("event", { action: "account.created", entityId: row.id }, err, scope.companyId));
 
     createAuditLog({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "create",
       entity: "chart_of_accounts",
-      entityId: r.insertId,
+      entityId: row.id,
       after: { code: b.code, name: b.name, type: b.type },
     }).catch((err) => console.error("[audit] account.created:", err));
 
-    res.status(201).json({ id: r.insertId, ...b });
+    res.status(201).json({ id: row.id, ...b });
   } catch (err) {
     handleRouteError(err, res, "Create account error:");
   }

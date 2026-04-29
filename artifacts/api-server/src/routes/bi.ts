@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, ConflictError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 
 const router = Router();
@@ -55,13 +55,17 @@ router.post("/dashboards", requirePermission("bi:write"), async (req, res) => {
     if (!parsed_createDashboardSchema.success) throw new ValidationError(parsed_createDashboardSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_createDashboardSchema.data;
     const { title, description, layout, isDefault } = body;
-    const r = await rawExecute(
-      `INSERT INTO bi_dashboards (title, description, layout, "isDefault", "createdBy", "companyId") VALUES ($1,$2,$3,$4,$5,$6)`,
+    const [row] = await rawQuery<any>(
+      `INSERT INTO bi_dashboards (title, description, layout, "isDefault", "createdBy", "companyId")
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT DO NOTHING
+       RETURNING *`,
       [title, description, layout ? JSON.stringify(layout) : '{}', isDefault || false, scope.userId, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_dashboards", entityId: r.insertId, after: { title } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.dashboard.created", entity: "bi_dashboards", entityId: r.insertId, details: JSON.stringify({ title }) }).catch(console.error);
-    res.status(201).json({ id: r.insertId });
+    if (!row) throw new ConflictError("لوحة القيادة موجودة مسبقاً", { field: "title", fix: "استخدم عنواناً مختلفاً للوحة القيادة" });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_dashboards", entityId: row.id, after: { title } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.dashboard.created", entity: "bi_dashboards", entityId: row.id, details: JSON.stringify({ title }) }).catch(console.error);
+    res.status(201).json({ id: row.id });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
@@ -80,13 +84,17 @@ router.post("/kpis", requirePermission("bi:write"), async (req, res) => {
     if (!parsed_createKpiSchema.success) throw new ValidationError(parsed_createKpiSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_createKpiSchema.data;
     const { name, description, module, formula, target, currentValue, unit, frequency } = body;
-    const r = await rawExecute(
-      `INSERT INTO bi_kpis (name, description, module, formula, target, "currentValue", unit, frequency, "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    const [kpiRow] = await rawQuery<any>(
+      `INSERT INTO bi_kpis (name, description, module, formula, target, "currentValue", unit, frequency, "companyId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       ON CONFLICT DO NOTHING
+       RETURNING *`,
       [name, description, module, formula, target, currentValue, unit, frequency || "monthly", scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_kpis", entityId: r.insertId, after: { name, module } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.kpi.created", entity: "bi_kpis", entityId: r.insertId, details: JSON.stringify({ name, module }) }).catch(console.error);
-    res.status(201).json({ id: r.insertId });
+    if (!kpiRow) throw new ConflictError("مؤشر الأداء موجود مسبقاً", { field: "name", fix: "استخدم اسماً مختلفاً لمؤشر الأداء" });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_kpis", entityId: kpiRow.id, after: { name, module } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.kpi.created", entity: "bi_kpis", entityId: kpiRow.id, details: JSON.stringify({ name, module }) }).catch(console.error);
+    res.status(201).json({ id: kpiRow.id });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
@@ -105,13 +113,17 @@ router.post("/reports", requirePermission("bi:write"), async (req, res) => {
     if (!parsed_createReportSchema.success) throw new ValidationError(parsed_createReportSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_createReportSchema.data;
     const { title, description, type, query, filters, scheduledAt } = body;
-    const r = await rawExecute(
-      `INSERT INTO bi_reports (title, description, type, query, filters, "scheduledAt", "createdBy", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    const [reportRow] = await rawQuery<any>(
+      `INSERT INTO bi_reports (title, description, type, query, filters, "scheduledAt", "createdBy", "companyId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT DO NOTHING
+       RETURNING *`,
       [title, description, type, query, filters ? JSON.stringify(filters) : '{}', scheduledAt || null, scope.userId, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_reports", entityId: r.insertId, after: { title, type } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.report.created", entity: "bi_reports", entityId: r.insertId, details: JSON.stringify({ title, type }) }).catch(console.error);
-    res.status(201).json({ id: r.insertId });
+    if (!reportRow) throw new ConflictError("التقرير موجود مسبقاً", { field: "title", fix: "استخدم عنواناً مختلفاً للتقرير" });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_reports", entityId: reportRow.id, after: { title, type } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.report.created", entity: "bi_reports", entityId: reportRow.id, details: JSON.stringify({ title, type }) }).catch(console.error);
+    res.status(201).json({ id: reportRow.id });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 

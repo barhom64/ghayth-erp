@@ -3602,7 +3602,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
       });
     }
 
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('letter_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('letter_number_seq') AS seq`).catch(() => [{ seq: Math.floor(Math.random() * 900000 + 100000) }]);
     const letterRef = generateRef("LTR", seqRow.seq);
 
     const { insertId } = await rawExecute(
