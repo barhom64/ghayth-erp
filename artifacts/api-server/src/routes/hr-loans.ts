@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { Router } from "express";
+import { LOAN_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -339,7 +340,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
     const { approved = true, reason, notes } = (req.body ?? {}) as { approved?: boolean; reason?: string; notes?: string };
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!["owner", "hr_manager", "general_manager", "branch_manager", "finance_manager"].includes(scope.role)) {
+    if (!LOAN_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError(
         "صلاحية اعتماد السلف محصورة بالمدير أو HR أو المدير المالي أو المالك",
         {
@@ -480,7 +481,7 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!["owner", "hr_manager", "general_manager", "branch_manager", "finance_manager"].includes(scope.role)) {
+    if (!LOAN_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("صلاحية رفض السلف محصورة بالمدير أو HR أو المدير المالي أو المالك");
     }
 

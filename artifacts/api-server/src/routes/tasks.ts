@@ -132,13 +132,13 @@ router.get("/", requirePermission("tasks:read"), async (req, res) => {
       }
     }
     const bulkQueryMap: Record<string, string> = {
-      property_unit: `SELECT id, "unitNumber" AS name FROM property_units WHERE id = ANY($1) AND "companyId"=$2`,
-      vehicle: `SELECT id, COALESCE("plateNumber", make || ' ' || model) AS name FROM fleet_vehicles WHERE id = ANY($1) AND "companyId"=$2`,
-      client: `SELECT id, name FROM clients WHERE id = ANY($1) AND "companyId"=$2`,
+      property_unit: `SELECT id, "unitNumber" AS name FROM property_units WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      vehicle: `SELECT id, COALESCE("plateNumber", make || ' ' || model) AS name FROM fleet_vehicles WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      client: `SELECT id, name FROM clients WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
       project: `SELECT id, name FROM projects WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
       contract: `SELECT id, COALESCE(ref, 'عقد #' || id) AS name FROM property_contracts WHERE id = ANY($1) AND "companyId"=$2`,
-      legal_case: `SELECT id, COALESCE(title, "caseNumber", 'قضية #' || id) AS name FROM legal_cases WHERE id = ANY($1) AND "companyId"=$2`,
-      maintenance_request: `SELECT id, COALESCE(description, category, 'طلب #' || id) AS name FROM maintenance_requests WHERE id = ANY($1) AND "companyId"=$2`,
+      legal_case: `SELECT id, COALESCE(title, "caseNumber", 'قضية #' || id) AS name FROM legal_cases WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      maintenance_request: `SELECT id, COALESCE(description, category, 'طلب #' || id) AS name FROM maintenance_requests WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
     };
     const namesByType = new Map<string, Map<number, string>>();
     await Promise.all(
@@ -365,7 +365,7 @@ router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
       }
     }
 
-    params.push(req.params.id);
+    params.push(id);
     let whereClause = `id = $${idx}`;
     idx++;
 
@@ -431,7 +431,7 @@ router.delete("/:id", requirePermission("tasks:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const beforeParams: any[] = [req.params.id, scope.companyId];
+    const beforeParams: any[] = [id, scope.companyId];
     let beforeWhere = `id = $1 AND "companyId" = $2`;
     if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {
       beforeWhere += ` AND "assignedTo" = $3`;
@@ -440,7 +440,7 @@ router.delete("/:id", requirePermission("tasks:write"), async (req, res) => {
     const [before] = await rawQuery<any>(`SELECT * FROM tasks WHERE ${beforeWhere}`, beforeParams);
     if (!before) { throw new NotFoundError("المهمة غير موجودة"); }
 
-    const params: any[] = [req.params.id, scope.companyId];
+    const params: any[] = [id, scope.companyId];
     let whereClause = `id = $1 AND "companyId" = $2`;
 
     if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {

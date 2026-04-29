@@ -1785,6 +1785,10 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
       results.push({ paymentId: payment.id, tenant: payment.tenantName, unit: payment.unitNumber, lateDays, stage: targetStage, action, financialMutation });
     }
 
+    if (results.length > 0) {
+      emitEvent({ companyId: cid, branchId: scope.branchId, userId: scope.userId, action: "property.late_rent.escalated", entity: "rent_payments", entityId: 0, details: JSON.stringify({ processed: results.length }) }).catch((e) => logger.error(e, "properties background task failed"));
+    }
+
     res.json({ processed: results.length, results });
   } catch (err) { handleRouteError(err, res, "Late rent escalation error:"); }
 });
@@ -1793,7 +1797,7 @@ router.get("/maintenance-requests", requirePermission("property:read"), async (r
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
-    const conditions = [`mr."companyId" = $1`];
+    const conditions = [`mr."companyId" = $1`, `mr."deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`mr.status = $${params.length}`); }
     const rows = await rawQuery<any>(
@@ -1815,7 +1819,7 @@ router.get("/maintenance/:id", requirePermission("property:read"), async (req, r
        FROM maintenance_requests mr
        LEFT JOIN property_units u ON u.id = mr."unitId"
        LEFT JOIN technicians t ON t.id = mr."assignedTo"
-       WHERE mr.id = $1 AND mr."companyId" = $2`,
+       WHERE mr.id = $1 AND mr."companyId" = $2 AND mr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("طلب الصيانة غير موجود");
@@ -2599,7 +2603,7 @@ router.get("/maintenance", requirePermission("property:read"), async (req, res) 
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
-    const conditions = [`mr."companyId" = $1`];
+    const conditions = [`mr."companyId" = $1`, `mr."deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`mr.status = $${params.length}`); }
     const rows = await rawQuery<any>(

@@ -41,7 +41,7 @@ import { submitWorkflow } from "../lib/workflowEngine.js";
 import { ensureInquiryMemoForViolation } from "../lib/disciplineEngine.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
-import { HR_ROLES, MGR_ROLES, HR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
+import { HR_ROLES, MGR_ROLES, HR_APPROVAL_ROLES , PR_APPROVAL_ROLES, PAYROLL_ROLES, OPS_CLOSE_ROLES} from "../lib/rbacCatalog.js";
 
 // ── Zod request-body schemas ──
 
@@ -348,7 +348,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     const [activeLeave] = await rawQuery<any>(
       `SELECT id FROM hr_leave_requests
        WHERE "employeeId" = $1 AND status = 'approved'
-         AND "startDate" <= $2 AND "endDate" >= $2`,
+         AND "startDate" <= $2 AND "endDate" >= $2 AND "deletedAt" IS NULL`,
       [scope.employeeId, today]
     );
     if (activeLeave) {
@@ -947,7 +947,7 @@ router.get("/leave-balance", requirePermission("hr:read"), async (req, res) => {
                 WHERE lr.status = 'approved' AND EXTRACT(YEAR FROM lr."startDate") = $3
               ), 0) AS used
        FROM hr_leave_types lt
-       LEFT JOIN hr_leave_requests lr ON lr."leaveTypeId" = lt.id AND lr."employeeId" = $2
+       LEFT JOIN hr_leave_requests lr ON lr."leaveTypeId" = lt.id AND lr."employeeId" = $2 AND lr."deletedAt" IS NULL
        WHERE lt."companyId" = $1
        GROUP BY lt.id, lt.name, lt."annualDays"
        ORDER BY lt.name`,
@@ -978,7 +978,7 @@ router.get("/leave-requests", requirePermission("hr:read"), async (req, res) => 
       companyColumn: 'lr."companyId"',
       disableBranchScope: true,
     });
-    let finalWhere = where;
+    let finalWhere = where + ` AND lr."deletedAt" IS NULL`;
     let paramIdx = nextParamIndex;
     if (status) {
       finalWhere += ` AND lr.status = $${paramIdx++}`;
@@ -1036,7 +1036,7 @@ router.get("/leaves/:id", requirePermission("hr:read"), async (req, res) => {
        JOIN employees e ON e.id = lr."employeeId"
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
        LEFT JOIN employees approver ON approver.id = lr."approvedBy"
-       WHERE lr.id = $1 AND lr."companyId" = $2`,
+       WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("طلب الإجازة غير موجود");
@@ -1156,7 +1156,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       const [usedRow] = await rawQuery<any>(
         `SELECT COALESCE(SUM(days), 0) AS used FROM hr_leave_requests
          WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status IN ('approved','pending')
-           AND EXTRACT(YEAR FROM "startDate") = $3`,
+           AND EXTRACT(YEAR FROM "startDate") = $3 AND "deletedAt" IS NULL`,
         [scope.employeeId, leaveTypeId, year]
       );
       const entitled = Number(leaveType.annualDays ?? 21);
@@ -1183,7 +1183,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
     const [overlap] = await rawQuery<any>(
       `SELECT id FROM hr_leave_requests
        WHERE "employeeId" = $1 AND status IN ('pending','approved')
-         AND "startDate" <= $2 AND "endDate" >= $3`,
+         AND "startDate" <= $2 AND "endDate" >= $3 AND "deletedAt" IS NULL`,
       [scope.employeeId, endDate, startDate]
     );
     if (overlap) {
@@ -1254,7 +1254,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
     if (leaveType.oncePerCareer) {
       const [prevHajj] = await rawQuery<any>(
         `SELECT id FROM hr_leave_requests
-         WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status = 'approved'`,
+         WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status = 'approved' AND "deletedAt" IS NULL`,
         [scope.employeeId, leaveTypeId]
       );
       if (prevHajj) {
@@ -1283,7 +1283,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         `SELECT COUNT(DISTINCT lr."employeeId") AS cnt FROM hr_leave_requests lr
          JOIN employee_assignments ea ON ea."employeeId" = lr."employeeId" AND ea."departmentId" = $1
          WHERE lr.status = 'approved' AND lr."startDate" <= $2 AND lr."endDate" >= $3
-           AND lr."employeeId" != $4`,
+           AND lr."employeeId" != $4 AND lr."deletedAt" IS NULL`,
         [assignment.departmentId, endDate, startDate, scope.employeeId]
       );
       const totalDept = Number(deptTotal?.cnt ?? 1);
@@ -1341,7 +1341,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         "لا يوجد مدير معتمد لاستلام طلبات الإجازة",
         {
           fix: "الرجاء التواصل مع الإدارة لتعيين مدير فرع أو مدير موارد بشرية قبل تقديم الطلبات.",
-          meta: { missingRoles: ["branch_manager", "hr_manager", "general_manager", "owner"] },
+          meta: { missingRoles: HR_APPROVAL_ROLES },
         }
       );
     }
@@ -1474,7 +1474,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
     const { approved, reason } = req.body as { approved: boolean | "returned"; reason?: string };
 
     // Authorization: only branch_manager, hr_manager, or owner roles can approve leave
-    if (!["branch_manager", "hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError(
         "صلاحية الموافقة محصورة بالمدير أو HR أو المالك",
         {
@@ -1930,7 +1930,7 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
     const scope = req.scope!;
     const { id } = req.params;
 
-    if (!["branch_manager", "hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: التصعيد متاح فقط للمدير أو HR أو المالك");
     }
 
@@ -2032,7 +2032,7 @@ router.get("/payroll", requirePermission("hr:read"), async (req, res) => {
        LEFT JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN payroll_lines pl ON pl."runId" = pr.id AND pl."deletedAt" IS NULL
        WHERE pr."companyId" = $1 AND pr."deletedAt" IS NULL
-       GROUP BY pr.id, e.name ORDER BY pr."createdAt" DESC`,
+       GROUP BY pr.id, e.name ORDER BY pr."createdAt" DESC LIMIT 500`,
       [scope.companyId]
     );
     const data = runs.map((r: any) => ({
@@ -2114,10 +2114,10 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
     // Payroll execution requires HR, Finance, Director or Owner role
-    if (!["hr_manager", "finance_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!PAYROLL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("ليس لديك الصلاحية لتشغيل مسير الرواتب", {
         meta: {
-          requiredRoles: ["hr_manager", "finance_manager", "general_manager", "owner"],
+          requiredRoles: PAYROLL_ROLES,
           yourRole: scope.role,
         },
       });
@@ -2935,16 +2935,16 @@ router.get("/leave-stats", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [pending] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='pending'`, [scope.companyId]
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='pending' AND "deletedAt" IS NULL`, [scope.companyId]
     );
     const [approved] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='approved'`, [scope.companyId]
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='approved' AND "deletedAt" IS NULL`, [scope.companyId]
     );
     const [rejected] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='rejected'`, [scope.companyId]
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='rejected' AND "deletedAt" IS NULL`, [scope.companyId]
     );
     const [total] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1`, [scope.companyId]
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
     );
     res.json({
       pending: Number(pending?.count ?? 0),
@@ -3030,7 +3030,7 @@ router.get("/approval-chain-definitions", requirePermission("hr:read"), async (r
 router.post("/approval-chain-definitions", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بإنشاء سلاسل موافقات");
     }
     const { name, chainType, minAmount, maxAmount, steps } = zodParse(approvalChainSchema.safeParse(req.body));
@@ -3065,7 +3065,7 @@ router.post("/approval-chain-definitions", requirePermission("hr:create"), async
 router.delete("/approval-chain-definitions/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: يتطلب صلاحية مالك أو HR أو مدير عام");
     }
     const id = parseId(req.params.id, "id");
@@ -3106,7 +3106,7 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
     const id = parseId(req.params.id, "id");
     const { approved, reason } = req.body as any;
 
-    if (!["branch_manager", "hr_manager", "finance_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!OPS_CLOSE_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بالموافقة أو الرفض");
     }
 
@@ -3252,7 +3252,7 @@ router.get("/attendance-policy", requirePermission("hr:read"), async (req, res) 
 router.put("/attendance-policy", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح");
     }
     const b = req.body as any;
@@ -3363,7 +3363,7 @@ router.get("/violations-stats", requirePermission("hr:read"), async (req, res) =
 router.patch("/violations/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل المخالفات مقصور على HR أو المدير أو المالك");
     }
     const id = parseId(req.params.id, "id");
@@ -3400,7 +3400,7 @@ router.patch("/violations/:id", requirePermission("hr:update"), async (req, res)
 async function violationApprovalAction(req: any, res: any, newStatus: "approved" | "rejected" | "returned") {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: اعتماد المخالفات مقصور على HR أو المدير أو المالك");
     }
     const id = parseId(req.params.id, "id");
@@ -3679,7 +3679,7 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل طلبات الإجازة مقصور على HR أو المالك");
     }
     const { status, reason } = req.body as any;
@@ -3738,7 +3738,7 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
     if (!request) throw new NotFoundError("طلب الإجازة غير موجود");
 
     const isOwn = request.employeeId === scope.employeeId;
-    if (!isOwn && !["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!isOwn && !HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError(
         "إلغاء الإجازة مقصور على صاحب الطلب أو HR أو المالك",
         { fix: "اطلب من مدير الموارد البشرية تنفيذ الإلغاء." },
@@ -3817,7 +3817,7 @@ router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req,
     );
     if (!leaveReq) throw new NotFoundError("طلب الإجازة غير موجود");
     const isOwnRequest = leaveReq.employeeId === scope.employeeId;
-    if (!isOwnRequest && !["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!isOwnRequest && !HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError(
         "حذف طلبات الإجازة مقصور على صاحب الطلب أو HR أو المالك",
         { fix: "اطلب من مدير الموارد البشرية تنفيذ الحذف." }
@@ -3876,7 +3876,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!["hr_manager", "finance_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!PAYROLL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل الرواتب مقصور على HR أو المالية أو المالك");
     }
     const { status } = req.body as any;
@@ -4006,7 +4006,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
 router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: حذف الرواتب مقصور على HR أو المالك");
     }
     const id = parseId(req.params.id, "id");
@@ -4043,7 +4043,7 @@ router.patch("/performance/:id", requirePermission("hr:update"), async (req, res
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل التقييمات مقصور على HR أو المدير أو المالك");
     }
     const { overallScore, score, comments, feedback, status, strengths, improvements, goals } = req.body as any;
@@ -4083,7 +4083,7 @@ router.patch("/performance/:id", requirePermission("hr:update"), async (req, res
 router.delete("/performance/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: حذف التقييمات مقصور على HR أو المالك");
     }
     const id = parseId(req.params.id, "id");
@@ -4107,7 +4107,7 @@ router.delete("/performance/:id", requirePermission("hr:delete"), async (req, re
 router.delete("/violations/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: حذف المخالفات مقصور على HR أو المالك");
     }
     const id = parseId(req.params.id, "id");
@@ -4159,7 +4159,7 @@ router.get("/official-letters/:id", requirePermission("hr:read"), async (req, re
 router.patch("/official-letters/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل الخطابات مقصور على HR أو المدير أو المالك");
     }
     const { subject, content, status, type } = req.body as any;
@@ -4195,7 +4195,7 @@ router.patch("/official-letters/:id", requirePermission("hr:update"), async (req
 router.delete("/official-letters/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: حذف الخطابات مقصور على HR أو المالك");
     }
     const id = parseId(req.params.id, "id");
@@ -5467,7 +5467,7 @@ router.get("/public-holidays", requirePermission("hr:read"), async (req, res) =>
 router.post("/public-holidays", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: إدارة الإجازات الرسمية مقصورة على HR أو المالك");
     }
     const b = zodParse(publicHolidaySchema.safeParse(req.body));
@@ -5493,7 +5493,7 @@ router.post("/public-holidays", requirePermission("hr:create"), async (req, res)
 router.patch("/public-holidays/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح");
     }
     const id = parseId(req.params.id, "id");
@@ -5542,7 +5542,7 @@ router.get("/public-holidays/check", requirePermission("hr:read"), async (req, r
 router.delete("/public-holidays/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح");
     }
     const id = parseId(req.params.id, "id");
@@ -5712,7 +5712,7 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
   // so the audit trail sees every HR decision on a transfer.
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("هذه الخطوة محصورة بمدير الموارد البشرية أو المدير العام", {
         fix: "اطلب من مدير الموارد البشرية اتخاذ القرار.",
       });
@@ -5805,7 +5805,7 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
   // event so the audit trail sees the final disposition.
   try {
     const scope = req.scope!;
-    if (!["branch_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!PR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError(
         "استقبال الموظف المنقول محصور بمدير الفرع أو المدير العام",
         { fix: "اطلب من مدير الفرع تنفيذ الاستقبال." }

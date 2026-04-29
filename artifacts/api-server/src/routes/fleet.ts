@@ -752,7 +752,7 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       const [vehicle] = await rawQuery<any>(
         `SELECT v.id, v."assignedDriverId", v.status,
                 (SELECT MAX(fi."endDate") FROM fleet_insurance fi WHERE fi."vehicleId" = v.id) AS "insuranceEnd"
-         FROM fleet_vehicles v WHERE v.id = $1 AND v."companyId" = $2`,
+         FROM fleet_vehicles v WHERE v.id = $1 AND v."companyId" = $2 AND v."deletedAt" IS NULL`,
         [b.vehicleId, scope.companyId]
       );
       if (vehicle) {
@@ -865,7 +865,7 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       const [autoVehicle] = await rawQuery<any>(
         `SELECT v.id,
                 (SELECT MAX(fi."endDate") FROM fleet_insurance fi WHERE fi."vehicleId" = v.id) AS "insuranceEnd"
-         FROM fleet_vehicles v WHERE v.id = $1 AND v."companyId" = $2`,
+         FROM fleet_vehicles v WHERE v.id = $1 AND v."companyId" = $2 AND v."deletedAt" IS NULL`,
         [selectedVehicleId, scope.companyId]
       );
       if (autoVehicle) {

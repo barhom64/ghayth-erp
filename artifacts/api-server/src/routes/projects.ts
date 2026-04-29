@@ -13,6 +13,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { criticalPathLength } from "../lib/algorithms.js";
+import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import {
   createNotification,
   createAuditLog,
@@ -313,7 +314,7 @@ router.get("/", requirePermission("projects:read"), async (req, res) => {
     if (status) { where += ` AND p.status = $${paramIdx}`; params.push(status); paramIdx++; }
 
     const managerOnlyRoles = ["projects_manager"];
-    if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && managerOnlyRoles.includes(scope.role) && scope.employeeId) {
+    if (!scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) && managerOnlyRoles.includes(scope.role) && scope.employeeId) {
       where += ` AND p."managerId" = $${paramIdx}`;
       params.push(scope.employeeId);
       paramIdx++;
@@ -326,7 +327,7 @@ router.get("/", requirePermission("projects:read"), async (req, res) => {
     }
 
     const rows = await rawQuery<any>(
-      `SELECT p.*, cl.name AS "clientName", e.name AS "managerName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" LEFT JOIN employees e ON e.id=p."managerId" WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.id DESC`,
+      `SELECT p.*, cl.name AS "clientName", e.name AS "managerName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" LEFT JOIN employees e ON e.id=p."managerId" WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -334,7 +335,7 @@ router.get("/", requirePermission("projects:read"), async (req, res) => {
 });
 
 function isFullAccess(scope: any) {
-  return scope.isOwner || scope.role === "owner" || scope.role === "general_manager";
+  return scope.isOwner || OWNER_GM_ROLES.includes(scope.role);
 }
 
 /**
@@ -503,7 +504,7 @@ router.get("/:id", requirePermission("projects:read"), async (req, res) => {
     let detailWhere = `p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`;
     const detailParams: any[] = [id, scope.companyId];
 
-    if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager") {
+    if (!scope.isOwner && !OWNER_GM_ROLES.includes(scope.role)) {
       if (scope.role === "projects_manager" && scope.employeeId) {
         detailWhere += ` AND p."managerId" = $3`;
         detailParams.push(scope.employeeId);
@@ -1518,7 +1519,7 @@ router.get("/:id/risks", requirePermission("projects:read"), async (req, res) =>
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     const rows = await rawQuery<any>(
-      `SELECT * FROM project_risks WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY (probability * impact) DESC`,
+      `SELECT * FROM project_risks WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY (probability * impact) DESC LIMIT 500`,
       [projectId, scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
@@ -1737,7 +1738,7 @@ router.get("/:id/costs", requirePermission("projects:read"), async (req, res) =>
        FROM project_costs pc
        LEFT JOIN employees e ON e.id=pc."enteredBy"
        WHERE pc."projectId"=$1 AND pc."companyId"=$2
-       ORDER BY pc."costDate" DESC`,
+       ORDER BY pc."costDate" DESC LIMIT 500`,
       [projectId, scope.companyId]
     );
     const [totals] = await rawQuery<any>(

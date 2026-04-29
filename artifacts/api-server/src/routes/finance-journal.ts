@@ -7,6 +7,7 @@ import {
   IntegrationError,
   parseId,
 } from "../lib/errorHandler.js";
+import { FINANCE_ROLES, OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -281,13 +282,13 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
             { field: "amount", fix: "أعد تقييم الميزانية أو قلل المبلغ المطلوب", meta: { utilization: Math.round(utilization), status: "rejected" } }
           );
         }
-        if (utilization > 99 && !["owner", "general_manager"].includes(scope.role)) {
+        if (utilization > 99 && !OWNER_GM_ROLES.includes(scope.role)) {
           throw new ForbiddenError(
             "تجاوز الميزانية 100-110%. يتطلب موافقة المدير العام فقط",
             { fix: "اطلب موافقة المدير العام قبل المتابعة", meta: { utilization: Math.round(utilization), status: "blocked_gm" } }
           );
         }
-        if (utilization > 80 && !["finance_manager", "general_manager", "owner"].includes(scope.role)) {
+        if (utilization > 80 && !FINANCE_ROLES.includes(scope.role)) {
           throw new ForbiddenError(
             "استخدام الميزانية 80-99%. يتطلب موافقة المدير المالي",
             { fix: "اطلب موافقة المدير المالي قبل المتابعة", meta: { utilization: Math.round(utilization), status: "warning_cfo" } }
@@ -348,7 +349,7 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
     }
 
     const approvalResult = await initiateApprovalChain({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, chainType: "expenses", refType: "expense", refId: journalId, amount: Number(amount ?? 0) });
-    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2`, [journalId, effectiveCompanyId]); }
+    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft'`, [journalId, effectiveCompanyId]); }
 
     emitEvent({ companyId: effectiveCompanyId, userId: scope.userId, action: "expense.created", entity: "expenses", entityId: journalId, details: JSON.stringify({ ref, accountCode, amount: baseAmount, vatAmount: computedVat, totalWithVat, sourceAccountCode: sourceAcct, approvalRequired: approvalResult.requiresApproval, operationType, expenseType, relatedEntityType, relatedEntityId }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
@@ -698,7 +699,7 @@ journalRouter.post("/salary-advances", requirePermission("finance:create"), asyn
 
     const { journalId } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: description ?? `سلفة راتب ${employeeName} – خصم على ${deductMonths} شهر`, type: "salary_advance", sourceType: "salary_advance", sourceId: 0, sourceKey: `finance:salary_advance:${Date.now()}`, lines: [{ accountCode: advanceAccountCode, debit: Number(amount), credit: 0, employeeId: employeeId ? Number(employeeId) : undefined }, { accountCode: sourceAcct, debit: 0, credit: Number(amount) }] });
     const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "advances", refType: "salary_advance", refId: journalId, amount: Number(amount) });
-    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2`, [journalId, scope.companyId]); }
+    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft'`, [journalId, scope.companyId]); }
     res.status(201).json({ id: journalId, ref, employeeName, amount, deductMonths, description, approval: approvalResult });
   } catch (err) {
     handleRouteError(err, res, "Finance journal error:");

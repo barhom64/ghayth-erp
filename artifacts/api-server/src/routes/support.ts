@@ -73,7 +73,7 @@ router.get("/tickets", requirePermission("support:read"), async (req, res) => {
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
     if (priority) { where += ` AND t.priority = $${paramIdx}`; params.push(priority); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT t.*, cl.name AS "clientName", e.name AS "assigneeName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" LEFT JOIN employees e ON e.id=t."assigneeId" WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC`,
+      `SELECT t.*, cl.name AS "clientName", e.name AS "assigneeName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" LEFT JOIN employees e ON e.id=t."assigneeId" WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -136,12 +136,12 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
                 COUNT(st.id) AS "openTickets",
                 COALESCE(
                   (SELECT AVG(EXTRACT(EPOCH FROM (st2."resolvedAt" - st2."createdAt"))/3600)
-                   FROM support_tickets st2 WHERE st2."assigneeId"=e.id AND st2.status='resolved' AND st2."resolvedAt" IS NOT NULL),
+                   FROM support_tickets st2 WHERE st2."assigneeId"=e.id AND st2.status='resolved' AND st2."resolvedAt" IS NOT NULL AND st2."deletedAt" IS NULL),
                   999
                 ) AS "avgResolution"
          FROM employees e
          JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-         LEFT JOIN support_tickets st ON st."assigneeId"=e.id AND st.status NOT IN ('resolved','closed')
+         LEFT JOIN support_tickets st ON st."assigneeId"=e.id AND st.status NOT IN ('resolved','closed') AND st."deletedAt" IS NULL
          WHERE e.status='active'
          GROUP BY e.id, e.name
          ORDER BY "openTickets" ASC, "avgResolution" ASC

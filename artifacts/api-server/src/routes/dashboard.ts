@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { FINANCE_ROLES, HR_ROLES, PR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError } from "../lib/errorHandler.js";
@@ -64,7 +65,7 @@ router.get("/", async (req, res) => {
        FROM hr_leave_requests lr
        JOIN employees e ON e.id = lr."employeeId"
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-       WHERE ${leaveWhere.replace(/"companyId"/g, 'lr."companyId"')} AND lr.status = 'pending'
+       WHERE ${leaveWhere.replace(/"companyId"/g, 'lr."companyId"')} AND lr.status = 'pending' AND lr."deletedAt" IS NULL
        ORDER BY lr."createdAt" DESC
        LIMIT 10`,
       leaveParams
@@ -168,7 +169,7 @@ router.get("/summary", async (req, res) => {
     let vehicles = { total: 0, active: 0 };
     try {
       const [v] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='active') AS active FROM fleet_vehicles WHERE ${where}`,
+        `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='active') AS active FROM fleet_vehicles WHERE ${where} AND "deletedAt" IS NULL`,
         [...params]
       );
       vehicles = { total: Number(v?.total ?? 0), active: Number(v?.active ?? 0) };
@@ -222,7 +223,7 @@ router.get("/summary", async (req, res) => {
     let pendingLeaveRequests = 0;
     try {
       const [lr] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM hr_leave_requests WHERE ${noBranchWhere} AND status = 'pending'`,
+        `SELECT COUNT(*) AS total FROM hr_leave_requests WHERE ${noBranchWhere} AND status = 'pending' AND "deletedAt" IS NULL`,
         [...noBranchParams]
       );
       pendingLeaveRequests = Number(lr?.total ?? 0);
@@ -256,7 +257,7 @@ router.get("/role-data", async (req, res) => {
     const role = scope.role;
     const result: any = { role };
 
-    if (["hr_manager", "general_manager", "owner"].includes(role)) {
+    if (HR_ROLES.includes(role)) {
       const [onboarding] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM tasks WHERE ${where} AND category = 'onboarding' AND status != 'completed'`, params
       ).catch(() => [{ total: 0 }]);
@@ -279,7 +280,7 @@ router.get("/role-data", async (req, res) => {
       };
     }
 
-    if (["finance_manager", "general_manager", "owner"].includes(role)) {
+    if (FINANCE_ROLES.includes(role)) {
       const [overdueInvoices] = await rawQuery<any>(
         `SELECT COUNT(*) AS count, COALESCE(SUM(total - "paidAmount"), 0) AS amount
          FROM invoices WHERE ${where} AND "deletedAt" IS NULL AND status IN ('overdue','sent') AND "dueDate" < CURRENT_DATE`, params
@@ -305,7 +306,7 @@ router.get("/role-data", async (req, res) => {
       };
     }
 
-    if (["branch_manager", "general_manager", "owner"].includes(role)) {
+    if (PR_APPROVAL_ROLES.includes(role)) {
       const [teamTasks] = await rawQuery<any>(
         `SELECT
            COUNT(*) AS total,
@@ -447,10 +448,10 @@ router.get("/charts/recent-events", async (req, res) => {
         FROM invoices WHERE ${companyWhere} AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 3)
        UNION ALL
        (SELECT 'leave' AS type, id, 'طلب إجازة من ' || (SELECT name FROM employees WHERE id = lr."employeeId") AS text, lr."createdAt"
-        FROM hr_leave_requests lr WHERE lr.${companyWhere} ORDER BY lr."createdAt" DESC LIMIT 3)
+        FROM hr_leave_requests lr WHERE lr.${companyWhere} AND lr."deletedAt" IS NULL ORDER BY lr."createdAt" DESC LIMIT 3)
        UNION ALL
        (SELECT 'ticket' AS type, id, 'تذكرة دعم: ' || COALESCE(title, '#' || id) AS text, "createdAt"
-        FROM support_tickets WHERE ${companyWhere} ORDER BY "createdAt" DESC LIMIT 3)
+        FROM support_tickets WHERE ${companyWhere} AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 3)
        UNION ALL
        (SELECT 'task' AS type, id, 'مهمة: ' || COALESCE(title, '#' || id) AS text, "createdAt"
         FROM tasks WHERE ${companyWhere} ORDER BY "createdAt" DESC LIMIT 3)

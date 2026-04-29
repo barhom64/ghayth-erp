@@ -919,7 +919,7 @@ router.get("/penalties", requirePermission("umrah:read"), async (req, res) => {
        FROM umrah_penalties pen
        LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id
        LEFT JOIN umrah_agents a ON pen."agentId"=a.id
-       WHERE ${where} ORDER BY pen."createdAt" DESC`, params
+       WHERE ${where} ORDER BY pen."createdAt" DESC LIMIT 500`, params
     );
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List penalties error"); }
@@ -1092,7 +1092,7 @@ router.get("/agent-invoices", requirePermission("umrah:read"), async (req, res) 
        FROM umrah_agent_invoices i
        LEFT JOIN umrah_agents a ON i."agentId"=a.id
        LEFT JOIN umrah_seasons s ON i."seasonId"=s.id
-       WHERE ${where} ORDER BY i."createdAt" DESC`, params
+       WHERE ${where} ORDER BY i."createdAt" DESC LIMIT 500`, params
     );
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List agent invoices error"); }
@@ -1127,7 +1127,7 @@ router.get("/transport", requirePermission("umrah:read"), async (req, res) => {
        FROM umrah_transport t
        LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId"
        LEFT JOIN fleet_drivers d ON d.id = t."driverId"
-       WHERE t."companyId"=$1 ORDER BY t."tripDate" DESC`,
+       WHERE t."companyId"=$1 ORDER BY t."tripDate" DESC LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows });
@@ -1371,7 +1371,7 @@ router.get("/violations", requirePermission("umrah:read"), async (req, res) => {
        LEFT JOIN umrah_agents a ON a.id = v."agentId"
        LEFT JOIN umrah_sub_agents sa ON sa.id = v."subAgentId"
        WHERE v."companyId"=$1 AND v."deletedAt" IS NULL
-       ORDER BY v."detectedAt" DESC`,
+       ORDER BY v."detectedAt" DESC LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
@@ -1448,6 +1448,7 @@ router.delete("/violations/:id", requirePermission("umrah:write"), async (req, r
     );
     if (!row) throw new NotFoundError("المخالفة غير موجودة");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_violations", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.violation.deleted", entity: "umrah_violations", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete violation error"); }
 });
@@ -1488,6 +1489,7 @@ router.post("/penalties", requirePermission("umrah:write"), async (req, res) => 
       }
     }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_penalties", entityId: rows[0]?.id, after: { amount: b.amount, type: b.type } }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.penalty.created", entity: "umrah_penalties", entityId: rows[0]?.id }).catch((e) => logger.error(e, "umrah background task failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create penalty error"); }
 });

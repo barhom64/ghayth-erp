@@ -104,9 +104,7 @@ describe("HR Leave cancel lifecycle", () => {
   it("cancel restricts to owner or HR/GM roles", () => {
     const idx = HR_ROUTE.indexOf('"/leave-requests/:id/cancel"');
     const section = HR_ROUTE.slice(idx, idx + 1000);
-    expect(section).toContain("hr_manager");
-    expect(section).toContain("general_manager");
-    expect(section).toContain("owner");
+    expect(section).toContain("HR_ROLES");
   });
 });
 

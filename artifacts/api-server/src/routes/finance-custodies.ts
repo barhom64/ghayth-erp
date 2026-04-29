@@ -452,7 +452,7 @@ custodiesRouter.post("/custodies", requirePermission("finance:create"), async (r
 
     if (approvalResult.requiresApproval) {
       await rawExecute(
-        `UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2`,
+        `UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft'`,
         [journalId, scope.companyId]
       );
     }

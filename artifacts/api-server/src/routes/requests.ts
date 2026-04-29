@@ -9,7 +9,7 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError, Forbid
 } from "../lib/errorHandler.js";
 import { createAuditLog, createNotification, emitEvent, getLegalResponsible, currentPeriod, currentYear, generateRef } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
-import { MANAGER_ROLES } from "../lib/rbacCatalog.js";
+import { MANAGER_ROLES , HR_APPROVAL_ROLES} from "../lib/rbacCatalog.js";
 
 /* ── Zod Schemas ───────────────────────────────────────────────── */
 
@@ -173,7 +173,7 @@ async function logCommunication(companyId: number, direction: string, subject: s
 router.get("/", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const isManager = ["owner", "general_manager", "hr_manager", "branch_manager"].includes(scope.role);
+    const isManager = HR_APPROVAL_ROLES.includes(scope.role);
     let rows;
     if (isManager) {
       rows = await rawQuery(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE (r."companyId"=$1 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL ORDER BY r."createdAt" DESC LIMIT 500`, [scope.companyId]);

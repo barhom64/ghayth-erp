@@ -690,7 +690,7 @@ router.get("/job-titles", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT * FROM job_titles WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY name`,
+      `SELECT * FROM job_titles WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY name LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
@@ -981,13 +981,13 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
 
     if (status === "active" && before.status !== "active") {
       await rawExecute(
-        `UPDATE employee_assignments SET status = 'active' WHERE id = $1 AND "companyId" = $2`,
-        [employee.assignmentId, scope.companyId]
+        `UPDATE employee_assignments SET status = 'active' WHERE id = $1 AND "companyId" = $2 AND status = $3`,
+        [employee.assignmentId, scope.companyId, before.status]
       );
     } else if (status === "suspended" && before.status !== "suspended") {
       await rawExecute(
-        `UPDATE employee_assignments SET status = 'suspended' WHERE id = $1 AND "companyId" = $2`,
-        [employee.assignmentId, scope.companyId]
+        `UPDATE employee_assignments SET status = 'suspended' WHERE id = $1 AND "companyId" = $2 AND status = $3`,
+        [employee.assignmentId, scope.companyId, before.status]
       );
     }
 

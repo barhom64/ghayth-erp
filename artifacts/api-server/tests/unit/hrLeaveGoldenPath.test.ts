@@ -217,10 +217,7 @@ describe("HR Leave security contracts", () => {
   it("role authorization restricts approvers", () => {
     const idx = HR_ROUTE.indexOf('"/leave-requests/:id/approve"');
     const approvalSection = HR_ROUTE.slice(idx, idx + 1200);
-    expect(approvalSection).toContain("branch_manager");
-    expect(approvalSection).toContain("hr_manager");
-    expect(approvalSection).toContain("general_manager");
-    expect(approvalSection).toContain("owner");
+    expect(approvalSection).toContain("HR_APPROVAL_ROLES");
   });
 });
 

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { OPS_CLOSE_ROLES, OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -135,13 +136,13 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
         `SELECT COUNT(*) AS total,
            COUNT(*) FILTER (WHERE "slaDeadline" IS NOT NULL AND "slaDeadline" < NOW()) AS breached
          FROM maintenance_requests
-         WHERE "companyId"=$1 AND status NOT IN ('completed','closed','rejected')`,
+         WHERE "companyId"=$1 AND status NOT IN ('completed','closed','rejected') AND "deletedAt" IS NULL`,
         [cid]
       );
       const [expContracts] = await rawQuery<any>(
         `SELECT COUNT(*) AS total
          FROM rental_contracts
-         WHERE "companyId"=$1 AND status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`,
+         WHERE "companyId"=$1 AND status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND "deletedAt" IS NULL`,
         [cid]
       );
       const overdueRentVal = Number(overdueRent?.total ?? 0);
@@ -236,7 +237,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
       const [vehicleStats] = await rawQuery<any>(
         `SELECT
            COUNT(*) FILTER (WHERE status='active' AND "nextServiceDate" IS NOT NULL AND "nextServiceDate" <= CURRENT_DATE + INTERVAL '7 days') AS needService
-         FROM fleet_vehicles WHERE ${where}`,
+         FROM fleet_vehicles WHERE ${where} AND "deletedAt" IS NULL`,
         params
       );
       const [activeTrips] = await rawQuery<any>(
@@ -530,7 +531,7 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
   try {
     const parsed = zodParse(dailyCloseExecuteSchema.safeParse(req.body));
     const scope = req.scope!;
-    const allowedRoles = ["owner", "general_manager", "branch_manager", "hr_manager", "finance_manager"];
+    const allowedRoles = OPS_CLOSE_ROLES;
     if (!allowedRoles.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح — يتطلب صلاحية مدير على الأقل");
     }
@@ -539,7 +540,7 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
     const userId = scope.userId;
     const cid = scope.companyId;
     const forceClose = req.body?.force === true;
-    const overrideRoles = ["owner", "general_manager"];
+    const overrideRoles = OWNER_GM_ROLES;
 
     if (!forceClose) {
       const { where, params } = buildFilter(scope, req);

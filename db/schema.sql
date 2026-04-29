@@ -20827,6 +20827,19 @@ CREATE INDEX IF NOT EXISTS idx_fleet_trips_company ON public.fleet_trips USING b
 CREATE INDEX IF NOT EXISTS idx_fleet_fuel_logs_vehicle ON public.fleet_fuel_logs USING btree ("vehicleId");
 CREATE INDEX IF NOT EXISTS idx_fleet_fuel_logs_company ON public.fleet_fuel_logs USING btree ("companyId");
 
+-- bank_statements
+CREATE INDEX IF NOT EXISTS idx_bank_statements_matched_journal ON public.bank_statements USING btree ("matchedJournalLineId");
+
+-- budget_approval_requests
+CREATE INDEX IF NOT EXISTS idx_budget_approval_requests_source ON public.budget_approval_requests USING btree ("sourceId");
+
+-- journal_entry_template_lines
+CREATE INDEX IF NOT EXISTS idx_journal_entry_template_lines_account ON public.journal_entry_template_lines USING btree ("accountId");
+
+-- accounting_mappings
+CREATE INDEX IF NOT EXISTS idx_accounting_mappings_debit ON public.accounting_mappings USING btree ("debitAccountId");
+CREATE INDEX IF NOT EXISTS idx_accounting_mappings_credit ON public.accounting_mappings USING btree ("creditAccountId");
+
 --
 -- Name: request_number_seq; Type: SEQUENCE; Schema: public; Owner: -
 --

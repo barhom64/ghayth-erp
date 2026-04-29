@@ -4,7 +4,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 import { todayISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
-import { LEAVE_APPROVAL_ROLES, PAYROLL_ROLES, FINANCE_ROLES, PR_APPROVAL_ROLES, LETTER_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
+import { LEAVE_APPROVAL_ROLES, PAYROLL_ROLES, FINANCE_ROLES, PR_APPROVAL_ROLES, LETTER_APPROVAL_ROLES , ACTION_CENTER_ROLES} from "../lib/rbacCatalog.js";
 
 const router = Router();
 
@@ -12,7 +12,7 @@ router.get("/", async (req, res) => {
   try {
     const scope = req.scope!;
 
-    const allowedRoles = ["owner", "general_manager", "branch_manager", "hr_manager", "finance_manager", "supervisor"];
+    const allowedRoles = ACTION_CENTER_ROLES;
     if (!allowedRoles.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: هذه الصفحة للمدراء فقط");
     }
@@ -31,7 +31,7 @@ router.get("/", async (req, res) => {
            JOIN employees e ON e.id = lr."employeeId"
            JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
            LEFT JOIN leave_approval_stages las ON las."leaveRequestId" = lr.id AND las.status = 'pending'
-           WHERE lr."companyId" = ANY($1::int[]) AND lr.status = 'pending'
+           WHERE lr."companyId" = ANY($1::int[]) AND lr.status = 'pending' AND lr."deletedAt" IS NULL
              AND (
                $2 = 'owner'
                OR las."assignedTo" = $3
