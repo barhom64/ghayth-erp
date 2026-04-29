@@ -1,5 +1,6 @@
 import { handleRouteError, ValidationError, ForbiddenError, NotFoundError, ConflictError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -101,11 +102,8 @@ router.post("/users", requirePermission("admin:write"), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const parsed = createUserSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    }
-    const { email, role, password, employeeId } = parsed.data;
+    const parsed = zodParse(createUserSchema.safeParse(req.body));
+    const { email, role, password, employeeId } = parsed;
     if (employeeId) {
       const [empCheck] = await rawQuery(
         `SELECT 1 FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 LIMIT 1`,
@@ -298,11 +296,8 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
       [id, scope.companyId]
     );
     if (!userBelongs) { throw new ForbiddenError("المستخدم لا ينتمي لشركتك"); }
-    const parsed = resetPasswordSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    }
-    const { newPassword } = parsed.data;
+    const parsed = zodParse(resetPasswordSchema.safeParse(req.body));
+    const { newPassword } = parsed;
     const hashed = await hashPassword(newPassword);
     const result = await rawExecute(`UPDATE users SET "passwordHash"=$1 WHERE id=$2`, [hashed, id]);
     if (result.affectedRows === 0) { throw new NotFoundError("المستخدم غير موجود"); }
@@ -333,14 +328,11 @@ router.post("/roles", requirePermission("admin:write"), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const parsed = createRoleSchema.safeParse({
+    zodParse(createRoleSchema.safeParse({
       name: req.body?.label,
       description: req.body?.description,
       permissions: req.body?.permissions,
-    });
-    if (!parsed.success) {
-      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    }
+    }));
     const { roleKey, label, level, modules, permissions: rolePermissions } = req.body;
     if (!roleKey || !label) { throw new ValidationError("roleKey و label مطلوبان"); }
     if (!/^[a-z_]+$/.test(roleKey)) { throw new ValidationError("roleKey يجب أن يحتوي على أحرف إنجليزية صغيرة وشرطات سفلية فقط"); }
@@ -536,10 +528,7 @@ router.post("/integrations", requirePermission("admin:write"), async (req, res) 
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const parsed = createIntegrationSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    }
+    const parsed = zodParse(createIntegrationSchema.safeParse(req.body));
     const { type, name, config, status, maxRetries } = req.body;
     const r = await rawExecute(
       `INSERT INTO integrations ("companyId",type,name,config,status,"maxRetries")

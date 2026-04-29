@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { handleRouteError, ValidationError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, ForbiddenError, ConflictError , zodParse } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { logger } from "../lib/logger.js";
@@ -528,8 +528,7 @@ router.get("/daily-close/checklist", requirePermission("operations:read"), async
 
 router.post("/daily-close/execute", requirePermission("finance:write"), async (req, res) => {
   try {
-    const parsed = dailyCloseExecuteSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(dailyCloseExecuteSchema.safeParse(req.body));
     const scope = req.scope!;
     const allowedRoles = ["owner", "general_manager", "branch_manager", "hr_manager", "finance_manager"];
     if (!allowedRoles.includes(scope.role)) {

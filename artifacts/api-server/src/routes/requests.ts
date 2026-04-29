@@ -5,6 +5,7 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, createNotification, emitEvent, getLegalResponsible, currentPeriod, currentYear, generateRef } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -185,8 +186,7 @@ router.get("/", requirePermission("requests:read"), async (req, res) => {
 
 router.post("/", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = createRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createRequestSchema.safeParse(req.body));
     const scope = req.scope!;
     const { typeId, requesterName, requester, title, description, priority, data, attachments } = req.body;
     const resolvedRequesterName = requesterName || requester;
@@ -333,8 +333,7 @@ router.get("/types", requirePermission("requests:read"), async (req, res) => {
 
 router.post("/types", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = createRequestTypeSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createRequestTypeSchema.safeParse(req.body));
     const scope = req.scope!;
     const { name, description, category, requiredFields, approvalFlow, isActive } = req.body;
     const r = await rawExecute(
@@ -357,8 +356,7 @@ router.get("/workflows", requirePermission("requests:read"), async (req, res) =>
 
 router.post("/workflows", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = createWorkflowSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createWorkflowSchema.safeParse(req.body));
     const scope = req.scope!;
     const { name, description, steps } = req.body;
     const r = await rawExecute(
@@ -400,8 +398,7 @@ router.get("/:id", requirePermission("requests:read"), async (req, res) => {
 
 router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = updateRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(updateRequestSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = req.body;
@@ -516,8 +513,7 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
 
 router.post("/:id/approve", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = approveRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(approveRequestSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { notes } = req.body;
@@ -580,8 +576,7 @@ router.post("/:id/approve", requirePermission("requests:write"), async (req, res
 
 router.post("/:id/reject", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = rejectRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(rejectRequestSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { notes } = req.body;
@@ -642,8 +637,7 @@ router.post("/:id/reject", requirePermission("requests:write"), async (req, res)
 
 router.post("/:id/return", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = returnRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(returnRequestSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { notes } = req.body;
@@ -765,8 +759,7 @@ router.delete("/:id", requirePermission("requests:write"), async (req, res) => {
 
 router.post("/:id/convert", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = convertRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(convertRequestSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { targetType } = req.body;

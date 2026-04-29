@@ -1228,7 +1228,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
  */
 router.post("/obligations/seed", requirePermission("hr:update"), async (req, res) => {
   try {
-    { const _guard = seedObligationsSchema.safeParse(req.body); if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
+    zodParse(seedObligationsSchema.safeParse(req.body));
     const scope = req.scope!;
     const emps = await rawQuery<any>(
       `SELECT e.id, e.name, e."iqamaExpiry", e."passportExpiry", e."workPermitExpiry", e."visaExpiry"

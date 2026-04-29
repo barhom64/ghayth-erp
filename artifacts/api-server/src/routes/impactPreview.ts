@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError , zodParse } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
@@ -28,14 +28,8 @@ interface ImpactItem {
 router.post("/", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const parsed = impactPreviewSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const { entityType, entityId, action } = parsed.data;
+    const parsed = zodParse(impactPreviewSchema.safeParse(req.body));
+    const { entityType, entityId, action } = parsed;
 
     const impacts: ImpactItem[] = [];
 

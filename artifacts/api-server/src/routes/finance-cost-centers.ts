@@ -4,6 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -69,14 +70,8 @@ router.get("/cost-centers/:id", requirePermission("finance:read"), async (req, r
 router.post("/cost-centers", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createCostCenterSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const { code, name, type, parentId, relatedEntityType, relatedEntityId, allocatedAmount } = parsed.data;
+    const parsed = zodParse(createCostCenterSchema.safeParse(req.body));
+    const { code, name, type, parentId, relatedEntityType, relatedEntityId, allocatedAmount } = parsed;
 
     const [existing] = code
       ? await rawQuery<any>(
@@ -111,14 +106,8 @@ router.patch("/cost-centers/:id", requirePermission("finance:update"), async (re
     );
     if (!existing) throw new NotFoundError("مركز التكلفة غير موجود");
 
-    const parsed = updateCostCenterSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("بيانات غير صالحة", {
-        field: parsed.error.issues[0]?.path[0]?.toString() ?? "unknown",
-        fix: parsed.error.issues[0]?.message ?? "تحقق من البيانات المدخلة",
-      });
-    }
-    const { name, code, type, parentId, allocatedAmount, status } = parsed.data;
+    const parsed = zodParse(updateCostCenterSchema.safeParse(req.body));
+    const { name, code, type, parentId, allocatedAmount, status } = parsed;
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;

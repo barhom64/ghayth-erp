@@ -1079,9 +1079,8 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
     END $$`).catch((e) => logger.error(e, "hr background task failed"));
 
     const scope = req.scope!;
-    const parsed = leaveRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    let { leaveTypeId, leaveType: leaveTypeName, startDate, endDate, reason, documentUrl } = parsed.data as any;
+    const parsed = zodParse(leaveRequestSchema.safeParse(req.body));
+    let { leaveTypeId, leaveType: leaveTypeName, startDate, endDate, reason, documentUrl } = parsed as any;
 
     if (!leaveTypeId && leaveTypeName) {
       const [found] = await rawQuery<any>(
@@ -2591,12 +2590,11 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
 router.post("/violations", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = violationSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(violationSchema.safeParse(req.body));
     const {
       assignmentId, type, description, severity, deduction,
       period: reqPeriod, incidentDate: reqIncidentDate, regulationId,
-    } = parsed.data as any;
+    } = parsed as any;
 
     // FK pre-check: assignment must exist inside the caller's company scope.
     // Without this, a bad assignmentId would fail as a deep 23503 whose
@@ -2738,14 +2736,13 @@ router.get("/shifts", requirePermission("hr:read"), async (req, res) => {
 router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = shiftSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(shiftSchema.safeParse(req.body));
     const {
       name, startTime, endTime, days, isDefault, branchId,
       shiftType, remoteAllowed,
       splitBreakStart, splitBreakEnd,
       flexStartEarliest, flexStartLatest,
-    } = parsed.data;
+    } = parsed;
     const effectiveBranchId = branchId ?? scope.branchId;
     // shiftType: 'fixed' (default) | 'flexible' | 'remote' | 'split'
     const effectiveShiftType = shiftType ?? 'fixed';

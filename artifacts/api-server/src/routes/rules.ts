@@ -207,7 +207,7 @@ router.delete("/:id", requirePermission("admin:write"), async (req, res) => {
 
 router.patch("/:id/toggle", requirePermission("admin:write"), async (req, res) => {
   try {
-    { const _guard = toggleRuleSchema.safeParse(req.body); if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
+    zodParse(toggleRuleSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(

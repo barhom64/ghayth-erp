@@ -1,5 +1,6 @@
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, IntegrationError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { logger } from "../lib/logger.js";
@@ -399,8 +400,7 @@ router.get("/log", requirePermission("communications:read"), async (req, res): P
 
 router.post("/send", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
-    const parsed = sendCommunicationSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(sendCommunicationSchema.safeParse(req.body));
     const scope = req.scope!;
     const b = req.body;
 
@@ -497,8 +497,7 @@ router.get("/pbx", requirePermission("communications:read"), async (req, res): P
 
 router.patch("/log/:id", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
-    const parsed = updateLogSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(updateLogSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { body, content, subject, direction, status } = req.body as any;
@@ -531,8 +530,7 @@ router.patch("/log/:id", requirePermission("communications:write"), async (req, 
 
 router.post("/log/:id/convert", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
-    const parsed = convertLogSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(convertLogSchema.safeParse(req.body));
     const scope = req.scope!;
     const logId = parseId(req.params.id, "id");
     const { targetType } = req.body;
@@ -729,8 +727,7 @@ router.get("/push/vapid-key", async (_req, res): Promise<void> => {
 
 router.post("/push/subscribe", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
-    const parsed = pushSubscribeSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(pushSubscribeSchema.safeParse(req.body));
     const scope = req.scope!;
     const { endpoint, keys } = req.body as {
       endpoint: string;
@@ -800,8 +797,7 @@ router.delete("/push/unsubscribe", requirePermission("communications:write"), as
 
 router.post("/push/test", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
-    const parsed = z.object({}).safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(z.object({}).safeParse(req.body));
     const scope = req.scope!;
     const result = await sendPushToCompany(
       scope.companyId,

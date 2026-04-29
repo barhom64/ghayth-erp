@@ -4,6 +4,7 @@ import {
   NotFoundError,
   ConflictError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -117,8 +118,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
   // errors instead of deep 23503 FK errors, and keeps the existing
   // obligations engine wiring + event emission untouched.
   try {
-    const parsed = createOpportunitySchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createOpportunitySchema.safeParse(req.body));
     const scope = req.scope!;
     const b = req.body;
 
@@ -301,8 +301,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
 
 router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, res) => {
   try {
-    const parsed = updateOpportunitySchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(updateOpportunitySchema.safeParse(req.body));
     const scope = req.scope!;
     const oppId = parseId(req.params.id, "id");
     const b = req.body;
@@ -765,8 +764,7 @@ router.get("/opportunities/:id", requirePermission("crm:read"), async (req, res)
 // atomic transition via the lifecycle engine.
 router.post("/opportunities/:id/convert", requirePermission("crm:update"), async (req, res) => {
   try {
-    const parsed = convertOpportunitySchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(convertOpportunitySchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
@@ -937,8 +935,7 @@ router.get("/opportunities/:id/activities", requirePermission("crm:read"), async
 
 router.post("/opportunities/:id/activities", requirePermission("crm:create"), async (req, res) => {
   try {
-    const parsed = createActivitySchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createActivitySchema.safeParse(req.body));
     const scope = req.scope!;
     const b = req.body;
     const oppId = parseId(req.params.id, "id");
@@ -980,8 +977,7 @@ router.get("/pipeline", requirePermission("crm:read"), async (req, res) => {
 
 router.post("/followup-check", requirePermission("crm:create"), async (req, res) => {
   try {
-    const parsed = followupCheckSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(followupCheckSchema.safeParse(req.body));
     const scope = req.scope!;
     const overdueActivities = await rawQuery<any>(
       `SELECT ca.*, co.title AS "oppTitle", co.stage, co."assignedTo", e.name AS "assigneeName"

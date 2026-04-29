@@ -4,6 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -61,8 +62,7 @@ router.get("/campaigns", requirePermission("marketing:read"), async (req, res) =
 
 router.post("/campaigns", requirePermission("marketing:create"), async (req, res) => {
   try {
-    const parsed = createCampaignSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createCampaignSchema.safeParse(req.body));
     const scope = req.scope!;
     const { name, description, type, channel, status, budget, spent, startDate, endDate, targetAudience } = req.body;
     if (!name || !String(name).trim()) {
@@ -112,8 +112,7 @@ router.get("/campaigns/:id", requirePermission("marketing:read"), async (req, re
 
 router.patch("/campaigns/:id", requirePermission("marketing:update"), async (req, res) => {
   try {
-    const parsed = updateCampaignSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(updateCampaignSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
@@ -234,8 +233,7 @@ router.get("/funnel", requirePermission("marketing:read"), async (req, res) => {
 
 router.patch("/campaigns/:id/revenue", requirePermission("marketing:update"), async (req, res) => {
   try {
-    const parsed = updateRevenueSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(updateRevenueSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { revenue } = req.body;
