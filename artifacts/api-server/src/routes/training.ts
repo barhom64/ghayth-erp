@@ -1,13 +1,23 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError,
+import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
+
+const VALID_PROGRAM_TRANSITIONS: Record<string, string[]> = {
+  draft: ["pending", "cancelled"],
+  pending: ["approved", "rejected"],
+  approved: ["active", "cancelled"],
+  rejected: ["draft"],
+  active: ["completed", "cancelled"],
+  completed: [],
+  cancelled: ["draft"],
+};
 
 /* ── Zod Schemas ────────────────────────────────────────────── */
 
@@ -121,8 +131,14 @@ router.patch("/programs/:id", requirePermission("hr:update"), async (req, res) =
     const b = parsed_patchProgramSchema.data;
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT id, status FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("البرنامج التدريبي غير موجود");
+    if (b.status && b.status !== existing.status) {
+      const allowed = VALID_PROGRAM_TRANSITIONS[existing.status];
+      if (allowed && !allowed.includes(b.status)) {
+        throw new ConflictError(`لا يمكن نقل البرنامج من "${existing.status}" إلى "${b.status}"`);
+      }
+    }
     const sets: string[] = [];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }

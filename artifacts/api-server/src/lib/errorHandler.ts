@@ -19,6 +19,8 @@
  * with one of these classes.
  */
 
+import { logger } from "./logger.js";
+
 export interface TypedErrorOptions {
   /** Form field that the error is attached to, when applicable. */
   field?: string;
@@ -311,9 +313,9 @@ export function handleRouteError(err: unknown, res: any, logContext: string): vo
     // visible to the operator even though we never ship it to the client.
     const underlying = (err as any).cause;
     if (underlying !== undefined) {
-      console.error(`[ERROR] ${logContext}:`, err.message, err.code, err.meta ?? "", underlying);
+      logger.error({ code: err.code, meta: err.meta, cause: underlying }, `[ERROR] ${logContext}: ${err.message}`);
     } else {
-      console.error(`[ERROR] ${logContext}:`, err.message, err.code, err.meta ?? "");
+      logger.error({ code: err.code, meta: err.meta }, `[ERROR] ${logContext}: ${err.message}`);
     }
     if (res.headersSent) return;
     res.status(err.status).json(err.toResponse());
@@ -325,9 +327,9 @@ export function handleRouteError(err: unknown, res: any, logContext: string): vo
     const safeFields = e && typeof e === "object"
       ? { message: e.message, code: e.code, detail: e.detail, hint: e.hint, table: e.table, column: e.column, constraint: e.constraint, position: e.position, where: e.where }
       : { message: String(e) };
-    console.error(`[ERROR] ${logContext}:`, JSON.stringify(safeFields), e?.stack ?? "");
+    logger.error({ ...safeFields, stack: e?.stack }, `[ERROR] ${logContext}`);
   } catch {
-    console.error(`[ERROR] ${logContext}: <unprintable error>`);
+    logger.error(`[ERROR] ${logContext}: <unprintable error>`);
   }
   const { status, message, code, field, fix } = classifyDbError(err);
   if (res.headersSent) return;
