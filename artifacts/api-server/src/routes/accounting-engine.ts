@@ -133,7 +133,8 @@ router.get("/accounting-mappings", requirePermission("finance:read"), async (req
        LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
        LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
        WHERE am."companyId" = $1
-       ORDER BY am."operationType" ASC`,
+       ORDER BY am."operationType" ASC
+       LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
@@ -296,7 +297,8 @@ router.get("/journal-templates", requirePermission("finance:read"), async (req, 
       `SELECT jt.*
        FROM journal_entry_templates jt
        WHERE ${conditions.join(" AND ")}
-       ORDER BY jt."operationType", jt.name`,
+       ORDER BY jt."operationType", jt.name
+       LIMIT 500`,
       params
     );
 
@@ -459,7 +461,8 @@ router.get("/subsidiary-accounts", requirePermission("finance:read"), async (req
        FROM subsidiary_accounts sa
        JOIN chart_of_accounts ca ON ca.id = sa."accountId"
        WHERE ${conditions.join(" AND ")}
-       ORDER BY sa."entityType", sa."entityId"`,
+       ORDER BY sa."entityType", sa."entityId"
+       LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });

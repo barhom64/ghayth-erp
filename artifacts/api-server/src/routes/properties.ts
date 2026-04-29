@@ -704,7 +704,7 @@ router.get("/contracts", requirePermission("property:read"), async (req, res) =>
     if (status) { params.push(status); conditions.push(`c.status = $${params.length}`); }
     conditions.push(`c."deletedAt" IS NULL`);
     const rows = await rawQuery<any>(
-      `SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL WHERE ${conditions.join(" AND ")} ORDER BY c.id DESC`,
+      `SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL WHERE ${conditions.join(" AND ")} ORDER BY c.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -1370,7 +1370,8 @@ router.get("/tenants/list", requirePermission("property:read"), async (req, res)
        LEFT JOIN rent_payments rp ON rp."contractId"=c.id
        WHERE ${tConditions.join(" AND ")}
        GROUP BY t.id, t.name, t.phone, t.email, t."nationalId", t.nationality, t."createdAt"
-       ORDER BY t.name`,
+       ORDER BY t.name
+       LIMIT 500`,
       tParams
     );
 
@@ -1398,7 +1399,8 @@ router.get("/tenants/list", requirePermission("property:read"), async (req, res)
          AND c."tenantName" NOT IN (SELECT name FROM tenants WHERE "companyId"=$1)
          AND (c."tenantId" IS NULL OR c."tenantId" NOT IN (SELECT id FROM tenants WHERE "companyId"=$1))
        GROUP BY c."tenantName", c."tenantPhone", c."tenantEmail", c."tenantIdNumber"
-       ORDER BY c."tenantName"`,
+       ORDER BY c."tenantName"
+       LIMIT 500`,
       cParams
     );
 
@@ -1553,7 +1555,7 @@ router.get("/payments", requirePermission("property:read"), async (req, res) => 
     if (status) { params.push(status); conditions.push(`rp.status = $${params.length}`); }
     if (contractId) { params.push(Number(contractId)); conditions.push(`rp."contractId" = $${params.length}`); }
     const rows = await rawQuery<any>(
-      `SELECT rp.*, c."tenantName", u."unitNumber" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" AND c."deletedAt" IS NULL LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL WHERE ${conditions.join(" AND ")} ORDER BY rp."dueDate" DESC`,
+      `SELECT rp.*, c."tenantName", u."unitNumber" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" AND c."deletedAt" IS NULL LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL WHERE ${conditions.join(" AND ")} ORDER BY rp."dueDate" DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -1797,7 +1799,7 @@ router.get("/maintenance-requests", requirePermission("property:read"), async (r
     const params: any[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`mr.status = $${params.length}`); }
     const rows = await rawQuery<any>(
-      `SELECT mr.*, u."unitNumber", u."buildingName", t.name AS "technicianName" FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId" LEFT JOIN technicians t ON t.id=mr."assignedTo" WHERE ${conditions.join(" AND ")} ORDER BY mr.id DESC`,
+      `SELECT mr.*, u."unitNumber", u."buildingName", t.name AS "technicianName" FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId" LEFT JOIN technicians t ON t.id=mr."assignedTo" WHERE ${conditions.join(" AND ")} ORDER BY mr.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -2224,7 +2226,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
 router.get("/technicians", requirePermission("property:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT * FROM technicians WHERE "companyId"=$1 ORDER BY name`, [scope.companyId]);
+    const rows = await rawQuery<any>(`SELECT * FROM technicians WHERE "companyId"=$1 ORDER BY name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Technicians error:"); }
 });
@@ -2238,7 +2240,7 @@ router.get("/tenants", requirePermission("property:read"), async (req, res) => {
     if (search) { params.push(`%${search}%`); whereClause += ` AND (name ILIKE $${params.length} OR phone ILIKE $${params.length} OR "nationalId" ILIKE $${params.length})`; }
     whereClause += ` AND "deletedAt" IS NULL`;
     const rows = await rawQuery<any>(
-      `SELECT id, name, phone, email, "nationalId", nationality, "idType", notes, "createdAt" FROM tenants WHERE ${whereClause} ORDER BY name`,
+      `SELECT id, name, phone, email, "nationalId", nationality, "idType", notes, "createdAt" FROM tenants WHERE ${whereClause} ORDER BY name LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -2376,7 +2378,8 @@ router.get("/buildings", requirePermission("property:read"), async (req, res) =>
        LEFT JOIN rent_payments rp ON rp."contractId"=rc.id AND rp.status='paid'
        WHERE ${conditions.join(" AND ")} AND b."deletedAt" IS NULL
        GROUP BY b.id
-       ORDER BY b.name`,
+       ORDER BY b.name
+       LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });
@@ -2604,7 +2607,7 @@ router.get("/maintenance", requirePermission("property:read"), async (req, res) 
     const params: any[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`mr.status = $${params.length}`); }
     const rows = await rawQuery<any>(
-      `SELECT mr.*, u."unitNumber", u."buildingName" FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId" WHERE ${conditions.join(" AND ")} ORDER BY mr.id DESC`,
+      `SELECT mr.*, u."unitNumber", u."buildingName" FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId" WHERE ${conditions.join(" AND ")} ORDER BY mr.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -2917,7 +2920,7 @@ router.get("/owners", requirePermission("property:read"), async (req, res) => {
         (SELECT COUNT(*) FROM property_buildings WHERE "ownerId"=o.id) AS "buildingCount",
         (SELECT COUNT(*) FROM property_units WHERE "ownerId"=o.id AND "deletedAt" IS NULL) AS "unitCount",
         (SELECT COUNT(*) FROM rental_contracts WHERE "ownerId"=o.id AND status='active' AND "deletedAt" IS NULL) AS "activeContracts"
-       FROM property_owners o WHERE ${conditions.join(" AND ")} AND o."deletedAt" IS NULL ORDER BY o.name`,
+       FROM property_owners o WHERE ${conditions.join(" AND ")} AND o."deletedAt" IS NULL ORDER BY o.name LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });
@@ -3184,7 +3187,8 @@ router.get("/inspections", requirePermission("property:read"), async (req, res) 
        FROM property_inspections i
        JOIN property_units u ON u.id=i."unitId"
        WHERE ${conditions.join(" AND ")}
-       ORDER BY i."scheduledDate" DESC`,
+       ORDER BY i."scheduledDate" DESC
+       LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });
@@ -3352,7 +3356,8 @@ router.get("/deposits", requirePermission("property:read"), async (req, res) => 
        JOIN rental_contracts rc ON rc.id=sd."contractId"
        LEFT JOIN property_units u ON u.id=rc."unitId"
        WHERE ${conditions.join(" AND ")}
-       ORDER BY sd."receivedDate" DESC`,
+       ORDER BY sd."receivedDate" DESC
+       LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });
@@ -3514,7 +3519,8 @@ router.get("/occupancy-report", requirePermission("property:read"), async (req, 
        FROM property_units u
        LEFT JOIN rental_contracts rc ON rc."unitId"=u.id AND rc.status='active' AND rc."deletedAt" IS NULL
        WHERE ${conditions.join(" AND ")}
-       ORDER BY u."buildingName", u."unitNumber"`,
+       ORDER BY u."buildingName", u."unitNumber"
+       LIMIT 500`,
       params
     );
 

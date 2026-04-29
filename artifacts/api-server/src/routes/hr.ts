@@ -2728,7 +2728,7 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
 router.get("/shifts", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT * FROM shifts WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name`, [scope.companyId]);
+    const rows = await rawQuery<any>(`SELECT * FROM shifts WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { console.error("Get shifts error:", err); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
@@ -2961,7 +2961,7 @@ router.get("/salary-components", requirePermission("hr:read"), async (req, res) 
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT * FROM salary_components WHERE "companyId"=$1 ORDER BY name`, [scope.companyId]
+      `SELECT * FROM salary_components WHERE "companyId"=$1 ORDER BY name LIMIT 500`, [scope.companyId]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (_e) { res.json({ data: [], total: 0 }); }
@@ -3099,7 +3099,7 @@ router.get("/approval-requests", requirePermission("hr:read"), async (req, res) 
        LEFT JOIN employee_assignments ea ON ea.id = ar."assignedTo"
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE ar."companyId" = $1 AND ar.status = $2
-       ORDER BY ar."createdAt" DESC`,
+       ORDER BY ar."createdAt" DESC LIMIT 500`,
       [scope.companyId, statusFilter]
     );
     res.json({ data: rows, total: rows.length });
@@ -3676,7 +3676,7 @@ router.get("/monthly-attendance", requirePermission("hr:read"), async (req, res)
        JOIN employee_assignments ea ON ea.id = ema."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
        WHERE ema."companyId" = $1 AND ema.period = $2
-       ORDER BY e.name`,
+       ORDER BY e.name LIMIT 500`,
       [scope.companyId, month]
     );
     res.json({ data: rows, total: rows.length });
@@ -4388,7 +4388,7 @@ router.get("/deductions", requirePermission("hr:read"), async (req, res) => {
        JOIN employee_assignments ea ON ea.id = ad."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
        WHERE ad."companyId" = $1 AND ad.period = $2
-       ORDER BY ad."createdAt" DESC`,
+       ORDER BY ad."createdAt" DESC LIMIT 500`,
       [scope.companyId, month]
     );
     res.json({ data: rows, total: rows.length });
@@ -5471,7 +5471,7 @@ router.get("/public-holidays", requirePermission("hr:read"), async (req, res) =>
     const params: any[] = [scope.companyId];
     if (year) { params.push(Number(year)); conditions.push(`year = $${params.length}`); }
     const rows = await rawQuery<any>(
-      `SELECT * FROM public_holidays WHERE ${conditions.join(" AND ")} ORDER BY "startDate"`,
+      `SELECT * FROM public_holidays WHERE ${conditions.join(" AND ")} ORDER BY "startDate" LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });
@@ -5596,7 +5596,7 @@ router.get("/transfers", requirePermission("hr:read"), async (req, res) => {
        LEFT JOIN departments d1 ON d1.id=t."fromDeptId"
        LEFT JOIN departments d2 ON d2.id=t."toDeptId"
        WHERE ${conditions.join(" AND ")}
-       ORDER BY t."createdAt" DESC`,
+       ORDER BY t."createdAt" DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });
@@ -5958,7 +5958,7 @@ router.get("/idp", requirePermission("hr:read"), async (req, res) => {
        FROM employee_development_plans idp
        JOIN employees e ON e.id=idp."employeeId"
        WHERE ${conditions.join(" AND ")}
-       ORDER BY idp."createdAt" DESC`,
+       ORDER BY idp."createdAt" DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });
@@ -6698,7 +6698,7 @@ router.get("/excuse-requests", requirePermission("hr:read"), async (req, res) =>
        JOIN employee_assignments ea ON ea.id = e."assignmentId"
        JOIN employees emp ON emp.id = ea."employeeId"
        WHERE ${where}
-       ORDER BY e."excuseDate" DESC, e."createdAt" DESC`,
+       ORDER BY e."excuseDate" DESC, e."createdAt" DESC LIMIT 500`,
       params
     );
     const pending = rows.filter((r: any) => r.status === "pending").length;

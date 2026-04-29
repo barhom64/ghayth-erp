@@ -496,7 +496,7 @@ router.get("/movements", requirePermission("warehouse:read"), async (req, res) =
     let paramIdx = nextParamIndex;
     if (productId) { where += ` AND m."productId" = $${paramIdx}`; params.push(Number(productId)); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT m.*, p.name AS "productName", p.sku FROM warehouse_movements m LEFT JOIN warehouse_products p ON p.id=m."productId" WHERE ${where} ORDER BY m.id DESC`,
+      `SELECT m.*, p.name AS "productName", p.sku FROM warehouse_movements m LEFT JOIN warehouse_products p ON p.id=m."productId" WHERE ${where} ORDER BY m.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -1171,7 +1171,7 @@ router.get("/inventory-counts", requirePermission("warehouse:read"), async (req,
        FROM inventory_counts ic
        LEFT JOIN employees e ON e.id=ic."conductedBy"
        WHERE ${conditions.join(" AND ")}
-       ORDER BY ic."countDate" DESC`,
+       ORDER BY ic."countDate" DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });

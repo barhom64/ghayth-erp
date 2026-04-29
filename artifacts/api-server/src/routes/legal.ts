@@ -117,7 +117,7 @@ router.get("/contracts", requirePermission("legal:read"), async (req, res) => {
     const params: any[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
     conditions.push(`"deletedAt" IS NULL`);
-    const rows = await rawQuery<any>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE ${conditions.join(" AND ")} ORDER BY id DESC`, params);
+    const rows = await rawQuery<any>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE ${conditions.join(" AND ")} ORDER BY id DESC LIMIT 500`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal contracts error:"); }
 });
@@ -519,7 +519,7 @@ router.get("/cases", requirePermission("legal:read"), async (req, res) => {
     const params: any[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
     conditions.push(`"deletedAt" IS NULL`);
-    const rows = await rawQuery<any>(`SELECT * FROM legal_cases WHERE ${conditions.join(" AND ")} ORDER BY id DESC`, params);
+    const rows = await rawQuery<any>(`SELECT * FROM legal_cases WHERE ${conditions.join(" AND ")} ORDER BY id DESC LIMIT 500`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal cases error:"); }
 });
@@ -764,7 +764,7 @@ router.get("/cases/:caseId/sessions", requirePermission("legal:read"), async (re
     const caseId = Number(req.params.caseId);
     const [legalCase] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!legalCase) throw new NotFoundError("القضية غير موجودة");
-    const rows = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 ORDER BY "sessionDate" DESC`, [caseId]);
+    const rows = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 ORDER BY "sessionDate" DESC LIMIT 500`, [caseId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal sessions error:"); }
 });
@@ -966,7 +966,7 @@ router.get("/cases/:caseId/correspondence", requirePermission("legal:read"), asy
     const caseId = Number(req.params.caseId);
     const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
-    const rows = await rawQuery<any>(`SELECT * FROM legal_correspondence WHERE "caseId"=$1 ORDER BY "correspondenceDate" DESC`, [caseId]);
+    const rows = await rawQuery<any>(`SELECT * FROM legal_correspondence WHERE "caseId"=$1 ORDER BY "correspondenceDate" DESC LIMIT 500`, [caseId]);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal correspondence error:"); }
 });
@@ -1067,7 +1067,7 @@ router.get("/cases/:caseId/judgments", requirePermission("legal:read"), async (r
     const caseId = Number(req.params.caseId);
     const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
-    const rows = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE "caseId"=$1 ORDER BY "judgmentDate" DESC`, [caseId]);
+    const rows = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE "caseId"=$1 ORDER BY "judgmentDate" DESC LIMIT 500`, [caseId]);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal judgments error:"); }
 });
