@@ -9,6 +9,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, Confl
 } from "../lib/errorHandler.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
+import { APPROVE_ROLES } from "../lib/rbacCatalog.js";
 
 /* ── Zod Schemas ────────────────────────────────────────────── */
 
@@ -105,8 +106,6 @@ const patchDocumentSchema = z.object({
 const router = Router();
 
 const objectStorageService = new ObjectStorageService();
-
-const APPROVE_ROLES = ["owner", "general_manager", "admin"];
 
 router.get("/", requirePermission("documents:read"), async (req: Request, res: Response) => {
   try {

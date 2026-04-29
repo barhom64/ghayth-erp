@@ -146,13 +146,13 @@ router.get("/overview", requirePermission("bi:read"), async (req, res) => {
       [cid]
     );
     res.json({
-      employees: Number(row.employees),
-      clients: Number(row.clients),
-      invoices: Number(row.invoices),
-      projects: Number(row.projects),
-      vehicles: Number(row.vehicles),
-      openTickets: Number(row.openTickets),
-      totalRevenue: Number(row.totalRevenue),
+      employees: Number(row?.employees ?? 0),
+      clients: Number(row?.clients ?? 0),
+      invoices: Number(row?.invoices ?? 0),
+      projects: Number(row?.projects ?? 0),
+      vehicles: Number(row?.vehicles ?? 0),
+      openTickets: Number(row?.openTickets ?? 0),
+      totalRevenue: Number(row?.totalRevenue ?? 0),
     });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });

@@ -7,6 +7,7 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { logger } from "../lib/logger.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
 
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -69,8 +70,6 @@ const createSubsidiaryAccountSchema = z.object({
 });
 
 const router = Router();
-
-const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 
 function requireFinance(scope: any): void {
   if (!FINANCE_ROLES.includes(scope.role)) {

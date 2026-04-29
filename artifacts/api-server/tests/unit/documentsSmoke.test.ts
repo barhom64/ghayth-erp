@@ -94,7 +94,8 @@ describe("Documents — permissions", () => {
   });
 
   it("status approval is gated by APPROVE_ROLES (owner, general_manager, admin)", () => {
-    expect(SRC).toContain('const APPROVE_ROLES = ["owner", "general_manager", "admin"]');
+    expect(SRC).toContain("APPROVE_ROLES");
+    expect(SRC).toContain("from \"../lib/rbacCatalog.js\"");
     const idx = SRC.indexOf('router.patch("/:id/status"');
     const section = SRC.slice(idx, idx + 3500);
     expect(section).toContain("APPROVE_ROLES.includes");

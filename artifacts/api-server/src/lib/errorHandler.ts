@@ -295,6 +295,14 @@ export function classifyDbError(err: unknown): ClassifiedError {
   };
 }
 
+/** Unwrap a Zod safeParse result — returns `data` or throws `ValidationError`. */
+export function zodParse<T>(result: { success: true; data: T } | { success: false; error: { errors: { message: string }[] } }): T {
+  if (!result.success) {
+    throw new ValidationError(result.error.errors[0]?.message ?? "بيانات غير صالحة");
+  }
+  return result.data;
+}
+
 export function handleRouteError(err: unknown, res: any, logContext: string): void {
   // Typed errors win — the route handler has already said exactly what the
   // client should see, so we skip DB error classification entirely.

@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError, NotFoundError,
+import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
@@ -38,6 +38,14 @@ const updateTaskSchema = z.object({
   scheduledDate: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
+
+const VALID_TASK_TRANSITIONS: Record<string, string[]> = {
+  pending: ["in_progress", "cancelled"],
+  in_progress: ["completed", "blocked", "cancelled", "pending"],
+  blocked: ["in_progress", "cancelled"],
+  completed: ["in_progress"],
+  cancelled: ["pending"],
+};
 
 const router = Router();
 
@@ -345,6 +353,18 @@ router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
 
     if (sets.length === 0) { throw new ValidationError("لا توجد بيانات للتحديث"); }
 
+    if (status) {
+      const [current] = await rawQuery<{ status: string }>(
+        `SELECT status FROM tasks WHERE id = $1 AND "companyId" = $2`,
+        [id, scope.companyId]
+      );
+      if (!current) throw new NotFoundError("المهمة غير موجودة");
+      const allowed = VALID_TASK_TRANSITIONS[current.status];
+      if (allowed && !allowed.includes(status)) {
+        throw new ConflictError(`لا يمكن نقل المهمة من "${current.status}" إلى "${status}"`);
+      }
+    }
+
     params.push(req.params.id);
     let whereClause = `id = $${idx}`;
     idx++;
@@ -368,22 +388,30 @@ router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "tasks", entityId: id, after: { title, description, type, priority, status, scheduledStart, scheduledEnd, scheduledDate, notes } }).catch((e) => logger.error(e, "tasks background task failed"));
 
-    // Close the loop on status transitions so subscribers fire.
-    if (status === "completed") {
+    if (status) {
       emitEvent({
         companyId: scope.companyId,
         branchId: scope.branchId,
         userId: scope.userId,
-        action: "task.completed",
+        action: `task.${status}`,
         entity: "tasks",
         entityId: id,
-        before: { status: "in_progress" },
         after: {
-          status: "completed",
-          completedAt: rows[0]?.completedAt ?? new Date().toISOString(),
+          status,
+          ...(status === "completed" ? { completedAt: rows[0]?.completedAt ?? new Date().toISOString() } : {}),
           assignedTo: rows[0]?.assignedTo ?? null,
           title: rows[0]?.title ?? null,
         },
+      }).catch((e) => logger.error(e, "tasks background task failed"));
+    } else if (sets.length > 0) {
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "task.updated",
+        entity: "tasks",
+        entityId: id,
+        after: { title: rows[0]?.title ?? null },
       }).catch((e) => logger.error(e, "tasks background task failed"));
     }
 

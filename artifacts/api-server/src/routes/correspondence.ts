@@ -37,6 +37,7 @@ async function generateCorrespondenceRef(direction: "outgoing" | "incoming", com
   const prefix = direction === "outgoing" ? "OUT" : "IN";
   const seqName = direction === "outgoing" ? "correspondence_outgoing_seq" : "correspondence_incoming_seq";
   const [row] = await rawQuery<any>(`SELECT nextval($1::regclass) AS seq`, [seqName]);
+  if (!row) throw new Error(`فشل في توليد التسلسل: ${seqName}`);
   return makeRef(prefix, row.seq);
 }
 

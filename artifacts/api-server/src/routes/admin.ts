@@ -11,6 +11,7 @@ import { integrationService } from "../lib/integrationService.js";
 import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import crypto from "node:crypto";
+import { ADMIN_ROLES } from "../lib/rbacCatalog.js";
 
 const router = Router();
 
@@ -47,7 +48,6 @@ const resetPasswordLimiter = rateLimit({
   validate: { ip: false, trustProxy: false },
 });
 
-const ADMIN_ROLES = ["owner", "admin", "general_manager"];
 const ADMIN_ROLE_LEVEL = 90;
 
 async function assertAdmin(req: any): Promise<void> {

@@ -8,6 +8,7 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError, Forbid
 } from "../lib/errorHandler.js";
 import { createAuditLog, createNotification, emitEvent, getLegalResponsible, currentPeriod, currentYear, generateRef } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
+import { MANAGER_ROLES } from "../lib/rbacCatalog.js";
 
 /* ── Zod Schemas ───────────────────────────────────────────────── */
 
@@ -73,8 +74,6 @@ const VALID_REQUEST_TRANSITIONS: Record<string, string[]> = {
   rejected: [],
   closed: [],
 };
-
-const MANAGER_ROLES = ["owner", "general_manager", "hr_manager", "branch_manager"];
 
 async function validateRequestTransition(
   id: number,

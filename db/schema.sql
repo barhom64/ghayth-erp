@@ -20711,6 +20711,123 @@ ALTER SEQUENCE public.payment_run_items_id_seq OWNED BY public.payment_run_items
 ALTER TABLE ONLY public.payment_run_items ADD CONSTRAINT payment_run_items_pkey PRIMARY KEY (id);
 
 --
+-- Missing primary key constraints (29 tables)
+--
+ALTER TABLE ONLY public.audit_logs_archive ADD CONSTRAINT audit_logs_archive_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.customer_advances ADD CONSTRAINT customer_advances_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.employee_commission_calculations ADD CONSTRAINT employee_commission_calculations_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.employee_commission_plans ADD CONSTRAINT employee_commission_plans_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.employee_commission_tiers ADD CONSTRAINT employee_commission_tiers_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.employee_kpi_snapshots ADD CONSTRAINT employee_kpi_snapshots_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.employee_salary_components ADD CONSTRAINT employee_salary_components_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.financial_posting_failures ADD CONSTRAINT financial_posting_failures_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_employee_loans ADD CONSTRAINT hr_employee_loans_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_excuse_requests ADD CONSTRAINT hr_excuse_requests_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_exit_clearance ADD CONSTRAINT hr_exit_clearance_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_exit_requests ADD CONSTRAINT hr_exit_requests_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_loan_installments ADD CONSTRAINT hr_loan_installments_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_overtime_requests ADD CONSTRAINT hr_overtime_requests_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.integration_logs_archive ADD CONSTRAINT integration_logs_archive_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.payment_runs ADD CONSTRAINT payment_runs_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.property_contracts ADD CONSTRAINT property_contracts_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.purchase_order_lines ADD CONSTRAINT purchase_order_lines_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_groups ADD CONSTRAINT umrah_groups_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_import_batches ADD CONSTRAINT umrah_import_batches_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_import_changes ADD CONSTRAINT umrah_import_changes_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_nusk_invoices ADD CONSTRAINT umrah_nusk_invoices_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_payment_allocations ADD CONSTRAINT umrah_payment_allocations_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_payments ADD CONSTRAINT umrah_payments_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_pricing ADD CONSTRAINT umrah_pricing_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_sales_invoice_items ADD CONSTRAINT umrah_sales_invoice_items_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_sales_invoices ADD CONSTRAINT umrah_sales_invoices_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_sub_agents ADD CONSTRAINT umrah_sub_agents_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_violations ADD CONSTRAINT umrah_violations_pkey PRIMARY KEY (id);
+
+--
+-- Missing FK indexes on high-traffic tables
+--
+
+-- journal_lines (critical for reporting JOINs)
+CREATE INDEX IF NOT EXISTS idx_journal_lines_account ON public.journal_lines USING btree ("accountId");
+CREATE INDEX IF NOT EXISTS idx_journal_lines_department ON public.journal_lines USING btree ("departmentId") WHERE "departmentId" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_journal_lines_project ON public.journal_lines USING btree ("projectId") WHERE "projectId" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_journal_lines_employee ON public.journal_lines USING btree ("employeeId") WHERE "employeeId" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_journal_lines_company ON public.journal_lines USING btree ("companyId");
+
+-- attendance
+CREATE INDEX IF NOT EXISTS idx_attendance_branch ON public.attendance USING btree ("branchId");
+CREATE INDEX IF NOT EXISTS idx_attendance_assignment ON public.attendance USING btree ("assignmentId");
+
+-- invoices
+CREATE INDEX IF NOT EXISTS idx_invoices_client ON public.invoices USING btree ("clientId") WHERE "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_invoices_project ON public.invoices USING btree ("projectId") WHERE "projectId" IS NOT NULL AND "deletedAt" IS NULL;
+
+-- invoice_lines
+CREATE INDEX IF NOT EXISTS idx_invoice_lines_invoice ON public.invoice_lines USING btree ("invoiceId");
+
+-- warehouse_movements
+CREATE INDEX IF NOT EXISTS idx_warehouse_movements_product ON public.warehouse_movements USING btree ("productId");
+CREATE INDEX IF NOT EXISTS idx_warehouse_movements_company ON public.warehouse_movements USING btree ("companyId");
+CREATE INDEX IF NOT EXISTS idx_warehouse_movements_branch ON public.warehouse_movements USING btree ("branchId") WHERE "branchId" IS NOT NULL;
+
+-- project_tasks
+CREATE INDEX IF NOT EXISTS idx_project_tasks_project ON public.project_tasks USING btree ("projectId");
+CREATE INDEX IF NOT EXISTS idx_project_tasks_assignee ON public.project_tasks USING btree ("assigneeId") WHERE "assigneeId" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_project_tasks_phase ON public.project_tasks USING btree ("phaseId") WHERE "phaseId" IS NOT NULL;
+
+-- project_resources
+CREATE INDEX IF NOT EXISTS idx_project_resources_project ON public.project_resources USING btree ("projectId");
+CREATE INDEX IF NOT EXISTS idx_project_resources_employee ON public.project_resources USING btree ("employeeId");
+
+-- project_costs
+CREATE INDEX IF NOT EXISTS idx_project_costs_project ON public.project_costs USING btree ("projectId");
+
+-- hr_leave_requests
+CREATE INDEX IF NOT EXISTS idx_hr_leave_requests_type ON public.hr_leave_requests USING btree ("leaveTypeId");
+
+-- hr_employee_loans
+CREATE INDEX IF NOT EXISTS idx_hr_employee_loans_company ON public.hr_employee_loans USING btree ("companyId", status);
+CREATE INDEX IF NOT EXISTS idx_hr_employee_loans_employee ON public.hr_employee_loans USING btree ("employeeId");
+CREATE INDEX IF NOT EXISTS idx_hr_employee_loans_assignment ON public.hr_employee_loans USING btree ("assignmentId");
+
+-- payroll_lines
+CREATE INDEX IF NOT EXISTS idx_payroll_lines_assignment ON public.payroll_lines USING btree ("assignmentId");
+CREATE INDEX IF NOT EXISTS idx_payroll_lines_employee ON public.payroll_lines USING btree ("employeeId");
+
+-- rental_contracts
+CREATE INDEX IF NOT EXISTS idx_rental_contracts_unit ON public.rental_contracts USING btree ("unitId");
+CREATE INDEX IF NOT EXISTS idx_rental_contracts_tenant ON public.rental_contracts USING btree ("tenantId");
+
+-- crm_opportunities
+CREATE INDEX IF NOT EXISTS idx_crm_opportunities_company ON public.crm_opportunities USING btree ("companyId") WHERE "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_crm_opportunities_client ON public.crm_opportunities USING btree ("clientId") WHERE "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_crm_opportunities_assigned ON public.crm_opportunities USING btree ("assignedTo") WHERE "deletedAt" IS NULL;
+
+-- crm_activities
+CREATE INDEX IF NOT EXISTS idx_crm_activities_opportunity ON public.crm_activities USING btree ("opportunityId");
+
+-- support_tickets
+CREATE INDEX IF NOT EXISTS idx_support_tickets_client ON public.support_tickets USING btree ("clientId") WHERE "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_support_tickets_assignee ON public.support_tickets USING btree ("assigneeId") WHERE "deletedAt" IS NULL;
+
+-- fleet_vehicles
+CREATE INDEX IF NOT EXISTS idx_fleet_vehicles_branch ON public.fleet_vehicles USING btree ("branchId") WHERE "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_fleet_vehicles_driver ON public.fleet_vehicles USING btree ("assignedDriverId") WHERE "assignedDriverId" IS NOT NULL AND "deletedAt" IS NULL;
+
+-- fleet_maintenance
+CREATE INDEX IF NOT EXISTS idx_fleet_maintenance_vehicle ON public.fleet_maintenance USING btree ("vehicleId");
+CREATE INDEX IF NOT EXISTS idx_fleet_maintenance_company ON public.fleet_maintenance USING btree ("companyId");
+
+-- fleet_trips
+CREATE INDEX IF NOT EXISTS idx_fleet_trips_vehicle ON public.fleet_trips USING btree ("vehicleId");
+CREATE INDEX IF NOT EXISTS idx_fleet_trips_driver ON public.fleet_trips USING btree ("driverId");
+CREATE INDEX IF NOT EXISTS idx_fleet_trips_company ON public.fleet_trips USING btree ("companyId");
+
+-- fleet_fuel_logs
+CREATE INDEX IF NOT EXISTS idx_fleet_fuel_logs_vehicle ON public.fleet_fuel_logs USING btree ("vehicleId");
+CREATE INDEX IF NOT EXISTS idx_fleet_fuel_logs_company ON public.fleet_fuel_logs USING btree ("companyId");
+
+--
 -- Name: request_number_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 

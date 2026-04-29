@@ -13,11 +13,10 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { currentPeriod, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 import { obligationSummary } from "../lib/obligationsEngine.js";
+import { EXEC_ROLES } from "../lib/rbacCatalog.js";
 
 export const execDashboardRouter = Router();
 execDashboardRouter.use(authMiddleware);
-
-const EXEC_ROLES = ["owner", "general_manager", "finance_manager", "director"];
 
 function requireExec(scope: any): void {
   if (!EXEC_ROLES.includes(scope.role)) {

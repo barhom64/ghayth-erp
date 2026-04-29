@@ -8,6 +8,7 @@ import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import dns from "node:dns/promises";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
+import { GOV_ADMIN_ROLES, GOV_READ_ROLES } from "../lib/rbacCatalog.js";
 
 const updateIntegrationSchema = z.object({
   config: z.record(z.unknown()).optional(),
@@ -48,9 +49,6 @@ function isPrivateIP(ip: string): boolean {
 }
 
 const router = Router();
-
-const GOV_ADMIN_ROLES = ["owner", "admin", "general_manager", "hr_manager", "operations"];
-const GOV_READ_ROLES = [...GOV_ADMIN_ROLES, "finance_manager", "branch_manager", "supervisor"];
 
 function requireGovAdmin(scope: any, res: any): boolean {
   if (!scope || !GOV_ADMIN_ROLES.includes(scope.role)) {
