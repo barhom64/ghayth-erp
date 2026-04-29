@@ -7602,6 +7602,49 @@ CREATE INDEX idx_employees_department ON public.employees USING btree ("companyI
 CREATE INDEX idx_payroll_runs_company ON public.payroll_runs USING btree ("companyId", period, "deletedAt") WHERE ("deletedAt" IS NULL);
 CREATE INDEX idx_payroll_lines_run ON public.payroll_lines USING btree ("payrollRunId") WHERE ("deletedAt" IS NULL);
 
+-- Partial indexes for soft-delete filtering on high-traffic tables
+CREATE INDEX IF NOT EXISTS idx_clients_active ON public.clients USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_suppliers_active ON public.suppliers USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_tasks_active ON public.tasks USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_projects_active ON public.projects USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_project_tasks_active ON public.project_tasks USING btree ("projectId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_documents_active ON public.documents USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_requests_active ON public.requests USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_fleet_drivers_active ON public.fleet_drivers USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_fleet_maintenance_active ON public.fleet_maintenance USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_fleet_trips_active ON public.fleet_trips USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_fleet_fuel_logs_active ON public.fleet_fuel_logs USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_fleet_insurance_active ON public.fleet_insurance USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_property_units_active ON public.property_units USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_property_buildings_active ON public.property_buildings USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_rent_payments_active ON public.rent_payments USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_tenants_active ON public.tenants USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_journal_lines_active ON public.journal_lines USING btree ("journalEntryId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_employee_contracts_active ON public.employee_contracts USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_official_letters_active ON public.official_letters USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_hr_employee_loans_active ON public.hr_employee_loans USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_hr_overtime_requests_active ON public.hr_overtime_requests USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_hr_exit_requests_active ON public.hr_exit_requests USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_training_programs_active ON public.training_programs USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_store_products_active ON public.store_products USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_store_orders_active ON public.store_orders USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_warehouse_products_active ON public.warehouse_products USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_budgets_active ON public.budgets USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_legal_contracts_active ON public.legal_contracts USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_umrah_pilgrims_active ON public.umrah_pilgrims USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_umrah_groups_active ON public.umrah_groups USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_umrah_agents_active ON public.umrah_agents USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_performance_reviews_active ON public.performance_reviews USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_job_postings_active ON public.job_postings USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_vendor_contracts_active ON public.vendor_contracts USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_workflow_requests_active ON public.workflow_requests USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_approval_chains_active ON public.approval_chains USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_goods_receipts_active ON public.goods_receipts USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_shifts_active ON public.shifts USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_ticket_replies_active ON public.ticket_replies USING btree ("ticketId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_marketing_campaigns_active ON public.marketing_campaigns USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_kb_articles_active ON public.kb_articles USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+
 
 --
 -- Name: notification_preferences; Type: TABLE; Schema: public; Owner: -

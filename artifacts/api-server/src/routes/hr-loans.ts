@@ -505,7 +505,7 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
     }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
     await rawExecute(
-      `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3`,
+      `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
       [b.reason || null, loan.id, scope.companyId]
     );
 

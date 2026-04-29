@@ -904,10 +904,10 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       const tripId = tripResult.rows[0]?.id;
 
       if (selectedVehicleId) {
-        await client.query(`UPDATE fleet_vehicles SET status='in_use', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [selectedVehicleId, scope.companyId]);
+        await client.query(`UPDATE fleet_vehicles SET status='in_use', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='available'`, [selectedVehicleId, scope.companyId]);
       }
       if (selectedDriverId) {
-        await client.query(`UPDATE fleet_drivers SET status='on_trip' WHERE id=$1 AND "companyId"=$2`, [selectedDriverId, scope.companyId]);
+        await client.query(`UPDATE fleet_drivers SET status='on_trip' WHERE id=$1 AND "companyId"=$2 AND status='available'`, [selectedDriverId, scope.companyId]);
       }
 
       return tripId;
@@ -998,10 +998,10 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
       setExtras: { endTime: { raw: "NOW()" }, distance: actualDistanceKm, cost: totalCost },
       onApply: async (_row, client) => {
         if (trip.vehicleId) {
-          await client.query(`UPDATE fleet_vehicles SET status='available', "currentMileage"="currentMileage"+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`, [actualDistanceKm, trip.vehicleId, scope.companyId]);
+          await client.query(`UPDATE fleet_vehicles SET status='available', "currentMileage"="currentMileage"+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status='in_use'`, [actualDistanceKm, trip.vehicleId, scope.companyId]);
         }
         if (trip.driverId) {
-          await client.query(`UPDATE fleet_drivers SET status='available', "totalTrips"=COALESCE("totalTrips",0)+1 WHERE id=$1 AND "companyId"=$2`, [trip.driverId, scope.companyId]);
+          await client.query(`UPDATE fleet_drivers SET status='available', "totalTrips"=COALESCE("totalTrips",0)+1 WHERE id=$1 AND "companyId"=$2 AND status='on_trip'`, [trip.driverId, scope.companyId]);
         }
       },
     });
@@ -1078,13 +1078,13 @@ router.post("/trips/:id/cancel", requirePermission("fleet:update"), async (req, 
         // Release vehicle and driver so the resources come back to the pool.
         if (row.vehicleId) {
           await client.query(
-            `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
+            `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='in_use'`,
             [row.vehicleId, scope.companyId]
           );
         }
         if (row.driverId) {
           await client.query(
-            `UPDATE fleet_drivers SET status='available' WHERE id=$1 AND "companyId"=$2`,
+            `UPDATE fleet_drivers SET status='available' WHERE id=$1 AND "companyId"=$2 AND status='on_trip'`,
             [row.driverId, scope.companyId]
           );
         }
@@ -1228,7 +1228,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
       const maintId = maintResult.rows[0]?.id;
 
       if (b.vehicleId) {
-        await client.query(`UPDATE fleet_vehicles SET status='maintenance', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [b.vehicleId, scope.companyId]);
+        await client.query(`UPDATE fleet_vehicles SET status='maintenance', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='available'`, [b.vehicleId, scope.companyId]);
       }
 
       return maintId;
@@ -1329,7 +1329,7 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
       setExtras: { cost: finalCost },
       onApply: async (_row, client) => {
         if (m.vehicleId) {
-          await client.query(`UPDATE fleet_vehicles SET status='available', "lastMaintenanceDate"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [m.vehicleId, scope.companyId]);
+          await client.query(`UPDATE fleet_vehicles SET status='available', "lastMaintenanceDate"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='maintenance'`, [m.vehicleId, scope.companyId]);
         }
       },
     });
@@ -1422,7 +1422,7 @@ router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async 
       setExtras: { description: { raw: `COALESCE(description,'') || ' | إلغاء: ' || '${b.reason.replace(/'/g, "''")}'` } },
       onApply: async (_row, client) => {
         if (m.vehicleId) {
-          await client.query(`UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [m.vehicleId, scope.companyId]);
+          await client.query(`UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='maintenance'`, [m.vehicleId, scope.companyId]);
         }
       },
     });

@@ -109,7 +109,7 @@ obligationsRouter.post("/:id/met", async (req, res) => {
     await ensureObligationsTable();
     const rows = await rawQuery<any>(
       `UPDATE obligations SET status='met', "metAt"=NOW(), "updatedAt"=NOW()
-       WHERE id=$1 AND "companyId"=$2 RETURNING id, status`,
+       WHERE id=$1 AND "companyId"=$2 AND status = 'pending' RETURNING id, status`,
       [id, scope.companyId]
     );
     if (rows.length === 0) throw new NotFoundError("الالتزام غير موجود");
@@ -145,7 +145,7 @@ obligationsRouter.post("/:id/cancel", async (req, res) => {
     await ensureObligationsTable();
     const rows = await rawQuery<any>(
       `UPDATE obligations SET status='cancelled', "updatedAt"=NOW()
-       WHERE id=$1 AND "companyId"=$2 RETURNING id, status`,
+       WHERE id=$1 AND "companyId"=$2 AND status = 'pending' RETURNING id, status`,
       [id, scope.companyId]
     );
     if (rows.length === 0) throw new NotFoundError("الالتزام غير موجود");

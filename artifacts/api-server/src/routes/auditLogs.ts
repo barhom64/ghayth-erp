@@ -68,7 +68,7 @@ router.get("/entities", requirePermission("audit:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT DISTINCT entity FROM audit_logs WHERE "companyId" = $1 ORDER BY entity`,
+      `SELECT DISTINCT entity FROM audit_logs WHERE "companyId" = $1 ORDER BY entity LIMIT 500`,
       [scope.companyId]
     );
     const entities = rows.map((r: any) => r.entity);

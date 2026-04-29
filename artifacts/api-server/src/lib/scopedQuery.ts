@@ -1,6 +1,7 @@
 import { rawQuery } from "./rawdb.js";
 import type { RequestScope } from "../middlewares/authMiddleware.js";
 import type { Request } from "express";
+import { OWNER_GM_ROLES } from "./rbacCatalog.js";
 
 export function parseScopeFilters(req: Request): ScopeFilters {
   const scope = req.scope!;
@@ -46,7 +47,7 @@ export interface ScopedQueryOptions {
   disableBranchScope?: boolean;
 }
 
-const BRANCH_SCOPE_EXEMPT_ROLES = new Set(["owner", "general_manager"]);
+const BRANCH_SCOPE_EXEMPT_ROLES = new Set(OWNER_GM_ROLES);
 
 export function buildScopedWhere(
   scope: RequestScope,

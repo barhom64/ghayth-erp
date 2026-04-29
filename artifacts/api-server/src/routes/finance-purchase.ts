@@ -455,7 +455,7 @@ purchaseRouter.get("/purchase-orders", requirePermission("finance:read"), async 
       `SELECT po.id, po.ref, po.status, po."totalAmount", po."createdAt",
               po."expectedDelivery", po.notes, s.name AS "supplierName"
        FROM purchase_orders po
-       LEFT JOIN suppliers s ON s.id = po."supplierId"
+       LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
        WHERE ${where}${extraWhere} AND po."deletedAt" IS NULL
        ORDER BY po."createdAt" DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
@@ -875,7 +875,7 @@ purchaseRouter.get("/payment-run/pending", requirePermission("finance:read"), as
       `SELECT po.id, po.ref, po."totalAmount", po."createdAt", po."expectedDelivery",
               po."supplierId", s.name AS "supplierName"
          FROM purchase_orders po
-         LEFT JOIN suppliers s ON s.id = po."supplierId"
+         LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
         WHERE ${where}
         ORDER BY po."expectedDelivery" ASC NULLS LAST, po."createdAt" ASC`,
       params
@@ -1185,7 +1185,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
     const [po] = await rawQuery<any>(
       `SELECT po.*, s.name AS "supplierName", s.email AS "supplierEmail"
        FROM purchase_orders po
-       LEFT JOIN suppliers s ON s.id = po."supplierId"
+       LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
        WHERE po.id = $1 AND po."deletedAt" IS NULL`,
       [poId]
     );
@@ -1205,7 +1205,7 @@ purchaseRouter.get("/purchase-orders/pending-grn", requirePermission("finance:re
       `SELECT po.id, po.ref, po.status, po."totalAmount" AS total, s.name AS "supplierName",
               po."createdAt", po."expectedDelivery"
        FROM purchase_orders po
-       LEFT JOIN suppliers s ON s.id = po."supplierId"
+       LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
        WHERE po."companyId" = $1 AND po.status IN ('approved','sent','partial_received')
          AND po."deletedAt" IS NULL
        ORDER BY po."createdAt" DESC`,
@@ -1226,7 +1226,7 @@ purchaseRouter.get("/purchase-orders/:id", requirePermission("finance:read"), as
               b.website AS "branchWebsite", b."taxNumber" AS "branchTaxNumber", b."crNumber" AS "branchCrNumber",
               b."footerText" AS "branchFooterText", b.city AS "branchCity"
        FROM purchase_orders po
-       LEFT JOIN suppliers s ON s.id = po."supplierId"
+       LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
        LEFT JOIN branches b ON b.id = po."branchId"
        WHERE po.id = $1 AND po."companyId" = $2 AND po."deletedAt" IS NULL`,
       [Number(id), scope.companyId]

@@ -312,7 +312,7 @@ execDashboardRouter.get("/overdue-invoices", async (req, res) => {
               COALESCE(i."lastDunningStage",0) AS "dunningStage",
               c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId"
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        WHERE i."companyId"=$1 AND i.status NOT IN ('paid','cancelled')
          AND i."deletedAt" IS NULL
          AND i."dueDate"::date < CURRENT_DATE

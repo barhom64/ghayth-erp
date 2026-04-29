@@ -894,7 +894,7 @@ router.get("/opportunities/:id/related", requirePermission("crm:read"), async (r
     const rows = await rawQuery<any>(
       `SELECT o.*, cl.name AS "clientName"
          FROM crm_opportunities o
-         LEFT JOIN clients cl ON cl.id = o."clientId"
+         LEFT JOIN clients cl ON cl.id = o."clientId" AND cl."deletedAt" IS NULL
         WHERE o."companyId" = $1
           AND o.id <> $2
           AND o."deletedAt" IS NULL

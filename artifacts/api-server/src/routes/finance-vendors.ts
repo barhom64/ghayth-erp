@@ -228,7 +228,7 @@ vendorsRouter.get("/receivables", requirePermission("finance:read"), async (req,
               (i.total - COALESCE(i."paidAmount", 0)) AS "remainingAmount",
               c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId"
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        WHERE i."companyId" = $1 AND i."deletedAt" IS NULL
          AND i.status IN ('sent','partial','overdue')
        ORDER BY i."dueDate" ASC LIMIT 100`,
@@ -247,7 +247,7 @@ vendorsRouter.get("/receivables/:id", requirePermission("finance:read"), async (
     const [row] = await rawQuery<any>(
       `SELECT i.*, c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId"
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -285,7 +285,7 @@ vendorsRouter.get("/commitments", requirePermission("finance:read"), async (req,
               po.status, po."createdAt", po."expectedDelivery" AS "dueDate",
               s.name AS "supplierName", s.name AS "vendorName"
        FROM purchase_orders po
-       LEFT JOIN suppliers s ON s.id = po."supplierId"
+       LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
        WHERE po."companyId" = $1 AND po.status NOT IN ('cancelled','closed','received') AND po."deletedAt" IS NULL
        ORDER BY po."createdAt" DESC LIMIT 100`,
       [scope.companyId]
@@ -303,7 +303,7 @@ vendorsRouter.get("/commitments/:id", requirePermission("finance:read"), async (
     const [row] = await rawQuery<any>(
       `SELECT po.*, s.name AS "supplierName"
        FROM purchase_orders po
-       LEFT JOIN suppliers s ON s.id = po."supplierId"
+       LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
        WHERE po.id = $1 AND po."companyId" = $2`,
       [id, scope.companyId]
     );

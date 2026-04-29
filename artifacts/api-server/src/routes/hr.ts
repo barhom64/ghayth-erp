@@ -41,7 +41,7 @@ import { submitWorkflow } from "../lib/workflowEngine.js";
 import { ensureInquiryMemoForViolation } from "../lib/disciplineEngine.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
-import { HR_ROLES, MGR_ROLES, HR_APPROVAL_ROLES , PR_APPROVAL_ROLES, PAYROLL_ROLES, OPS_CLOSE_ROLES} from "../lib/rbacCatalog.js";
+import { HR_ROLES, MGR_ROLES, HR_APPROVAL_ROLES , PR_APPROVAL_ROLES, PAYROLL_ROLES, OPS_CLOSE_ROLES, BRANCH_GM_ROLES} from "../lib/rbacCatalog.js";
 
 // ── Zod request-body schemas ──
 
@@ -1397,7 +1397,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
 
       // Find the appropriate assignee for the first step — never store NULL.
       let firstAssignee: number = managerAssignmentId!;
-      if (!["branch_manager", "general_manager"].includes(firstStep.requiredRole)) {
+      if (!BRANCH_GM_ROLES.includes(firstStep.requiredRole)) {
         const roleRes = await client.query(
           `SELECT id FROM employee_assignments
            WHERE "companyId" = $1 AND role = $2 AND status = 'active'
@@ -1529,9 +1529,9 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 
       if (!currentStage.assignedTo) {
         const roleMatchesStage =
-          (stageRequiredRole === "manager" && ["branch_manager", "general_manager"].includes(scope.role)) ||
+          (stageRequiredRole === "manager" && BRANCH_GM_ROLES.includes(scope.role)) ||
           (stageRequiredRole === "hr" && scope.role === "hr_manager") ||
-          (stageRequiredRole === "branch_manager" && ["branch_manager", "general_manager"].includes(scope.role)) ||
+          (stageRequiredRole === "branch_manager" && BRANCH_GM_ROLES.includes(scope.role)) ||
           (stageRequiredRole === "hr_manager" && scope.role === "hr_manager") ||
           (stageRequiredRole === scope.role);
         if (!roleMatchesStage) {
@@ -3609,7 +3609,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
 
     if (approvalResult.requiresApproval) {
       await rawExecute(
-        `UPDATE official_letters SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2`,
+        `UPDATE official_letters SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft'`,
         [insertId, scope.companyId]
       );
     }
@@ -4406,7 +4406,7 @@ router.get("/onboarding-steps", requirePermission("hr:read"), async (req, res) =
 router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!['owner', 'general_manager', 'hr_manager'].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بتعديل إعدادات التهيئة");
     }
     const { steps } = req.body as { steps: string[] };
@@ -4726,7 +4726,7 @@ router.get("/evaluation-cycles", requirePermission("hr:read"), async (req, res) 
          ORDER BY ec."createdAt" DESC LIMIT 200`,
         employeeId ? [scope.companyId, employeeId] : [scope.companyId]
       );
-    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+    } else if (BRANCH_GM_ROLES.includes(scope.role)) {
       // Managers see cycles for employees they manage (same branch)
       rows = await rawQuery<any>(
         `SELECT ec.*, e.name AS "employeeName", e."empNumber",
@@ -4861,7 +4861,7 @@ router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, r
     // - Employee: only their own cycle, or cycles where they are an assigned participant
     if (isHR(scope)) {
       // HR: unrestricted within company — already filtered by companyId above
-    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+    } else if (BRANCH_GM_ROLES.includes(scope.role)) {
       // Manager must share at least one branch with the employee being evaluated (any active assignment)
       const [sharedBranch] = await rawQuery<any>(
         `SELECT 1 FROM employee_assignments ea_mgr
@@ -4956,7 +4956,7 @@ router.get("/evaluation-cycles/:id/system-report", requirePermission("hr:read"),
     // Enforce the same cycle-level authorization as the detail endpoint
     if (isHR(scope)) {
       // unrestricted
-    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+    } else if (BRANCH_GM_ROLES.includes(scope.role)) {
       const [sharedBranch] = await rawQuery<any>(
         `SELECT 1 FROM employee_assignments ea_mgr
          JOIN employee_assignments ea_sub ON ea_sub."branchId" = ea_mgr."branchId"
@@ -5041,7 +5041,7 @@ router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:crea
     } else if (isHR(scope)) {
       // HR can submit evaluations for any cycle without being a pre-assigned participant
       evaluatorRole = "peer";
-    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+    } else if (BRANCH_GM_ROLES.includes(scope.role)) {
       // Manager must share at least one branch with the subject employee (any active assignment, not just primary)
       const [sharedBranch] = await rawQuery<any>(
         `SELECT 1 FROM employee_assignments ea_mgr
@@ -5210,7 +5210,7 @@ router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async
     // Access check (same branch-scoped rules as detail endpoint)
     if (isHR(scope)) {
       // unrestricted
-    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+    } else if (BRANCH_GM_ROLES.includes(scope.role)) {
       const [sharedBranch] = await rawQuery<any>(
         `SELECT 1 FROM employee_assignments ea_mgr
          JOIN employee_assignments ea_sub ON ea_sub."branchId" = ea_mgr."branchId"
@@ -5290,7 +5290,7 @@ router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), as
     // - Employee: own history only
     if (isHR(scope)) {
       // unrestricted
-    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+    } else if (BRANCH_GM_ROLES.includes(scope.role)) {
       const [sharedBranch] = await rawQuery<any>(
         `SELECT 1 FROM employee_assignments ea_mgr
          JOIN employee_assignments ea_sub ON ea_sub."branchId" = ea_mgr."branchId"

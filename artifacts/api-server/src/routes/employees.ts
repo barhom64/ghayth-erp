@@ -668,7 +668,7 @@ router.patch("/onboarding-tasks/:id", requirePermission("hr:update"), async (req
       `UPDATE onboarding_tasks SET status = $1,
        "completedAt" = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
        "completedBy" = $2
-       WHERE id = $3 AND "companyId" = $4 RETURNING *`,
+       WHERE id = $3 AND "companyId" = $4 AND status != 'completed' RETURNING *`,
       [status, scope.activeAssignmentId, id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المهمة غير موجودة");
@@ -1144,11 +1144,11 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
     // them manually after the fact.
     await withTransaction(async (tx) => {
       await tx.query(
-        `UPDATE employee_assignments SET status = 'terminated' WHERE id = $1 AND "companyId" = $2`,
+        `UPDATE employee_assignments SET status = 'terminated' WHERE id = $1 AND "companyId" = $2 AND status = 'active'`,
         [employee.assignmentId, scope.companyId]
       );
       await tx.query(
-        `UPDATE employees SET status = 'terminated' WHERE id = $1 AND "companyId" = $2`,
+        `UPDATE employees SET status = 'terminated' WHERE id = $1 AND "companyId" = $2 AND status = 'active'`,
         [Number(id), scope.companyId]
       );
 

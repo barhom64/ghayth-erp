@@ -47,7 +47,7 @@ financeAlgorithmsRouter.get("/ar-aging", requirePermission("finance:read"), asyn
          c.phone AS "clientPhone",
          c.email AS "clientEmail"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId"
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        WHERE i."companyId" = $2
          AND i."deletedAt" IS NULL
          AND i.status NOT IN ('paid','cancelled','draft')
@@ -139,7 +139,7 @@ financeAlgorithmsRouter.get("/ap-aging", requirePermission("finance:read"), asyn
          s.phone AS "supplierPhone",
          s.email AS "supplierEmail"
        FROM purchase_orders po
-       LEFT JOIN suppliers s ON s.id = po."supplierId"
+       LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
        WHERE po."companyId" = $2 AND po."deletedAt" IS NULL
          AND po.status NOT IN ('cancelled','draft','delivered')
          AND po."totalAmount" > 0.009
@@ -159,7 +159,7 @@ financeAlgorithmsRouter.get("/ap-aging", requirePermission("finance:read"), asyn
          s2.phone AS "supplierPhone",
          s2.email AS "supplierEmail"
        FROM purchase_requests pr
-       LEFT JOIN suppliers s2 ON s2.id = pr."supplierId"
+       LEFT JOIN suppliers s2 ON s2.id = pr."supplierId" AND s2."deletedAt" IS NULL
        WHERE pr."companyId" = $2 AND pr."deletedAt" IS NULL
          AND pr.status NOT IN ('cancelled','rejected','completed','draft')
          AND pr."supplierId" IS NOT NULL

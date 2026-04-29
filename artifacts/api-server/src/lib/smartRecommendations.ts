@@ -1,5 +1,6 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { logger } from "./logger.js";
+import { MGR_ROLES, OPS_CLOSE_ROLES } from "./rbacCatalog.js";
 
 export interface SmartRecommendation {
   id: string;
@@ -123,7 +124,7 @@ export async function getPersonalizedRecommendations(
   }
 
   // 4. Employees with productivity drop
-  if (["branch_manager", "general_manager", "hr_manager", "owner"].includes(role)) {
+  if (MGR_ROLES.includes(role)) {
     try {
       const prodDrop = await rawQuery<any>(
         `WITH recent AS (
@@ -168,7 +169,7 @@ export async function getPersonalizedRecommendations(
   }
 
   // 5. Budget overspend warnings
-  if (["branch_manager", "general_manager", "finance_manager", "owner"].includes(role)) {
+  if (OPS_CLOSE_ROLES.includes(role)) {
     try {
       const budgetAlerts = await rawQuery<any>(
         `SELECT b."accountCode", b.amount, b.used,
@@ -195,7 +196,7 @@ export async function getPersonalizedRecommendations(
   }
 
   // 6. Clients with 3+ consecutive unpaid invoices
-  if (["branch_manager", "general_manager", "finance_manager", "owner"].includes(role)) {
+  if (OPS_CLOSE_ROLES.includes(role)) {
     try {
       const badPayers = await rawQuery<any>(
         `SELECT c.id, c.name, COUNT(i.id)::int AS "unpaidCount",

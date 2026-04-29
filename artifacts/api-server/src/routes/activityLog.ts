@@ -141,7 +141,7 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
           i.id::text AS "entityId",
           'invoice' AS "entityType"
         FROM invoices i
-        LEFT JOIN clients c ON c.id = i."clientId"
+        LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
         WHERE i."companyId" = $1 AND i."deletedAt" IS NULL
         ${module ? `AND 'finance' = $${moduleParamIndex}` : ""}
 
