@@ -34,7 +34,7 @@
     "@radix-ui/react-slot": "catalog:",
     "@radix-ui/react-switch": "catalog:",
     "@radix-ui/react-tabs": "catalog:",
-    "@radix-ui/react-toast": "^1.2.7",
+    "@radix-ui/react-toast": "catalog:",
     "@radix-ui/react-toggle": "catalog:",
     "@radix-ui/react-toggle-group": "catalog:",
     "@radix-ui/react-tooltip": "catalog:",
