@@ -169,7 +169,7 @@ router.get("/summary", async (req, res) => {
     let vehicles = { total: 0, active: 0 };
     try {
       const [v] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='active') AS active FROM fleet_vehicles WHERE ${where}`,
+        `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='active') AS active FROM fleet_vehicles WHERE ${where} AND "deletedAt" IS NULL`,
         [...params]
       );
       vehicles = { total: Number(v?.total ?? 0), active: Number(v?.active ?? 0) };

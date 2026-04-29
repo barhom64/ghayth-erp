@@ -2603,7 +2603,7 @@ router.get("/maintenance", requirePermission("property:read"), async (req, res) 
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
-    const conditions = [`mr."companyId" = $1`];
+    const conditions = [`mr."companyId" = $1`, `mr."deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`mr.status = $${params.length}`); }
     const rows = await rawQuery<any>(
