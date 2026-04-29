@@ -74,6 +74,17 @@ if (allowedOrigins.size === 0 && process.env.NODE_ENV === "development") {
 }
 
 const isProduction = process.env.NODE_ENV === "production";
+
+const replitDevHostPattern: RegExp | null = (() => {
+  if (isProduction) return null;
+  const dev = process.env.REPLIT_DEV_DOMAIN;
+  if (!dev) return null;
+  const prefix = dev.split(".")[0];
+  if (!prefix) return null;
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^https://${escaped}\\.(?:[a-z0-9-]+\\.)?(?:repl\\.co|replit\\.dev)$`);
+})();
+
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) {
@@ -82,6 +93,8 @@ app.use(cors({
     }
     const normalizedOrigin = origin.replace(/\/$/, "");
     if (allowedOrigins.has(normalizedOrigin)) {
+      callback(null, true);
+    } else if (replitDevHostPattern && replitDevHostPattern.test(normalizedOrigin)) {
       callback(null, true);
     } else if (!isProduction && allowedOrigins.size === 0) {
       callback(null, true);
