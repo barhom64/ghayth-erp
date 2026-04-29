@@ -581,7 +581,7 @@ router.post("/memos/:id/justify", requirePermission("hr:read"), async (req, res)
 
     // authorisation: الموظف نفسه أو HR/GM/Owner
     const isOwnerOfMemo = scope.activeAssignmentId === memo.assignmentId;
-    const isHR = scope.role === "hr_manager" || scope.role === "owner" || scope.role === "general_manager";
+    const isHR = HR_ROLES.includes(scope.role);
     if (!isOwnerOfMemo && !isHR) {
       throw new ForbiddenError("لا تملك صلاحية تقديم التبرير على هذا المحضر");
     }

@@ -13,6 +13,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { criticalPathLength } from "../lib/algorithms.js";
+import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import {
   createNotification,
   createAuditLog,
@@ -313,7 +314,7 @@ router.get("/", requirePermission("projects:read"), async (req, res) => {
     if (status) { where += ` AND p.status = $${paramIdx}`; params.push(status); paramIdx++; }
 
     const managerOnlyRoles = ["projects_manager"];
-    if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && managerOnlyRoles.includes(scope.role) && scope.employeeId) {
+    if (!scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) && managerOnlyRoles.includes(scope.role) && scope.employeeId) {
       where += ` AND p."managerId" = $${paramIdx}`;
       params.push(scope.employeeId);
       paramIdx++;
@@ -334,7 +335,7 @@ router.get("/", requirePermission("projects:read"), async (req, res) => {
 });
 
 function isFullAccess(scope: any) {
-  return scope.isOwner || scope.role === "owner" || scope.role === "general_manager";
+  return scope.isOwner || OWNER_GM_ROLES.includes(scope.role);
 }
 
 /**
@@ -503,7 +504,7 @@ router.get("/:id", requirePermission("projects:read"), async (req, res) => {
     let detailWhere = `p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`;
     const detailParams: any[] = [id, scope.companyId];
 
-    if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager") {
+    if (!scope.isOwner && !OWNER_GM_ROLES.includes(scope.role)) {
       if (scope.role === "projects_manager" && scope.employeeId) {
         detailWhere += ` AND p."managerId" = $3`;
         detailParams.push(scope.employeeId);

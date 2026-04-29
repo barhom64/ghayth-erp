@@ -2,6 +2,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError , zodParse } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
@@ -217,7 +218,7 @@ router.post("/bulk-action", requirePermission("admin:write"), async (req, res): 
       throw new ValidationError("بيانات غير مكتملة");
     }
 
-    if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager") {
+    if (!scope.isOwner && !OWNER_GM_ROLES.includes(scope.role)) {
       throw new ForbiddenError("لا تملك صلاحية تنفيذ الإجراءات الجماعية");
     }
 
