@@ -271,6 +271,7 @@ export const LETTER_APPROVAL_ROLES: readonly string[] = ["hr_manager", "branch_m
 export const HR_APPROVAL_ROLES: readonly string[] = ["hr_manager", "branch_manager", "general_manager", "owner"];
 export const LOAN_APPROVAL_ROLES: readonly string[] = ["owner", "hr_manager", "general_manager", "branch_manager", "finance_manager"];
 export const OWNER_GM_ROLES: readonly string[] = ["owner", "general_manager"];
+export const BRANCH_GM_ROLES: readonly string[] = ["branch_manager", "general_manager"];
 export const OPS_CLOSE_ROLES: readonly string[] = ["owner", "general_manager", "branch_manager", "hr_manager", "finance_manager"];
 export const APPROVAL_AUDIT_ROLES: readonly string[] = ["owner", "general_manager", "hr_manager", "finance_manager", "compliance", "audit"];
 export const ACTION_CENTER_ROLES: readonly string[] = ["owner", "general_manager", "branch_manager", "hr_manager", "finance_manager", "supervisor"];

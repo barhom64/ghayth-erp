@@ -107,7 +107,7 @@ router.post("/", requirePermission("admin:read"), async (req, res): Promise<void
       const [invoice] = await rawQuery<any>(
         `SELECT i.*, c.name AS "clientName"
          FROM invoices i
-         LEFT JOIN clients c ON c.id = i."clientId"
+         LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
          WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
         [entityId, scope.companyId]
       );

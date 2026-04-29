@@ -232,7 +232,7 @@ invoicesRouter.get("/invoices", requirePermission("finance:read"), async (req, r
               i."isTaxLinked", i."zatcaStatus",
               c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId"
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY i."createdAt" DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
@@ -428,7 +428,7 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
     createNotification({ companyId: scope.companyId, assignmentId: scope.activeAssignmentId, type: "invoice_created", title: "تم إنشاء فاتورة جديدة", body: `فاتورة ${ref} بمبلغ ${total.toLocaleString()} ﷼`, priority: "normal", refType: "invoices", refId: insertId }).catch((e) => logger.error(e, "finance-invoices background task failed"));
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "invoices", entityId: insertId, after: { ref, total, vatAmount, clientId: clientId ?? null } }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    const [invoice] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [invoice] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [insertId, scope.companyId]);
     res.status(201).json({ ...invoice, lines: validatedLines });
   } catch (err) {
     handleRouteError(err, res, "Create invoice error:");
@@ -448,7 +448,7 @@ invoicesRouter.post("/invoices/:id/send", requirePermission("finance:create"), a
     const [invoice] = await rawQuery<any>(
       `SELECT i.id, i.ref, i.status, i.total, i."vatAmount", i."dueDate",
               c.name AS "clientName", c.phone AS "clientPhone", c.email AS "clientEmail"
-       FROM invoices i LEFT JOIN clients c ON c.id = i."clientId"
+       FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
@@ -505,7 +505,7 @@ invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"
     const id = parseId(req.params.id, "id");
 
     const [invoice] = await rawQuery<any>(
-      `SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId"
+      `SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -551,7 +551,7 @@ invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.approved", entity: "invoices", entityId: id, details: JSON.stringify({ ref: invoice.ref, total: invoice.total }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!updated) throw new NotFoundError("الفاتورة غير موجودة");
     res.json(updated);
   } catch (err) {
@@ -590,7 +590,7 @@ invoicesRouter.post("/invoices/:id/post", requirePermission("finance:approve"), 
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.posted", entity: "invoices", entityId: id }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!updated) throw new NotFoundError("الفاتورة غير موجودة");
     res.json(updated);
   } catch (err) {
@@ -709,7 +709,7 @@ invoicesRouter.get("/invoices/:id", requirePermission("finance:read"), async (re
               b.address AS "branchAddress", b.phone AS "branchPhone", b.email AS "branchEmail",
               b.website AS "branchWebsite", b."taxNumber" AS "branchTaxNumber", b."crNumber" AS "branchCrNumber",
               b."footerText" AS "branchFooterText", b.city AS "branchCity"
-       FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" LEFT JOIN branches b ON b.id = i."branchId"
+       FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL LEFT JOIN branches b ON b.id = i."branchId"
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
@@ -915,7 +915,7 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
             try {
               await reverseAccountBalances(scope.companyId, Number(je.id));
               await client.query(
-                `UPDATE journal_entries SET status = 'reversed' WHERE id = $1 AND "companyId" = $2`,
+                `UPDATE journal_entries SET status = 'reversed' WHERE id = $1 AND "companyId" = $2 AND status IN ('posted', 'partial')`,
                 [Number(je.id), scope.companyId]
               );
             } catch (e) { logger.error(e, "Failed to reverse invoice GL on rejection:"); }
@@ -1778,7 +1778,7 @@ invoicesRouter.get("/dunning/preview", requirePermission("finance:read"), async 
               c.name AS "clientName", c.email AS "clientEmail", c.phone AS "clientPhone",
               GREATEST(0, ($1::date - i."dueDate"::date))::int AS "daysPastDue"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId"
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        WHERE i."companyId"=$2
          AND i.status NOT IN ('paid','cancelled')
          AND COALESCE(i."deletedAt",NULL) IS NULL
@@ -1861,7 +1861,7 @@ invoicesRouter.post("/dunning/send", requirePermission("finance:create"), async 
                 i.total, COALESCE(i."paidAmount",0) AS "paidAmount", i."clientId",
                 c.name AS "clientName"
          FROM invoices i
-         LEFT JOIN clients c ON c.id = i."clientId"
+         LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
          WHERE i.id=$1 AND i."companyId"=$2
            AND i.status NOT IN ('paid','cancelled')
            AND i."deletedAt" IS NULL`,

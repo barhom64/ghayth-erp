@@ -1241,7 +1241,7 @@ router.get("/governance/event-catalog", requirePermission("admin:read"), async (
 router.get("/governance/rbac-matrix", requirePermission("admin:read"), async (req, res) => {
   const scope = req.scope!;
   const customPerms = await rawQuery<any>(
-    `SELECT role, permission FROM role_permissions WHERE "companyId" = $1`,
+    `SELECT role, permission FROM role_permissions WHERE "companyId" = $1 LIMIT 500`,
     [scope.companyId]
   );
   res.json({

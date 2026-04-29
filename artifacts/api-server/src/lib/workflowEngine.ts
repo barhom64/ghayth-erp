@@ -2,6 +2,7 @@ import { rawQuery, rawExecute } from "./rawdb.js";
 import { createNotification, getAssignmentIdByRole, createAuditLog, emitEvent, toDateISO, currentPeriod } from "./businessHelpers.js";
 import { NotFoundError, ValidationError, ForbiddenError } from "./errorHandler.js";
 import { logger } from "./logger.js";
+import { OPS_CLOSE_ROLES } from "./rbacCatalog.js";
 
 async function handleLeaveApproval(refId: number, approvedBy?: number | null): Promise<void> {
   await rawExecute(
@@ -483,7 +484,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
     throw new ValidationError("المعاملة ليست في حالة تسمح بهذا الإجراء");
   }
 
-  const privilegedRoles = ["owner", "general_manager", "hr_manager", "finance_manager"];
+  const privilegedRoles = OPS_CLOSE_ROLES;
   let isOverride = false;
 
   const [actorAssignment] = await rawQuery<any>(

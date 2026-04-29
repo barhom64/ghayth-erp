@@ -753,7 +753,7 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
         if (decision === "rejected") {
           if (memo.violationId) {
             await client.query(
-              `UPDATE employee_violations SET status = 'rejected' WHERE id = $1 AND "companyId" = $2`,
+              `UPDATE employee_violations SET status = 'rejected' WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
               [memo.violationId, scope.companyId]
             );
           }
@@ -848,7 +848,7 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
         if (memo.violationId) {
           await rawExecute(
             `UPDATE employee_violations SET status = 'cancelled'
-              WHERE id = $1 AND "companyId" = $2`,
+              WHERE id = $1 AND "companyId" = $2 AND status IN ('pending', 'under_review')`,
             [memo.violationId, scope.companyId]
           );
         }
@@ -949,7 +949,7 @@ router.post("/memos/:id/appeal-decision", requirePermission("hr:discipline:appro
       onApply: async (_row, _client) => {
         if (decision === "accepted" && memo.violationId) {
           await rawExecute(
-            `UPDATE employee_violations SET status = 'appeal_accepted' WHERE id = $1 AND "companyId" = $2`,
+            `UPDATE employee_violations SET status = 'appeal_accepted' WHERE id = $1 AND "companyId" = $2 AND status = 'approved'`,
             [memo.violationId, scope.companyId]
           );
         }
@@ -1003,7 +1003,7 @@ router.post("/memos/:id/close", requirePermission("hr:update"), async (req, res)
       onApply: async (_row, _client) => {
         if (memo.violationId) {
           await rawExecute(
-            `UPDATE employee_violations SET status = 'closed' WHERE id = $1 AND "companyId" = $2`,
+            `UPDATE employee_violations SET status = 'closed' WHERE id = $1 AND "companyId" = $2 AND status IN ('approved', 'rejected', 'appeal_accepted', 'cancelled')`,
             [memo.violationId, scope.companyId]
           );
         }

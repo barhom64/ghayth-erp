@@ -4,6 +4,7 @@ import { ValidationError } from "./errorHandler.js";
 import { sendNotification } from "./notificationService.js";
 import { validateEventPayload, getEventDefinition } from "./eventCatalog.js";
 import { logger } from "./logger.js";
+import { FINANCE_ROLES, OWNER_GM_ROLES } from "./rbacCatalog.js";
 
 export function todayISO(): string {
   return new Date().toISOString().split("T")[0];
@@ -720,7 +721,7 @@ export async function validateBudget(params: {
   }
   if (utilization <= 99) {
     return {
-      status: "warning_cfo", canProceed: ["finance_manager", "general_manager", "owner"].includes(params.role),
+      status: "warning_cfo", canProceed: FINANCE_ROLES.includes(params.role),
       utilization: Math.round(utilization),
       message: "تحذير: استخدام الميزانية 80-99%. يتطلب موافقة المدير المالي",
       requiresApproval: true, approvalLevel: "cfo",
@@ -728,7 +729,7 @@ export async function validateBudget(params: {
   }
   if (utilization <= 110) {
     return {
-      status: "blocked_gm", canProceed: ["general_manager", "owner"].includes(params.role),
+      status: "blocked_gm", canProceed: OWNER_GM_ROLES.includes(params.role),
       utilization: Math.round(utilization),
       message: "تجاوز الميزانية 100-110%. يتطلب موافقة المدير العام فقط",
       requiresApproval: true, approvalLevel: "general_manager",

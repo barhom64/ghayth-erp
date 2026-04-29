@@ -11,7 +11,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog, toDateISO } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, toDateISO } from "../lib/businessHelpers.js";
 import crypto from "node:crypto";
 import QRCode from "qrcode";
 import { logger } from "../lib/logger.js";
@@ -300,6 +300,11 @@ zatcaRouter.put("/zatca/settings", requirePermission("finance:update"), async (r
       entityId: scope.companyId,
       after: { enabled, environment, vatRegistrationNumber },
     }).catch((e) => logger.error(e, "finance-zatca background task failed"));
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "zatca.settings.updated", entity: "zatca_settings",
+      entityId: scope.companyId, details: JSON.stringify({ enabled, environment }),
+    }).catch((e) => logger.error(e, "finance-zatca emitEvent failed"));
 
     const [updated] = await rawQuery<any>(
       `SELECT id, "companyId", enabled, environment, "vatRegistrationNumber", "crNumber",
@@ -371,7 +376,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), asy
       `SELECT i.*, c.name AS "clientName", c."taxNumber" AS "clientVat",
               b.name AS "branchName", b."taxNumber" AS "branchVat"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId"
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        LEFT JOIN branches b ON b.id = i."branchId"
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [Number(id), scope.companyId]
@@ -462,7 +467,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
       `SELECT i.*, c.name AS "clientName", c."taxNumber" AS "clientVat",
               b.name AS "branchName", b."taxNumber" AS "branchVat"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId"
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        LEFT JOIN branches b ON b.id = i."branchId"
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [Number(id), scope.companyId]
