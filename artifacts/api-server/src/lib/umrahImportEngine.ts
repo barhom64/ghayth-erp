@@ -3,6 +3,7 @@ import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
 import { emitEvent, createAuditLog, createJournalEntry, getAccountCodeFromMapping, toDateISO } from "./businessHelpers.js";
 import { ValidationError } from "./errorHandler.js";
 import type pg from "pg";
+import { logger } from "./logger.js";
 
 // ---------------------------------------------------------------------------
 // Arabic header → DB column mapping
@@ -591,7 +592,7 @@ export async function confirmVouchersImport(
                 );
               }
             } catch (jeErr) {
-              console.error(`[UmrahImport] Journal entry failed for NUSK ${row.nuskInvoiceNumber}:`, jeErr);
+              logger.error(jeErr, `[UmrahImport] Journal entry failed for NUSK ${row.nuskInvoiceNumber}:`);
             }
           }
 

@@ -39,6 +39,7 @@ import type pg from "pg";
 import { withTransaction } from "./rawdb.js";
 import { createAuditLog, createNotification } from "./businessHelpers.js";
 import { safeEmitEvent } from "./eventBus.js";
+import { logger } from "./logger.js";
 
 export interface LifecycleScope {
   companyId: number;
@@ -167,7 +168,7 @@ export async function applyTransition<TRow = any>(
     if (toState !== undefined) {
       const currentStatus = (existing[statusCol] as string) ?? "*";
       if (!isValidTransition(entity, currentStatus, toState, statusCol)) {
-        console.warn(`[lifecycle] transition not in state machine: ${entity} ${currentStatus} → ${toState}`);
+        logger.warn(`[lifecycle] transition not in state machine: ${entity} ${currentStatus} → ${toState}`);
       }
     }
 
@@ -252,7 +253,7 @@ export async function applyTransition<TRow = any>(
     before: { [statusCol]: existingStatus },
     after: { [statusCol]: toState ?? existingStatus, ...(after ?? {}) },
     reason,
-  }).catch((err) => console.error("lifecycleEngine audit error:", err));
+  }).catch((err) => logger.error(err, "lifecycleEngine audit error:"));
 
   safeEmitEvent({
     action,
@@ -278,7 +279,7 @@ export async function applyTransition<TRow = any>(
         refType: n.refType,
         refId: n.refId,
         actionUrl: n.actionUrl,
-      }).catch((err) => console.error("lifecycleEngine notify error:", err));
+      }).catch((err) => logger.error(err, "lifecycleEngine notify error:"));
     }
   }
 

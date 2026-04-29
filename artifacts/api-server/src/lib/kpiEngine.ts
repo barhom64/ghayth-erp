@@ -1,5 +1,6 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { todayISO } from "./businessHelpers.js";
+import { logger } from "./logger.js";
 
 export interface KPISnapshot {
   companyId: number;
@@ -309,7 +310,7 @@ export async function saveKPISnapshots(companyId: number, date: string): Promise
       }
       saved++;
     } catch (err) {
-      console.error(`KPI error for employee ${emp.id}:`, err);
+      logger.error(err, `KPI error for employee ${emp.id}:`);
     }
   }
   return saved;

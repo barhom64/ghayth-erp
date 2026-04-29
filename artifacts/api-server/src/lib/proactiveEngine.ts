@@ -39,7 +39,7 @@ async function logAutomation(params: {
       [params.automationType]
     ).catch(() => {});
   } catch (err) {
-    console.error("[ProactiveEngine] Failed to log automation:", err);
+    logger.error(err, "[ProactiveEngine] Failed to log automation:");
   }
 }
 
@@ -107,7 +107,7 @@ async function createTaskForAssignment(params: {
     );
     return row?.id ?? null;
   } catch (err) {
-    console.error("[ProactiveEngine] Failed to create task:", err);
+    logger.error(err, "[ProactiveEngine] Failed to create task:");
     return null;
   }
 }
@@ -533,7 +533,7 @@ export async function proactiveVehicleBreakdown(payload: {
       );
       maintenanceId = maint?.id ?? null;
     } catch (err) {
-      console.error("[ProactiveEngine] Failed to create fleet_maintenance:", err);
+      logger.error(err, "[ProactiveEngine] Failed to create fleet_maintenance:");
     }
   }
 
@@ -584,7 +584,7 @@ export function registerProactiveEventListeners(): void {
         });
       }
     } catch (err) {
-      console.error("[ProactiveEngine] Vehicle breakdown handler failed:", err);
+      logger.error(err, "[ProactiveEngine] Vehicle breakdown handler failed:");
     }
   });
 

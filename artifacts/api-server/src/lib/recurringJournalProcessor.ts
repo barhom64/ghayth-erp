@@ -1,5 +1,6 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { todayISO } from "./businessHelpers.js";
+import { logger } from "./logger.js";
 
 export type RecurringFrequency = "daily" | "weekly" | "monthly" | "quarterly" | "yearly";
 
@@ -68,7 +69,7 @@ export async function runRecurringJournal(params: {
          ("companyId","recurringJournalId","runDate",status,error,"triggeredBy")
        VALUES ($1,$2,$3,'failed',$4,$5)`,
       [companyId, recurring.id, todayISO(), msg, triggeredBy]
-    ).catch(console.error);
+    ).catch((e) => logger.error(e, "[recurringJournalProcessor] background task failed"));
     return { success: false, error: msg };
   }
 }

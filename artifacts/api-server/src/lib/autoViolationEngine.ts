@@ -16,6 +16,7 @@ import { rawQuery, rawExecute } from "./rawdb.js";
 import { ensureInquiryMemoForViolation, type IncidentType } from "./disciplineEngine.js";
 import { createNotification, getManagerAssignmentId, emitEvent, todayISO } from "./businessHelpers.js";
 import { eventBus } from "./eventBus.js";
+import { logger } from "./logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // الأنواع
@@ -402,7 +403,7 @@ export async function runAutoDetection(
               priority: incident.severity === "high" ? "high" : "normal",
               refType: "hr_inquiry_memo",
               refId: memoResult.memoId,
-            }).catch(console.error);
+            }).catch((e) => logger.error(e, "[autoViolationEngine] background task failed"));
           }
 
           // ── إشعار المدير ──
@@ -419,10 +420,10 @@ export async function runAutoDetection(
                     priority: incident.severity === "high" ? "high" : "normal",
                     refType: "hr_inquiry_memo",
                     refId: memoResult.memoId,
-                  }).catch(console.error);
+                  }).catch((e) => logger.error(e, "[autoViolationEngine] background task failed"));
                 }
               })
-              .catch(console.error);
+              .catch((e) => logger.error(e, "[autoViolationEngine] background task failed"));
           }
         }
 
@@ -444,7 +445,7 @@ export async function runAutoDetection(
       }
     } catch (err) {
       result.errors++;
-      console.error(`[الرصد التلقائي] خطأ في معالجة واقعة ${incident.type} للموظف ${incident.employeeName}:`, err);
+      logger.error(err, `[الرصد التلقائي] خطأ في معالجة واقعة ${incident.type} للموظف ${incident.employeeName}:`);
     }
   }
 
@@ -480,7 +481,7 @@ export async function runAutoDetectionAllCompanies(
       totalDetected += result.detected;
       totalMemos += result.memosCreated;
     } catch (err) {
-      console.error(`[الرصد التلقائي] خطأ في الشركة ${company.id}:`, err);
+      logger.error(err, `[الرصد التلقائي] خطأ في الشركة ${company.id}:`);
     }
   }
 
@@ -538,7 +539,7 @@ async function logDetectionRun(result: AutoDetectionResult): Promise<void> {
         ]
       );
     } catch (innerErr) {
-      console.error("[الرصد التلقائي] فشل تسجيل السجل:", innerErr);
+      logger.error(innerErr, "[الرصد التلقائي] فشل تسجيل السجل:");
     }
   }
 }

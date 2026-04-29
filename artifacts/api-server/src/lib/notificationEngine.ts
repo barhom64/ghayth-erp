@@ -1,6 +1,7 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { sendPushToCompany } from "./pushService.js";
 import crypto from "node:crypto";
+import { logger } from "./logger.js";
 
 export type EngineChannel = "in_app" | "email" | "sms" | "whatsapp" | "push" | "webhook";
 
@@ -250,7 +251,7 @@ async function dispatchWebhooks(companyId: number, eventCategory: string, payloa
       const parsedUrl = new URL(wh.url);
       if (!["http:", "https:"].includes(parsedUrl.protocol)) continue;
     } catch {
-      console.warn(`[NotifEngine] Invalid webhook URL for ${wh.name}: ${wh.url}`);
+      logger.warn(`[NotifEngine] Invalid webhook URL for ${wh.name}: ${wh.url}`);
       continue;
     }
 
@@ -403,7 +404,7 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
             refType: payload.refType,
             refId: payload.refId,
           }).catch((err: unknown) => {
-            console.warn("[NotifEngine] Push error:", err instanceof Error ? err.message : String(err));
+            logger.warn(`[NotifEngine] Push error: ${err instanceof Error ? err.message : String(err)}`);
           });
           const dlId = await insertDeliveryLog({
             companyId, channel: "push",
@@ -470,7 +471,7 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
 
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      console.warn(`[NotifEngine] Channel ${channel} error:`, errMsg);
+      logger.warn(`[NotifEngine] Channel ${channel} error: ${errMsg}`);
       const dlId = await insertDeliveryLog({
         companyId, channel,
         recipient: "error",

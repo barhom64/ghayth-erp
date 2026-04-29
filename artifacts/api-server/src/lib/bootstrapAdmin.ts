@@ -178,7 +178,7 @@ export async function bootstrapAdminUser(): Promise<void> {
     }
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("[Bootstrap] Failed to bootstrap admin users:", err);
+    logger.error(err as Error, "[Bootstrap] Failed to bootstrap admin users");
     throw err;
   } finally {
     client.release();

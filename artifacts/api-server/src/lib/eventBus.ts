@@ -1,5 +1,6 @@
 import { EventEmitter } from "events";
 import { rawExecute } from "./rawdb.js";
+import { logger } from "./logger.js";
 
 export interface EventPayload {
   companyId?: number;
@@ -116,7 +117,7 @@ async function flushDLQ(): Promise<void> {
         ]
       );
     } catch (dbErr) {
-      console.error("[DLQ] Failed to persist DLQ entry:", dbErr);
+      logger.error(dbErr, "[DLQ] Failed to persist DLQ entry:");
     }
   }
 }
@@ -147,7 +148,7 @@ export function registerCrossDomainHandler(
     try {
       await handler(payload);
     } catch (err) {
-      console.error(`[CrossDomain] handler for ${eventName} failed:`, err);
+      logger.error(err, `[CrossDomain] handler for ${eventName} failed:`);
       pushToDLQ("event", payload, err, payload?.companyId, eventName);
     }
   });

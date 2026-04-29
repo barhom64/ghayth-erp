@@ -3,6 +3,7 @@ import { eventBus } from "./eventBus.js";
 import { ValidationError } from "./errorHandler.js";
 import { sendNotification } from "./notificationService.js";
 import { validateEventPayload, getEventDefinition } from "./eventCatalog.js";
+import { logger } from "./logger.js";
 
 export function todayISO(): string {
   return new Date().toISOString().split("T")[0];
@@ -74,7 +75,7 @@ export async function createNotification(params: {
       actionUrl: params.actionUrl,
     });
   } catch (err) {
-    console.error("createNotification error:", err);
+    logger.error(err, "createNotification error:");
   }
 }
 
@@ -128,13 +129,13 @@ export async function emitEvent(params: {
     if (isCritical) {
       throw new ValidationError(`حدث حرج غير مسجل في الكتالوج: ${params.action}`);
     }
-    console.warn(`[emitEvent] uncataloged event: ${params.action}`);
+    logger.warn(`[emitEvent] uncataloged event: ${params.action}`);
   } else if (!validation.valid && isCritical) {
     throw new ValidationError(
       `حدث حرج بدون بيانات مطلوبة: ${params.action} — ${validation.warnings.join("; ")}`
     );
   } else if (!validation.valid) {
-    console.warn(`[emitEvent] payload warnings for ${params.action}: ${validation.warnings.join("; ")}`);
+    logger.warn(`[emitEvent] payload warnings for ${params.action}: ${validation.warnings.join("; ")}`);
   }
 
   // Critical events: persist to event_logs BEFORE emitting to listeners
@@ -171,7 +172,7 @@ export async function emitEvent(params: {
         );
       } catch { /* DB also failed — last resort */ }
     }
-    console.error("[emitEvent] listener failed, event persisted to event_logs:", err);
+    logger.error(err, "[emitEvent] listener failed, event persisted to event_logs:");
   }
 }
 
@@ -203,7 +204,7 @@ export async function createAuditLog(params: {
       ]
     );
   } catch (err) {
-    console.error("createAuditLog error:", err);
+    logger.error(err, "createAuditLog error:");
   }
 }
 
@@ -323,7 +324,7 @@ export async function createJournalEntry(params: {
         [params.companyId, params.createdBy, JSON.stringify({
           ref: params.ref, imbalance, totalDebit, totalCredit,
         })]
-      ).catch(console.error);
+      ).catch((e) => logger.error(e, "[businessHelpers] background task failed"));
     }
   } else if (Math.abs(imbalance) > 0.05) {
     throw new ValidationError(
@@ -437,7 +438,7 @@ export async function createGuardedJournalEntry(
        err instanceof Error ? err.message : String(err)]
     );
 
-    console.error(`[FinancialPostingGuard] GL failed for ${guard.table}#${guard.id}:`, err);
+    logger.error(err, `[FinancialPostingGuard] GL failed for ${guard.table}#${guard.id}:`);
     throw err;
   }
 }
@@ -572,7 +573,7 @@ export async function initiateApprovalChain(params: {
       priority: "high", refType: params.refType, refId: params.refId,
     });
   } else {
-    console.warn(
+    logger.warn(
       `[initiateApprovalChain] No approver found for company=${params.companyId} chainType=${params.chainType} ref=${params.refType}#${params.refId}. Request ${requestId} created with assignedTo=null.`
     );
   }
@@ -906,7 +907,7 @@ async function resolveByIntent(companyId: number, operationType: string, fallbac
       params
     );
     if (rows.length) {
-      console.warn(`[accounting_mappings] Resolved "${operationType}" → "${rows[0].code}" by intent search (fallback "${fallbackCode}" missing).`);
+      logger.warn(`[accounting_mappings] Resolved "${operationType}" → "${rows[0].code}" by intent search (fallback "${fallbackCode}" missing).`);
       _resolvedAccountCache.set(cacheKey, rows[0].code);
       return rows[0].code;
     }
@@ -936,12 +937,12 @@ export async function getAccountCodeFromMapping(
   if (!mapping) {
     const resolved = await resolveByIntent(companyId, operationType, fallbackCode);
     if (resolved !== fallbackCode) return resolved;
-    console.warn(`[accounting_mappings] No mapping for "${operationType}", company=${companyId}. Fallback: "${fallbackCode}".`);
+    logger.warn(`[accounting_mappings] No mapping for "${operationType}", company=${companyId}. Fallback: "${fallbackCode}".`);
     rawExecute(
       `INSERT INTO audit_logs ("companyId","userId",action,entity,"entityId","after")
        VALUES ($1,0,'mapping_fallback','accounting_mappings',0,$2)`,
       [companyId, JSON.stringify({ operationType, side, fallbackCode })]
-    ).catch(console.error);
+    ).catch((e) => logger.error(e, "[businessHelpers] background task failed"));
     return fallbackCode;
   }
   const explicitCode = side === "debit"

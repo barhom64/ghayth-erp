@@ -1417,9 +1417,9 @@ router.get("/system-registry/missing", requirePermission("admin:read"), async (r
   } catch (err) { handleRouteError(err, res, "Missing registry items error:"); }
 });
 
-// ─── System Health Dashboard ────────────────────────────────────────────
+// ─── System Health Checks (structured pass/fail) ────────────────────────
 
-router.get("/system-health", requirePermission("admin:read"), async (req, res) => {
+router.get("/system-health-checks", requirePermission("admin:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const checks: { name: string; status: "ok" | "warn" | "error"; detail?: string }[] = [];

@@ -28,7 +28,7 @@ export async function bootstrapCompany(companyId: number, companyName: string) {
     return { branchId };
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error(`[CompanyBootstrap] Failed to bootstrap company ${companyId}:`, err);
+    logger.error(err, `[CompanyBootstrap] Failed to bootstrap company ${companyId}:`);
     throw err;
   } finally {
     client.release();
