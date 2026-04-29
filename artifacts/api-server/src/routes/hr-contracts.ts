@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
@@ -36,7 +36,7 @@ contractsRouter.get("/", requirePermission("hr:read"), async (req, res) => {
     const scope = req.scope!;
     const { status, employeeId, search } = req.query as Record<string, string>;
     const params: any[] = [scope.companyId];
-    let where = `ec."companyId" = $1`;
+    let where = `ec."companyId" = $1 AND ec."deletedAt" IS NULL`;
 
     if (status) {
       params.push(status);
@@ -154,7 +154,7 @@ contractsRouter.patch("/:id", requirePermission("hr:update"), async (req, res) =
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [existing] = await rawQuery<any>(
-      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("العقد غير موجود");
@@ -198,7 +198,7 @@ contractsRouter.post("/:id/submit", requirePermission("hr:create"), async (req, 
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [contract] = await rawQuery<any>(
-      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود");
@@ -226,7 +226,7 @@ contractsRouter.post("/:id/approve", requirePermission("hr:approve"), async (req
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [contract] = await rawQuery<any>(
-      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود");
@@ -257,7 +257,7 @@ contractsRouter.post("/:id/reject", requirePermission("hr:approve"), async (req,
     const id = Number(req.params.id);
     const { reason } = req.body as { reason?: string };
     const [contract] = await rawQuery<any>(
-      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود");
@@ -286,7 +286,7 @@ contractsRouter.post("/:id/sign-company", requirePermission("hr:approve"), async
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [contract] = await rawQuery<any>(
-      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود");
@@ -349,7 +349,7 @@ contractsRouter.post("/:id/activate", requirePermission("hr:update"), async (req
     const scope = req.scope!;
     const id = Number(req.params.id);
     const [contract] = await rawQuery<any>(
-      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود");
@@ -379,7 +379,7 @@ contractsRouter.post("/:id/terminate", requirePermission("hr:update"), async (re
     const id = Number(req.params.id);
     const { reason } = req.body as { reason?: string };
     const [contract] = await rawQuery<any>(
-      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود");
@@ -410,7 +410,7 @@ contractsRouter.post("/:id/renew", requirePermission("hr:create"), async (req, r
     const id = Number(req.params.id);
     const { newEndDate, newSalary } = req.body as { newEndDate?: string; newSalary?: number };
     const [contract] = await rawQuery<any>(
-      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("الع��د غير موجود");
@@ -420,27 +420,31 @@ contractsRouter.post("/:id/renew", requirePermission("hr:create"), async (req, r
 
     const newStart = contract.endDate || todayISO();
 
-    const [newContract] = await rawQuery<any>(
-      `INSERT INTO employee_contracts (
-        "companyId", "employeeId", "assignmentId", "contractType",
-        "startDate", "endDate", salary, "housingAllowance", "transportAllowance",
-        "otherAllowances", "templateId", "branchId", ref, "approvalStatus", status, notes
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'draft','draft',$14)
-      RETURNING *`,
-      [
-        scope.companyId, contract.employeeId, contract.assignmentId, contract.contractType,
-        newStart, newEndDate || null,
-        newSalary || contract.salary, contract.housingAllowance, contract.transportAllowance,
-        JSON.stringify(contract.otherAllowances || {}),
-        contract.templateId, contract.branchId, ref,
-        `تجديد للعقد رقم ${contract.ref}`,
-      ]
-    );
+    const newContract = await withTransaction(async (client) => {
+      const insertRes = await client.query(
+        `INSERT INTO employee_contracts (
+          "companyId", "employeeId", "assignmentId", "contractType",
+          "startDate", "endDate", salary, "housingAllowance", "transportAllowance",
+          "otherAllowances", "templateId", "branchId", ref, "approvalStatus", status, notes
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'draft','draft',$14)
+        RETURNING *`,
+        [
+          scope.companyId, contract.employeeId, contract.assignmentId, contract.contractType,
+          newStart, newEndDate || null,
+          newSalary || contract.salary, contract.housingAllowance, contract.transportAllowance,
+          JSON.stringify(contract.otherAllowances || {}),
+          contract.templateId, contract.branchId, ref,
+          `تجديد للعقد رقم ${contract.ref}`,
+        ]
+      );
 
-    await rawExecute(
-      `UPDATE employee_contracts SET "renewalDate" = $2, "updatedAt" = NOW() WHERE id = $1`,
-      [id, newStart]
-    );
+      await client.query(
+        `UPDATE employee_contracts SET "renewalDate" = $2, "updatedAt" = NOW() WHERE id = $1`,
+        [id, newStart]
+      );
+
+      return insertRes.rows[0];
+    });
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_renewed", entity: "employee_contract", entityId: newContract.id, after: {
       ref, previousRef: contract.ref,

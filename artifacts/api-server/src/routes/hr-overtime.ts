@@ -110,7 +110,8 @@ router.get("/overtime", requirePermission("hr:read"), async (req, res) => {
        JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN branches b ON b.id = ea."branchId"
        WHERE ${where}
-       ORDER BY o."overtimeDate" DESC, o."createdAt" DESC`,
+       ORDER BY o."overtimeDate" DESC, o."createdAt" DESC
+       LIMIT 500`,
       params
     );
 

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -54,27 +54,31 @@ router.post("/policies", requirePermission("governance:write"), async (req, res)
     const parsed = createPolicySchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { title, description, category, status, effectiveDate, expiryDate, modules } = parsed.data;
-    const r = await rawExecute(
-      `INSERT INTO governance_policies (title, description, category, status, "effectiveDate", "expiryDate", version, "companyId")
-       VALUES ($1,$2,$3,$4,$5,$6,1,$7)`,
-      [title, description, category, status || "draft", effectiveDate || null, expiryDate || null, scope.companyId]
-    );
-    if (modules && Array.isArray(modules) && modules.length > 0) {
-      for (const mod of modules) {
-        await rawExecute(
-          `INSERT INTO policy_module_links ("policyId", module, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
-          [r.insertId, mod, scope.companyId]
-        );
+    const { insertId, row } = await withTransaction(async (client) => {
+      const insertRes = await client.query(
+        `INSERT INTO governance_policies (title, description, category, status, "effectiveDate", "expiryDate", version, "companyId")
+         VALUES ($1,$2,$3,$4,$5,$6,1,$7) RETURNING id`,
+        [title, description, category, status || "draft", effectiveDate || null, expiryDate || null, scope.companyId]
+      );
+      const insertId = insertRes.rows[0]?.id;
+      if (modules && Array.isArray(modules) && modules.length > 0) {
+        for (const mod of modules) {
+          await client.query(
+            `INSERT INTO policy_module_links ("policyId", module, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+            [insertId, mod, scope.companyId]
+          );
+        }
       }
-    }
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_policies", entityId: r.insertId, after: { title, category } }).catch(console.error);
+      const selectRes = await client.query(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+      return { insertId, row: selectRes.rows[0] };
+    });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_policies", entityId: insertId, after: { title, category } }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "governance.policy.created",
       entity: "governance_policies",
-      entityId: r.insertId,
+      entityId: insertId,
       details: JSON.stringify({ title, category }),
     }).catch(console.error);
     res.status(201).json(row);
@@ -118,23 +122,26 @@ router.patch("/policies/:id", requirePermission("governance:write"), async (req,
     if (b.expiryDate !== undefined) { params.push(b.expiryDate || null); sets.push(`"expiryDate"=$${params.length}`); }
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id); params.push(scope.companyId);
-    const result = await rawExecute(
-      `UPDATE governance_policies SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`,
-      params
-    );
-    if (result.affectedRows === 0) throw new NotFoundError("السياسة غير موجودة");
+    const row = await withTransaction(async (client) => {
+      const updateRes = await client.query(
+        `UPDATE governance_policies SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`,
+        params
+      );
+      if ((updateRes.rowCount ?? 0) === 0) throw new NotFoundError("السياسة غير موجودة");
 
-    if (b.modules && Array.isArray(b.modules)) {
-      await rawExecute(`DELETE FROM policy_module_links WHERE "policyId"=$1`, [id]);
-      for (const mod of b.modules) {
-        await rawExecute(
-          `INSERT INTO policy_module_links ("policyId", module, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
-          [id, mod, scope.companyId]
-        );
+      if (b.modules && Array.isArray(b.modules)) {
+        await client.query(`DELETE FROM policy_module_links WHERE "policyId"=$1`, [id]);
+        for (const mod of b.modules) {
+          await client.query(
+            `INSERT INTO policy_module_links ("policyId", module, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+            [id, mod, scope.companyId]
+          );
+        }
       }
-    }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+      const selectRes = await client.query(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+      return selectRes.rows[0];
+    });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_policies", entityId: id }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
@@ -164,48 +171,52 @@ router.post("/policies/:id/new-version", requirePermission("governance:write"), 
     const nextVersion = Number(maxVersion?.next || parent.version + 1);
 
     const b = req.body;
-    const r = await rawExecute(
-      `INSERT INTO governance_policies (title, description, category, status, "effectiveDate", "expiryDate", version, "parentId", "companyId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [
-        b.title || parent.title,
-        b.description || parent.description,
-        b.category || parent.category,
-        "draft",
-        b.effectiveDate || null,
-        b.expiryDate || null,
-        nextVersion,
-        parentId,
-        scope.companyId,
-      ]
-    );
-
-    await applyTransition({
-      entity: "governance_policies",
-      id: parentId,
-      scope,
-      action: "governance.policy.archived",
-      fromStates: ["draft", "active"],
-      toState: "archived",
-      reason: `أرشفة تلقائية — إصدار جديد v${nextVersion}`,
-    });
-
-    const links = await rawQuery<any>(`SELECT module FROM policy_module_links WHERE "policyId"=$1`, [parentId]);
-    for (const link of links) {
-      await rawExecute(
-        `INSERT INTO policy_module_links ("policyId", module, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
-        [r.insertId, link.module, scope.companyId]
+    const { insertId, row } = await withTransaction(async (client) => {
+      const insertRes = await client.query(
+        `INSERT INTO governance_policies (title, description, category, status, "effectiveDate", "expiryDate", version, "parentId", "companyId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [
+          b.title || parent.title,
+          b.description || parent.description,
+          b.category || parent.category,
+          "draft",
+          b.effectiveDate || null,
+          b.expiryDate || null,
+          nextVersion,
+          parentId,
+          scope.companyId,
+        ]
       );
-    }
+      const insertId = insertRes.rows[0]?.id;
 
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_policies", entityId: r.insertId, after: { version: nextVersion, parentId } }).catch(console.error);
+      await applyTransition({
+        entity: "governance_policies",
+        id: parentId,
+        scope,
+        action: "governance.policy.archived",
+        fromStates: ["draft", "active"],
+        toState: "archived",
+        reason: `أرشفة تلقائية — إصدار جديد v${nextVersion}`,
+      });
+
+      const linksRes = await client.query(`SELECT module FROM policy_module_links WHERE "policyId"=$1`, [parentId]);
+      for (const link of linksRes.rows) {
+        await client.query(
+          `INSERT INTO policy_module_links ("policyId", module, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+          [insertId, link.module, scope.companyId]
+        );
+      }
+
+      const selectRes = await client.query(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+      return { insertId, row: selectRes.rows[0] };
+    });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_policies", entityId: insertId, after: { version: nextVersion, parentId } }).catch(console.error);
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "governance.policy.new_version",
       entity: "governance_policies",
-      entityId: r.insertId,
+      entityId: insertId,
       details: JSON.stringify({ version: nextVersion, parentId }),
     }).catch(console.error);
     res.status(201).json(row);

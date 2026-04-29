@@ -6,7 +6,7 @@ import {
   IntegrationError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
@@ -897,17 +897,24 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
     const depreciation = estimatedDistanceKm * 0.15;
     const totalEstimatedCost = estimatedFuelCost + driverFare + depreciation;
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO fleet_trips ("companyId","vehicleId","driverId","clientId","fromLocation","toLocation","fromLat","fromLng","toLat","toLng","distance","cost","startTime",status,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-      [scope.companyId, selectedVehicleId, selectedDriverId, b.clientId, b.fromLocation, b.toLocation, fromLat || null, fromLng || null, toLat || null, toLng || null, estimatedDistanceKm, totalEstimatedCost, b.startTime || new Date().toISOString(), 'in_progress', b.notes]
-    );
+    const insertId = await withTransaction(async (client) => {
+      const tripResult = await client.query(
+        `INSERT INTO fleet_trips ("companyId","vehicleId","driverId","clientId","fromLocation","toLocation","fromLat","fromLng","toLat","toLng","distance","cost","startTime",status,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
+        [scope.companyId, selectedVehicleId, selectedDriverId, b.clientId, b.fromLocation, b.toLocation, fromLat || null, fromLng || null, toLat || null, toLng || null, estimatedDistanceKm, totalEstimatedCost, b.startTime || new Date().toISOString(), 'in_progress', b.notes]
+      );
+      const tripId = tripResult.rows[0]?.id;
 
-    if (selectedVehicleId) {
-      await rawExecute(`UPDATE fleet_vehicles SET status='in_use', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [selectedVehicleId, scope.companyId]);
-    }
+      if (selectedVehicleId) {
+        await client.query(`UPDATE fleet_vehicles SET status='in_use', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [selectedVehicleId, scope.companyId]);
+      }
+      if (selectedDriverId) {
+        await client.query(`UPDATE fleet_drivers SET status='on_trip' WHERE id=$1 AND "companyId"=$2`, [selectedDriverId, scope.companyId]);
+      }
+
+      return tripId;
+    });
+
     if (selectedDriverId) {
-      await rawExecute(`UPDATE fleet_drivers SET status='on_trip' WHERE id=$1 AND "companyId"=$2`, [selectedDriverId, scope.companyId]);
-
       try {
         const [driverEmp] = await rawQuery<any>(
           `SELECT d."employeeId", ea.id AS "assignmentId" FROM fleet_drivers d
@@ -1216,14 +1223,19 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
     defaultNextDate.setMonth(defaultNextDate.getMonth() + 3);
     const effectiveNextServiceDate = b.nextServiceDate || toDateISO(defaultNextDate);
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO fleet_maintenance ("companyId","vehicleId",type,description,cost,"mileageAtService","serviceDate","performedBy",status,"nextServiceDate","nextServiceKm") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [scope.companyId, b.vehicleId, b.type, b.description, b.cost || 0, b.mileageAtService, b.serviceDate || todayISO(), assignedMechanic, b.status || 'in_progress', effectiveNextServiceDate, b.nextServiceKm ?? null]
-    );
+    const insertId = await withTransaction(async (client) => {
+      const maintResult = await client.query(
+        `INSERT INTO fleet_maintenance ("companyId","vehicleId",type,description,cost,"mileageAtService","serviceDate","performedBy",status,"nextServiceDate","nextServiceKm") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+        [scope.companyId, b.vehicleId, b.type, b.description, b.cost || 0, b.mileageAtService, b.serviceDate || todayISO(), assignedMechanic, b.status || 'in_progress', effectiveNextServiceDate, b.nextServiceKm ?? null]
+      );
+      const maintId = maintResult.rows[0]?.id;
 
-    if (b.vehicleId) {
-      await rawExecute(`UPDATE fleet_vehicles SET status='maintenance', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [b.vehicleId, scope.companyId]);
-    }
+      if (b.vehicleId) {
+        await client.query(`UPDATE fleet_vehicles SET status='maintenance', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [b.vehicleId, scope.companyId]);
+      }
+
+      return maintId;
+    });
 
     if (b.partsUsed && Array.isArray(b.partsUsed)) {
       fleetEngine.requestWarehouseDeduction(
@@ -2567,40 +2579,44 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
     // "driver" = fine liability shifted to driver → payroll deduction in current period.
     const liability: 'company' | 'driver' = b.liability === 'driver' ? 'driver' : 'company';
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO fleet_traffic_violations
-       ("companyId","vehicleId","driverId","violationType","violationDate","fineAmount","location","violationNumber",status,notes,"paidAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10)`,
-      [scope.companyId, b.vehicleId, b.driverId || null, b.violationType,
-       b.violationDate || todayISO(),
-       fineAmount, b.location || null, b.violationNumber || null,
-       b.notes || null, null]
-    );
+    const { insertId, journalEntryId } = await withTransaction(async (client) => {
+      const violationResult = await client.query(
+        `INSERT INTO fleet_traffic_violations
+         ("companyId","vehicleId","driverId","violationType","violationDate","fineAmount","location","violationNumber",status,notes,"paidAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10) RETURNING id`,
+        [scope.companyId, b.vehicleId, b.driverId || null, b.violationType,
+         b.violationDate || todayISO(),
+         fineAmount, b.location || null, b.violationNumber || null,
+         b.notes || null, null]
+      );
+      const violationId = violationResult.rows[0]?.id;
 
-    // GL posting — company-borne fines hit expense account immediately. If
-    // the GL fails we roll back the violation row so we never have a visible
-    // fine without its accounting impact.
-    let journalEntryId: number | null = null;
-    if (fineAmount > 0 && liability === 'company') {
-      try {
-        const { fleetEngine } = await import("../lib/engines/index.js");
-        const glResult = await fleetEngine.postTrafficViolationGL(
-          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
-          {
-            id: insertId,
-            vehicleId: b.vehicleId ? Number(b.vehicleId) : 0,
-            driverId: b.driverId ? Number(b.driverId) : undefined,
-            amount: fineAmount,
-            description: `مخالفة مرورية — ${b.violationType}${b.violationNumber ? ` #${b.violationNumber}` : ''}`,
-          }
-        );
-        journalEntryId = glResult.journalId;
-      } catch (jeErr) {
-        console.error("Traffic violation journal entry failed:", jeErr);
-        await rawExecute(`UPDATE fleet_traffic_violations SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]).catch(console.error);
-        throw new IntegrationError("تعذّر إنشاء القيد المحاسبي للمخالفة — لم يتم تسجيل المخالفة", { field: "journalEntry", fix: "تحقق من إعدادات ربط الحسابات (fleet_fines_expense / fleet_fines_payable) ثم أعد المحاولة" });
+      // GL posting — company-borne fines hit expense account immediately. If
+      // the GL fails the transaction rolls back so we never have a visible
+      // fine without its accounting impact.
+      let journalId: number | null = null;
+      if (fineAmount > 0 && liability === 'company') {
+        try {
+          const { fleetEngine } = await import("../lib/engines/index.js");
+          const glResult = await fleetEngine.postTrafficViolationGL(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+            {
+              id: violationId,
+              vehicleId: b.vehicleId ? Number(b.vehicleId) : 0,
+              driverId: b.driverId ? Number(b.driverId) : undefined,
+              amount: fineAmount,
+              description: `مخالفة مرورية — ${b.violationType}${b.violationNumber ? ` #${b.violationNumber}` : ''}`,
+            }
+          );
+          journalId = glResult.journalId;
+        } catch (jeErr) {
+          console.error("Traffic violation journal entry failed:", jeErr);
+          throw new IntegrationError("تعذّر إنشاء القيد المحاسبي للمخالفة — لم يتم تسجيل المخالفة", { field: "journalEntry", fix: "تحقق من إعدادات ربط الحسابات (fleet_fines_expense / fleet_fines_payable) ثم أعد المحاولة" });
+        }
       }
-    }
+
+      return { insertId: violationId, journalEntryId: journalId };
+    });
 
     // Driver-liability: request a payroll deduction via Fleet Engine →
     // HR Engine event boundary (no direct write to HR-owned table).

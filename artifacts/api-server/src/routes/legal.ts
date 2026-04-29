@@ -5,7 +5,7 @@ import {
   ConflictError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded } from "../lib/businessHelpers.js";
@@ -1087,13 +1087,17 @@ router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async
     }
     const [lc] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
-    const { insertId } = await rawExecute(
-      `INSERT INTO legal_judgments ("caseId","companyId","judgmentDate","judgmentType",verdict,amount,"paidAmount","dueDate",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [caseId, scope.companyId, b.judgmentDate, b.judgmentType || 'judgment', b.verdict, b.amount || 0, b.paidAmount || 0, b.dueDate || null, b.notes || null]
-    );
-    if (b.amount && Number(b.amount) > 0) {
-      await rawExecute(`UPDATE legal_cases SET "financialRisk"=COALESCE("financialRisk",0)+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`, [Number(b.amount), caseId, scope.companyId]).catch(console.error);
-    }
+    const { insertId } = await withTransaction(async (client) => {
+      const insertRes = await client.query(
+        `INSERT INTO legal_judgments ("caseId","companyId","judgmentDate","judgmentType",verdict,amount,"paidAmount","dueDate",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [caseId, scope.companyId, b.judgmentDate, b.judgmentType || 'judgment', b.verdict, b.amount || 0, b.paidAmount || 0, b.dueDate || null, b.notes || null]
+      );
+      const insertId = insertRes.rows[0]?.id ?? 0;
+      if (b.amount && Number(b.amount) > 0) {
+        await client.query(`UPDATE legal_cases SET "financialRisk"=COALESCE("financialRisk",0)+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`, [Number(b.amount), caseId, scope.companyId]);
+      }
+      return { insertId };
+    });
 
     // Register appeal deadline obligation (30 days after judgment by default)
     try {

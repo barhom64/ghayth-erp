@@ -130,7 +130,8 @@ router.get("/loans", requirePermission("hr:read"), async (req, res) => {
        JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN branches b ON b.id = ea."branchId"
        WHERE ${where}
-       ORDER BY l."createdAt" DESC`,
+       ORDER BY l."createdAt" DESC
+       LIMIT 500`,
       params
     );
 

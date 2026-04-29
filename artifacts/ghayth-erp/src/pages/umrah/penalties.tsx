@@ -1,20 +1,40 @@
 import { useLocation } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
 import { formatCurrency } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AlertTriangle, DollarSign, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, DollarSign, Clock, Zap, XCircle } from "lucide-react";
 import { AdvancedFilters, useFilters } from "@/components/shared/advanced-filters";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { useToast } from "@/hooks/use-toast";
 
 export default function UmrahPenalties() {
   const [, navigate] = useLocation();
   const { data: resp, isLoading, isError, error, refetch } = useApiQuery<any>(["umrah-penalties"], "/umrah/penalties");
   const [filters, setFilters] = useFilters();
+  const { toast } = useToast();
   const pageSize = 20;
   const items = resp?.data || [];
+
+  const waiveMutation = useApiMutation<any, { id: number; reason: string }>(
+    (body) => `/umrah/penalties/${body.id}/waive`,
+    "PATCH",
+    [["umrah-penalties"]],
+    { successMessage: "تم إعفاء الغرامة بنجاح" }
+  );
+
+  const runPenaltyEngine = async () => {
+    try {
+      const res = await apiFetch<any>("/umrah/run-penalty-engine", { method: "POST", body: JSON.stringify({}) });
+      toast({ title: `تم إنشاء ${res.penaltiesCreated ?? 0} غرامة جديدة` });
+      refetch();
+    } catch {
+      toast({ variant: "destructive", title: "خطأ في تشغيل محرك الغرامات" });
+    }
+  };
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
@@ -37,6 +57,11 @@ export default function UmrahPenalties() {
     { label: "إجمالي المبالغ (ريال)", value: formatCurrency(totalAmount), icon: DollarSign, color: "text-red-600 bg-red-50" },
   ];
 
+  const handleWaive = (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    waiveMutation.mutate({ id, reason: "إعفاء إداري" });
+  };
+
   const columns: DataTableColumn<any>[] = [
     { key: "pilgrimName", header: "المعتمر", render: (p) => <span className="font-medium">{p.pilgrimName}</span> },
     { key: "passportNumber", header: "الجواز" },
@@ -45,12 +70,25 @@ export default function UmrahPenalties() {
     { key: "daysOverstayed", header: "أيام التأخر" },
     { key: "amount", header: "المبلغ (ريال)", render: (p) => <span className="font-bold text-red-600">{formatCurrency(Number(p.amount))}</span> },
     { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
+    {
+      key: "actions" as any,
+      header: "إجراءات",
+      render: (p) =>
+        p.status === "pending" ? (
+          <Button variant="ghost" size="sm" className="text-orange-600 gap-1" onClick={(e) => handleWaive(e, p.id)}>
+            <XCircle className="h-3.5 w-3.5" />إعفاء
+          </Button>
+        ) : null,
+    },
   ];
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">الغرامات</h1>
+        <Button variant="outline" onClick={runPenaltyEngine} className="gap-2">
+          <Zap className="h-4 w-4" />تشغيل محرك الغرامات
+        </Button>
       </div>
 
       <div className="grid gap-4 grid-cols-3">
@@ -76,6 +114,7 @@ export default function UmrahPenalties() {
             { value: "pending", label: "معلقة" },
             { value: "invoiced", label: "مفوترة" },
             { value: "paid", label: "مدفوعة" },
+            { value: "waived", label: "معفاة" },
             { value: "cancelled", label: "ملغية" },
           ],
         }}

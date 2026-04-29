@@ -135,7 +135,8 @@ router.get("/exit", requirePermission("hr:read"), async (req, res) => {
        JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN branches b ON b.id = ea."branchId"
        WHERE ${where}
-       ORDER BY x."createdAt" DESC`,
+       ORDER BY x."createdAt" DESC
+       LIMIT 500`,
       params
     );
 
