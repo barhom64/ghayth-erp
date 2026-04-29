@@ -59,7 +59,7 @@ async function assertAdmin(req: any): Promise<void> {
       [scope.userId, scope.companyId]
     );
     if (rows.length > 0 && rows[0].level >= ADMIN_ROLE_LEVEL) return;
-  } catch {}
+  } catch (e) { logger.error(e, "assertAdmin role-level query failed"); }
   if (ADMIN_ROLES.includes(scope.role)) return;
   throw new ForbiddenError("غير مصرح: صلاحيات المسؤول مطلوبة");
 }
@@ -759,13 +759,13 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
     try {
       const [sizeRow] = await rawQuery<any>(`SELECT pg_size_pretty(pg_database_size(current_database())) as size`);
       dbSize = sizeRow?.size || "N/A";
-    } catch {}
+    } catch (e) { logger.error(e, "admin stats: db size query failed"); }
 
     let tableCount = 0;
     try {
       const [tc] = await rawQuery<any>(`SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema='public'`);
       tableCount = Number(tc?.count || 0);
-    } catch {}
+    } catch (e) { logger.error(e, "admin stats: table count query failed"); }
 
     const [integrationStats] = await rawQuery<any>(
       `SELECT
@@ -1131,7 +1131,7 @@ router.get("/governance/system-guards", requirePermission("admin:read"), async (
     res.json(result);
   } catch (err: any) {
     logger.error(err, "System guards error");
-    res.json({ allowed: true, violations: [], error: String(err?.message ?? "unknown") });
+    res.json({ allowed: true, violations: [], error: "خطأ في فحص حراسة النظام" });
   }
 });
 
