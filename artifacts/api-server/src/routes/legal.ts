@@ -237,7 +237,8 @@ router.get("/contracts/renewal-alerts", requirePermission("legal:read"), async (
 router.get("/contracts/:id", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("العقد غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get contract error:"); }
@@ -602,7 +603,8 @@ router.post("/cases", requirePermission("legal:create"), async (req, res) => {
 router.get("/cases/:id", requirePermission("legal:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("القضية غير موجودة");
 
     const sessions = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 ORDER BY "sessionDate" DESC`, [row.id]);

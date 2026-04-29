@@ -269,6 +269,7 @@ router.post("/agents", requirePermission("umrah:write"), async (req, res) => {
 router.patch("/agents/:id", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const b = req.body;
     if (b.status !== undefined) {
       const [existing] = await rawQuery<any>(`SELECT status FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [req.params.id, scope.companyId]);
@@ -292,8 +293,8 @@ router.patch("/agents/:id", requirePermission("umrah:write"), async (req, res) =
     params.push(req.params.id); params.push(scope.companyId);
     await rawExecute(`UPDATE umrah_agents SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery(`SELECT * FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [req.params.id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_agents", entityId: Number(req.params.id) }).catch((e) => logger.error(e, "umrah background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.updated", entity: "umrah_agents", entityId: Number(req.params.id), details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_agents", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.updated", entity: "umrah_agents", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update agent error"); }
 });
@@ -361,6 +362,7 @@ router.get("/packages/:id", requirePermission("umrah:read"), async (req, res): P
 router.patch("/packages/:id", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const b = req.body;
     const params: any[] = [];
     const sets: string[] = [];
@@ -372,8 +374,8 @@ router.patch("/packages/:id", requirePermission("umrah:write"), async (req, res)
     params.push(req.params.id); params.push(scope.companyId);
     await rawExecute(`UPDATE umrah_packages SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery(`SELECT * FROM umrah_packages WHERE id=$1 AND "companyId"=$2`, [req.params.id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_packages", entityId: Number(req.params.id), after: b }).catch((e) => logger.error(e, "umrah background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.package.updated", entity: "umrah_packages", entityId: Number(req.params.id), details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_packages", entityId: id, after: b }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.package.updated", entity: "umrah_packages", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update package error"); }
 });
@@ -381,6 +383,7 @@ router.patch("/packages/:id", requirePermission("umrah:write"), async (req, res)
 router.delete("/packages/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const inUse = await rawQuery(
       `SELECT COUNT(*)::int AS c FROM umrah_pilgrims WHERE "packageId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [req.params.id, scope.companyId]
@@ -390,7 +393,7 @@ router.delete("/packages/:id", requirePermission("umrah:write"), async (req, res
     }
     await applyTransition({
       entity: "umrah_packages",
-      id: Number(req.params.id),
+      id: id,
       scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
       action: "umrah.package.deleted",
       toState: "deleted",
@@ -1382,6 +1385,7 @@ router.get("/violations", requirePermission("umrah:read"), async (req, res) => {
 router.get("/violations/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery(
       `SELECT v.*,
               p."fullName" AS "mutamerName", p."passportNumber",
@@ -1392,7 +1396,7 @@ router.get("/violations/:id", requirePermission("umrah:read"), async (req, res):
        LEFT JOIN umrah_agents a ON a.id = v."agentId"
        LEFT JOIN umrah_sub_agents sa ON sa.id = v."subAgentId"
        WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المخالفة غير موجودة");
     res.json(row);

@@ -304,9 +304,10 @@ router.get("/branches", requirePermission("settings:read"), async (req, res) => 
 router.get("/branches/:id", requirePermission("settings:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery(
       `SELECT * FROM branches WHERE id = $1 AND "companyId" = ANY($2)`,
-      [Number(req.params.id), scope.allowedCompanies]
+      [id, scope.allowedCompanies]
     );
     if (!row) { throw new NotFoundError("الفرع غير موجود"); }
     res.json(row);
@@ -730,15 +731,16 @@ router.post("/approval-config", requirePermission("settings:write"), async (req,
 router.delete("/approval-config/:id", requirePermission("settings:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [beforeChain] = await rawQuery(`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [beforeChain] = await rawQuery(`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!beforeChain) throw new NotFoundError("سلسلة الاعتماد غير موجودة");
-    await rawExecute(`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    await rawExecute(`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_approval_config",
-      entity: "approval_chains", entityId: Number(req.params.id),
+      entity: "approval_chains", entityId: id,
       before: beforeChain,
     }).catch((e) => logger.error(e, "settings background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: Number(req.params.id), details: JSON.stringify({ key: "approval_config" }) }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: id, details: JSON.stringify({ key: "approval_config" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });

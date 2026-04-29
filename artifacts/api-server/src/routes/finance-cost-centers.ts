@@ -2,7 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError, ConflictError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
@@ -146,12 +148,13 @@ router.patch("/cost-centers/:id", requirePermission("finance:update"), async (re
 router.delete("/cost-centers/:id", requirePermission("finance:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     await rawExecute(
       `UPDATE cost_centers SET status = 'deleted', "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
       [req.params.id, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "cost_center.deleted", entity: "cost_centers", entityId: Number(req.params.id) });
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "cost_center.deleted", entity: "cost_centers", entityId: Number(req.params.id), details: JSON.stringify({ id: Number(req.params.id) }) }).catch((e) => logger.error(e, "finance-cost-centers background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "cost_center.deleted", entity: "cost_centers", entityId: id });
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "cost_center.deleted", entity: "cost_centers", entityId: id, details: JSON.stringify({ id: id }) }).catch((e) => logger.error(e, "finance-cost-centers background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete cost center error"); }
 });

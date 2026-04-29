@@ -1,5 +1,7 @@
 import { Router, type Request, type Response } from "express";
-import { handleRouteError, ValidationError, ForbiddenError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, ForbiddenError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { getDeliveryStats } from "../lib/notificationEngine.js";
@@ -250,6 +252,7 @@ router.put("/routing-rules/:id", requirePermission("admin:write"), async (req: R
     if (!parsed_updateRoutingRuleSchema.success) throw new ValidationError(parsed_updateRoutingRuleSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_updateRoutingRuleSchema.data;
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const { channels, priority, description, fallbackChainId, isActive } = body;
 
     await rawExecute(
@@ -267,7 +270,7 @@ router.put("/routing-rules/:id", requirePermission("admin:write"), async (req: R
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_routing_rule",
-      entity: "notification_routing_rules", entityId: Number(req.params.id),
+      entity: "notification_routing_rules", entityId: id,
       after: { channels, priority, description, fallbackChainId, isActive },
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
@@ -276,7 +279,7 @@ router.put("/routing-rules/:id", requirePermission("admin:write"), async (req: R
       userId: scope.userId,
       action: "notification.routing_rule.updated",
       entity: "notification_routing_rules",
-      entityId: Number(req.params.id),
+      entityId: id,
       details: JSON.stringify({ channels, priority }),
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
@@ -289,6 +292,7 @@ router.put("/routing-rules/:id", requirePermission("admin:write"), async (req: R
 router.delete("/routing-rules/:id", requirePermission("admin:write"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM notification_routing_rules WHERE id = $1 AND "companyId" = $2`,
       [req.params.id, scope.companyId]
@@ -300,7 +304,7 @@ router.delete("/routing-rules/:id", requirePermission("admin:write"), async (req
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_routing_rule",
-      entity: "notification_routing_rules", entityId: Number(req.params.id),
+      entity: "notification_routing_rules", entityId: id,
       before,
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
@@ -309,7 +313,7 @@ router.delete("/routing-rules/:id", requirePermission("admin:write"), async (req
       userId: scope.userId,
       action: "notification.routing_rule.deleted",
       entity: "notification_routing_rules",
-      entityId: Number(req.params.id),
+      entityId: id,
       details: JSON.stringify({ eventCategory: (before as any)?.eventCategory }),
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
@@ -388,6 +392,7 @@ router.put("/templates/:id", requirePermission("admin:write"), async (req: Reque
     if (!parsed_updateTemplateSchema.success) throw new ValidationError(parsed_updateTemplateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_updateTemplateSchema.data;
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const { titleTemplate, bodyTemplate, variables, isActive } = body;
 
     await rawExecute(
@@ -404,7 +409,7 @@ router.put("/templates/:id", requirePermission("admin:write"), async (req: Reque
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_notification_template",
-      entity: "notification_templates", entityId: Number(req.params.id),
+      entity: "notification_templates", entityId: id,
       after: { titleTemplate, bodyTemplate, isActive },
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
@@ -413,7 +418,7 @@ router.put("/templates/:id", requirePermission("admin:write"), async (req: Reque
       userId: scope.userId,
       action: "notification.template.updated",
       entity: "notification_templates",
-      entityId: Number(req.params.id),
+      entityId: id,
       details: JSON.stringify({ titleTemplate, isActive }),
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
@@ -426,6 +431,7 @@ router.put("/templates/:id", requirePermission("admin:write"), async (req: Reque
 router.delete("/templates/:id", requirePermission("admin:write"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM notification_templates WHERE id = $1 AND "companyId" = $2`,
       [req.params.id, scope.companyId]
@@ -437,7 +443,7 @@ router.delete("/templates/:id", requirePermission("admin:write"), async (req: Re
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_notification_template",
-      entity: "notification_templates", entityId: Number(req.params.id),
+      entity: "notification_templates", entityId: id,
       before,
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
@@ -446,7 +452,7 @@ router.delete("/templates/:id", requirePermission("admin:write"), async (req: Re
       userId: scope.userId,
       action: "notification.template.deleted",
       entity: "notification_templates",
-      entityId: Number(req.params.id),
+      entityId: id,
       details: JSON.stringify({ templateKey: (before as any)?.templateKey }),
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
@@ -514,6 +520,7 @@ router.put("/fallback-chains/:id", requirePermission("admin:write"), async (req:
     if (!parsed_updateFallbackChainSchema.success) throw new ValidationError(parsed_updateFallbackChainSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_updateFallbackChainSchema.data;
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const { name, description, steps, isActive } = body;
 
     await rawExecute(
@@ -530,7 +537,7 @@ router.put("/fallback-chains/:id", requirePermission("admin:write"), async (req:
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_fallback_chain",
-      entity: "notification_fallback_chains", entityId: Number(req.params.id),
+      entity: "notification_fallback_chains", entityId: id,
       after: { name, description, steps, isActive },
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
@@ -539,7 +546,7 @@ router.put("/fallback-chains/:id", requirePermission("admin:write"), async (req:
       userId: scope.userId,
       action: "notification.fallback_chain.updated",
       entity: "notification_fallback_chains",
-      entityId: Number(req.params.id),
+      entityId: id,
       details: JSON.stringify({ name }),
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
@@ -552,6 +559,7 @@ router.put("/fallback-chains/:id", requirePermission("admin:write"), async (req:
 router.delete("/fallback-chains/:id", requirePermission("admin:write"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM notification_fallback_chains WHERE id = $1 AND "companyId" = $2`,
       [req.params.id, scope.companyId]
@@ -563,7 +571,7 @@ router.delete("/fallback-chains/:id", requirePermission("admin:write"), async (r
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_fallback_chain",
-      entity: "notification_fallback_chains", entityId: Number(req.params.id),
+      entity: "notification_fallback_chains", entityId: id,
       before,
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
@@ -572,7 +580,7 @@ router.delete("/fallback-chains/:id", requirePermission("admin:write"), async (r
       userId: scope.userId,
       action: "notification.fallback_chain.deleted",
       entity: "notification_fallback_chains",
-      entityId: Number(req.params.id),
+      entityId: id,
       details: JSON.stringify({ name: (before as any)?.name }),
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
@@ -649,6 +657,7 @@ router.put("/webhooks/:id", requirePermission("admin:write"), async (req: Reques
     if (!parsed_updateWebhookSchema.success) throw new ValidationError(parsed_updateWebhookSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_updateWebhookSchema.data;
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const { name, url, secret, events, headers, isActive } = body;
 
     if (url) {
@@ -681,7 +690,7 @@ router.put("/webhooks/:id", requirePermission("admin:write"), async (req: Reques
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_webhook",
-      entity: "notification_webhooks", entityId: Number(req.params.id),
+      entity: "notification_webhooks", entityId: id,
       after: { name, url, events, isActive },
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
@@ -690,7 +699,7 @@ router.put("/webhooks/:id", requirePermission("admin:write"), async (req: Reques
       userId: scope.userId,
       action: "notification.webhook.updated",
       entity: "notification_webhooks",
-      entityId: Number(req.params.id),
+      entityId: id,
       details: JSON.stringify({ name, url }),
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
@@ -703,6 +712,7 @@ router.put("/webhooks/:id", requirePermission("admin:write"), async (req: Reques
 router.delete("/webhooks/:id", requirePermission("admin:write"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM notification_webhooks WHERE id = $1 AND "companyId" = $2`,
       [req.params.id, scope.companyId]
@@ -714,7 +724,7 @@ router.delete("/webhooks/:id", requirePermission("admin:write"), async (req: Req
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_webhook",
-      entity: "notification_webhooks", entityId: Number(req.params.id),
+      entity: "notification_webhooks", entityId: id,
       before,
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
     emitEvent({
@@ -723,7 +733,7 @@ router.delete("/webhooks/:id", requirePermission("admin:write"), async (req: Req
       userId: scope.userId,
       action: "notification.webhook.deleted",
       entity: "notification_webhooks",
-      entityId: Number(req.params.id),
+      entityId: id,
       details: JSON.stringify({ name: (before as any)?.name }),
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
 

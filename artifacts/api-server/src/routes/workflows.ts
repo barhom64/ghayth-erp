@@ -129,8 +129,9 @@ router.post("/:id/approve", requirePermission("admin:write"), async (req, res) =
     if (!parsed_approveSchema.success) throw new ValidationError(parsed_approveSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_approveSchema.data;
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const result = await approveWorkflow({
-      instanceId: Number(req.params.id),
+      instanceId: id,
       companyId: scope.companyId,
       branchId: scope.branchId,
       actionBy: scope.activeAssignmentId,
@@ -139,8 +140,8 @@ router.post("/:id/approve", requirePermission("admin:write"), async (req, res) =
       attachments: body.attachments,
       overrideReason: body.overrideReason,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "approve" } }).catch((e) => logger.error(e, "workflows background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.approved", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ notes: body.notes }) }).catch((e) => logger.error(e, "workflows background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: id, after: { action: "approve" } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.approved", entity: "workflow_instances", entityId: id, details: JSON.stringify({ notes: body.notes }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Workflow approve error:"); }
 });
@@ -151,8 +152,9 @@ router.post("/:id/reject", requirePermission("admin:write"), async (req, res) =>
     if (!parsed_rejectSchema.success) throw new ValidationError(parsed_rejectSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_rejectSchema.data;
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const result = await rejectWorkflow({
-      instanceId: Number(req.params.id),
+      instanceId: id,
       companyId: scope.companyId,
       branchId: scope.branchId,
       actionBy: scope.activeAssignmentId,
@@ -160,8 +162,8 @@ router.post("/:id/reject", requirePermission("admin:write"), async (req, res) =>
       notes: body.notes,
       overrideReason: body.overrideReason,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "reject" } }).catch((e) => logger.error(e, "workflows background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.rejected", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ notes: body.notes }) }).catch((e) => logger.error(e, "workflows background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: id, after: { action: "reject" } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.rejected", entity: "workflow_instances", entityId: id, details: JSON.stringify({ notes: body.notes }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Workflow reject error:"); }
 });
@@ -172,9 +174,10 @@ router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => 
     if (!parsed_referSchema.success) throw new ValidationError(parsed_referSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_referSchema.data;
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const { referredTo, referredToName, notes, overrideReason } = body;
     const result = await referWorkflow({
-      instanceId: Number(req.params.id),
+      instanceId: id,
       companyId: scope.companyId,
       branchId: scope.branchId,
       actionBy: scope.activeAssignmentId,
@@ -184,8 +187,8 @@ router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => 
       referredToName,
       overrideReason,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "refer", referredTo } }).catch((e) => logger.error(e, "workflows background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "refer", referredTo }) }).catch((e) => logger.error(e, "workflows background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: id, after: { action: "refer", referredTo } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: id, details: JSON.stringify({ action: "refer", referredTo }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Workflow refer error:"); }
 });
@@ -196,8 +199,9 @@ router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) 
     if (!parsed_escalateSchema.success) throw new ValidationError(parsed_escalateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_escalateSchema.data;
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const result = await escalateWorkflow({
-      instanceId: Number(req.params.id),
+      instanceId: id,
       companyId: scope.companyId,
       branchId: scope.branchId,
       actionBy: scope.activeAssignmentId,
@@ -205,8 +209,8 @@ router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) 
       notes: body.notes,
       overrideReason: body.overrideReason,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "escalate" } }).catch((e) => logger.error(e, "workflows background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "escalate" }) }).catch((e) => logger.error(e, "workflows background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: id, after: { action: "escalate" } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: id, details: JSON.stringify({ action: "escalate" }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Workflow escalate error:"); }
 });
@@ -217,8 +221,9 @@ router.post("/:id/return", requirePermission("admin:write"), async (req, res) =>
     if (!parsed_returnSchema.success) throw new ValidationError(parsed_returnSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_returnSchema.data;
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const result = await returnWorkflow({
-      instanceId: Number(req.params.id),
+      instanceId: id,
       companyId: scope.companyId,
       branchId: scope.branchId,
       actionBy: scope.activeAssignmentId,
@@ -226,8 +231,8 @@ router.post("/:id/return", requirePermission("admin:write"), async (req, res) =>
       notes: body.notes,
       overrideReason: body.overrideReason,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "return" } }).catch((e) => logger.error(e, "workflows background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "return" }) }).catch((e) => logger.error(e, "workflows background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: id, after: { action: "return" } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: id, details: JSON.stringify({ action: "return" }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Workflow return error:"); }
 });
@@ -235,7 +240,8 @@ router.post("/:id/return", requirePermission("admin:write"), async (req, res) =>
 router.get("/:id/timeline", requirePermission("admin:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const result = await getTimeline(Number(req.params.id), scope.companyId);
+    const id = parseId(req.params.id, "id");
+    const result = await getTimeline(id, scope.companyId);
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Workflow timeline error:"); }
 });
@@ -243,7 +249,8 @@ router.get("/:id/timeline", requirePermission("admin:read"), async (req, res) =>
 router.get("/timeline/:refTable/:refId", requirePermission("admin:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const result = await getTimelineByRef(String(req.params.refTable), Number(req.params.refId), scope.companyId);
+    const refId = parseId(req.params.refId, "refId");
+    const result = await getTimelineByRef(String(req.params.refTable), refId, scope.companyId);
     res.json(result);
   } catch (err) {
     handleRouteError(err, res, "workflows");
@@ -325,9 +332,10 @@ router.get("/definitions", requirePermission("admin:read"), async (req, res) => 
 router.get("/definitions/:id", requirePermission("admin:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [def] = await rawQuery<any>(
       `SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!def) throw new NotFoundError("التعريف غير موجود");
     const steps = await rawQuery<any>(

@@ -1,4 +1,6 @@
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -427,15 +429,16 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
 router.delete("/journal-templates/:id", requirePermission("finance:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     requireFinance(scope);
     const [existing] = await rawQuery<any>(
       `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("القالب غير موجود");
-    await rawExecute(`UPDATE journal_entry_templates SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "journal_entry_templates", entityId: Number(req.params.id), before: existing }).catch((e) => logger.error(e, "accounting-engine background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.deleted", entity: "journal_entry_templates", entityId: Number(req.params.id), details: JSON.stringify({ name: existing.name }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
+    await rawExecute(`UPDATE journal_entry_templates SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "journal_entry_templates", entityId: id, before: existing }).catch((e) => logger.error(e, "accounting-engine background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.deleted", entity: "journal_entry_templates", entityId: id, details: JSON.stringify({ name: existing.name }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     res.json({ message: "تم حذف القالب" });
   } catch (err) {
     handleRouteError(err, res, "Delete journal template error:");
@@ -524,17 +527,18 @@ router.post("/subsidiary-accounts", requirePermission("finance:write"), async (r
 router.delete("/subsidiary-accounts/:id", requirePermission("finance:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     requireFinance(scope);
     const [before] = await rawQuery<any>(
       `SELECT * FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     await rawExecute(
       `DELETE FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "subsidiary_accounts", entityId: Number(req.params.id), before: before ?? null }).catch((e) => logger.error(e, "accounting-engine background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.subsidiary_account.deleted", entity: "subsidiary_accounts", entityId: Number(req.params.id), details: JSON.stringify({ entityType: before?.entityType, entityId: before?.entityId }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "subsidiary_accounts", entityId: id, before: before ?? null }).catch((e) => logger.error(e, "accounting-engine background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.subsidiary_account.deleted", entity: "subsidiary_accounts", entityId: id, details: JSON.stringify({ entityType: before?.entityType, entityId: before?.entityId }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     res.json({ message: "تم الحذف" });
   } catch (err) {
     handleRouteError(err, res, "Delete subsidiary account error:");

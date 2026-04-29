@@ -499,8 +499,9 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
 router.get("/:id", requirePermission("projects:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     let detailWhere = `p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`;
-    const detailParams: any[] = [Number(req.params.id), scope.companyId];
+    const detailParams: any[] = [id, scope.companyId];
 
     if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager") {
       if (scope.role === "projects_manager" && scope.employeeId) {

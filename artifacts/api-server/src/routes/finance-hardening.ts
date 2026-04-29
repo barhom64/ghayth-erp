@@ -1110,7 +1110,8 @@ financeHardeningRouter.get("/projects/:id", requirePermission("finance:read"), a
 financeHardeningRouter.get("/projects/:id/costs", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!project) throw new NotFoundError("المشروع غير موجود");
 
     const costs = await rawQuery<any>(
@@ -1122,7 +1123,7 @@ financeHardeningRouter.get("/projects/:id/costs", requirePermission("finance:rea
        WHERE je."projectId"=$1 AND je."companyId"=$2 AND je."deletedAt" IS NULL AND je.status = 'posted'
        GROUP BY je.id
        ORDER BY je."createdAt" DESC`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
 
     const totalCost = costs.reduce((s: number, r: any) => s + Number(r.amount), 0);

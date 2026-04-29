@@ -1,4 +1,6 @@
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
@@ -315,6 +317,7 @@ router.post("/", requirePermission("tasks:write"), async (req, res) => {
 router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const parsed = updateTaskSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { title, description, type, priority, status, scheduledStart, scheduledEnd, scheduledDate, notes } = parsed.data as any;
@@ -363,7 +366,7 @@ router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
 
     if (rows.length === 0) { throw new NotFoundError("المهمة غير موجودة"); }
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "tasks", entityId: Number(req.params.id), after: { title, description, type, priority, status, scheduledStart, scheduledEnd, scheduledDate, notes } }).catch((e) => logger.error(e, "tasks background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "tasks", entityId: id, after: { title, description, type, priority, status, scheduledStart, scheduledEnd, scheduledDate, notes } }).catch((e) => logger.error(e, "tasks background task failed"));
 
     // Close the loop on status transitions so subscribers fire.
     if (status === "completed") {
@@ -373,7 +376,7 @@ router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
         userId: scope.userId,
         action: "task.completed",
         entity: "tasks",
-        entityId: Number(req.params.id),
+        entityId: id,
         before: { status: "in_progress" },
         after: {
           status: "completed",
@@ -393,6 +396,7 @@ router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
 router.delete("/:id", requirePermission("tasks:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const beforeParams: any[] = [req.params.id, scope.companyId];
     let beforeWhere = `id = $1 AND "companyId" = $2`;
     if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {
@@ -415,8 +419,8 @@ router.delete("/:id", requirePermission("tasks:write"), async (req, res) => {
       params
     );
     if (rows.length === 0) { throw new NotFoundError("المهمة غير موجودة"); }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "tasks", entityId: Number(req.params.id), before }).catch((e) => logger.error(e, "tasks background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "task.deleted", entity: "tasks", entityId: Number(req.params.id), details: JSON.stringify({ title: before?.title }) }).catch((e) => logger.error(e, "tasks background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "tasks", entityId: id, before }).catch((e) => logger.error(e, "tasks background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "task.deleted", entity: "tasks", entityId: id, details: JSON.stringify({ title: before?.title }) }).catch((e) => logger.error(e, "tasks background task failed"));
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete task error:");

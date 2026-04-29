@@ -500,6 +500,7 @@ router.patch("/log/:id", requirePermission("communications:write"), async (req, 
     const parsed = updateLogSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const { body, content, subject, direction, status } = req.body as any;
     const sets: string[] = [];
     const params: any[] = [];
@@ -510,19 +511,19 @@ router.patch("/log/:id", requirePermission("communications:write"), async (req, 
     if (direction !== undefined) { sets.push(`direction = $${idx++}`); params.push(direction); }
     if (status !== undefined) { sets.push(`status = $${idx++}`); params.push(status); }
     if (sets.length === 0) { throw new ValidationError("لا توجد بيانات"); }
-    params.push(Number(req.params.id), scope.companyId);
+    params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE communications_log SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
     if (!row) { throw new NotFoundError("السجل غير موجود"); }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "communications_log", entityId: Number(req.params.id) }).catch((e) => logger.error(e, "communications background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "communications_log", entityId: id }).catch((e) => logger.error(e, "communications background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "communications.log.updated",
       entity: "communications_log",
-      entityId: Number(req.params.id),
+      entityId: id,
     }).catch((e) => logger.error(e, "communications background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }

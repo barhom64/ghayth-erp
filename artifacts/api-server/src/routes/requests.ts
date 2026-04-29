@@ -392,7 +392,8 @@ router.get("/stats", requirePermission("requests:read"), async (req, res) => {
 router.get("/:id", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الطلب غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "requests"); }

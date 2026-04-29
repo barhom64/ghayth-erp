@@ -570,7 +570,8 @@ router.delete("/vehicles/:id", requirePermission("fleet:delete"), async (req, re
 router.get("/drivers/:id", requirePermission("fleet:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("السائق غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get driver error:"); }
