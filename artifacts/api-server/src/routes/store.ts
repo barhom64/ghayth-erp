@@ -7,6 +7,7 @@ import {
   emitEvent,
   createAuditLog,
 } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const createStoreProductSchema = z.object({
   name: z.string().min(1, "اسم المنتج مطلوب"),
@@ -250,21 +251,20 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
         params
       );
       const updatedRes = await client.query(`SELECT * FROM store_orders WHERE id=$1`, [id]);
-      const updated = updatedRes.rows[0];
-
-      if (b.status === "completed" && existing.status !== "completed") {
-        try {
-          await postStoreOrderGl(scope, updated);
-        } catch (glErr) {
-          console.error("[store] GL posting failed for order", id, glErr);
-        }
-      }
-      return updated;
+      return { updated: updatedRes.rows[0], previousStatus: existing.status };
     });
+
+    if (b.status === "completed" && row.previousStatus !== "completed") {
+      try {
+        await postStoreOrderGl(scope, row.updated);
+      } catch (glErr) {
+        logger.error(glErr, "[store] GL posting failed for order");
+      }
+    }
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "store_orders", entityId: id, after: b }).catch(console.error);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.order.updated", entity: "store_orders", entityId: id, details: JSON.stringify(b) }).catch(console.error);
-    res.json(row);
+    res.json(row.updated ?? row);
   } catch (err) { handleRouteError(err, res, "Update store order"); }
 });
 

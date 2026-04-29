@@ -502,6 +502,16 @@ export const STATE_MACHINES: StateMachine[] = [
     },
   },
   {
+    entity: "property_units",
+    label: "وحدة عقارية",
+    transitions: {
+      available: ["reserved", "rented", "maintenance"],
+      reserved: ["rented", "available"],
+      rented: ["available", "maintenance"],
+      maintenance: ["available"],
+    },
+  },
+  {
     entity: "support_tickets",
     label: "تذكرة دعم",
     transitions: {
