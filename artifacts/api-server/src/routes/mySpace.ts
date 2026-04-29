@@ -470,7 +470,7 @@ router.get("/", async (req, res) => {
                       COUNT(*) FILTER (WHERE status = 'rented') AS rented,
                       COUNT(*) FILTER (WHERE status = 'available') AS available,
                       COUNT(*) FILTER (WHERE status = 'maintenance') AS maintenance
-               FROM property_units WHERE "companyId" = $1`,
+               FROM property_units WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
               [scope.companyId]
             );
             unitsSummary = us;
@@ -497,7 +497,7 @@ router.get("/", async (req, res) => {
               `SELECT COUNT(*) AS total,
                       COUNT(*) FILTER (WHERE status = 'open') AS open,
                       COUNT(*) FILTER (WHERE status = 'closed') AS closed
-               FROM legal_cases WHERE "companyId" = $1`,
+               FROM legal_cases WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
               [scope.companyId]
             );
             casesSummary = cs;

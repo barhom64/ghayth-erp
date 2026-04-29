@@ -1777,7 +1777,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 
         await client.query(
           `UPDATE approval_requests SET status = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
-           WHERE "refType" = 'leave_request' AND "refId" = $2`,
+           WHERE "refType" = 'leave_request' AND "refId" = $2 AND status = 'pending'`,
           [scope.activeAssignmentId, Number(id)]
         );
 

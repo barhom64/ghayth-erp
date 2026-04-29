@@ -265,7 +265,7 @@ router.get("/role-data", async (req, res) => {
         `SELECT e.name, ec."probationEndDate"
          FROM employee_contracts ec
          JOIN employees e ON e.id = ec."employeeId"
-         WHERE ec."companyId" = ANY($1::int[]) AND ec."probationEndDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+         WHERE ec."companyId" = ANY($1::int[]) AND ec."deletedAt" IS NULL AND ec."probationEndDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
          LIMIT 10`,
         [scope.allowedCompanies]
       ).catch(() => []);
