@@ -14,6 +14,7 @@ import {
   ValidationError,
   ConflictError,
   ForbiddenError,
+  parseId,
 } from "../lib/errorHandler.js";
 import {
   createAuditLog,
@@ -446,6 +447,7 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
 router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     if (!["owner", "hr_manager", "general_manager", "branch_manager"].includes(scope.role)) {
       throw new ForbiddenError("صلاحية رفض طلبات الوقت الإضافي محصورة بالمدير أو HR أو المالك");
     }
@@ -489,7 +491,7 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
     }).catch((e) => logger.error(e, "hr-overtime background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "hr_overtime_requests", entityId: Number(req.params.id),
+      action: "update", entity: "hr_overtime_requests", entityId: id,
       after: { status: "rejected", rejectionReason: b.reason || null, requestNumber: item.requestNumber },
     }).catch((e) => logger.error(e, "hr-overtime background task failed"));
 

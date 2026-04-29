@@ -91,9 +91,10 @@ router.post("/policies", requirePermission("governance:write"), async (req, res)
 router.get("/policies/:id", requirePermission("governance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT * FROM governance_policies WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("السياسة غير موجودة");
     const links = await rawQuery<any>(
@@ -319,7 +320,8 @@ router.post("/risks", requirePermission("governance:write"), async (req, res) =>
 router.get("/risks/:id", requirePermission("governance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المخاطرة غير موجودة");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
@@ -407,7 +409,8 @@ router.post("/audits", requirePermission("governance:write"), async (req, res) =
 router.get("/audits/:id", requirePermission("governance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المراجعة غير موجودة");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
@@ -493,7 +496,8 @@ router.post("/compliance", requirePermission("governance:write"), async (req, re
 router.get("/compliance/:id", requirePermission("governance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("بند الامتثال غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }

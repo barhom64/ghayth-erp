@@ -290,7 +290,8 @@ router.post("/products", requirePermission("warehouse:create"), async (req, res)
 router.get("/products/:id", requirePermission("warehouse:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المنتج غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get product error:"); }

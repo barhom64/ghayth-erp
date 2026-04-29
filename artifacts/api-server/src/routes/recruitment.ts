@@ -99,7 +99,8 @@ router.post("/postings", requirePermission("hr:write"), async (req, res) => {
 router.get("/postings/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الإعلان الوظيفي غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
@@ -291,7 +292,8 @@ router.post("/applications", requirePermission("hr:write"), async (req, res) => 
 router.get("/applications/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND (jp."companyId"=$2 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND (jp."companyId"=$2 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("طلب التوظيف غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }

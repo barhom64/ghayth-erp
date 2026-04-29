@@ -606,21 +606,22 @@ router.delete("/integrations/:id", requirePermission("admin:write"), async (req,
   try {
     await assertAdmin(req);
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const result = await rawExecute(
       `DELETE FROM integrations WHERE id=$1 AND "companyId"=$2`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (result.affectedRows === 0) { throw new NotFoundError("التكامل غير موجود"); }
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
-      action: "delete", entity: "integrations", entityId: Number(req.params.id),
+      action: "delete", entity: "integrations", entityId: id,
     }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "admin.integration.deleted",
       entity: "integrations",
-      entityId: Number(req.params.id),
+      entityId: id,
     }).catch((e) => logger.error(e, "admin background task failed"));
     res.json({ message: "تم حذف التكامل" });
   } catch (err) { handleRouteError(err, res, "admin"); }
@@ -630,9 +631,10 @@ router.post("/integrations/:id/test", requirePermission("admin:write"), async (r
   try {
     await assertAdmin(req);
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [integration] = await rawQuery<any>(
       `SELECT * FROM integrations WHERE id=$1 AND "companyId"=$2`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!integration) { throw new NotFoundError("التكامل غير موجود"); }
 
@@ -646,11 +648,11 @@ router.post("/integrations/:id/test", requirePermission("admin:write"), async (r
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
-      action: "preview", entity: "gov_integrations", entityId: Number(req.params.id),
+      action: "preview", entity: "gov_integrations", entityId: id,
     }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
-      action: "admin.integration.tested", entity: "gov_integrations", entityId: Number(req.params.id),
+      action: "admin.integration.tested", entity: "gov_integrations", entityId: id,
       details: JSON.stringify({ success: result.success, channel: integration.type }),
     }).catch((e) => logger.error(e, "admin background task failed"));
     res.json({ success: result.success, error: result.error, logId: result.logId });

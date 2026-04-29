@@ -248,6 +248,7 @@ router.get("/sub-agents/unlinked", requirePermission("umrah:read"), async (req, 
 router.patch("/sub-agents/:id", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const parsed = updateSubAgentSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new ValidationError("بيانات غير صالحة", {
@@ -268,8 +269,8 @@ router.patch("/sub-agents/:id", requirePermission("umrah:write"), async (req, re
     await rawExecute(`UPDATE umrah_sub_agents SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery(`SELECT * FROM umrah_sub_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [req.params.id, scope.companyId]);
     if (!row) throw new NotFoundError("الوكيل الفرعي غير موجود");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: Number(req.params.id), after: b }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.updated", entity: "umrah_sub_agents", entityId: Number(req.params.id), details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: id, after: b }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.updated", entity: "umrah_sub_agents", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update sub-agent"); }
 });
@@ -277,12 +278,13 @@ router.patch("/sub-agents/:id", requirePermission("umrah:write"), async (req, re
 router.delete("/sub-agents/:id", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     await rawExecute(
       `UPDATE umrah_sub_agents SET "deletedAt"=NOW(), "updatedBy"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
       [scope.userId, req.params.id, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_sub_agents", entityId: Number(req.params.id) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.deleted", entity: "umrah_sub_agents", entityId: Number(req.params.id), details: "{}" }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_sub_agents", entityId: id }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.deleted", entity: "umrah_sub_agents", entityId: id, details: "{}" }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete sub-agent"); }
 });
@@ -290,6 +292,7 @@ router.delete("/sub-agents/:id", requirePermission("umrah:write"), async (req, r
 router.put("/sub-agents/:id/link", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const parsed = linkSubAgentSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new ValidationError("بيانات غير صالحة", {
@@ -330,8 +333,8 @@ router.put("/sub-agents/:id/link", requirePermission("umrah:write"), async (req,
       [req.params.id, scope.companyId]
     );
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.agent.linked", entity: "umrah_sub_agents", entityId: Number(req.params.id), details: JSON.stringify({ clientId: finalClientId, createNew: !!createNew }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: Number(req.params.id), after: { clientId: finalClientId } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.agent.linked", entity: "umrah_sub_agents", entityId: id, details: JSON.stringify({ clientId: finalClientId, createNew: !!createNew }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: id, after: { clientId: finalClientId } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Link sub-agent"); }
@@ -362,6 +365,7 @@ router.post("/sub-agents/link-by-nusk", requirePermission("umrah:write"), async 
 router.post("/sub-agents/:id/link-client", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const parsed = linkClientSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new ValidationError("بيانات غير صالحة", {
@@ -376,8 +380,8 @@ router.post("/sub-agents/:id/link-client", requirePermission("umrah:write"), asy
       [clientId, scope.userId, req.params.id, scope.companyId]
     );
     const [row] = await rawQuery(`SELECT * FROM umrah_sub_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [req.params.id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: Number(req.params.id), after: { clientId } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.client_linked", entity: "umrah_sub_agents", entityId: Number(req.params.id), details: JSON.stringify({ clientId }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: id, after: { clientId } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.client_linked", entity: "umrah_sub_agents", entityId: id, details: JSON.stringify({ clientId }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Link sub-agent client"); }
 });
@@ -443,6 +447,7 @@ router.post("/pricing", requirePermission("umrah:write"), async (req, res) => {
 router.patch("/pricing/:id", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const parsed = updatePricingSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new ValidationError("بيانات غير صالحة", {
@@ -483,8 +488,8 @@ router.patch("/pricing/:id", requirePermission("umrah:write"), async (req, res) 
     params.push(req.params.id); params.push(scope.companyId);
     await rawExecute(`UPDATE umrah_pricing SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery(`SELECT * FROM umrah_pricing WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [req.params.id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pricing", entityId: Number(req.params.id), after: b }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pricing.updated", entity: "umrah_pricing", entityId: Number(req.params.id), details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pricing", entityId: id, after: b }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pricing.updated", entity: "umrah_pricing", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update pricing"); }
 });
@@ -492,12 +497,13 @@ router.patch("/pricing/:id", requirePermission("umrah:write"), async (req, res) 
 router.delete("/pricing/:id", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     await rawExecute(
       `UPDATE umrah_pricing SET "deletedAt"=NOW(), "updatedBy"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
       [scope.userId, req.params.id, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_pricing", entityId: Number(req.params.id) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pricing.deleted", entity: "umrah_pricing", entityId: Number(req.params.id), details: "{}" }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_pricing", entityId: id }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pricing.deleted", entity: "umrah_pricing", entityId: id, details: "{}" }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete pricing"); }
 });
@@ -675,6 +681,7 @@ router.post("/commission-plans", requirePermission("umrah:write"), async (req, r
 router.patch("/commission-plans/:id", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const parsed = updateCommissionPlanSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new ValidationError("بيانات غير صالحة", {
@@ -730,8 +737,8 @@ router.patch("/commission-plans/:id", requirePermission("umrah:write"), async (r
       `SELECT * FROM employee_commission_plans WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [req.params.id, scope.companyId]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission_plan.updated", entity: "employee_commission_plans", entityId: Number(req.params.id), details: JSON.stringify({ planName: b.planName }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_commission_plans", entityId: Number(req.params.id), after: { planName: b.planName } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission_plan.updated", entity: "employee_commission_plans", entityId: id, details: JSON.stringify({ planName: b.planName }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_commission_plans", entityId: id, after: { planName: b.planName } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update commission plan"); }
 });
@@ -747,9 +754,10 @@ router.post("/commission-plans/:id/simulate", requirePermission("umrah:read"), a
     }
     const { month, year } = parsed.data;
     const scope = req.scope!;
-    const result = await simulateCommission(Number(req.params.id), month, year, scope.companyId);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission.simulated", entity: "employee_commission_plans", entityId: Number(req.params.id), details: JSON.stringify({ month, year }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "preview", entity: "umrah_commission_plans", entityId: Number(req.params.id), after: { month, year } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    const id = parseId(req.params.id, "id");
+    const result = await simulateCommission(id, month, year, scope.companyId);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission.simulated", entity: "employee_commission_plans", entityId: id, details: JSON.stringify({ month, year }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "preview", entity: "umrah_commission_plans", entityId: id, after: { month, year } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Simulate commission"); }
 });
@@ -757,6 +765,7 @@ router.post("/commission-plans/:id/simulate", requirePermission("umrah:read"), a
 router.post("/commission-plans/:id/calculate", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const parsed = simulateCommissionSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new ValidationError("بيانات غير صالحة", {
@@ -765,9 +774,9 @@ router.post("/commission-plans/:id/calculate", requirePermission("umrah:write"),
       });
     }
     const { month, year } = parsed.data;
-    const result = await calculateCommissionForPlan(Number(req.params.id), month, year, scope.userId, scope.companyId);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission.calculated", entity: "employee_commission_plans", entityId: Number(req.params.id), details: JSON.stringify({ month, year }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_commissions", entityId: Number(req.params.id), after: { month, year } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    const result = await calculateCommissionForPlan(id, month, year, scope.userId, scope.companyId);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission.calculated", entity: "employee_commission_plans", entityId: id, details: JSON.stringify({ month, year }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_commissions", entityId: id, after: { month, year } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Calculate commission"); }
 });
@@ -878,6 +887,7 @@ router.post("/invoices/generate", requirePermission("umrah:write"), async (req, 
 router.patch("/invoices/:id", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const parsed = updateInvoiceSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new ValidationError("بيانات غير صالحة", {
@@ -903,8 +913,8 @@ router.patch("/invoices/:id", requirePermission("umrah:write"), async (req, res)
       `SELECT * FROM umrah_sales_invoices WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [req.params.id, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sales_invoices", entityId: Number(req.params.id), after: b }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.invoice.updated", entity: "umrah_sales_invoices", entityId: Number(req.params.id), details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sales_invoices", entityId: id, after: b }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.invoice.updated", entity: "umrah_sales_invoices", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update umrah invoice"); }
 });
@@ -973,7 +983,7 @@ router.get("/statements/:subAgentId", requirePermission("umrah:read"), async (re
     const stmtType = type === "summary" ? "summary" : "detailed";
     const result = await generateStatement(
       { companyId: scope.companyId, userId: scope.userId },
-      Number(req.params.subAgentId),
+      parseId(req.params.subAgentId, "subAgentId"),
       stmtType,
       from, to
     );

@@ -3111,6 +3111,7 @@ router.get("/approval-requests", requirePermission("hr:read"), async (req, res) 
 router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const { approved, reason } = req.body as any;
 
     if (!["branch_manager", "hr_manager", "finance_manager", "general_manager", "owner"].includes(scope.role)) {
@@ -3119,7 +3120,7 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
 
     const [request] = await rawQuery<any>(
       `SELECT * FROM approval_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!request) {
       throw new NotFoundError("طلب الموافقة غير موجود أو تمت معالجته");
@@ -3223,14 +3224,14 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "approval_requests", entityId: Number(req.params.id),
+      action: "update", entity: "approval_requests", entityId: id,
       before: { status: request.status, refType: request.refType, refId: request.refId },
       after: { status: result.status, approved: !!approved, reason: reason ?? null },
     }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: `approval.${result.status}`, entity: "approval_requests",
-      entityId: Number(req.params.id),
+      entityId: id,
       details: JSON.stringify({ refType: request.refType, refId: request.refId, result: result.status }),
     }).catch((e) => logger.error(e, "hr background task failed"));
 
@@ -3689,6 +3690,7 @@ router.get("/monthly-attendance", requirePermission("hr:read"), async (req, res)
 router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل طلبات الإجازة مقصور على HR أو المالك");
     }
@@ -3704,7 +3706,7 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
     if (sets.length === 0) {
       throw new ValidationError("لا توجد بيانات للتحديث");
     }
-    params.push(Number(req.params.id), scope.companyId);
+    params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE hr_leave_requests SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
@@ -3714,10 +3716,10 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
     }
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "hr_leave_requests", entityId: Number(req.params.id),
+      action: "update", entity: "hr_leave_requests", entityId: id,
       after: { status: status ?? undefined, reason: reason ?? undefined },
     }).catch((e) => logger.error(e, "hr background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "leave.updated", entity: "hr_leave_requests", entityId: Number(req.params.id), details: JSON.stringify({ id: Number(req.params.id), status, reason }) }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "leave.updated", entity: "hr_leave_requests", entityId: id, details: JSON.stringify({ id: id, status, reason }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3885,6 +3887,7 @@ router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req,
 router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     if (!["hr_manager", "finance_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل الرواتب مقصور على HR أو المالية أو المالك");
     }
@@ -3892,7 +3895,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
 
     const [existing] = await rawQuery<any>(
       `SELECT id, status, period, "totalNet" FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("دورة الرواتب غير موجودة");
 
@@ -3903,7 +3906,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
       const lines = await rawQuery<any>(
         `SELECT pl."employeeId", pl.gosi AS "gosiEmployee", pl."gosiEmployer", pl.basic, pl."grossSalary", pl."netSalary"
          FROM payroll_lines pl WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL`,
-        [Number(req.params.id)]
+        [id]
       );
 
       const totalGross = lines.reduce((s: number, l: any) => s + Number(l.grossSalary ?? l.basic ?? 0), 0);
@@ -3914,7 +3917,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
 
       const [updatedRun] = await rawQuery<any>(
         `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL RETURNING *`,
-        [status, Number(req.params.id), scope.companyId]
+        [status, id, scope.companyId]
       );
       if (!updatedRun) throw new NotFoundError("دورة الرواتب غير موجودة");
 
@@ -3922,7 +3925,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
       await hrEngine.postPayrollPostGL(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
         {
-          runId: Number(req.params.id),
+          runId: id,
           period,
           totalGross,
           totalGosiEmployer,
@@ -3941,7 +3944,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
               companyId: scope.companyId,
               branchId: scope.branchId ?? null,
               entityType: "payroll_run",
-              entityId: Number(req.params.id),
+              entityId: id,
               obligationType: "declaration",
               title: `تقديم اشتراكات التأمينات الاجتماعية — ${period} (${totalGosiPayable.toFixed(2)} ريال)`,
               dueAt: gosiDue.toISOString(),
@@ -3959,7 +3962,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
             companyId: scope.companyId,
             branchId: scope.branchId ?? null,
             entityType: "payroll_run",
-            entityId: Number(req.params.id),
+            entityId: id,
             obligationType: "payment",
             title: `صرف رواتب — ${period} (${totalBankPayout.toFixed(2)} ريال صافي)`,
             dueAt: disbursementDue.toISOString(),
@@ -3978,17 +3981,17 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
         userId: scope.userId,
         action: "payroll.posted",
         entity: "payroll_runs",
-        entityId: Number(req.params.id),
+        entityId: id,
         details: `ترحيل رواتب ${period}: صافي ${totalBankPayout.toFixed(2)} / GOSI ${totalGosiPayable.toFixed(2)}`,
       }).catch((e) => logger.error(e, "hr background task failed"));
 
       const [row] = await rawQuery<any>(
         `SELECT * FROM payroll_runs WHERE id = $1`,
-        [Number(req.params.id)]
+        [id]
       );
       createAuditLog({
         companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-        action: "update", entity: "payroll_runs", entityId: Number(req.params.id),
+        action: "update", entity: "payroll_runs", entityId: id,
         before: { status: existing.status, period: existing.period },
         after: { status: "posted", period: existing.period },
       }).catch((e) => logger.error(e, "hr background task failed"));
@@ -3998,13 +4001,13 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
 
     const [row] = await rawQuery<any>(
       `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL RETURNING *`,
-      [status, Number(req.params.id), scope.companyId]
+      [status, id, scope.companyId]
     );
     if (!row) throw new NotFoundError("دورة الرواتب غير موجودة");
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "payroll_runs", entityId: Number(req.params.id),
+      action: "update", entity: "payroll_runs", entityId: id,
       before: { status: existing.status },
       after: { status },
     }).catch((e) => logger.error(e, "hr background task failed"));
@@ -4051,6 +4054,7 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
 router.patch("/performance/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل التقييمات مقصور على HR أو المدير أو المالك");
     }
@@ -4070,8 +4074,8 @@ router.patch("/performance/:id", requirePermission("hr:update"), async (req, res
       throw new ValidationError("لا توجد بيانات");
     }
     sets.push(`"updatedAt" = NOW()`);
-    params.push(Number(req.params.id), scope.companyId);
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    params.push(id, scope.companyId);
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
       `UPDATE performance_reviews SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
@@ -4079,11 +4083,11 @@ router.patch("/performance/:id", requirePermission("hr:update"), async (req, res
     if (!row) throw new NotFoundError("التقييم غير موجود");
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "performance_reviews", entityId: Number(req.params.id),
+      action: "update", entity: "performance_reviews", entityId: id,
       before: beforeRow ?? {},
       after: row,
     }).catch((e) => logger.error(e, "hr background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "performance.updated", entity: "hr_performance", entityId: Number(req.params.id), details: JSON.stringify({ id: Number(req.params.id) }) }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "performance.updated", entity: "hr_performance", entityId: id, details: JSON.stringify({ id: id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Patch performance error:"); }
 });

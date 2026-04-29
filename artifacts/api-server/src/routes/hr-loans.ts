@@ -14,6 +14,7 @@ import {
   ValidationError,
   ConflictError,
   ForbiddenError,
+  parseId,
 } from "../lib/errorHandler.js";
 import {
   createAuditLog,
@@ -186,6 +187,7 @@ router.get("/loans/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     await ensureLoanTables();
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [loan] = await rawQuery<any>(
       `SELECT l.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", ea.salary, b.name AS "branchName"
@@ -194,7 +196,7 @@ router.get("/loans/:id", requirePermission("hr:read"), async (req, res) => {
        JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN branches b ON b.id = ea."branchId"
        WHERE l.id = $1 AND l."companyId" = $2 AND l."deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!loan) throw new NotFoundError("السلفة غير موجودة");
 
@@ -337,6 +339,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
   try {
     const { approved = true, reason, notes } = (req.body ?? {}) as { approved?: boolean; reason?: string; notes?: string };
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     if (!["owner", "hr_manager", "general_manager", "branch_manager", "finance_manager"].includes(scope.role)) {
       throw new ForbiddenError(
         "صلاحية اعتماد السلف محصورة بالمدير أو HR أو المدير المالي أو المالك",
@@ -349,7 +352,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
 
     const [loan] = await rawQuery<any>(
       `SELECT * FROM hr_employee_loans WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!loan) throw new NotFoundError("السلفة غير موجودة");
     if (loan.status !== "pending") throw new ConflictError("لا يمكن اعتماد سلفة بحالة: " + loan.status);
@@ -477,6 +480,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
 router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     if (!["owner", "hr_manager", "general_manager", "branch_manager", "finance_manager"].includes(scope.role)) {
       throw new ForbiddenError("صلاحية رفض السلف محصورة بالمدير أو HR أو المدير المالي أو المالك");
     }
@@ -486,7 +490,7 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
     const b = parsed_rejectLoanSchema.data;
     const [loan] = await rawQuery<any>(
       `SELECT * FROM hr_employee_loans WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!loan) throw new NotFoundError("السلفة غير موجودة");
     if (loan.status !== "pending") throw new ConflictError("لا يمكن رفض سلفة بحالة: " + loan.status);
@@ -524,7 +528,7 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
     }).catch((e) => logger.error(e, "hr-loans background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "hr_employee_loans", entityId: Number(req.params.id),
+      action: "update", entity: "hr_employee_loans", entityId: id,
       after: { status: "rejected", rejectionReason: b.reason || null, loanNumber: loan.loanNumber },
     }).catch((e) => logger.error(e, "hr-loans background task failed"));
 

@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError,
+  parseId,
+} from "../lib/errorHandler.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -175,12 +177,13 @@ router.get("/jobs", portalLimiter, async (_req: Request, res: Response) => {
 
 router.get("/jobs/:id", portalLimiter, async (req: Request, res: Response) => {
   try {
+    const id = parseId(req.params.id, "id");
     const rows = await rawQuery(
       `SELECT id, title, department, location, type, description, requirements,
               "salaryMin", "salaryMax", status, "closingDate", "createdAt"
        FROM job_postings
        WHERE id = $1 AND status = 'open'`,
-      [Number(req.params.id)]
+      [id]
     );
     if (rows.length === 0) {
       throw new NotFoundError("الوظيفة غير موجودة");

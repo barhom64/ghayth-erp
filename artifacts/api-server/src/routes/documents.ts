@@ -241,9 +241,10 @@ router.post("/upload", requirePermission("documents:create"), async (req: Reques
 router.get("/:id/download", requirePermission("documents:download"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [doc] = await rawQuery<any>(
       `SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!doc) throw new NotFoundError("المستند غير موجود");
 
@@ -279,9 +280,10 @@ router.get("/:id/download", requirePermission("documents:download"), async (req:
 router.get("/:id/preview", requirePermission("documents:download"), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [doc] = await rawQuery<any>(
       `SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!doc) throw new NotFoundError("المستند غير موجود");
     if (!doc.storageKey) throw new NotFoundError("لا يوجد ملف مرفق");
@@ -560,7 +562,8 @@ router.get("/templates", requirePermission("documents:read"), async (req, res) =
 router.get("/templates/:id", requirePermission("documents:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("القالب غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "documents"); }
@@ -881,7 +884,8 @@ router.get("/stats", requirePermission("documents:read"), async (req, res) => {
 router.get("/:id", requirePermission("documents:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المستند غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "documents"); }

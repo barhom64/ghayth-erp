@@ -558,9 +558,10 @@ financeAlgorithmsRouter.post("/fixed-assets", requirePermission("finance:create"
 financeAlgorithmsRouter.get("/fixed-assets/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [asset] = await rawQuery<any>(
       `SELECT * FROM fixed_assets WHERE id=$1 AND "companyId"=$2`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!asset) { throw new NotFoundError("الأصل غير موجود"); return; }
     const schedule = await rawQuery<any>(
@@ -656,9 +657,10 @@ function calcDepreciationAmount(asset: any, _period: string, opts?: { unitsThisP
 financeAlgorithmsRouter.get("/fixed-assets/:id/schedule", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [asset] = await rawQuery<any>(
       `SELECT * FROM fixed_assets WHERE id=$1 AND "companyId"=$2`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!asset) { throw new NotFoundError("الأصل غير موجود"); return; }
 

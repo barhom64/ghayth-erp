@@ -741,7 +741,8 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
 router.get("/opportunities/:id", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" LEFT JOIN employees e ON e.id=o."assignedTo" WHERE o.id=$1 AND o."companyId"=$2 AND o."deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" LEFT JOIN employees e ON e.id=o."assignedTo" WHERE o.id=$1 AND o."companyId"=$2 AND o."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الفرصة غير موجودة");
 
     const activities = await rawQuery<any>(

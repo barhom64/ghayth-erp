@@ -14,6 +14,7 @@ import {
   ValidationError,
   ConflictError,
   ForbiddenError,
+  parseId,
 } from "../lib/errorHandler.js";
 import {
   createAuditLog,
@@ -166,6 +167,7 @@ router.get("/exit/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     await ensureExitTables();
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [item] = await rawQuery<any>(
       `SELECT x.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", ea.salary, ea."hireDate", b.name AS "branchName"
@@ -174,7 +176,7 @@ router.get("/exit/:id", requirePermission("hr:read"), async (req, res) => {
        JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN branches b ON b.id = ea."branchId"
        WHERE x.id = $1 AND x."companyId" = $2 AND x."deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("طلب نهاية الخدمة غير موجود");
 
@@ -354,6 +356,7 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
   try {
     const { approved = true, reason, notes } = (req.body ?? {}) as { approved?: boolean; reason?: string; notes?: string };
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
       throw new ForbiddenError(
         "صلاحية اعتماد نهاية الخدمة محصورة بمدير HR أو المدير العام أو المالك",
@@ -366,7 +369,7 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
 
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_exit_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (item.status !== "pending") throw new ConflictError("لا يمكن اعتماد طلب بحالة: " + item.status);
@@ -463,13 +466,14 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
 router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const parsed_updateClearanceSchema = updateClearanceSchema.safeParse(req.body);
     if (!parsed_updateClearanceSchema.success) throw new ValidationError(parsed_updateClearanceSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const b = parsed_updateClearanceSchema.data;
 
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_exit_clearance WHERE id = $1 AND "companyId" = $2`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("عنصر إخلاء الطرف غير موجود");
 
@@ -497,7 +501,7 @@ router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "exit.clearance_updated", entity: "hr_exit_clearance", entityId: item.id, details: JSON.stringify({ status: newStatus, exitRequestId: item.exitRequestId }) }).catch((e) => logger.error(e, "hr-exit background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "hr_exit_clearance_items", entityId: Number(req.params.id),
+      action: "update", entity: "hr_exit_clearance_items", entityId: id,
       after: { status: newStatus, clearedBy: scope.userId, notes: b.notes || null, exitRequestId: item.exitRequestId },
     }).catch((e) => logger.error(e, "hr-exit background task failed"));
     res.json({ success: true });
@@ -512,10 +516,11 @@ router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, 
 router.patch("/exit/:id/complete", requirePermission("hr:update"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     // Pre-check clearance before attempting the transition
     const [item] = await rawQuery<any>(
       `SELECT * FROM hr_exit_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (!item.clearanceCompleted) throw new ConflictError("يجب إكمال إخلاء الطرف أولاً");

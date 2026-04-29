@@ -361,15 +361,16 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
 journalRouter.patch("/expenses/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const { description } = req.body as any;
-    const [existing] = await rawQuery<any>(`SELECT id, "createdAt" FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT id, "createdAt" FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المصروف غير موجود");
     const expenseDate = toDateISO(existing.createdAt);
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, expenseDate);
     if (!periodCheck.open) {
       throw new ConflictError(`لا يمكن تعديل مصروف في فترة مالية مُقفلة: ${periodCheck.periodName ?? ""}`);
     }
-    const [row] = await rawQuery<any>(`UPDATE journal_entries SET description = $1 WHERE id = $2 AND "companyId" = $3 RETURNING *`, [description, Number(req.params.id), scope.companyId]);
+    const [row] = await rawQuery<any>(`UPDATE journal_entries SET description = $1 WHERE id = $2 AND "companyId" = $3 RETURNING *`, [description, id, scope.companyId]);
     if (!row) throw new NotFoundError("المصروف غير موجود");
     res.json(row);
   } catch (err) {
@@ -380,7 +381,8 @@ journalRouter.patch("/expenses/:id", requirePermission("finance:update"), async 
 journalRouter.delete("/expenses/:id", requirePermission("finance:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المصروف غير موجود");
     await reverseAccountBalances(scope.companyId, row.id);
     res.json({ success: true });
@@ -621,8 +623,9 @@ journalRouter.post("/vouchers", requirePermission("finance:create"), async (req,
 journalRouter.patch("/vouchers/:id", requirePermission("finance:update"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const { description } = req.body as any;
-    const [row] = await rawQuery<any>(`UPDATE journal_entries SET description = $1 WHERE id = $2 AND "companyId" = $3 RETURNING *`, [description, Number(req.params.id), scope.companyId]);
+    const [row] = await rawQuery<any>(`UPDATE journal_entries SET description = $1 WHERE id = $2 AND "companyId" = $3 RETURNING *`, [description, id, scope.companyId]);
     if (!row) throw new NotFoundError("السند غير موجود");
     res.json(row);
   } catch (err) {
@@ -633,7 +636,8 @@ journalRouter.patch("/vouchers/:id", requirePermission("finance:update"), async 
 journalRouter.delete("/vouchers/:id", requirePermission("finance:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("السند غير موجود");
     await reverseAccountBalances(scope.companyId, row.id);
     res.json({ success: true });

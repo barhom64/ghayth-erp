@@ -273,9 +273,10 @@ router.post("/tickets/check-sla", requirePermission("support:read"), async (req,
 router.get("/tickets/:id", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [ticket] = await rawQuery<any>(
       `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" WHERE t.id=$1 AND t."companyId"=$2 AND t."deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
     const replies = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE "ticketId"=$1 ORDER BY "createdAt"`, [ticket.id]);

@@ -103,7 +103,8 @@ router.post("/campaigns", requirePermission("marketing:create"), async (req, res
 router.get("/campaigns/:id", requirePermission("marketing:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الحملة غير موجودة");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "marketing"); }

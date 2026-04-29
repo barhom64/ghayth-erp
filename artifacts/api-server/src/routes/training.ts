@@ -107,7 +107,8 @@ router.post("/programs", requirePermission("hr:create"), async (req, res) => {
 router.get("/programs/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("البرنامج التدريبي غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "training"); }
@@ -294,7 +295,8 @@ router.post("/enrollments", requirePermission("hr:create"), async (req, res) => 
 router.get("/enrollments/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT e.*, tp.title as "programTitle" FROM training_enrollments e LEFT JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT e.*, tp.title as "programTitle" FROM training_enrollments e LEFT JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("التسجيل غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "training"); }

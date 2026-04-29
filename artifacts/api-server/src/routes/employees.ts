@@ -3,6 +3,7 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -664,23 +665,24 @@ router.patch("/onboarding-tasks/:id", requirePermission("hr:update"), async (req
     if (!parsed_patchOnboardingTaskSchema.success) throw new ValidationError(parsed_patchOnboardingTaskSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
     const body = parsed_patchOnboardingTaskSchema.data;
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const { status } = body;
     const [row] = await rawQuery<any>(
       `UPDATE onboarding_tasks SET status = $1,
        "completedAt" = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
        "completedBy" = $2
        WHERE id = $3 AND "companyId" = $4 RETURNING *`,
-      [status, scope.activeAssignmentId, Number(req.params.id), scope.companyId]
+      [status, scope.activeAssignmentId, id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المهمة غير موجودة");
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
-      action: "onboarding_task.updated", entity: "onboarding_tasks", entityId: Number(req.params.id),
+      action: "onboarding_task.updated", entity: "onboarding_tasks", entityId: id,
       details: JSON.stringify({ status }),
     }).catch((e) => logger.error(e, "employees background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "onboarding_tasks", entityId: Number(req.params.id),
+      action: "update", entity: "onboarding_tasks", entityId: id,
       after: { status },
     }).catch((e) => logger.error(e, "employees background task failed"));
     res.json(row);
