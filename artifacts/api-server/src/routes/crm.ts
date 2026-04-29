@@ -972,7 +972,7 @@ router.get("/pipeline", requirePermission("crm:read"), async (req, res) => {
     const result: any[] = [];
     for (const stage of STAGE_ORDER) {
       const [row] = await rawQuery<any>(`SELECT COUNT(*) as count, COALESCE(SUM(value),0) as value FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage=$2`, [scope.companyId, stage]);
-      result.push({ stage, count: Number(row.count), value: Number(row.value), autoAction: STAGE_AUTO_ACTIONS[stage]?.description });
+      result.push({ stage, count: Number(row?.count ?? 0), value: Number(row?.value ?? 0), autoAction: STAGE_AUTO_ACTIONS[stage]?.description });
     }
     res.json({ data: result, total: result.length, page: 1, pageSize: result.length });
   } catch (err) { handleRouteError(err, res, "CRM pipeline error:"); }
@@ -1042,7 +1042,7 @@ router.get("/analytics", requirePermission("crm:read"), async (req, res) => {
     let prevCount: number | null = null;
     for (const stage of STAGE_ORDER) {
       const [row] = await rawQuery<any>(`SELECT COUNT(*) as count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage=$2`, [cid, stage]);
-      const count = Number(row.count);
+      const count = Number(row?.count ?? 0);
       const rate = prevCount !== null && prevCount > 0 ? ((count / prevCount) * 100).toFixed(1) : null;
       conversionRates.push({ stage, count, conversionFromPrev: rate });
       if (!['closed_won', 'closed_lost'].includes(stage)) prevCount = count;
@@ -1064,10 +1064,10 @@ router.get("/analytics", requirePermission("crm:read"), async (req, res) => {
     res.json({
       conversionRates,
       avgDealDays: Number(avgDeal?.avgDays || 0).toFixed(1),
-      wonRevenue: Number(revenue.wonRevenue),
-      forecastRevenue: Number(revenue.forecast),
-      lostCount: Number(lostAnalysis.lostCount),
-      lostValue: Number(lostAnalysis.lostValue),
+      wonRevenue: Number(revenue?.wonRevenue ?? 0),
+      forecastRevenue: Number(revenue?.forecast ?? 0),
+      lostCount: Number(lostAnalysis?.lostCount ?? 0),
+      lostValue: Number(lostAnalysis?.lostValue ?? 0),
     });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });

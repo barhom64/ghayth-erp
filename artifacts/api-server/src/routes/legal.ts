@@ -687,6 +687,7 @@ router.patch("/cases/:id", requirePermission("legal:write"), async (req, res) =>
     }
 
     const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!row) throw new NotFoundError("القضية غير موجودة");
     res.json({ ...row, allowedTransitions: VALID_CASE_TRANSITIONS[row.status] || [] });
   } catch (err) { handleRouteError(err, res, "Update case error:"); }
 });

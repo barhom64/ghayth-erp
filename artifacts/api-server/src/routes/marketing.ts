@@ -214,7 +214,7 @@ router.get("/funnel", requirePermission("marketing:read"), async (req, res) => {
     const stageData: any[] = [];
     for (const stage of STAGES) {
       const [row] = await rawQuery<any>(`SELECT COUNT(*) AS count, COALESCE(SUM(value),0) AS value FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage=$2`, [cid, stage]);
-      stageData.push({ stage, count: Number(row.count), value: Number(row.value) });
+      stageData.push({ stage, count: Number(row?.count ?? 0), value: Number(row?.value ?? 0) });
     }
     const sourceFunnel = await rawQuery<any>(
       `SELECT source, COUNT(*) AS total, COUNT(*) FILTER (WHERE stage='closed_won') AS won, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonValue"

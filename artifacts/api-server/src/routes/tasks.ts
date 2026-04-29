@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError, NotFoundError,
+import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
@@ -38,6 +38,14 @@ const updateTaskSchema = z.object({
   scheduledDate: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
+
+const VALID_TASK_TRANSITIONS: Record<string, string[]> = {
+  pending: ["in_progress", "cancelled"],
+  in_progress: ["completed", "blocked", "cancelled", "pending"],
+  blocked: ["in_progress", "cancelled"],
+  completed: ["in_progress"],
+  cancelled: ["pending"],
+};
 
 const router = Router();
 
@@ -344,6 +352,18 @@ router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
     }
 
     if (sets.length === 0) { throw new ValidationError("لا توجد بيانات للتحديث"); }
+
+    if (status) {
+      const [current] = await rawQuery<{ status: string }>(
+        `SELECT status FROM tasks WHERE id = $1 AND "companyId" = $2`,
+        [id, scope.companyId]
+      );
+      if (!current) throw new NotFoundError("المهمة غير موجودة");
+      const allowed = VALID_TASK_TRANSITIONS[current.status];
+      if (allowed && !allowed.includes(status)) {
+        throw new ConflictError(`لا يمكن نقل المهمة من "${current.status}" إلى "${status}"`);
+      }
+    }
 
     params.push(req.params.id);
     let whereClause = `id = $${idx}`;
