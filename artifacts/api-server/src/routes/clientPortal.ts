@@ -643,7 +643,7 @@ protectedRouter.get("/kb", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
     const { q, category } = req.query as any;
-    const conditions = [`("companyId"=$1 OR "companyId" IS NULL)`, `status='published'`];
+    const conditions = [`("companyId"=$1 OR "companyId" IS NULL)`, `status='published'`, `"deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (category) { params.push(category); conditions.push(`category=$${params.length}`); }
     if (q) { params.push(`%${q}%`); conditions.push(`(title ILIKE $${params.length} OR content ILIKE $${params.length})`); }
@@ -662,7 +662,7 @@ protectedRouter.get("/kb/:id", withPortalScope(async (req, res) => {
     const scope = req.portalScope;
     const id = Number(req.params.id);
     const [row] = await rawQuery<any>(
-      `SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND status='published'`,
+      `SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND status='published' AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المقالة غير موجودة");

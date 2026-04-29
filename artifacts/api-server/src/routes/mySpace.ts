@@ -662,7 +662,7 @@ router.get("/performance", async (req, res) => {
       `SELECT pr.id, pr.period, pr."overallScore" AS "overallRating", pr.comments AS notes,
               pr.status, pr."createdAt"
        FROM performance_reviews pr
-       WHERE pr."employeeId" = $1 AND pr."companyId" = $2
+       WHERE pr."employeeId" = $1 AND pr."companyId" = $2 AND pr."deletedAt" IS NULL
        ORDER BY pr."createdAt" DESC LIMIT 20`,
       [scope.employeeId, scope.companyId]
     );
