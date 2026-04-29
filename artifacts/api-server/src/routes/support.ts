@@ -136,12 +136,12 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
                 COUNT(st.id) AS "openTickets",
                 COALESCE(
                   (SELECT AVG(EXTRACT(EPOCH FROM (st2."resolvedAt" - st2."createdAt"))/3600)
-                   FROM support_tickets st2 WHERE st2."assigneeId"=e.id AND st2.status='resolved' AND st2."resolvedAt" IS NOT NULL),
+                   FROM support_tickets st2 WHERE st2."assigneeId"=e.id AND st2.status='resolved' AND st2."resolvedAt" IS NOT NULL AND st2."deletedAt" IS NULL),
                   999
                 ) AS "avgResolution"
          FROM employees e
          JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-         LEFT JOIN support_tickets st ON st."assigneeId"=e.id AND st.status NOT IN ('resolved','closed')
+         LEFT JOIN support_tickets st ON st."assigneeId"=e.id AND st.status NOT IN ('resolved','closed') AND st."deletedAt" IS NULL
          WHERE e.status='active'
          GROUP BY e.id, e.name
          ORDER BY "openTickets" ASC, "avgResolution" ASC

@@ -348,7 +348,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     const [activeLeave] = await rawQuery<any>(
       `SELECT id FROM hr_leave_requests
        WHERE "employeeId" = $1 AND status = 'approved'
-         AND "startDate" <= $2 AND "endDate" >= $2`,
+         AND "startDate" <= $2 AND "endDate" >= $2 AND "deletedAt" IS NULL`,
       [scope.employeeId, today]
     );
     if (activeLeave) {
@@ -947,7 +947,7 @@ router.get("/leave-balance", requirePermission("hr:read"), async (req, res) => {
                 WHERE lr.status = 'approved' AND EXTRACT(YEAR FROM lr."startDate") = $3
               ), 0) AS used
        FROM hr_leave_types lt
-       LEFT JOIN hr_leave_requests lr ON lr."leaveTypeId" = lt.id AND lr."employeeId" = $2
+       LEFT JOIN hr_leave_requests lr ON lr."leaveTypeId" = lt.id AND lr."employeeId" = $2 AND lr."deletedAt" IS NULL
        WHERE lt."companyId" = $1
        GROUP BY lt.id, lt.name, lt."annualDays"
        ORDER BY lt.name`,
@@ -978,7 +978,7 @@ router.get("/leave-requests", requirePermission("hr:read"), async (req, res) => 
       companyColumn: 'lr."companyId"',
       disableBranchScope: true,
     });
-    let finalWhere = where;
+    let finalWhere = where + ` AND lr."deletedAt" IS NULL`;
     let paramIdx = nextParamIndex;
     if (status) {
       finalWhere += ` AND lr.status = $${paramIdx++}`;
@@ -1036,7 +1036,7 @@ router.get("/leaves/:id", requirePermission("hr:read"), async (req, res) => {
        JOIN employees e ON e.id = lr."employeeId"
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
        LEFT JOIN employees approver ON approver.id = lr."approvedBy"
-       WHERE lr.id = $1 AND lr."companyId" = $2`,
+       WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("طلب الإجازة غير موجود");
@@ -1156,7 +1156,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       const [usedRow] = await rawQuery<any>(
         `SELECT COALESCE(SUM(days), 0) AS used FROM hr_leave_requests
          WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status IN ('approved','pending')
-           AND EXTRACT(YEAR FROM "startDate") = $3`,
+           AND EXTRACT(YEAR FROM "startDate") = $3 AND "deletedAt" IS NULL`,
         [scope.employeeId, leaveTypeId, year]
       );
       const entitled = Number(leaveType.annualDays ?? 21);
@@ -1183,7 +1183,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
     const [overlap] = await rawQuery<any>(
       `SELECT id FROM hr_leave_requests
        WHERE "employeeId" = $1 AND status IN ('pending','approved')
-         AND "startDate" <= $2 AND "endDate" >= $3`,
+         AND "startDate" <= $2 AND "endDate" >= $3 AND "deletedAt" IS NULL`,
       [scope.employeeId, endDate, startDate]
     );
     if (overlap) {
@@ -1254,7 +1254,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
     if (leaveType.oncePerCareer) {
       const [prevHajj] = await rawQuery<any>(
         `SELECT id FROM hr_leave_requests
-         WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status = 'approved'`,
+         WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status = 'approved' AND "deletedAt" IS NULL`,
         [scope.employeeId, leaveTypeId]
       );
       if (prevHajj) {
@@ -1283,7 +1283,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         `SELECT COUNT(DISTINCT lr."employeeId") AS cnt FROM hr_leave_requests lr
          JOIN employee_assignments ea ON ea."employeeId" = lr."employeeId" AND ea."departmentId" = $1
          WHERE lr.status = 'approved' AND lr."startDate" <= $2 AND lr."endDate" >= $3
-           AND lr."employeeId" != $4`,
+           AND lr."employeeId" != $4 AND lr."deletedAt" IS NULL`,
         [assignment.departmentId, endDate, startDate, scope.employeeId]
       );
       const totalDept = Number(deptTotal?.cnt ?? 1);
@@ -2935,16 +2935,16 @@ router.get("/leave-stats", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const [pending] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='pending'`, [scope.companyId]
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='pending' AND "deletedAt" IS NULL`, [scope.companyId]
     );
     const [approved] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='approved'`, [scope.companyId]
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='approved' AND "deletedAt" IS NULL`, [scope.companyId]
     );
     const [rejected] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='rejected'`, [scope.companyId]
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='rejected' AND "deletedAt" IS NULL`, [scope.companyId]
     );
     const [total] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1`, [scope.companyId]
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
     );
     res.json({
       pending: Number(pending?.count ?? 0),
