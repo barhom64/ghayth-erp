@@ -183,7 +183,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
     // Pre-check: clientId must resolve to an active client in this company.
     if (b.clientId) {
       const [client] = await rawQuery<{ id: number }>(
-        `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
         [Number(b.clientId), scope.companyId]
       );
       if (!client) {
@@ -424,7 +424,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
     // Pre-check clientId FK on update.
     if (b.clientId !== undefined && b.clientId !== null) {
       const [client] = await rawQuery<{ id: number }>(
-        `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
         [Number(b.clientId), scope.companyId]
       );
       if (!client) {
@@ -634,7 +634,7 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
 
     if (!clientId && opp.contactName) {
       const existing = await rawQuery<any>(
-        `SELECT id FROM clients WHERE "companyId"=$1 AND (name=$2 OR phone=$3 OR email=$4) LIMIT 1`,
+        `SELECT id FROM clients WHERE "companyId"=$1 AND "deletedAt" IS NULL AND (name=$2 OR phone=$3 OR email=$4) LIMIT 1`,
         [scope.companyId, opp.contactName || '', opp.contactPhone || '', opp.contactEmail || '']
       );
       if (existing.length > 0) {

@@ -119,7 +119,7 @@ invoicesRouter.post("/invoices/impact-preview", requirePermission("finance:creat
     let clientName = "";
     if (clientId) {
       const [client] = await rawQuery<any>(
-        `SELECT name FROM clients WHERE id = $1 AND "companyId" = $2`,
+        `SELECT name FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [Number(clientId), scope.companyId]
       );
       clientName = client?.name || "";

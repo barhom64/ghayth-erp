@@ -424,7 +424,7 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
     }
     if (b.managerId) {
       const [emp] = await rawQuery<any>(
-        `SELECT id FROM employees WHERE id=$1`,
+        `SELECT id FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
         [b.managerId]
       );
       if (!emp) {
@@ -630,7 +630,7 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
     }
     if (b.managerId !== undefined && b.managerId !== existing.managerId) {
       const [emp] = await rawQuery<any>(
-        `SELECT id FROM employees WHERE id=$1`,
+        `SELECT id FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
         [b.managerId]
       );
       if (!emp) {
@@ -870,7 +870,7 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
 
     if (b.assigneeId) {
       const [emp] = await rawQuery<any>(
-        `SELECT id FROM employees WHERE id=$1`,
+        `SELECT id FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
         [b.assigneeId]
       );
       if (!emp) {
