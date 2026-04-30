@@ -463,7 +463,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
   } = params;
 
   const [instance] = await rawQuery<any>(
-    `SELECT * FROM workflow_instances WHERE id = $1 AND "companyId" = $2`,
+    `SELECT * FROM workflow_instances WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
     [instanceId, companyId]
   );
   if (!instance) throw new NotFoundError("المعاملة غير موجودة");
@@ -506,14 +506,14 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
     }
     isOverride = true;
     if (!overrideReason && !notes) {
-      throw new Error("يجب تحديد سبب التجاوز عند التدخل في معاملة ليست مسندة إليك");
+      throw new ValidationError("يجب تحديد سبب التجاوز عند التدخل في معاملة ليست مسندة إليك");
     }
   }
 
   if (action === "approve") {
     const validationErrors = await validatePreApproval(instance, companyId, attachments);
     if (validationErrors.length > 0) {
-      throw new Error(
+      throw new ValidationError(
         `لا يمكن الاعتماد — شروط غير مستوفاة:\n${validationErrors.map(e => `• ${e.message}`).join("\n")}`
       );
     }
@@ -821,7 +821,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
 
 export async function getTimeline(instanceId: number, companyId: number) {
   const [instance] = await rawQuery<any>(
-    `SELECT * FROM workflow_instances WHERE id = $1 AND "companyId" = $2`,
+    `SELECT * FROM workflow_instances WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
     [instanceId, companyId]
   );
   if (!instance) throw new NotFoundError("المعاملة غير موجودة");

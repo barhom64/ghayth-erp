@@ -148,7 +148,7 @@ router.get("/overtime/my", requirePermission("hr:read"), async (req, res) => {
        FROM hr_overtime_requests o
        JOIN employees e ON e.id = o."employeeId"
        WHERE o."assignmentId" = $1 AND o."companyId" = $2 AND o."deletedAt" IS NULL
-       ORDER BY o."overtimeDate" DESC`,
+       ORDER BY o."overtimeDate" DESC LIMIT 500`,
       [scope.activeAssignmentId, scope.companyId]
     );
     res.json({ data });

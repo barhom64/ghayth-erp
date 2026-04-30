@@ -87,10 +87,10 @@ async function getTargetAssignmentId(
         };
         const roles = roleMap[target] || ["owner"];
         const [asgn] = await rawQuery<any>(
-          `SELECT id FROM employee_assignments 
-           WHERE "companyId" = $1 AND role = ANY($2) AND status = 'active' 
-           ORDER BY CASE role WHEN '${roles[0]}' THEN 1 ELSE 2 END LIMIT 1`,
-          [companyId, roles]
+          `SELECT id FROM employee_assignments
+           WHERE "companyId" = $1 AND role = ANY($2) AND status = 'active'
+           ORDER BY CASE WHEN role = $3 THEN 1 ELSE 2 END LIMIT 1`,
+          [companyId, roles, roles[0]]
         );
         return asgn?.id ?? null;
       }
@@ -191,11 +191,11 @@ async function executeAction(
 
     case "set_sla": {
       if (payload.entityId) {
-        const slaHours = Number(config.slaHours) || 4;
+        const slaHours = Math.max(1, Math.min(Number(config.slaHours) || 4, 720));
         await rawExecute(
-          `UPDATE support_tickets SET "slaDeadline" = NOW() + INTERVAL '${slaHours} hours' WHERE id = $1`,
-          [payload.entityId]
-        ).catch(() => {});
+          `UPDATE support_tickets SET "slaDeadline" = NOW() + make_interval(hours => $2) WHERE id = $1`,
+          [payload.entityId, slaHours]
+        ).catch((e) => logger.error(e, "[RulesEngine] SLA update failed:"));
         return `sla_set_${slaHours}h`;
       }
       return "no_entity_for_sla";

@@ -168,7 +168,10 @@ export async function applyTransition<TRow = any>(
     if (toState !== undefined) {
       const currentStatus = (existing[statusCol] as string) ?? "*";
       if (!isValidTransition(entity, currentStatus, toState, statusCol)) {
-        logger.warn(`[lifecycle] transition not in state machine: ${entity} ${currentStatus} → ${toState}`);
+        throw new LifecycleError(
+          `الانتقال غير مسموح: ${entity} ${currentStatus} → ${toState}`,
+          409
+        );
       }
     }
 

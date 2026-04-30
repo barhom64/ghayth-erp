@@ -182,22 +182,26 @@ router.post("/orders", requirePermission("store:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { orderNumber, customerName, customerPhone, status, totalAmount, items, notes, branchId } = zodParse(createStoreOrderSchema.safeParse(req.body));
-    const r = await rawExecute(
-      `INSERT INTO store_orders ("orderNumber", "customerName", "customerPhone", status, "totalAmount", items, notes, "companyId", "branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [orderNumber || `ORD-${Date.now()}`, customerName, customerPhone, status, totalAmount, items ? JSON.stringify(items) : '[]', notes, scope.companyId, branchId || scope.branchId || null]
-    );
-    const orderId = r.insertId;
-    if (Array.isArray(items) && items.length > 0) {
-      for (const item of items) {
-        const unitPrice = Number(item.unitPrice || item.price || 0);
-        const qty = Number(item.quantity || 1);
-        await rawExecute(
-          `INSERT INTO store_order_items ("orderId","productId","productName",quantity,"unitPrice",total,notes) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          [orderId, item.productId || null, item.productName || item.name || null, qty, unitPrice, unitPrice * qty, item.notes || null]
-        );
+    const effectiveOrderNumber = orderNumber || `ORD-${Date.now()}`;
+    const orderId = await withTransaction(async (client) => {
+      const r = await client.query(
+        `INSERT INTO store_orders ("orderNumber", "customerName", "customerPhone", status, "totalAmount", items, notes, "companyId", "branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [effectiveOrderNumber, customerName, customerPhone, status, totalAmount, items ? JSON.stringify(items) : '[]', notes, scope.companyId, branchId || scope.branchId || null]
+      );
+      const newId = r.rows[0].id;
+      if (Array.isArray(items) && items.length > 0) {
+        for (const item of items) {
+          const unitPrice = Number(item.unitPrice || item.price || 0);
+          const qty = Number(item.quantity || 1);
+          await client.query(
+            `INSERT INTO store_order_items ("orderId","productId","productName",quantity,"unitPrice",total,notes) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [newId, item.productId || null, item.productName || item.name || null, qty, unitPrice, unitPrice * qty, item.notes || null]
+          );
+        }
       }
-    }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "store_orders", entityId: orderId, after: { orderNumber: orderNumber || `ORD-${Date.now()}`, customerName, status: status || "pending", totalAmount } }).catch((e) => logger.error(e, "store background task failed"));
+      return newId;
+    });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "store_orders", entityId: orderId, after: { orderNumber: effectiveOrderNumber, customerName, status: status || "pending", totalAmount } }).catch((e) => logger.error(e, "store background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.order.created", entity: "store_orders", entityId: orderId, details: JSON.stringify({ customerName, totalAmount }) }).catch((e) => logger.error(e, "store background task failed"));
     res.status(201).json({ id: orderId });
   } catch (err) { handleRouteError(err, res, "Create store order"); }

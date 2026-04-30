@@ -92,7 +92,7 @@ router.get("/proactive-rules", requirePermission("admin:read"), async (req, res)
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT * FROM proactive_rules WHERE "companyId" = $1 ORDER BY module, name`,
+      `SELECT * FROM proactive_rules WHERE "companyId" = $1 ORDER BY module, name LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });

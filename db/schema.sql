@@ -15254,10 +15254,8 @@ ALTER TABLE ONLY public.invoices
 
 --
 -- Name: invoices invoices_ref_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.invoices
-    ADD CONSTRAINT invoices_ref_key UNIQUE (ref);
+-- REMOVED: was UNIQUE(ref) without companyId — multi-tenant unsafe.
+-- The correct constraint is enforced by: invoices_ref_company_uq UNIQUE(companyId, ref) WHERE deletedAt IS NULL
 
 
 --
