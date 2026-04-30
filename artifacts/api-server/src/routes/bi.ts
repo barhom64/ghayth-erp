@@ -157,7 +157,7 @@ router.get("/operations/sla-delays", requirePermission("bi:read"), async (req, r
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
-    const conditions = [`t."companyId" = $1`];
+    const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`];
     const params: any[] = [cid];
     if (from) { params.push(from); conditions.push(`t."scheduledDate" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`t."scheduledDate" <= $${params.length}::date`); }
@@ -190,7 +190,7 @@ router.get("/operations/rejection-rate", requirePermission("bi:read"), async (re
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to } = req.query as any;
-    const conditions = [`"companyId" = $1`];
+    const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
     const params: any[] = [cid];
     if (from) { params.push(from); conditions.push(`"createdAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`"createdAt" <= $${params.length}::date`); }
@@ -216,7 +216,7 @@ router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, r
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
-    const conditions = [`t."companyId" = $1`];
+    const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`];
     const params: any[] = [cid];
     if (from) { params.push(from); conditions.push(`t."createdAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`t."createdAt" <= $${params.length}::date`); }
@@ -274,7 +274,7 @@ router.get("/operations/employee-productivity", requirePermission("bi:read"), as
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
-    const conditions = [`t."companyId" = $1`];
+    const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`];
     const params: any[] = [cid];
     if (from) { params.push(from); conditions.push(`t."completedAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`t."completedAt" <= $${params.length}::date`); }
@@ -356,7 +356,7 @@ router.get("/operations/avg-completion-time", requirePermission("bi:read"), asyn
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
-    const conditions = [`t."companyId" = $1`, `t.status = 'completed'`, `t."completedAt" IS NOT NULL`];
+    const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`, `t.status = 'completed'`, `t."completedAt" IS NOT NULL`];
     const params: any[] = [cid];
     if (from) { params.push(from); conditions.push(`t."completedAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`t."completedAt" <= $${params.length}::date`); }
@@ -387,7 +387,7 @@ router.get("/operations/trend", requirePermission("bi:read"), async (req, res) =
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
-    const conditions = [`t."companyId" = $1`, `t."scheduledDate" >= CURRENT_DATE - INTERVAL '12 weeks'`];
+    const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`, `t."scheduledDate" >= CURRENT_DATE - INTERVAL '12 weeks'`];
     const params: any[] = [cid];
     if (from) { params.push(from); conditions.push(`t."scheduledDate" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`t."scheduledDate" <= $${params.length}::date`); }
@@ -437,7 +437,7 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
          COUNT(*) FILTER (WHERE status = 'completed' AND DATE("completedAt") = $2::date) AS completed,
          COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "scheduledDate" < $2::date) AS overdue
        FROM tasks
-       WHERE "companyId" = $1`,
+       WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid, date]
     ).catch(() => [{ scheduled: 0, completed: 0, overdue: 0 }]);
 
@@ -506,7 +506,7 @@ router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, re
            COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "scheduledDate" < $3::date) AS overdue,
            ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'completed') / NULLIF(COUNT(*), 0), 0) AS "completionRate"
          FROM tasks
-         WHERE "companyId" = $1 AND "scheduledDate" BETWEEN $2::date AND $3::date`,
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "scheduledDate" BETWEEN $2::date AND $3::date`,
         [cid, startDate, endDate]
       ).catch(() => [{ total: 0, completed: 0, overdue: 0, completionRate: 0 }]);
 
@@ -604,7 +604,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
            COUNT(*) FILTER (WHERE status = 'completed') AS completed,
            COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "scheduledDate" < $3::date) AS overdue,
            ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'completed') / NULLIF(COUNT(*), 0), 0) AS "completionRate"
-         FROM tasks WHERE "companyId" = $1 AND "scheduledDate" BETWEEN $2::date AND $3::date`,
+         FROM tasks WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "scheduledDate" BETWEEN $2::date AND $3::date`,
         [cid, startDate, endDate]
       ).catch(() => [{ total: 0, completed: 0, overdue: 0, completionRate: 0 }]);
 
@@ -690,7 +690,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
          COUNT(*) AS total,
          COUNT(*) FILTER (WHERE status = 'completed') AS completed
        FROM tasks
-       WHERE "companyId" = $1 AND "scheduledDate" >= $2::date
+       WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "scheduledDate" >= $2::date
        GROUP BY week ORDER BY week`,
       [cid, fmt(thisMonthStart)]
     ).catch(() => []);

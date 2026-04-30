@@ -87,7 +87,7 @@ contractsRouter.get("/:id", requirePermission("hr:read"), async (req, res) => {
        JOIN employee_assignments ea ON ea.id = ec."assignmentId"
        LEFT JOIN branches b ON b.id = ec."branchId"
        LEFT JOIN document_templates dt ON dt.id = ec."templateId"
-       WHERE ec.id = $1 AND ec."companyId" = $2`,
+       WHERE ec.id = $1 AND ec."companyId" = $2 AND ec."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العق�� غير موجود");

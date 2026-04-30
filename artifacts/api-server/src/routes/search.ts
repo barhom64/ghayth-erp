@@ -71,6 +71,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
                 'ticket' AS type
          FROM support_tickets t
          WHERE t."companyId" = $1
+           AND t."deletedAt" IS NULL
            AND (t.ref ILIKE $2 OR t.title ILIKE $2)
          LIMIT 10`,
         [scope.companyId, pattern]

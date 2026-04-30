@@ -119,7 +119,7 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
         FROM hr_leave_requests lr
         JOIN employees e ON e.id = lr."employeeId"
         LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-        WHERE lr."companyId" = $1
+        WHERE lr."companyId" = $1 AND lr."deletedAt" IS NULL
         ${module ? `AND 'hr' = $${moduleParamIndex}` : ""}
 
         UNION ALL
@@ -161,7 +161,7 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
         UNION ALL
         SELECT cl.id FROM communications_log cl WHERE cl."companyId" = $1 ${module ? `AND 'communications' = $${moduleParamIndex}` : ""}
         UNION ALL
-        SELECT lr.id FROM hr_leave_requests lr WHERE lr."companyId" = $1 ${module ? `AND 'hr' = $${moduleParamIndex}` : ""}
+        SELECT lr.id FROM hr_leave_requests lr WHERE lr."companyId" = $1 AND lr."deletedAt" IS NULL ${module ? `AND 'hr' = $${moduleParamIndex}` : ""}
         UNION ALL
         SELECT i.id FROM invoices i WHERE i."companyId" = $1 AND i."deletedAt" IS NULL ${module ? `AND 'finance' = $${moduleParamIndex}` : ""}
       ) AS combined`,

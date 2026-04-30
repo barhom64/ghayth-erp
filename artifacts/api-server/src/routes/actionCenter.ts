@@ -170,6 +170,7 @@ router.get("/", async (req, res) => {
          LEFT JOIN employee_assignments ea ON ea.id = t."assignedTo"
          LEFT JOIN employees e ON e.id = ea."employeeId"
          WHERE ${tw.replace(/"companyId"/g, 't."companyId"').replace(/"branchId"/g, 't."branchId"')}
+           AND t."deletedAt" IS NULL
            AND t."scheduledDate" = $${nextParamIndex}
          ORDER BY t.priority DESC, t.status ASC
          LIMIT 15`,
