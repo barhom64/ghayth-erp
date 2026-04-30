@@ -37,7 +37,7 @@ async function logAutomation(params: {
     await rawExecute(
       `UPDATE proactive_rules SET "lastRunAt" = NOW(), "totalExecutions" = "totalExecutions" + 1 WHERE name = $1`,
       [params.automationType]
-    ).catch(() => {});
+    ).catch((e) => logger.error(e, "proactive rule execution update failed"));
   } catch (err) {
     logger.error(err, "[ProactiveEngine] Failed to log automation:");
   }

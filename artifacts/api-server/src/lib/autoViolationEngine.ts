@@ -458,7 +458,7 @@ export async function runAutoDetection(
       companyId, branchId: 0, userId: null,
       action: "hr.auto_detection.completed", entity: "auto_detection_log", entityId: 0,
       details: JSON.stringify({ date, detected: result.detected, memosCreated: result.memosCreated }),
-    }).catch(() => {});
+    }).catch((e) => logger.error(e, "auto violation event emit failed"));
   }
 
   return result;

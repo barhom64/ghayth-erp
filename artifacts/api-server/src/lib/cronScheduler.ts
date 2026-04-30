@@ -2514,12 +2514,12 @@ async function weeklyDataCleanup(): Promise<string> {
     await rawExecute(
       `INSERT INTO audit_archive SELECT * FROM event_logs WHERE "createdAt" < NOW() - INTERVAL '365 days'
        ON CONFLICT DO NOTHING`
-    ).catch(() => {});
+    ).catch((e) => logger.error(e, "[cronScheduler] audit archive insert failed"));
     const { affectedRows: archivedLogs } = await rawExecute(
       `DELETE FROM event_logs WHERE "createdAt" < NOW() - INTERVAL '365 days'`
     ).catch(() => ({ affectedRows: 0 }));
     cleaned += archivedLogs;
-  } catch {}
+  } catch (e) { logger.error(e, "[cronScheduler] event log archival failed"); }
 
   // Orphaned workflow_instances: delete instances whose refTable row no longer exists.
   // Only handle the known refTables — safer than a generic EXISTS loop.
@@ -2539,7 +2539,7 @@ async function weeklyDataCleanup(): Promise<string> {
       ).catch(() => ({ affectedRows: 0 }));
       cleaned += affectedRows;
     }
-  } catch {}
+  } catch (e) { logger.error(e, "[cronScheduler] orphaned workflow instances cleanup failed"); }
 
   // Mark orphaned approval_requests as cancelled when their referenced entity was hard-deleted.
   // approval_requests uses refType+refId (not a workflow FK).
@@ -2566,7 +2566,7 @@ async function weeklyDataCleanup(): Promise<string> {
       ).catch(() => ({ affectedRows: 0 }));
       cleaned += affectedRows;
     }
-  } catch {}
+  } catch (e) { logger.error(e, "[cronScheduler] orphaned approval requests cleanup failed"); }
 
   return `Data cleanup: ${cleaned} records cleaned`;
 }

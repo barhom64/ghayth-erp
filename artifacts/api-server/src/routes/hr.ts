@@ -1597,7 +1597,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
           await client.query(
             `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'rejected',$2,$3,$4)`,
             [Number(id), reason || null, scope.userId, scope.companyId]
-          ).catch(() => {});
+          ).catch((e) => logger.error(e, "hr approval action insert failed"));
         },
       });
 
@@ -1647,7 +1647,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
           await client.query(
             `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'returned',$2,$3,$4)`,
             [Number(id), reason, scope.userId, scope.companyId]
-          ).catch(() => {});
+          ).catch((e) => logger.error(e, "hr approval action insert failed"));
         },
       });
 
@@ -1810,7 +1810,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         await client.query(
           `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'approved',$2,$3,$4)`,
           [Number(id), reason || null, scope.userId, scope.companyId]
-        ).catch(() => {});
+        ).catch((e) => logger.error(e, "hr approval action insert failed"));
       },
     });
 

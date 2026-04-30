@@ -49,7 +49,7 @@ async function handleLeaveApproval(refId: number, approvedBy?: number | null): P
          VALUES ($1,$2,$3,$4,'on_leave',$5)
          ON CONFLICT DO NOTHING`,
         [asn.id, asn.companyId, asn.branchId, dateStr, `إجازة معتمدة - طلب رقم ${refId}`]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "workflow engine background task failed"));
     }
   }
 
@@ -57,7 +57,7 @@ async function handleLeaveApproval(refId: number, approvedBy?: number | null): P
     `UPDATE leave_approval_stages SET status = 'approved', decision = 'approved', "decidedAt" = NOW()
      WHERE "leaveRequestId" = $1 AND status = 'pending'`,
     [refId]
-  ).catch(() => {});
+  ).catch((e) => logger.error(e, "workflow engine background task failed"));
 }
 
 async function handleLeaveRejection(refId: number): Promise<void> {
@@ -84,7 +84,7 @@ async function handleLeaveRejection(refId: number): Promise<void> {
     `UPDATE leave_approval_stages SET status = 'rejected', "decidedAt" = NOW()
      WHERE "leaveRequestId" = $1 AND status = 'pending'`,
     [refId]
-  ).catch(() => {});
+  ).catch((e) => logger.error(e, "workflow engine background task failed"));
 }
 
 const DOMAIN_RECORD_HANDLERS: Record<
@@ -102,7 +102,7 @@ const DOMAIN_RECORD_HANDLERS: Record<
         `UPDATE leave_approval_stages SET status = 'returned', "decidedAt" = NOW()
          WHERE "leaveRequestId" = $1 AND status = 'pending'`,
         [refId]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "workflow engine background task failed"));
     }
   },
   official_letters: async (refId, outcome) => {

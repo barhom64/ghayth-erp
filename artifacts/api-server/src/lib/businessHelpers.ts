@@ -753,7 +753,7 @@ export async function updateBudgetUsed(params: {
     `UPDATE budgets SET used = used + $1
      WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4`,
     [Number(params.amount), params.companyId, params.accountCode, targetPeriod]
-  ).catch(() => {});
+  ).catch((e) => logger.error(e, "budget usage update failed"));
 }
 
 export async function getAssignmentIdByRole(companyId: number, branchId: number, role: string): Promise<number | null> {

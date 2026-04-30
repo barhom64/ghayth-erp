@@ -238,7 +238,7 @@ export async function saveRecommendationsForUser(
   await rawExecute(
     `DELETE FROM smart_recommendations WHERE "companyId"=$1 AND "userId"=$2 AND status='active'`,
     [companyId, userId]
-  ).catch(() => {});
+  ).catch((e) => logger.error(e, "smart recommendations cleanup failed"));
 
   let saved = 0;
   for (const rec of recs) {

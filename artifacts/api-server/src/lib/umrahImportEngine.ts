@@ -485,10 +485,10 @@ export async function confirmMutamersImport(
           // Treat duplicate (companyId, passportNumber, seasonId) as skipped (idempotent)
           if (/duplicate key|unique constraint|already exists/i.test(msg) && /passport/i.test(msg)) {
             skippedCount++;
-            try { await logChange(client, batchId, "mutamer", 0, "skipped", null, null, "duplicate"); } catch {}
+            try { await logChange(client, batchId, "mutamer", 0, "skipped", null, null, "duplicate"); } catch (e) { logger.error(e, "umrah import logChange failed"); }
           } else {
             errorCount++;
-            try { await logChange(client, batchId, "mutamer", 0, "error", null, null, msg); } catch {}
+            try { await logChange(client, batchId, "mutamer", 0, "error", null, null, msg); } catch (e) { logger.error(e, "umrah import logChange failed"); }
           }
         }
       }
@@ -504,7 +504,7 @@ export async function confirmMutamersImport(
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "umrah.mutamers.imported", entity: "umrah_import_batches", entityId: batchId,
       after: { newCount, updatedCount, skippedCount, errorCount },
-    }).catch(() => {});
+    }).catch((e) => logger.error(e, "umrah import event emit failed"));
 
     return { batchId, newCount, updatedCount, skippedCount, errorCount, financialImpactCount };
   });
@@ -641,10 +641,10 @@ export async function confirmVouchersImport(
         const msg = String(err?.message || "");
         if (/duplicate key|unique constraint|already exists/i.test(msg)) {
           skippedCount++;
-          try { await logChange(client, batchId, "nusk_invoice", 0, "skipped", null, null, "duplicate"); } catch {}
+          try { await logChange(client, batchId, "nusk_invoice", 0, "skipped", null, null, "duplicate"); } catch (e) { logger.error(e, "umrah import logChange failed"); }
         } else {
           errorCount++;
-          try { await logChange(client, batchId, "nusk_invoice", 0, "error", null, null, msg); } catch {}
+          try { await logChange(client, batchId, "nusk_invoice", 0, "error", null, null, msg); } catch (e) { logger.error(e, "umrah import logChange failed"); }
         }
       }
     }
@@ -659,7 +659,7 @@ export async function confirmVouchersImport(
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "umrah.vouchers.imported", entity: "umrah_import_batches", entityId: batchId,
       after: { newCount, updatedCount, skippedCount, errorCount },
-    }).catch(() => {});
+    }).catch((e) => logger.error(e, "umrah import event emit failed"));
 
     return { batchId, newCount, updatedCount, skippedCount, errorCount, financialImpactCount };
   });
@@ -754,7 +754,7 @@ async function detectViolation(
     companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
     action: eventName, entity: "umrah_violations", entityId: mutamerId,
     after: { nuskNumber: row.nuskNumber, type, overstayDays: row.overstayDays },
-  }).catch(() => {});
+  }).catch((e) => logger.error(e, "umrah import event emit failed"));
 }
 
 // ---------------------------------------------------------------------------
