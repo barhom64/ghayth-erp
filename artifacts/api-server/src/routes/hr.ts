@@ -257,6 +257,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     const [activeContract] = await rawQuery<any>(
       `SELECT id, "endDate", status FROM employee_contracts
        WHERE "assignmentId" = $1 AND status = 'active'
+         AND "deletedAt" IS NULL
          AND "startDate" <= $2 AND ("endDate" IS NULL OR "endDate" >= $2)
        LIMIT 1`,
       [scope.activeAssignmentId, today]
@@ -4147,7 +4148,7 @@ router.get("/official-letters/:id", requirePermission("hr:read"), async (req, re
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = ol."companyId" AND ea.status = 'active'
        LEFT JOIN branches b ON b.id = COALESCE(ol."branchId", ea."branchId")
        LEFT JOIN companies c ON c.id = ol."companyId"
-       WHERE ol.id = $1 AND ol."companyId" = $2`,
+       WHERE ol.id = $1 AND ol."companyId" = $2 AND ol."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!letter) throw new NotFoundError("الخطاب غير موجود");
@@ -4277,7 +4278,7 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
                     LIMIT 1)
                 ) AS "assignmentId"
            FROM official_letters ol
-          WHERE ol.id = $1`,
+          WHERE ol.id = $1 AND ol."deletedAt" IS NULL`,
         [Number(id)]
       );
       if (targetAssignment?.assignmentId) {
@@ -6324,6 +6325,7 @@ router.get("/turnover-report", requirePermission("hr:read"), async (req, res) =>
        LEFT JOIN departments d ON d.id=ea."departmentId"
        LEFT JOIN branches b ON b.id=ea."branchId"
        WHERE ec."companyId"=$1 AND ec."terminatedAt" IS NOT NULL
+         AND ec."deletedAt" IS NULL
          AND EXTRACT(YEAR FROM ec."terminatedAt")=$2`,
       [scope.companyId, targetYear]
     );
@@ -6435,6 +6437,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
        FROM employee_contracts ec
        JOIN employees e ON e.id=ec."employeeId"
        WHERE ec."companyId"=$1 AND ec.status='active'
+         AND ec."deletedAt" IS NULL
          AND ec."endDate" IS NOT NULL
          AND ec."endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
@@ -6448,6 +6451,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               'driver' AS "entityType"
        FROM fleet_drivers fd
        WHERE fd."companyId"=$1 AND fd.status='active'
+         AND fd."deletedAt" IS NULL
          AND fd."licenseExpiry" IS NOT NULL
          AND fd."licenseExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]

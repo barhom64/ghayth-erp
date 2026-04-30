@@ -568,7 +568,7 @@ router.get("/drivers/:id", requirePermission("fleet:read"), async (req, res) => 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("السائق غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get driver error:"); }
@@ -828,6 +828,7 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
                 COALESCE(d.rating, 3) AS "driverRating"
          FROM fleet_drivers d
          WHERE d."companyId"=$1 AND d.status='available'
+           AND d."deletedAt" IS NULL
            AND (d."licenseExpiry" IS NULL OR d."licenseExpiry" > CURRENT_DATE)
          ORDER BY d.id LIMIT 20`,
         [scope.companyId]
@@ -918,7 +919,7 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
         const [driverEmp] = await rawQuery<any>(
           `SELECT d."employeeId", ea.id AS "assignmentId" FROM fleet_drivers d
            LEFT JOIN employee_assignments ea ON ea."employeeId"=d."employeeId" AND ea.status='active'
-           WHERE d.id=$1`, [selectedDriverId]);
+           WHERE d.id=$1 AND d."deletedAt" IS NULL`, [selectedDriverId]);
         if (driverEmp?.assignmentId) {
           createNotification({
             companyId: scope.companyId,
@@ -1481,6 +1482,7 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
               (d."licenseExpiry"::date - CURRENT_DATE) AS "daysLeft"
        FROM fleet_drivers d
        WHERE d."companyId"=$1 AND d."licenseExpiry" IS NOT NULL
+         AND d."deletedAt" IS NULL
          AND d."licenseExpiry" BETWEEN $2 AND $3`,
       [cid, todayStr, toDateISO(in90Days)]
     );
@@ -1552,7 +1554,7 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
 
     const lowRatingDrivers = await rawQuery<any>(
       `SELECT d.name, d.rating, d.id FROM fleet_drivers d
-       WHERE d."companyId"=$1 AND d.rating IS NOT NULL AND d.rating < 3`,
+       WHERE d."companyId"=$1 AND d.rating IS NOT NULL AND d.rating < 3 AND d."deletedAt" IS NULL`,
       [cid]
     );
     for (const d of lowRatingDrivers) {
@@ -2616,7 +2618,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
           `SELECT fd."employeeId", ea.id AS "assignmentId"
            FROM fleet_drivers fd
            LEFT JOIN employee_assignments ea ON ea."employeeId" = fd."employeeId" AND ea."companyId" = fd."companyId" AND ea.status = 'active'
-           WHERE fd.id = $1 AND fd."companyId" = $2`,
+           WHERE fd.id = $1 AND fd."companyId" = $2 AND fd."deletedAt" IS NULL`,
           [b.driverId, scope.companyId]
         );
         if (driver?.employeeId) {
