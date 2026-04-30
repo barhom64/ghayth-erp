@@ -14,6 +14,7 @@ import { currentPeriod, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 import { obligationSummary } from "../lib/obligationsEngine.js";
 import { EXEC_ROLES } from "../lib/rbacCatalog.js";
+import { logger } from "../lib/logger.js";
 
 export const execDashboardRouter = Router();
 execDashboardRouter.use(authMiddleware);
@@ -26,7 +27,7 @@ function requireExec(scope: any): void {
 
 // Safe query helper — swallows errors (missing tables) and returns default
 async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
-  try { return await fn(); } catch { return fallback; }
+  try { return await fn(); } catch (e) { logger.error(e, "exec dashboard query failed"); return fallback; }
 }
 
 execDashboardRouter.get("/overview", async (req, res) => {

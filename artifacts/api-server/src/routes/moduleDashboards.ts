@@ -3,13 +3,15 @@ import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { todayISO, currentPeriod } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
 const safeQuery = async <T = any>(sql: string, params: any[] = [], fallback: T[] = []): Promise<T[]> => {
   try {
     return await rawQuery<T>(sql, params);
-  } catch {
+  } catch (e) {
+    logger.error(e, "module dashboard query failed");
     return fallback;
   }
 };

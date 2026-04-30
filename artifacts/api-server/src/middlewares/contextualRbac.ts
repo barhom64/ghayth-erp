@@ -71,7 +71,7 @@ export function requireOwnership(options: OwnershipOptions) {
     }
 
     const recordId = Number(req.params[idParam]);
-    if (!recordId || isNaN(recordId)) {
+    if (isNaN(recordId)) {
       // No numeric id in the route — nothing to check, let downstream
       // handlers deal with the missing/invalid id.
       next();
