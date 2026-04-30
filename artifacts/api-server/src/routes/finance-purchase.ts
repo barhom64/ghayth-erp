@@ -1239,7 +1239,7 @@ purchaseRouter.get("/purchase-orders/:id", requirePermission("finance:read"), as
         `SELECT * FROM purchase_order_lines WHERE "purchaseOrderId" = $1 ORDER BY id`,
         [Number(id)]
       );
-    } catch { }
+    } catch (e) { logger.error(e, "PO lines fetch error"); }
 
     res.json({ ...po, lines });
   } catch (err) {

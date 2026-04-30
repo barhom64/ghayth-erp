@@ -363,7 +363,7 @@ async function checkSpeedViolation(companyId: number): Promise<number> {
         [companyId, row.vehicleId, row.driverId ?? null, row.tripId,
          `تجاوز سرعة: ${row.currentSpeed} كم/ساعة — الحد 120 كم/ساعة`]
       ).catch(() => {});
-    } catch {}
+    } catch (e) { logger.error(e, "Speed violation record insert error"); }
   }
   return rows.length;
 }
@@ -394,7 +394,7 @@ async function checkVehicleRepeatedBreakdowns(companyId: number): Promise<number
         `UPDATE fleet_vehicles SET status = 'under_review' WHERE id = $1 AND status = 'active'`,
         [row.vehicleId]
       ).catch(() => {});
-    } catch {}
+    } catch (e) { logger.error(e, "Vehicle status update to under_review error"); }
   }
   return rows.length;
 }
@@ -609,7 +609,7 @@ async function checkConsecutiveUnpaidInvoices(companyId: number): Promise<number
         );
         count++;
       }
-    } catch { }
+    } catch (e) { logger.error(e, "Consecutive unpaid invoices check error"); }
     return count;
   }
 

@@ -119,7 +119,7 @@ export function registerEventListeners() {
 
     // Cross-module: mark financial obligation as fulfilled
     if (payload.companyId && payload.entityId) {
-      await markObligationMet(payload.companyId, "invoices", payload.entityId as number, "payment").catch(() => {});
+      await markObligationMet(payload.companyId, "invoices", payload.entityId as number, "payment").catch((e) => logger.error(e, "event listener background task failed"));
     }
   });
 
@@ -351,7 +351,7 @@ export function registerEventListeners() {
            VALUES ($1,$2,$3,$4,false)`,
           [payload.companyId, "expense_obligation", payload.entityId ?? 0,
            `فشل تسجيل التزام المصروف: ${String(oblErr)}`]
-        ).catch(() => {});
+        ).catch((e) => logger.error(e, "event listener background task failed"));
       }
     }
   });
@@ -550,7 +550,7 @@ export function registerEventListeners() {
          VALUES ($1,$2,$3,$4,false)`,
         [payload.companyId, "hr_letter_dispatch", payload.entityId ?? 0,
          `فشل إرسال الخطاب الرسمي: ${String(err)}`]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "event listener background task failed"));
     }
   });
 
@@ -745,7 +745,7 @@ export function registerEventListeners() {
            VALUES ($1,$2,$3,$4,false)`,
           [payload.companyId, "commission_suspension", payload.entityId ?? 0,
            `فشل تعليق خطط العمولة عند إنهاء خدمة الموظف: ${String(err)}`]
-        ).catch(() => {});
+        ).catch((e) => logger.error(e, "event listener background task failed"));
       }
     }
   });
@@ -791,7 +791,7 @@ export function registerEventListeners() {
            VALUES ($1,$2,$3,$4,false)`,
           [payload.companyId, "commission_auto_calc", payload.entityId ?? 0,
            `فشل حساب العمولات التلقائي عند إنشاء مسيّر الرواتب: ${String(commErr)}`]
-        ).catch(() => {});
+        ).catch((e) => logger.error(e, "event listener background task failed"));
       }
     }
   });
@@ -843,7 +843,7 @@ export function registerEventListeners() {
            VALUES ($1,$2,$3,$4,false)`,
           [payload.companyId, "payroll_gl_posting", payload.entityId ?? 0,
            `فشل ترحيل قيد الرواتب: ${String(glErr)}`]
-        ).catch(() => {});
+        ).catch((e) => logger.error(e, "event listener background task failed"));
       }
     }
   });
@@ -1239,7 +1239,7 @@ export function registerEventListeners() {
          VALUES ($1,$2,$3,$4,false)`,
         [payload.companyId, "obligation_registration", payload.entityId ?? 0,
          `فشل تسجيل الالتزام: ${String(oblErr)}`]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "event listener background task failed"));
     }
 
     // Notification to manager
@@ -1299,7 +1299,7 @@ export function registerEventListeners() {
            VALUES ($1,$2,$3,$4,false)`,
           [payload.companyId, "payment_gl_recovery", payload.entityId ?? 0,
            `فشل استعادة قيد الدفعة: ${String(glErr)}`]
-        ).catch(() => {});
+        ).catch((e) => logger.error(e, "event listener background task failed"));
       }
     }
 
@@ -1311,7 +1311,7 @@ export function registerEventListeners() {
           [alloc.invoiceId, payload.companyId]
         );
         if (inv?.status === "paid") {
-          await markObligationMet(payload.companyId, "umrah_sales_invoices", alloc.invoiceId, "payment").catch(() => {});
+          await markObligationMet(payload.companyId, "umrah_sales_invoices", alloc.invoiceId, "payment").catch((e) => logger.error(e, "event listener background task failed"));
         }
       }
     }
@@ -1373,7 +1373,7 @@ export function registerEventListeners() {
              VALUES ($1,$2,$3,$4,false)`,
             [payload.companyId, "commission_gl_recovery", planId,
              `فشل استعادة قيد العمولة: ${String(glErr)}`]
-          ).catch(() => {});
+          ).catch((e) => logger.error(e, "event listener background task failed"));
         }
       }
     }
@@ -1433,7 +1433,7 @@ export function registerEventListeners() {
              VALUES ($1,$2,$3,$4,false)`,
             [payload.companyId, "commission_payroll_link", planId,
              `فشل ربط العمولة بمسير الرواتب — خطة ${planId} شهر ${month}/${year}: ${String(plErr)}`]
-          ).catch(() => {});
+          ).catch((e) => logger.error(e, "event listener background task failed"));
         }
       } else if (!activeRun && mgr) {
         await createNotification({

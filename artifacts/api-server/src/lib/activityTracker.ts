@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { rawExecute, rawQuery } from "./rawdb.js";
+import { logger } from "./logger.js";
 
 const SKIP_PATHS = new Set([
   "/health", "/api/health", "/favicon.ico",
@@ -39,7 +40,7 @@ export function activityTrackerMiddleware() {
               req.ip ?? null,
             ]
           );
-        } catch { }
+        } catch (e) { logger.error(e, "activity tracker insert error"); }
       });
     });
     next();
@@ -68,7 +69,7 @@ export async function logPageView(params: {
       [params.companyId, params.userId, params.assignmentId,
        params.sessionId ?? null, params.page]
     );
-  } catch { }
+  } catch (e) { logger.error(e, "page view log error"); }
 }
 
 export async function getUsageStats(companyId: number, days: number = 30): Promise<{

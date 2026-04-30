@@ -102,7 +102,8 @@ async function releaseCronLock(jobName: string): Promise<void> {
       `DELETE FROM cron_locks WHERE job_name = $1 AND locked_by = $2`,
       [jobName, LOCK_OWNER]
     );
-  } catch {
+  } catch (e) {
+    logger.error(e, "[cronScheduler] failed to release cron lock");
   }
 }
 
@@ -335,12 +336,12 @@ async function fleetStatusCheck(): Promise<string> {
           action: "fleet.preventive.due", entity: "fleet_vehicles", entityId: Number(v.id),
           details: `المركبة ${v.plateNumber} تجاوزت موعد الصيانة — حالة needs_service`,
         });
-      } catch {}
+      } catch (e) { logger.error(e, "[cronScheduler] fleet preventive due event failed"); }
       emitEvent({
         companyId: company.id, branchId: 0, userId: null,
         action: "fleet.vehicle.breakdown", entity: "fleet_vehicles", entityId: Number(v.id),
         details: JSON.stringify({ plateNumber: v.plateNumber, description: "صيانة متأخرة — تجاوزت موعد الصيانة المحدد", source: "preventive_due" }),
-      }).catch(() => {});
+      }).catch((e) => logger.error(e, "[cronScheduler] fleet vehicle breakdown event failed"));
       actions++;
     }
 
@@ -569,7 +570,7 @@ async function leaveReturnToWorkClosure(): Promise<string> {
         `UPDATE approval_requests SET status = 'completed', "decidedAt" = NOW()
          WHERE "refType" = 'leave_request' AND "refId" = $1 AND status NOT IN ('completed','rejected')`,
         [lv.id]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] leave request approval cleanup failed"));
 
       // Find active employee assignment so we can notify the employee.
       const [asn] = await rawQuery<any>(
@@ -657,7 +658,7 @@ async function inquiryMemoEscalation(): Promise<string> {
         `INSERT INTO hr_inquiry_memo_events ("memoId","companyId","actorRole",action,note,"createdAt")
          VALUES ($1,$2,'system','auto_declined','تجاوز مهلة 72 ساعة للرد — اعتُبر رفضاً ضمنياً',NOW())`,
         [memo.id, memo.companyId]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] inquiry memo auto-decline event insert failed"));
 
       // Tell the employee why their memo moved on — otherwise the auto-decline
       // is silent from the employee's perspective and they may later dispute
@@ -928,7 +929,7 @@ async function dailyDeductionCheck(): Promise<string> {
            WHERE "companyId" = $1 AND "employeeId" = $2 AND date = CURRENT_DATE AND type = 'absence'
          )`,
         [company.id, a.employeeId, `خصم غياب تلقائي — ${a.name}`]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] absence deduction insert failed"));
       deductions++;
 
       // 2) تسجيل مخالفة + فتح محضر استفسار (idempotent) بموجب لائحة الانضباط
@@ -1021,7 +1022,7 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
                 END
           WHERE id = $2`,
         [phase, inv.id]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] invoice overdue phase update failed"));
 
       await broadcastAlert(
         company.id, "invoice_overdue",
@@ -1090,7 +1091,7 @@ async function dailyInventoryCheck(): Promise<string> {
           `INSERT INTO purchase_orders ("companyId", title, status, "totalAmount", "createdAt")
            VALUES ($1, $2, 'draft', 0, NOW())`,
           [company.id, `طلب شراء تلقائي: ${p.name} (المخزون ${p.currentStock}/${p.threshold})`]
-        ).catch(() => {});
+        ).catch((e) => logger.error(e, "[cronScheduler] auto purchase order insert failed"));
         pos++;
       }
     }
@@ -1144,14 +1145,14 @@ async function dailyPropertyCheck(): Promise<string> {
       );
       await rawExecute(
         `UPDATE rental_contracts SET "renewalNoticeSentAt"=NOW() WHERE id=$1`, [c.id]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] rental contract renewal notice update failed"));
       try {
         await emitEvent({
           companyId: company.id, userId: null,
           action: "lease.renewal_notice", entity: "rental_contracts", entityId: Number(c.id),
           details: `تنبيه تجديد — ينتهي ${c.endDate}`,
         });
-      } catch {}
+      } catch (e) { logger.error(e, "[cronScheduler] rental renewal notice event failed"); }
       renewalNotices++;
     }
 
@@ -1175,14 +1176,14 @@ async function dailyPropertyCheck(): Promise<string> {
       await rawExecute(
         `UPDATE rent_payments SET status='cancelled', "updatedAt"=NOW() WHERE "contractId"=$1 AND status IN ('pending','partial')`,
         [c.id]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] rent payments cancellation on contract expiry failed"));
       try {
         await emitEvent({
           companyId: company.id, userId: null,
           action: "lease.expired", entity: "rental_contracts", entityId: Number(c.id),
           details: `انتهاء تلقائي — ${c.tenantName ?? ''}`,
         });
-      } catch {}
+      } catch (e) { logger.error(e, "[cronScheduler] lease expired event failed"); }
       expired++;
     }
   }
@@ -1391,7 +1392,7 @@ async function monthlyRentPenalties(): Promise<string> {
         `INSERT INTO late_rent_actions ("contractId","paymentId",phase,action,"sentAt",notes)
          VALUES ($1,$2,$3,$4,NOW(),$5)`,
         [p.contractId, p.id, targetStage, actionLabel, `تأخر ${lateDays} يوم — ${actionLabel}`]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] late rent action insert failed"));
 
       try {
         await emitEvent({
@@ -1399,7 +1400,7 @@ async function monthlyRentPenalties(): Promise<string> {
           action: `rent.late.${targetStage}`, entity: "rent_payments", entityId: Number(p.id),
           details: `تأخر ${lateDays} يوم — ${actionLabel}`,
         });
-      } catch {}
+      } catch (e) { logger.error(e, "[cronScheduler] rent late escalation event failed"); }
     }
   }
   return `Rent escalation: ${penalties} penalties, ${legalHandoffs} legal handoffs`;
@@ -1677,7 +1678,7 @@ async function yearlyLeaveBalanceRenewal(): Promise<string> {
          VALUES ($1, $2, $3, $4, $5, 0, 0)
          ON CONFLICT DO NOTHING`,
         [company.id, b.employeeId, b.leaveTypeId, year, b.annual || 21]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] leave balance renewal insert failed"));
       renewed++;
     }
   }
@@ -2291,7 +2292,7 @@ async function runScheduledReports(): Promise<string> {
         `INSERT INTO scheduled_report_history ("scheduledReportId", status, "sentAt", error)
          VALUES ($1, 'failed', NOW(), $2)`,
         [report.id, errMsg]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] scheduled report error history insert failed"));
       errors++;
     }
   }
@@ -2431,7 +2432,7 @@ async function vendorContractExpiryAlerts(): Promise<string> {
         `INSERT INTO automation_logs ("companyId","automationType","triggerReason","actionTaken","entityType","entityId","createdAt")
          VALUES ($1,'vendor_contract_expiry',$2,$3,'vendor_contract',$4,NOW())`,
         [company.id, `عقد المورد ${c.vendorName} ينتهي خلال ${daysLeft} يوم`, "إرسال إشعار تنبيه للمشتريات", c.vendorId]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] vendor contract expiry log insert failed"));
       alerted++;
     }
   }

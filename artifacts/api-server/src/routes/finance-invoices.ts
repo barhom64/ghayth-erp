@@ -1311,11 +1311,11 @@ invoicesRouter.get("/bad-debt/preview", requirePermission("finance:read"), async
     const scope = req.scope!;
     const asOf = (req.query.asOf as string) || todayISO();
     const rates = {
-      current: Number(req.query.rateCurrent ?? 0),
-      d30: Number(req.query.rate30 ?? 0.05),
-      d60: Number(req.query.rate60 ?? 0.25),
-      d90: Number(req.query.rate90 ?? 0.5),
-      d90plus: Number(req.query.rate90plus ?? 0.75),
+      current: Number.isFinite(Number(req.query.rateCurrent)) ? Number(req.query.rateCurrent) : 0,
+      d30: Number.isFinite(Number(req.query.rate30)) ? Number(req.query.rate30) : 0.05,
+      d60: Number.isFinite(Number(req.query.rate60)) ? Number(req.query.rate60) : 0.25,
+      d90: Number.isFinite(Number(req.query.rate90)) ? Number(req.query.rate90) : 0.5,
+      d90plus: Number.isFinite(Number(req.query.rate90plus)) ? Number(req.query.rate90plus) : 0.75,
     };
 
     const invoices = await rawQuery<any>(
@@ -1768,7 +1768,7 @@ invoicesRouter.get("/dunning/preview", requirePermission("finance:read"), async 
   try {
     const scope = req.scope!;
     await ensureDunningTables();
-    const minDays = Number(req.query.minDaysPastDue ?? 1);
+    const minDays = Number(req.query.minDaysPastDue) || 1;
     const today = todayISO();
 
     const rows = await rawQuery<any>(

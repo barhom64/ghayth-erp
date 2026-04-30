@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { logger } from "../lib/logger.js";
 import healthRouter from "./health.js";
 import authRouter from "./auth.js";
 import dashboardRouter from "./dashboard.js";
@@ -112,7 +113,7 @@ router.get("/settings/display", async (req, res) => {
         const SECRET = process.env.JWT_SECRET;
         const payload: any = jwt.default.verify(rawToken, SECRET!);
         if (payload?.companyId && payload?.type !== "client_portal") companyId = payload.companyId;
-      } catch {}
+      } catch (e) { logger.debug(e, "public-settings JWT decode (optional)"); }
     }
     const rows = await rawQuery<{ key: string; value: string }>(
       companyId

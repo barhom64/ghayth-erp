@@ -88,7 +88,7 @@ eventsRouter.get("/log", async (req, res) => {
 eventsRouter.get("/log/stats", async (req, res) => {
   try {
     const scope = req.scope!;
-    const days = Number(req.query.days ?? 7);
+    const days = Number(req.query.days) || 7;
     const rows = await rawQuery<any>(
       `SELECT action, COUNT(*)::int AS count
        FROM event_logs

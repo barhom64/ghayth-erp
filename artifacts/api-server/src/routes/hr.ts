@@ -3247,7 +3247,7 @@ router.get("/attendance-policy", requirePermission("hr:read"), async (req, res) 
       penaltyLevel3Label: "خصم يوم", penaltyLevel4Label: "خصم يومين",
       penaltyLevel5Label: "خصم ثلاثة أيام + إنذار نهائي",
     });
-  } catch (_e) { res.json({}); }
+  } catch (e) { logger.error(e, "attendance-policy GET error"); res.json({}); }
 });
 
 router.put("/attendance-policy", requirePermission("hr:update"), async (req, res) => {
@@ -6395,7 +6395,7 @@ router.get("/turnover-report", requirePermission("hr:read"), async (req, res) =>
 router.get("/expiring-documents", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const days = Number(req.query.days || 90);
+    const days = Number(req.query.days) || 90;
 
     const workPermits = await rawQuery<any>(
       `SELECT e.id AS "employeeId", e.name AS "employeeName", e."workPermitExpiry" AS "expiryDate",

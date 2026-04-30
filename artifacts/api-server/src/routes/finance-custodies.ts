@@ -320,7 +320,7 @@ custodiesRouter.get("/custodies/:id", requirePermission("finance:read"), async (
          ORDER BY aa."createdAt" ASC`,
         [Number(id)]
       );
-    } catch { }
+    } catch (e) { logger.error(e, "custody approval actions fetch error"); }
 
     const isPending = custody.approvalStatus === "pending_approval" || custody.approvalStatus === "draft";
     const isRejected = custody.approvalStatus === "rejected";

@@ -225,7 +225,7 @@ router.get("/orders/:id", requirePermission("store:read"), async (req, res) => {
     if (!row) throw new NotFoundError("الطلب غير موجود");
     const orderItems = await rawQuery<any>(`SELECT oi.*, sp.name AS "productNameFromCatalog" FROM store_order_items oi LEFT JOIN store_products sp ON sp.id = oi."productId" WHERE oi."orderId" = $1 ORDER BY oi.id LIMIT 500`, [row.id]);
     let parsedItems: any[] = [];
-    try { parsedItems = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []); } catch {}
+    try { parsedItems = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []); } catch (e) { logger.warn(e, "store order items JSON parse fallback"); }
     row.items = orderItems.length > 0 ? orderItems : parsedItems;
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get store order"); }

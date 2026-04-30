@@ -1126,7 +1126,7 @@ router.get("/governance/system-guards", requirePermission("admin:read"), async (
     res.json(result);
   } catch (err: any) {
     logger.error(err, "System guards error");
-    res.json({ allowed: true, violations: [], error: "خطأ في فحص حراسة النظام" });
+    res.status(500).json({ allowed: false, violations: [], error: "خطأ في فحص حراسة النظام" });
   }
 });
 
