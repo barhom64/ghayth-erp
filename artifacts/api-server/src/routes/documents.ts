@@ -119,7 +119,7 @@ router.get("/", requirePermission("documents:read"), async (req: Request, res: R
          JOIN document_entity_links del ON del."documentId" = d.id
          WHERE del."entityType" = $1 AND del."entityId" = $2
          AND (d."companyId" = $3 OR d."companyId" IS NULL) AND d."deletedAt" IS NULL
-         ORDER BY d."createdAt" DESC`,
+         ORDER BY d."createdAt" DESC LIMIT 500`,
         [entity, Number(entityId), scope.companyId]
       );
       res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -372,7 +372,7 @@ router.get("/:id/versions", requirePermission("documents:read"), async (req: Req
     if (!doc) throw new NotFoundError("المستند غير موجود");
 
     const versions = await rawQuery(
-      `SELECT * FROM document_versions WHERE "documentId"=$1 ORDER BY "versionNumber" DESC`,
+      `SELECT * FROM document_versions WHERE "documentId"=$1 ORDER BY "versionNumber" DESC LIMIT 500`,
       [docId]
     );
     res.json({ data: versions });
@@ -477,7 +477,7 @@ router.get("/:id/entity-links", requirePermission("documents:read"), async (req:
     if (!doc) throw new NotFoundError("المستند غير موجود");
 
     const links = await rawQuery(
-      `SELECT * FROM document_entity_links WHERE "documentId"=$1`,
+      `SELECT * FROM document_entity_links WHERE "documentId"=$1 LIMIT 500`,
       [docId]
     );
     res.json({ data: links });
@@ -540,7 +540,7 @@ router.get("/templates", requirePermission("documents:read"), async (req, res) =
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT * FROM document_templates WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC`,
+      `SELECT * FROM document_templates WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`,
       [scope.companyId]
     );
     res.json(rows);

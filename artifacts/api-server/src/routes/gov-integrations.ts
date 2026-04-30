@@ -217,8 +217,8 @@ router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
       } else {
         let resolvedPrivate = false;
         try {
-          const addresses = await dns.resolve4(parsedUrl.hostname).catch(() => []);
-          const addresses6 = await dns.resolve6(parsedUrl.hostname).catch(() => []);
+          const addresses = await dns.resolve4(parsedUrl.hostname).catch((e) => { logger.error(e, "gov integrations query failed"); return []; });
+          const addresses6 = await dns.resolve6(parsedUrl.hostname).catch((e) => { logger.error(e, "gov integrations query failed"); return []; });
           const allAddrs = [...addresses, ...addresses6];
           if (allAddrs.some(isPrivateIP)) resolvedPrivate = true;
         } catch { /* DNS resolution failure handled by fetch below */ }

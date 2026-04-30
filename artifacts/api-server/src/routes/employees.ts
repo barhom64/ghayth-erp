@@ -788,7 +788,7 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
          WHERE te."employeeId" = $1
          ORDER BY tp."startDate" DESC LIMIT 20`,
         [Number(id)]
-      ).catch(() => []),
+      ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
       rawQuery<any>(
         `SELECT pl.id, pl.basic, pl."grossSalary", pl.gosi, pl."lateDeduction", pl."netSalary",
                 pr.period, pr.status, pr."createdAt"
@@ -797,14 +797,14 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
          WHERE pl."assignmentId" = $1 AND pr."companyId" = $2 AND pl."deletedAt" IS NULL AND pr."deletedAt" IS NULL
          ORDER BY pr.period DESC LIMIT 12`,
         [employee.assignmentId, scope.companyId]
-      ).catch(() => []),
+      ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
       rawQuery<any>(
         `SELECT ev.id, ev.type, ev.description, ev.severity, ev.deduction, ev.period, ev."createdAt"
          FROM employee_violations ev
          WHERE ev."assignmentId" = $1 AND ev."companyId" = $2 AND ev."deletedAt" IS NULL
          ORDER BY ev."createdAt" DESC LIMIT 20`,
         [employee.assignmentId, scope.companyId]
-      ).catch(() => []),
+      ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
       rawQuery<any>(
         `SELECT l.id, l."loanNumber", l."loanType", l.amount, l."paidAmount", l."remainingAmount",
                 l."installmentCount", l."installmentAmount", l.status, l."createdAt"
@@ -812,14 +812,14 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
          WHERE l."assignmentId" = $1 AND l."companyId" = $2 AND l."deletedAt" IS NULL
          ORDER BY l."createdAt" DESC LIMIT 20`,
         [employee.assignmentId, scope.companyId]
-      ).catch(() => []),
+      ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
       rawQuery<any>(
         `SELECT o.id, o."requestNumber", o."overtimeDate", o.hours, o."totalAmount", o.status, o."createdAt"
          FROM hr_overtime_requests o
          WHERE o."assignmentId" = $1 AND o."companyId" = $2 AND o."deletedAt" IS NULL
          ORDER BY o."overtimeDate" DESC LIMIT 20`,
         [employee.assignmentId, scope.companyId]
-      ).catch(() => []),
+      ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
     ]);
 
     res.json({ ...employee, tasks, attendance, leaves, trainings, payroll, violations, loans, overtime });

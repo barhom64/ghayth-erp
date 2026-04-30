@@ -1247,7 +1247,7 @@ router.get("/auto-detection/summary", requirePermission("hr:read"), async (req, 
        GROUP BY d.value->>'type'
        ORDER BY count DESC`,
       [scope.companyId]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "hr discipline query failed"); return []; });
 
     const typeLabels: Record<string, string> = {
       late: "تأخر",

@@ -45,7 +45,7 @@ router.get("/policies", requirePermission("governance:read"), async (req, res) =
       conditions.push(`id IN (SELECT "policyId" FROM policy_module_links WHERE module=$${params.length})`);
     }
     const rows = await rawQuery(
-      `SELECT * FROM governance_policies WHERE ${conditions.join(" AND ")} ORDER BY "createdAt" DESC`,
+      `SELECT * FROM governance_policies WHERE ${conditions.join(" AND ")} ORDER BY "createdAt" DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -237,7 +237,7 @@ router.get("/policies/:id/module-links", requirePermission("governance:read"), a
     );
     if (!policy) throw new NotFoundError("السياسة غير موجودة");
     const rows = await rawQuery(
-      `SELECT * FROM policy_module_links WHERE "policyId"=$1`,
+      `SELECT * FROM policy_module_links WHERE "policyId"=$1 LIMIT 500`,
       [policyId]
     );
     res.json({ data: rows });
@@ -255,7 +255,7 @@ router.get("/module-policies/:module", requirePermission("governance:read"), asy
          AND gp.status = 'active'
          AND (gp."effectiveDate" IS NULL OR gp."effectiveDate" <= CURRENT_DATE)
          AND (gp."expiryDate" IS NULL OR gp."expiryDate" >= CURRENT_DATE)
-       ORDER BY gp."createdAt" DESC`,
+       ORDER BY gp."createdAt" DESC LIMIT 500`,
       [mod, scope.companyId]
     );
     res.json({ data: rows });
@@ -586,7 +586,7 @@ router.get("/compliance-dashboard", requirePermission("governance:read"), async 
       `SELECT COUNT(*) AS count FROM governance_policies gp WHERE ("companyId"=$1 OR "companyId" IS NULL) AND status='active' AND NOT EXISTS (SELECT 1 FROM policy_compliance_actions pca WHERE pca."policyId"=gp.id AND pca."companyId"=$1)`,
       [cid]
     ).catch(() => [{ count: 0 }]);
-    const capas = await rawQuery<any>(`SELECT * FROM governance_capa WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`, [cid]).catch(() => []);
+    const capas = await rawQuery<any>(`SELECT * FROM governance_capa WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`, [cid]).catch((e) => { logger.error(e, "governance query failed"); return []; });
     const rate = Number(actions?.total) > 0 ? Math.round(Number(actions?.implemented) / Number(actions?.total) * 100) : 100;
     res.json({
       complianceRate: rate,

@@ -415,7 +415,7 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
       refId: item.id,
       approved: true,
       decidedBy: scope.activeAssignmentId,
-    }).catch(() => ({ status: "approved" as const, message: "" }));
+    }).catch((e) => { logger.error(e, "hr exit approval failed"); return { status: "approved" as const, message: "" }; });
 
     if (chainResult.status === "pending_next_step") {
       res.json({

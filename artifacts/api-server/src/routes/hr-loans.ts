@@ -402,7 +402,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
       approved: true,
       decidedBy: scope.activeAssignmentId,
       requesterId: loan.assignmentId,
-    }).catch(() => ({ status: "approved" as const, message: "" }));
+    }).catch((e) => { logger.error(e, "hr loans approval failed"); return { status: "approved" as const, message: "" }; });
 
     // إذا بقيت خطوات موافقة إضافية
     if (chainResult.status === "pending_next_step") {

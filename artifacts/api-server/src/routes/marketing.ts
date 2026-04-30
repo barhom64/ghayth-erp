@@ -168,7 +168,7 @@ router.get("/stats", requirePermission("marketing:read"), async (req, res) => {
     const sourceCounts = await rawQuery<any>(
       `SELECT source, COUNT(*) AS count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND source IS NOT NULL GROUP BY source ORDER BY count DESC`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "marketing query failed"); return []; });
     res.json({
       totalCampaigns: Number(total.count),
       activeCampaigns: Number(active.count),
@@ -219,7 +219,7 @@ router.get("/funnel", requirePermission("marketing:read"), async (req, res) => {
       `SELECT source, COUNT(*) AS total, COUNT(*) FILTER (WHERE stage='closed_won') AS won, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonValue"
        FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND source IS NOT NULL GROUP BY source ORDER BY total DESC`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "marketing query failed"); return []; });
     const conversionRates = stageData.map((s, i) => {
       const prev = i > 0 ? stageData[i - 1] : null;
       return {

@@ -341,7 +341,7 @@ execDashboardRouter.get("/critical-obligations", async (req, res) => {
        ORDER BY "escalationLevel" DESC, "dueAt" ASC
        LIMIT 50`,
       [scope.companyId]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "exec dashboard query failed"); return []; });
     res.json({ data: rows });
   } catch (err) {
     handleRouteError(err, res, "Critical obligations error:");

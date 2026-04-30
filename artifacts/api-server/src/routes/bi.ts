@@ -263,7 +263,7 @@ router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, r
        ORDER BY "avgWaitHours" DESC
        LIMIT 10`,
       approvalParams
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     res.json({ departmentDelay, approvalBottleneck });
   } catch (err) { handleRouteError(err, res, "Bottleneck analysis"); }
@@ -693,7 +693,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
        WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "scheduledDate" >= $2::date
        GROUP BY week ORDER BY week`,
       [cid, fmt(thisMonthStart)]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     const [current, previous] = await Promise.all([
       buildMonthStats(fmt(thisMonthStart), fmt(now)),
@@ -852,7 +852,7 @@ router.get("/reports/branch-performance", requirePermission("bi:read"), async (r
     const dateTo = to || todayISO();
 
     const branches = await rawQuery<any>(
-      `SELECT b.id, b.name FROM branches b WHERE b."companyId" = $1 ORDER BY b.name`,
+      `SELECT b.id, b.name FROM branches b WHERE b."companyId" = $1 ORDER BY b.name LIMIT 500`,
       [cid]
     );
 
@@ -954,7 +954,7 @@ router.get("/reports/vendor-performance", requirePermission("bi:read"), async (r
        HAVING COUNT(po.id) > 0
        ORDER BY "totalSpend" DESC`,
       [cid, dateFrom, dateTo]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     const data = rows.map((r: any) => {
       const total = Number(r.totalOrders);
@@ -1012,7 +1012,7 @@ router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) 
        WHERE fv."companyId" = $1
        ORDER BY fv."plateNumber"`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     const data = rows.map((r: any) => {
       const purchasePrice = Number(r.purchasePrice);
@@ -1075,7 +1075,7 @@ router.get("/reports/department-leave-balance", requirePermission("bi:read"), as
        GROUP BY d.id, d.name
        ORDER BY department`,
       [cid, year]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     const data = rows.map((r: any) => {
       const total = Number(r.totalEmployees);
@@ -1120,7 +1120,7 @@ router.get("/reports/property-occupancy", requirePermission("bi:read"), async (r
        GROUP BY pb.id, pb.name, pb.address
        ORDER BY pb.name`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     const data = rows.map((r: any) => {
       const total = Number(r.totalUnits);
@@ -1182,7 +1182,7 @@ router.get("/reports/training-roi", requirePermission("bi:read"), async (req, re
        ORDER BY cost DESC
        LIMIT 20`,
       [cid, dateFrom, dateTo]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     res.json({
       summary: {
@@ -1226,7 +1226,7 @@ router.get("/ai-insights", requirePermission("bi:read"), async (req, res) => {
          sa."createdAt" DESC
        LIMIT $${params.length + 1}`,
       [...params, pageSize]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     const proactive = await rawQuery<any>(
       `SELECT al.id, al."automationType", al."triggerReason", al."actionTaken",
@@ -1236,7 +1236,7 @@ router.get("/ai-insights", requirePermission("bi:read"), async (req, res) => {
        ORDER BY al."createdAt" DESC
        LIMIT 20`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     const [counts] = await rawQuery<any>(
       `SELECT
@@ -1295,7 +1295,7 @@ router.get("/alert-fatigue/settings", requirePermission("bi:read"), async (req, 
     const rows = await rawQuery<any>(
       `SELECT * FROM alert_fatigue_settings WHERE "assignmentId" = $1`,
       [scope.activeAssignmentId]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "Alert fatigue settings"); }
 });

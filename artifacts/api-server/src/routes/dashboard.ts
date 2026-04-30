@@ -268,7 +268,7 @@ router.get("/role-data", async (req, res) => {
          WHERE ec."companyId" = ANY($1::int[]) AND ec."deletedAt" IS NULL AND ec."probationEndDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
          LIMIT 10`,
         [scope.allowedCompanies]
-      ).catch(() => []);
+      ).catch((e) => { logger.error(e, "dashboard query failed"); return []; });
       const [expiringDocs] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM employee_documents WHERE "companyId" = ANY($1::int[]) AND "expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`,
         [scope.allowedCompanies]

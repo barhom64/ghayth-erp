@@ -217,7 +217,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
               AND t.status NOT IN ('completed','cancelled'))::int > 6
        LIMIT 5`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const emp of overloadedEmployees) {
       suggestions.push({
@@ -236,7 +236,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
          AND lc."endDate"::date - CURRENT_DATE BETWEEN 0 AND 30
        ORDER BY "daysLeft" ASC LIMIT 5`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const c of expiringContracts) {
       suggestions.push({
@@ -258,7 +258,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
        HAVING MAX(CURRENT_DATE - i."dueDate"::date) > 30
        ORDER BY "maxDaysLate" DESC LIMIT 5`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const cl of overdueClients) {
       suggestions.push({
@@ -281,7 +281,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
        HAVING AVG(EXTRACT(EPOCH FROM (NOW() - lr."createdAt")) / 86400) > 2
        ORDER BY "avgDays" DESC LIMIT 3`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const dept of slowDepartments) {
       suggestions.push({
@@ -302,7 +302,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
        GROUP BY fv.id, fv."plateNumber"
        ORDER BY "maintenanceCost" DESC LIMIT 3`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const v of costlyVehicles) {
       suggestions.push({
@@ -334,7 +334,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
        WHERE h.rate > 0.3 AND r.rate < h.rate * 0.7
        LIMIT 3`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
     for (const emp of prodDrops) {
       suggestions.push({
         id: `prod-drop-${emp.assignedTo}`, type: "productivity_drop_historical", severity: "warning",
@@ -380,7 +380,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
        WHERE rs."companyId"=$1 AND rs."churnRisk"='high'
        ORDER BY rs."churnScore" DESC LIMIT 3`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
     for (const cl of churnClients) {
       suggestions.push({
         id: `churn-hist-${cl.name}`, type: "churn_risk_historical", severity: "warning",

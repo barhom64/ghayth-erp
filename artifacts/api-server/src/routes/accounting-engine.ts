@@ -306,7 +306,7 @@ router.get("/journal-templates", requirePermission("finance:read"), async (req, 
          FROM journal_entry_template_lines tl
          LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId"
          WHERE tl."templateId" = $1
-         ORDER BY tl."sortOrder", tl.id`,
+         ORDER BY tl."sortOrder", tl.id LIMIT 500`,
         [t.id]
       );
     }
@@ -353,7 +353,7 @@ router.post("/journal-templates", requirePermission("finance:write"), async (req
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
        LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId"
-       WHERE tl."templateId" = $1 ORDER BY tl."sortOrder"`,
+       WHERE tl."templateId" = $1 ORDER BY tl."sortOrder" LIMIT 500`,
       [result]
     );
 
@@ -407,7 +407,7 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
        LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId"
-       WHERE tl."templateId" = $1 ORDER BY tl."sortOrder"`,
+       WHERE tl."templateId" = $1 ORDER BY tl."sortOrder" LIMIT 500`,
       [Number(id)]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "journal_entry_templates", entityId: Number(id), before: existing, after: template }).catch((e) => logger.error(e, "accounting-engine background task failed"));
@@ -476,7 +476,7 @@ router.get("/subsidiary-accounts/entity/:entityType/:entityId", requirePermissio
        FROM subsidiary_accounts sa
        JOIN chart_of_accounts ca ON ca.id = sa."accountId"
        WHERE sa."companyId" = $1 AND sa."entityType" = $2 AND sa."entityId" = $3 AND sa."isActive" = true
-       ORDER BY sa."accountType"`,
+       ORDER BY sa."accountType" LIMIT 500`,
       [scope.companyId, entityType, Number(entityId)]
     );
     res.json({ data: rows, total: rows.length });

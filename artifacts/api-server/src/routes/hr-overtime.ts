@@ -396,7 +396,7 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
       approved: true,
       decidedBy: scope.activeAssignmentId,
       requesterId: item.assignmentId,
-    }).catch(() => ({ status: "approved" as const, message: "" }));
+    }).catch((e) => { logger.error(e, "hr overtime approval failed"); return { status: "approved" as const, message: "" }; });
 
     if (chainResult.status === "pending_next_step") {
       res.json({

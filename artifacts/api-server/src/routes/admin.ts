@@ -720,12 +720,12 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
     const recentCrons = await rawQuery<any>(
       `SELECT name, "lastRunAt", "lastStatus", "lastError", schedule, "isActive"
        FROM cron_jobs ORDER BY "lastRunAt" DESC NULLS LAST LIMIT 20`
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "admin query failed"); return []; });
 
     const recentCronLogs = await rawQuery<any>(
       `SELECT "jobName", status, duration, result, error, "createdAt"
        FROM cron_logs ORDER BY "createdAt" DESC LIMIT 20`
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "admin query failed"); return []; });
 
     const recentErrors = await rawQuery<any>(
       `SELECT action, entity, details, "createdAt"
@@ -733,7 +733,7 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
          AND ("companyId"=$1 OR "companyId" IS NULL)
        ORDER BY "createdAt" DESC LIMIT 20`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "admin query failed"); return []; });
 
     const [failedLogins] = await rawQuery<any>(
       `SELECT COUNT(*) as count FROM event_logs

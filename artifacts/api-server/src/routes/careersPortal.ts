@@ -164,7 +164,7 @@ router.get("/jobs", portalLimiter, async (_req: Request, res: Response) => {
        WHERE status = 'open'
          AND ("isPublic" IS NULL OR "isPublic" = true)
          AND ("closingDate" IS NULL OR "closingDate" >= CURRENT_DATE)
-       ORDER BY "createdAt" DESC`
+       ORDER BY "createdAt" DESC LIMIT 500`
     );
     res.json({ data: rows });
   } catch (err) {
@@ -274,7 +274,7 @@ router.get("/my-applications", careersAuth, async (req: Request, res: Response) 
        FROM job_applications ja
        JOIN job_postings jp ON jp.id = ja."postingId"
        WHERE ja."applicantAccountId" = $1
-       ORDER BY ja."createdAt" DESC`,
+       ORDER BY ja."createdAt" DESC LIMIT 500`,
       [(req as any).applicantId]
     );
     res.json({ data: rows });

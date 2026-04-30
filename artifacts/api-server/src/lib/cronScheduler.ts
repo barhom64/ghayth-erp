@@ -2404,7 +2404,7 @@ async function vendorContractExpiryAlerts(): Promise<string> {
              AND al."createdAt" > NOW() - INTERVAL '7 days'
          )`,
       [company.id]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return []; });
 
     for (const c of expiring) {
       const daysLeft = Number(c.daysLeft);
@@ -2492,22 +2492,22 @@ async function weeklyDataCleanup(): Promise<string> {
 
   const { affectedRows: expiredSessions } = await rawExecute(
     `DELETE FROM user_sessions WHERE "expiresAt" < NOW() - INTERVAL '7 days'`
-  ).catch(() => ({ affectedRows: 0 }));
+  ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
   cleaned += expiredSessions;
 
   const { affectedRows: oldCronLogs } = await rawExecute(
     `DELETE FROM cron_logs WHERE "createdAt" < NOW() - INTERVAL '90 days'`
-  ).catch(() => ({ affectedRows: 0 }));
+  ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
   cleaned += oldCronLogs;
 
   const { affectedRows: oldDeliveryLogs } = await rawExecute(
     `DELETE FROM notification_delivery_log WHERE "queuedAt" < NOW() - INTERVAL '90 days' AND status IN ('delivered','failed')`
-  ).catch(() => ({ affectedRows: 0 }));
+  ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
   cleaned += oldDeliveryLogs;
 
   const { affectedRows: oldNotifLogs } = await rawExecute(
     `DELETE FROM notification_log WHERE "createdAt" < NOW() - INTERVAL '90 days'`
-  ).catch(() => ({ affectedRows: 0 }));
+  ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
   cleaned += oldNotifLogs;
 
   try {
@@ -2517,7 +2517,7 @@ async function weeklyDataCleanup(): Promise<string> {
     ).catch((e) => logger.error(e, "[cronScheduler] audit archive insert failed"));
     const { affectedRows: archivedLogs } = await rawExecute(
       `DELETE FROM event_logs WHERE "createdAt" < NOW() - INTERVAL '365 days'`
-    ).catch(() => ({ affectedRows: 0 }));
+    ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
     cleaned += archivedLogs;
   } catch (e) { logger.error(e, "[cronScheduler] event log archival failed"); }
 
@@ -2536,7 +2536,7 @@ async function weeklyDataCleanup(): Promise<string> {
            WHERE wi."refTable" = $1
              AND NOT EXISTS (SELECT 1 FROM ${tbl} t WHERE t.id = wi."refId")`,
         [tbl]
-      ).catch(() => ({ affectedRows: 0 }));
+      ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
       cleaned += affectedRows;
     }
   } catch (e) { logger.error(e, "[cronScheduler] orphaned workflow instances cleanup failed"); }
@@ -2563,7 +2563,7 @@ async function weeklyDataCleanup(): Promise<string> {
             AND ar.status IN ('pending','in_progress')
             AND NOT EXISTS (SELECT 1 FROM ${tbl} t WHERE t.id = ar."refId")`,
         [refType]
-      ).catch(() => ({ affectedRows: 0 }));
+      ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
       cleaned += affectedRows;
     }
   } catch (e) { logger.error(e, "[cronScheduler] orphaned approval requests cleanup failed"); }

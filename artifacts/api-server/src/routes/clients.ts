@@ -201,7 +201,7 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
          WHERE sq."clientId" = $1 AND sq."companyId" = $2
          ORDER BY "createdAt" DESC LIMIT 20`,
         [Number(id), scope.companyId]
-      ).catch(() => []),
+      ).catch((e) => { logger.error(e, "clients query failed"); return []; }),
       rawQuery<any>(
         `(SELECT 'invoice' AS type, ref AS ref, status, total::text AS detail, "createdAt"
           FROM invoices WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)
@@ -228,7 +228,7 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
            ))
          LIMIT 10`,
         [Number(id), scope.companyId, client.name]
-      ).catch(() => []),
+      ).catch((e) => { logger.error(e, "clients query failed"); return []; }),
       activeProjects: projects.filter((p: any) => p.status === 'active'),
       openTickets: tickets.filter((t: any) => t.status === 'open' || t.status === 'in_progress'),
     };
