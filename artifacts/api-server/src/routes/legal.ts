@@ -201,19 +201,19 @@ router.get("/contracts/renewal-alerts", requirePermission("legal:read"), async (
     const alerts90 = await rawQuery<any>(
       `SELECT id, title, "partyName", "endDate", ("endDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM legal_contracts WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL
-       AND "endDate" BETWEEN CURRENT_DATE + INTERVAL '31 days' AND CURRENT_DATE + INTERVAL '90 days'`,
+       AND "endDate" BETWEEN CURRENT_DATE + INTERVAL '31 days' AND CURRENT_DATE + INTERVAL '90 days' LIMIT 500`,
       [cid]
     );
     const alerts30 = await rawQuery<any>(
       `SELECT id, title, "partyName", "endDate", ("endDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM legal_contracts WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL
-       AND "endDate" BETWEEN CURRENT_DATE + INTERVAL '15 days' AND CURRENT_DATE + INTERVAL '30 days'`,
+       AND "endDate" BETWEEN CURRENT_DATE + INTERVAL '15 days' AND CURRENT_DATE + INTERVAL '30 days' LIMIT 500`,
       [cid]
     );
     const alerts14 = await rawQuery<any>(
       `SELECT id, title, "partyName", "endDate", ("endDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM legal_contracts WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL
-       AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '14 days'`,
+       AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '14 days' LIMIT 500`,
       [cid]
     );
 
