@@ -1491,7 +1491,7 @@ router.post("/assign-bulk", requirePermission("umrah:write"), async (req, res): 
     const { pilgrimIds, agentId } = zodParse(bulkAssignSchema.safeParse(req.body));
     const placeholders = pilgrimIds.map((_: any, i: number) => `$${i + 3}`).join(",");
     await rawExecute(
-      `UPDATE umrah_pilgrims SET "agentId"=$1, "updatedAt"=NOW() WHERE "companyId"=$2 AND id IN (${placeholders})`,
+      `UPDATE umrah_pilgrims SET "agentId"=$1, "updatedAt"=NOW() WHERE "companyId"=$2 AND "deletedAt" IS NULL AND status NOT IN ('departed','cancelled') AND id IN (${placeholders})`,
       [agentId, scope.companyId, ...pilgrimIds]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pilgrims", entityId: 0, after: { assigned: pilgrimIds.length, agentId } }).catch((e) => logger.error(e, "umrah background task failed"));

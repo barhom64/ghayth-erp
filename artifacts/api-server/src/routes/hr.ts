@@ -3345,7 +3345,7 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       const target = entityUpdateMap[request.refType];
       if (target) {
         await rawExecute(
-          `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1 AND "companyId" = $2`,
+          `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status IN ('pending','pending_approval','draft')`,
           [request.refId, scope.companyId]
         );
       }
@@ -3362,7 +3362,7 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       const target = entityUpdateMap[request.refType];
       if (target) {
         await rawExecute(
-          `UPDATE ${target.table} SET ${target.column} = 'rejected' WHERE id = $1 AND "companyId" = $2`,
+          `UPDATE ${target.table} SET ${target.column} = 'rejected' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status IN ('pending','pending_approval','draft')`,
           [request.refId, scope.companyId]
         );
       }

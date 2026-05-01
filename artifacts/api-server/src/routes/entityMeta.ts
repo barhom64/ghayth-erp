@@ -272,7 +272,7 @@ router.post("/bulk-action", requirePermission("admin:write"), async (req, res): 
       updated = affectedIds.length;
     } else if (action === "delete") {
       const result = await rawQuery<{ id: number }>(
-        `UPDATE ${table} SET "deletedAt" = NOW() WHERE id = ANY($1::int[]) AND "companyId" = $2 AND "deletedAt" IS NULL ${extraWhere} RETURNING id`,
+        `UPDATE ${table} SET "deletedAt" = NOW() WHERE id = ANY($1::int[]) AND "companyId" = $2 AND "deletedAt" IS NULL AND status NOT IN ('approved','posted','paid','completed') ${extraWhere} RETURNING id`,
         [validIds, scope.companyId]
       );
       affectedIds = result.map((r) => r.id);

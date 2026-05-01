@@ -497,8 +497,8 @@ router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, 
     );
     if (Number(remaining[0]?.cnt) === 0) {
       await rawExecute(
-        `UPDATE hr_exit_requests SET "clearanceCompleted" = TRUE, "updatedAt" = NOW() WHERE id = $1`,
-        [item.exitRequestId]
+        `UPDATE hr_exit_requests SET "clearanceCompleted" = TRUE, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status NOT IN ('cancelled','rejected')`,
+        [item.exitRequestId, scope.companyId]
       );
     }
 
