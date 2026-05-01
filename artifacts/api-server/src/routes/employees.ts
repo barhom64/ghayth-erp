@@ -390,12 +390,12 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
          borderNumber || null, visaNumber || null, visaType || null, visaExpiry || null,
          sponsorNumber || null, workPermitNumber || null, workPermitExpiry || null, iqamaStatus || 'active',
          bankName || null, bankAccount || null, iban || null, emergencyContact || null, emergencyPhone || null,
-         (req.body as any).attachments ? JSON.stringify((req.body as any).attachments) : null]
+         (body as any).attachments ? JSON.stringify((body as any).attachments) : null]
       );
       const empId = empRes.rows[0].id;
 
       // ── Step 3: Create first assignment ──
-      let resolvedJobTitleId = req.body.jobTitleId ?? null;
+      let resolvedJobTitleId = (body as any).jobTitleId ?? null;
       if (!resolvedJobTitleId && jobTitle && jobTitle !== "موظف") {
         const jtRes = await client.query(
           `SELECT id FROM job_titles WHERE name = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`,

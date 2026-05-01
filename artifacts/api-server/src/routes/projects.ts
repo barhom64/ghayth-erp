@@ -593,7 +593,7 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
     }
     const [existing] = await rawQuery<any>(findQuery, findParams);
     if (!existing) throw new NotFoundError("المشروع غير موجود");
-    const b = req.body;
+    const b = parsed;
 
     // Closed/cancelled projects are frozen — refuse any PATCH on them, even
     // edits to non-status fields. The /close endpoint is the only way out.
@@ -611,7 +611,7 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
     // State machine — /close is the only way to reach `completed`; PATCH
     // refuses direct transitions to terminal states.
     if (b.status !== undefined && b.status !== existing.status) {
-      if (!PROJECT_STATUSES.includes(b.status)) {
+      if (!(PROJECT_STATUSES as readonly string[]).includes(b.status)) {
         throw new ValidationError(
           `حالة مشروع غير صالحة: ${b.status}`,
           { field: "status", fix: `اختر من: ${PROJECT_STATUSES.join(", ")}` }
@@ -1457,10 +1457,10 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
     );
     if (!existing) throw new NotFoundError("المعلم غير موجود");
     await assertProjectAccess(existing.projectId, scope);
-    const b = req.body;
+    const b = parsed;
 
     if (b.status !== undefined && b.status !== existing.status) {
-      if (!MILESTONE_STATUSES.includes(b.status)) {
+      if (!(MILESTONE_STATUSES as readonly string[]).includes(b.status)) {
         throw new ValidationError(
           `حالة معلَم غير صالحة: ${b.status}`,
           { field: "status", fix: `اختر من: ${MILESTONE_STATUSES.join(", ")}` }
@@ -1598,10 +1598,10 @@ router.patch("/risks/:riskId", requirePermission("projects:update"), async (req,
     );
     if (!existingRisk) throw new NotFoundError("المخاطرة غير موجودة");
     await assertProjectAccess(existingRisk.projectId, scope);
-    const b = req.body;
+    const b = parsed;
 
     if (b.status !== undefined && b.status !== existingRisk.status) {
-      if (!RISK_STATUSES.includes(b.status)) {
+      if (!(RISK_STATUSES as readonly string[]).includes(b.status)) {
         throw new ValidationError(
           `حالة مخاطرة غير صالحة: ${b.status}`,
           { field: "status", fix: `اختر من: ${RISK_STATUSES.join(", ")}` }
