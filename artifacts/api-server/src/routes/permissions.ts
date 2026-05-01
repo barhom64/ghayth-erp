@@ -78,7 +78,7 @@ router.get("/my", async (req, res) => {
       const customRow = await rawQuery<any>(
         `SELECT "roleKey", label, modules, level FROM custom_roles WHERE "roleKey"=$1 AND "companyId"=$2 LIMIT 1`,
         [roleKey, scope.companyId]
-      ).catch(() => [] as any[]);
+      ).catch((e) => { logger.error(e, "permissions query failed"); return [] as any[]; });
       if (customRow.length > 0) {
         roles = customRow;
       } else {
@@ -105,7 +105,7 @@ router.get("/my", async (req, res) => {
     const userPermRows = await rawQuery<any>(
       `SELECT permission, type FROM permissions WHERE "userId" = $1 AND ("companyId" IS NULL OR "companyId" = $2)`,
       [scope.userId, scope.companyId]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "permissions query failed"); return [] as any[]; });
     const grants = userPermRows.filter((p: any) => p.type === "grant").map((p: any) => p.permission as string);
     const revokes = new Set(userPermRows.filter((p: any) => p.type === "revoke").map((p: any) => p.permission as string));
     const grantedPerms = Array.from(new Set([...rolePerms, ...grants])).filter((p) => !revokes.has(p));

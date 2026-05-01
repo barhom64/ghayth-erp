@@ -216,7 +216,7 @@ async function documentExpiryAlerts(): Promise<string> {
          AND fv."insuranceExpiry" IS NOT NULL
          AND fv."insuranceExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'`,
       [company.id]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any[]; });
 
     // Company documents (commercial registration, municipality license, etc.)
     const companyDocAlerts = await rawQuery<any>(
@@ -228,7 +228,7 @@ async function documentExpiryAlerts(): Promise<string> {
          AND cd."expiryDate" IS NOT NULL
          AND cd."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'`,
       [company.id]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any[]; });
 
     const allDocsCombined = [
       ...allDocs,
@@ -2414,7 +2414,7 @@ async function vendorContractExpiryAlerts(): Promise<string> {
         `SELECT id FROM employee_assignments WHERE "companyId" = $1
          AND role IN ('finance_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
         [company.id]
-      ).catch(() => [null]);
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [null]; });
 
       if (!purchaseAsgn) continue;
 
@@ -2466,7 +2466,7 @@ async function dailySystemHealthReport(): Promise<string> {
       `SELECT id FROM employee_assignments WHERE "companyId" = $1
        AND role IN ('general_manager','owner') AND status = 'active' LIMIT 1`,
       [company.id]
-    ).catch(() => [null]);
+    ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [null]; });
 
     if (!techAsgn) continue;
 
@@ -2678,7 +2678,7 @@ async function monthlyBadDebtReminder(): Promise<string> {
          WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
          LIMIT 1`,
         [c.id]
-      ).catch(() => [] as any);
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any; });
       const cfoId = cfoRow?.id;
       if (!cfoId) continue;
       await createNotification({
@@ -2721,7 +2721,7 @@ async function monthlyFxRevaluationReminder(): Promise<string> {
          WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
          LIMIT 1`,
         [c.id]
-      ).catch(() => [] as any);
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any; });
       const cfoId = cfoRow?.id;
       if (!cfoId) continue;
       await createNotification({
@@ -2787,7 +2787,7 @@ async function dailyBudgetVarianceAlert(): Promise<string> {
          WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
          LIMIT 1`,
         [c.id]
-      ).catch(() => [] as any);
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any; });
       const cfoId = cfoRow?.id;
       if (!cfoId) continue;
 

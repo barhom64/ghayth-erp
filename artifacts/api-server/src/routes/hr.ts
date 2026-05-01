@@ -728,7 +728,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
          WHERE "assignmentId" = $1 AND "excuseDate" = $2 AND status = 'approved' AND "excuseType" IN ('early_leave', 'personal')
          LIMIT 1`,
         [scope.activeAssignmentId, today]
-      ).catch(() => [null]);
+      ).catch((e) => { logger.error(e, "hr query failed"); return [null]; });
       if (approvedExcuse) {
         excusedEarlyLeave = true;
         await rawExecute(
@@ -2292,7 +2292,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
        WHERE li."companyId" = $1 AND li.period = $2 AND li.status = 'pending'
        GROUP BY li."assignmentId"`,
       [scope.companyId, targetPeriod]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     for (const row of hrLoanRows) {
       const aId = Number(row.assignmentId);
       loanMap.set(aId, (loanMap.get(aId) ?? 0) + Number(row.installment ?? 0));
@@ -2316,7 +2316,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
        WHERE "companyId" = $1 AND TO_CHAR("overtimeDate", 'YYYY-MM') = $2 AND status = 'approved'
        GROUP BY "assignmentId"`,
       [scope.companyId, targetPeriod]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     const hrOtMap = new Map<number, number>();
     for (const row of hrOtRows) hrOtMap.set(Number(row.assignmentId), Number(row.otAmount ?? 0));
 
@@ -2583,7 +2583,7 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
        WHERE m."violationId" = $1 AND m."companyId" = $2
        ORDER BY m."createdAt" DESC`,
       [item.id, scope.companyId]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
 
     res.json({ ...item, memos });
   } catch (err) { handleRouteError(err, res, "Get violation detail error"); }
@@ -3211,7 +3211,7 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
           `UPDATE whatsapp_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
             WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
           [request.refId]
-        ).catch(() => { /* whatsapp_queue may not exist */ });
+        ).catch((e) => { logger.warn(e, "hr whatsapp_queue insert failed (table may not exist)"); });
       }
     }
 
@@ -4262,7 +4262,7 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
         `UPDATE whatsapp_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
           WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
         [Number(id)]
-      ).catch(() => { /* whatsapp_queue may not exist */ });
+      ).catch((e) => { logger.warn(e, "hr whatsapp_queue insert failed (table may not exist)"); });
 
       // Notify whoever filed the letter about the rejection/return so they
       // can see the reason and take action. Prefer the creator assignment
@@ -5386,7 +5386,7 @@ router.get("/delegations", requirePermission("hr:read"), async (req, res) => {
        ORDER BY d."createdAt" DESC
        LIMIT 50`,
       [scope.companyId]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     res.json({ data: rows, total: rows.length });
   } catch (err) { res.json({ data: [], total: 0 }); }
 });
@@ -6511,7 +6511,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
          AND ed."expiryDate" IS NOT NULL
          AND ed."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
 
     // Company documents (commercial registration, chamber of commerce, etc.)
     const companyDocs = await rawQuery<any>(
@@ -6524,7 +6524,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
          AND cd."expiryDate" IS NOT NULL
          AND cd."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
 
     const all = [
       ...workPermits.map((d: any) => ({ ...d, entityType: 'employee' })),
@@ -6560,7 +6560,7 @@ router.get("/company-documents", requirePermission("hr:read"), async (req, res) 
     const rows = await rawQuery<any>(
       `SELECT * FROM company_documents WHERE "companyId"=$1 AND status != 'deleted' ORDER BY "expiryDate" ASC NULLS LAST LIMIT $2 OFFSET $3`,
       [scope.companyId, Number(lim), offset]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
   } catch (err) { handleRouteError(err, res, "Company documents error:"); }
 });
@@ -6628,7 +6628,7 @@ router.get("/employee-documents", requirePermission("hr:read"), async (req, res)
        ORDER BY ed."expiryDate" ASC NULLS LAST
        LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
   } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
 });

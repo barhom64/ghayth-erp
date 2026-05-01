@@ -230,7 +230,7 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
       const productRows = await rawQuery<{ id: number; name: string }>(
         `SELECT id, name FROM store_products WHERE id = ANY($1) AND "companyId" = $2`,
         [productIds, scope.companyId]
-      ).catch(() => [] as { id: number; name: string }[]);
+      ).catch((e) => { logger.error(e, "finance purchase query failed"); return [] as { id: number; name: string }[]; });
       for (const p of productRows) productNameById.set(Number(p.id), p.name);
     }
 
@@ -1084,7 +1084,7 @@ purchaseRouter.get("/payment-run", requirePermission("finance:read"), async (req
            FROM payment_runs WHERE "companyId" = $1 ORDER BY "paymentDate" DESC, id DESC`,
         [scope.companyId]
       );
-    } catch { /* table not created yet */ }
+    } catch (e) { logger.warn(e, "payment_runs table not created yet"); }
     res.json({ data: rows });
   } catch (err) {
     handleRouteError(err, res, "List payment runs error:");

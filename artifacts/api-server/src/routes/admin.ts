@@ -407,7 +407,7 @@ router.get("/predefined-roles", requirePermission("admin:read"), async (req, res
     const customRows = await rawQuery<any>(
       `SELECT "roleKey", label, level, modules FROM custom_roles WHERE "companyId"=$1 ORDER BY level DESC LIMIT 500`,
       [scope.companyId]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "admin query failed"); return [] as any[]; });
     const customRoles = customRows.map((r: any) => ({
       roleKey: r.roleKey,
       label: r.label,
@@ -458,7 +458,7 @@ router.post("/user-roles", requirePermission("admin:write"), async (req, res) =>
       const [customRole] = await rawQuery<any>(
         `SELECT "roleKey", label, modules, level FROM custom_roles WHERE "roleKey"=$1 AND "companyId"=$2 LIMIT 1`,
         [roleKey, scope.companyId]
-      ).catch(() => [] as any[]);
+      ).catch((e) => { logger.error(e, "admin query failed"); return [] as any[]; });
       if (customRole) {
         def = {
           roleKey: customRole.roleKey,
@@ -708,7 +708,8 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
     try {
       await pool.query("SELECT 1");
       dbLatency = Date.now() - dbStart;
-    } catch {
+    } catch (e) {
+      logger.error(e, "admin health check DB ping failed");
       dbStatus = "error";
       dbLatency = Date.now() - dbStart;
     }
@@ -1448,7 +1449,7 @@ router.get("/system-health-checks", requirePermission("admin:read"), async (req,
       `SELECT name, "lastRunAt"::text AS last_run FROM cron_jobs
        WHERE enabled = true AND "lastRunAt" < NOW() - INTERVAL '25 hours'
        ORDER BY "lastRunAt" ASC LIMIT 10`
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "admin query failed"); return [] as any[]; });
     checks.push({
       name: "cron_jobs",
       status: staleCrons.length === 0 ? "ok" : "warn",
@@ -1484,7 +1485,7 @@ router.get("/system-health-checks", requirePermission("admin:read"), async (req,
        WHERE "companyId" = $1 AND "deletedAt" IS NULL
        ORDER BY "endDate" DESC LIMIT 1`,
       [scope.companyId]
-    ).catch(() => [null]);
+    ).catch((e) => { logger.error(e, "admin query failed"); return [null]; });
     if (activePeriod) {
       checks.push({
         name: "financial_period",
@@ -1507,7 +1508,7 @@ router.get("/system-health-checks", requirePermission("admin:read"), async (req,
        HAVING ABS(coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)) > 0.01
        LIMIT 5`,
       [scope.companyId]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "admin query failed"); return [] as any[]; });
     checks.push({
       name: "gl_balance_drift",
       status: drifts.length === 0 ? "ok" : "warn",

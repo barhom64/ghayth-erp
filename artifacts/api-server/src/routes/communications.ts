@@ -586,8 +586,8 @@ router.post("/log/:id/convert", requirePermission("communications:write"), async
         `UPDATE communications_log SET "relatedType"=$1, "relatedId"=$2 WHERE id=$3 AND "companyId"=$4`,
         [targetType, createdId, logId, scope.companyId]
       );
-    } catch {
-      // relatedType/relatedId columns may not exist yet — conversion still succeeded
+    } catch (e) {
+      logger.warn(e, "communications: relatedType/relatedId columns may not exist yet");
     }
 
     const typeLabels: Record<string, string> = { task: "مهمة متابعة", ticket: "تذكرة دعم", request: "طلب داخلي" };

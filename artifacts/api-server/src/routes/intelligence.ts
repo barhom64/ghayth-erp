@@ -351,7 +351,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
          COALESCE(SUM(CASE WHEN "createdAt" BETWEEN CURRENT_DATE - INTERVAL '60 days' AND CURRENT_DATE - INTERVAL '30 days' THEN "paidAmount" ELSE 0 END),0)::float AS prev
        FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status NOT IN ('cancelled','draft')`,
       [cid]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return [] as any[]; });
     const revTrend = revTrendRows[0] ?? null;
     if (revTrend && revTrend.prev > 0) {
       const revChange = Math.round(((revTrend.curr - revTrend.prev) / revTrend.prev) * 100);

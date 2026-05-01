@@ -359,7 +359,7 @@ router.get("/charts/revenue", async (req, res) => {
          AND v."createdAt" >= (CURRENT_DATE - INTERVAL '6 months')
        GROUP BY month_key`,
       [...voucherParams]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "dashboard query failed"); return [] as any[]; });
     const expenseMap: Record<string, number> = {};
     for (const e of expenseRows) expenseMap[e.month_key] = Number(e.total);
 

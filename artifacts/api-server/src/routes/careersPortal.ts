@@ -75,7 +75,8 @@ function careersAuth(req: Request, res: Response, next: NextFunction): void {
     }
     (req as any).applicantId = payload.accountId;
     next();
-  } catch {
+  } catch (e) {
+    logger.warn(e, "careers portal JWT verification failed");
     res.status(401).json({ error: "انتهت الجلسة" });
   }
 }

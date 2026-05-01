@@ -319,7 +319,7 @@ export async function computeEmployeeOperationalStatus(
      WHERE "employeeId" = $1 AND status = 'approved'
        AND "startDate" <= $2 AND "endDate" >= $2`,
     [employeeId, today]
-  ).catch(() => [null]);
+  ).catch((e) => { logger.error(e, "impact preview query failed"); return [null]; });
   if (onLeave) {
     return { status: "on_leave", label: "في إجازة", color: "bg-blue-100 text-blue-700", reason: "إجازة معتمدة" };
   }
@@ -328,7 +328,7 @@ export async function computeEmployeeOperationalStatus(
     `SELECT status FROM employee_contracts
      WHERE "companyId" = $1 AND "employeeId" = $2 ORDER BY id DESC LIMIT 1`,
     [companyId, employeeId]
-  ).catch(() => [null]);
+  ).catch((e) => { logger.error(e, "impact preview query failed"); return [null]; });
   if (contract?.status === "terminated" || contract?.status === "cancelled") {
     return { status: "terminated", label: "منتهية خدماته", color: "bg-gray-100 text-gray-600", reason: "انتهاء الخدمة" };
   }
@@ -337,7 +337,7 @@ export async function computeEmployeeOperationalStatus(
     `SELECT id FROM employee_violations
      WHERE "assignmentId" = $1 AND type = 'suspension' AND status = 'active'`,
     [assignmentId]
-  ).catch(() => [null]);
+  ).catch((e) => { logger.error(e, "impact preview query failed"); return [null]; });
   if (suspension) {
     return { status: "suspended", label: "موقوف", color: "bg-red-100 text-red-700", reason: "إيقاف تأديبي" };
   }
@@ -346,7 +346,7 @@ export async function computeEmployeeOperationalStatus(
     `SELECT id FROM employee_violations
      WHERE "assignmentId" = $1 AND period = $2 AND severity IN ('high','critical') AND status = 'active'`,
     [assignmentId, period]
-  ).catch(() => [null]);
+  ).catch((e) => { logger.error(e, "impact preview query failed"); return [null]; });
   if (pendingViolation) {
     return { status: "under_action", label: "تحت إجراء", color: "bg-orange-100 text-orange-700", reason: "مخالفة نشطة" };
   }
@@ -354,7 +354,7 @@ export async function computeEmployeeOperationalStatus(
   const [todayAttendance] = await rawQuery<any>(
     `SELECT status, "lateMinutes" FROM attendance WHERE "assignmentId" = $1 AND date = $2`,
     [assignmentId, today]
-  ).catch(() => [null]);
+  ).catch((e) => { logger.error(e, "impact preview query failed"); return [null]; });
 
   if (!todayAttendance) {
     const now = new Date();

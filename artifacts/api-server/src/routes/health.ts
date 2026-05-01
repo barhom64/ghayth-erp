@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { HealthCheckResponse } from "@workspace/api-zod";
 import { rawQuery } from "../lib/rawdb.js";
+import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
