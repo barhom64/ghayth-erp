@@ -64,7 +64,8 @@ async function generateZatcaQrCode(params: {
   try {
     const dataUrl = await QRCode.toDataURL(tlvBase64, { width: 160, margin: 1 });
     return dataUrl;
-  } catch {
+  } catch (e) {
+    logger.warn(e, "ZATCA QR code generation failed, falling back to TLV base64");
     return tlvBase64;
   }
 }

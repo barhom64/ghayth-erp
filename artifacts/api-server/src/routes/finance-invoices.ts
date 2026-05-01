@@ -1283,14 +1283,14 @@ invoicesRouter.get("/invoices/:id/memos", requirePermission("finance:read"), asy
            FROM credit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY "memoDate" DESC`,
         [id, scope.companyId]
       );
-    } catch { /* table may not exist yet */ }
+    } catch (e) { logger.warn(e, "credit_memos table may not exist yet"); }
     try {
       debitMemos = await rawQuery<any>(
         `SELECT id, amount, "netAmount", "vatAmount", reason, "memoDate", "journalId", "createdAt"
            FROM debit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY "memoDate" DESC`,
         [id, scope.companyId]
       );
-    } catch { /* table may not exist yet */ }
+    } catch (e) { logger.warn(e, "debit_memos table may not exist yet"); }
     res.json({ creditMemos, debitMemos });
   } catch (err) {
     handleRouteError(err, res, "List memos error:");
@@ -1585,7 +1585,8 @@ invoicesRouter.post("/customer-advances/:id/apply", requirePermission("finance:c
            FROM customer_advances WHERE id = $1 AND "companyId" = $2`,
         [advanceId, scope.companyId]
       );
-    } catch {
+    } catch (e) {
+      logger.error(e, "failed to query customer_advances");
       throw new NotFoundError("الدفعة المقدمة غير موجودة");
     }
     if (!advance) throw new NotFoundError("الدفعة المقدمة غير موجودة");
@@ -1678,7 +1679,7 @@ invoicesRouter.get("/customer-advances", requirePermission("finance:read"), asyn
           ORDER BY ca."receivedDate" DESC, ca.id DESC`,
         params
       );
-    } catch { /* table not yet created */ }
+    } catch (e) { logger.warn(e, "customer_advances table not yet created"); }
     res.json({ data: rows });
   } catch (err) {
     handleRouteError(err, res, "List customer advances error:");

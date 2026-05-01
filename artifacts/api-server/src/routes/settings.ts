@@ -110,7 +110,8 @@ publicRouter.get("/display", async (_req, res) => {
     const result: Record<string, string> = {};
     for (const row of rows) result[row.key] = row.value;
     res.json({ data: result });
-  } catch {
+  } catch (e) {
+    logger.warn(e, "failed to load public system settings, using defaults");
     res.json({ data: { currency: "SAR", timezone: "Asia/Riyadh", companyName: "" } });
   }
 });
@@ -593,7 +594,8 @@ router.get("/timezone", requirePermission("settings:read"), async (_req, res) =>
     const rows = await rawQuery(`SELECT value FROM system_settings WHERE key='timezone' AND "companyId" IS NULL AND "branchId" IS NULL`);
     const timezone = rows.length > 0 ? rows[0].value : "Asia/Riyadh";
     res.json({ timezone });
-  } catch {
+  } catch (e) {
+    logger.warn(e, "failed to load timezone setting, using default");
     res.json({ timezone: "Asia/Riyadh" });
   }
 });
@@ -605,7 +607,7 @@ router.get("/system-controls", requirePermission("settings:read"), async (_req, 
     );
     const controls: Record<string, any> = {};
     for (const r of rows) {
-      try { controls[r.key] = JSON.parse(r.value as string); } catch { controls[r.key] = r.value; }
+      try { controls[r.key] = JSON.parse(r.value as string); } catch (e) { logger.warn(e, `failed to parse system control JSON for key ${r.key}`); controls[r.key] = r.value; }
     }
     res.json({ data: controls });
   } catch (err) { handleRouteError(err, res, "settings"); }

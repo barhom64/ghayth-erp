@@ -244,7 +244,7 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
         [effectiveCompanyId]
       );
       costCenterValidationEnabled = costCenterSettingRow?.value === "true";
-    } catch { /* table may not exist yet */ }
+    } catch (e) { logger.warn(e, "system_settings table may not exist yet"); }
     if (costCenterValidationEnabled) {
       const [ccRow] = await rawQuery<any>(
         `SELECT id FROM departments WHERE "companyId" = ANY($1) AND name = $2 LIMIT 1`,

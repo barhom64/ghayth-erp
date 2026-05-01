@@ -197,7 +197,8 @@ router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
       let parsedUrl: URL;
       try {
         parsedUrl = new URL(urlStr);
-      } catch {
+      } catch (e) {
+        logger.warn(e, "gov integration URL parse failed");
         checkStatus = "error";
         checkMessage = "رابط الخدمة غير صالح — يجب أن يبدأ بـ https://";
         await rawExecute(
@@ -221,7 +222,7 @@ router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
           const addresses6 = await dns.resolve6(parsedUrl.hostname).catch((e) => { logger.error(e, "gov integrations query failed"); return []; });
           const allAddrs = [...addresses, ...addresses6];
           if (allAddrs.some(isPrivateIP)) resolvedPrivate = true;
-        } catch { /* DNS resolution failure handled by fetch below */ }
+        } catch (e) { logger.warn(e, "gov integration DNS resolution failure"); }
         if (resolvedPrivate) {
           checkStatus = "error";
           checkMessage = "عنوان DNS يشير إلى شبكة داخلية — غير مسموح";

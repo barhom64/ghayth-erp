@@ -357,13 +357,13 @@ export async function submitWorkflow(params: SubmitParams) {
         if (directMgrRow?.assignmentId) {
           currentAssignee = directMgrRow.assignmentId;
         }
-      } catch { /* ignore */ }
+      } catch (e) { logger.warn(e, "workflow: failed to resolve direct manager assignee"); }
     }
     // Fallback: resolve by required role at branch/company level
     if (!currentAssignee) {
       try {
         currentAssignee = await getAssignmentIdByRole(companyId, branchId ?? 0, firstStep.requiredRole);
-      } catch { /* no assignee found */ }
+      } catch (e) { logger.warn(e, "workflow: no assignee found for required role"); }
     }
     // Final fallback: any active HR/GM/owner in the company. Never leave a
     // submitted workflow with NULL currentAssignee — that makes it invisible
@@ -379,7 +379,7 @@ export async function submitWorkflow(params: SubmitParams) {
           [companyId]
         );
         if (fallback?.id) currentAssignee = fallback.id;
-      } catch { /* ignore */ }
+      } catch (e) { logger.warn(e, "workflow: failed to resolve fallback assignee"); }
     }
   }
   if (firstStep && !currentAssignee) {
@@ -575,7 +575,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         newStatus = "pending";
         try {
           newAssignee = await getAssignmentIdByRole(companyId, branchId ?? instance.branchId ?? 0, nextStep.requiredRole);
-        } catch { newAssignee = null; }
+        } catch (e) { logger.warn(e, "workflow: failed to resolve next step assignee"); newAssignee = null; }
         // Never advance to a step with NULL assignee — fall back to any active
         // HR/GM/owner so the request stays actionable somewhere.
         if (!newAssignee) {
@@ -589,7 +589,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
               [companyId]
             );
             if (fallback?.id) newAssignee = fallback.id;
-          } catch { /* ignore */ }
+          } catch (e) { logger.warn(e, "workflow: failed to resolve fallback assignee for next step"); }
         }
 
         const [sla] = await rawQuery<any>(
@@ -755,7 +755,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
       let escalateAssignee: number | null = null;
       try {
         escalateAssignee = await getAssignmentIdByRole(companyId, branchId ?? instance.branchId ?? 0, escalateRole);
-      } catch { /* */ }
+      } catch (e) { logger.warn(e, "workflow: failed to resolve escalation assignee"); }
 
       await rawExecute(
         `UPDATE workflow_instances SET "currentAssignee" = $1, "slaStatus" = 'escalated', "updatedAt" = NOW() WHERE id = $2`,
@@ -914,7 +914,7 @@ export async function checkSlaStatus(companyId: number) {
         let escalateAssignee: number | null = null;
         try {
           escalateAssignee = await getAssignmentIdByRole(companyId, inst.branchId ?? 0, escalateRole);
-        } catch { /* */ }
+        } catch (e) { logger.warn(e, "workflow SLA: failed to resolve escalation assignee"); }
 
         await rawExecute(
           `UPDATE workflow_instances SET "currentAssignee" = $1, "slaStatus" = 'escalated', "updatedAt" = NOW() WHERE id = $2`,

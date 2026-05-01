@@ -1310,7 +1310,7 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
           { contractId: Number(id), propertyId: contract.unitId, penaltyAmount: earlyFee }
         );
         journalEntryId = glResult.journalId;
-      } catch { journalEntryId = null; }
+      } catch (e) { logger.error(e, "early termination GL posting failed"); journalEntryId = null; }
     }
 
     await emitEvent({
@@ -2173,7 +2173,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
           { id, propertyId: mr.unitId ? Number(mr.unitId) : 0, totalCost: cost, type: mr.category }
         );
         journalEntryId = glResult.journalId;
-      } catch { journalEntryId = null; }
+      } catch (e) { logger.error(e, "maintenance expense GL posting failed"); journalEntryId = null; }
     }
 
     let followUpTaskId: number | null = null;

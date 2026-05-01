@@ -188,7 +188,8 @@ router.get("/health/schema", async (_req, res) => {
         `SELECT COUNT(*)::text AS count FROM schema_migrations`
       );
       migrationsApplied = Number(countRows[0]?.count ?? 0);
-    } catch {
+    } catch (e) {
+      logger.warn(e, "schema_migrations table does not exist");
       // schema_migrations itself doesn't exist — that's a critical miss and
       // is already reflected in `criticalMissing`.
     }

@@ -516,8 +516,8 @@ export function registerEventListeners() {
              VALUES ($1,$2,$3,'pending',NOW(),'official_letter',$4)`,
             [payload.companyId, letter.employeePhone, `${subject}\n\n${body}`, letterId]
           );
-        } catch {
-          /* whatsapp_queue may not exist in every deployment — ignore */
+        } catch (e) {
+          logger.warn(e, "whatsapp_queue table may not exist in this deployment");
         }
       }
 

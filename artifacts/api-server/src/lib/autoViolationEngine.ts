@@ -92,7 +92,8 @@ export async function getAutoDetectionSettings(companyId: number): Promise<AutoD
     try {
       const parsed = typeof row.value === "string" ? JSON.parse(row.value) : row.value;
       return { ...DEFAULT_SETTINGS, ...parsed };
-    } catch {
+    } catch (e) {
+      logger.warn(e, "failed to parse auto-detection settings JSON");
       return DEFAULT_SETTINGS;
     }
   }
@@ -585,8 +586,8 @@ export async function getDetectionLog(
     );
 
     return { data, total };
-  } catch {
-    // الجدول قد لا يكون موجوداً
+  } catch (e) {
+    logger.warn(e, "auto_violations table may not exist");
     return { data: [], total: 0 };
   }
 }

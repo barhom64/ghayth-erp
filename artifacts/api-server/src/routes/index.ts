@@ -124,7 +124,8 @@ router.get("/settings/display", async (req, res) => {
     const result: Record<string, string> = {};
     for (const row of rows) result[row.key] = row.value;
     res.json({ data: result });
-  } catch {
+  } catch (e) {
+    logger.warn(e, "failed to load system settings, using defaults");
     res.json({ data: { currency: "SAR", timezone: "Asia/Riyadh", companyName: "" } });
   }
 });

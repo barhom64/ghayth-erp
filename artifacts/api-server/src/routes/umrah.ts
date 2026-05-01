@@ -824,7 +824,7 @@ router.post("/run-daily-status", requirePermission("umrah:write"), async (req, r
           extraWhere: `"deletedAt" IS NULL`,
         });
         arrivedUpdated++;
-      } catch { /* state already changed by another process */ }
+      } catch (e) { logger.warn(e, "umrah pilgrim arrival state already changed"); }
     }
     for (const p of toOverstayed) {
       try {
@@ -835,7 +835,7 @@ router.post("/run-daily-status", requirePermission("umrah:write"), async (req, r
           extraWhere: `"deletedAt" IS NULL`,
         });
         overstayedUpdated++;
-      } catch { /* state already changed */ }
+      } catch (e) { logger.warn(e, "umrah pilgrim overstayed state already changed"); }
     }
     for (const p of toDeparted) {
       try {
@@ -846,7 +846,7 @@ router.post("/run-daily-status", requirePermission("umrah:write"), async (req, r
           extraWhere: `"deletedAt" IS NULL`,
         });
         departedUpdated++;
-      } catch { /* state already changed */ }
+      } catch (e) { logger.warn(e, "umrah pilgrim departed state already changed"); }
     }
 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.daily_status.run", entity: "umrah_pilgrims", entityId: 0, details: JSON.stringify({ date: today, arrivedUpdated, overstayedUpdated, departedUpdated }) }).catch((e) => logger.error(e, "umrah background task failed"));
@@ -895,7 +895,7 @@ router.post("/run-penalty-engine", requirePermission("umrah:write"), async (req,
               { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
               { id: penRows[0].id, amount, pilgrimName: p.fullName, agentName: undefined, type: "overstay" }
             );
-          } catch { /* GL failure must not block penalty creation */ }
+          } catch (e) { logger.error(e, "umrah penalty GL posting failed (non-blocking)"); }
         }
         created++;
       }
@@ -968,7 +968,7 @@ router.patch("/penalties/:id/waive", requirePermission("umrah:write"), async (re
           { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
           { id, amount: Number(penalty.amount), pilgrimName: penalty.pilgrimName || "" }
         );
-      } catch { /* GL failure must not block waiver */ }
+      } catch (e) { logger.error(e, "umrah penalty waiver GL posting failed (non-blocking)"); }
     }
     const [row] = await rawQuery(`SELECT * FROM umrah_penalties WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);

@@ -57,7 +57,7 @@ function parseModules(raw: unknown, roleKey?: string): string[] {
       }
       if (Array.isArray(parsed)) return parsed;
       return [];
-    } catch { return []; }
+    } catch (e) { logger.warn(e, "failed to parse permission modules JSON"); return []; }
   }
   return [];
 }

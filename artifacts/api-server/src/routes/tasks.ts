@@ -150,7 +150,7 @@ router.get("/", requirePermission("tasks:read"), async (req, res) => {
           const map = new Map<number, string>();
           for (const r of rows) map.set(Number(r.id), r.name);
           namesByType.set(type, map);
-        } catch { /* table may not exist in some deployments */ }
+        } catch (e) { logger.warn(e, "tasks: linked entity table may not exist"); }
       })
     );
     for (const task of tasks) {

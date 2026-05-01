@@ -250,8 +250,8 @@ async function dispatchWebhooks(companyId: number, eventCategory: string, payloa
     try {
       const parsedUrl = new URL(wh.url);
       if (!["http:", "https:"].includes(parsedUrl.protocol)) continue;
-    } catch {
-      logger.warn(`[NotifEngine] Invalid webhook URL for ${wh.name}: ${wh.url}`);
+    } catch (e) {
+      logger.warn(e, `[NotifEngine] Invalid webhook URL for ${wh.name}: ${wh.url}`);
       continue;
     }
 

@@ -253,7 +253,8 @@ router.get("/templates", requirePermission("marketing:read"), async (req, res) =
       [scope.companyId]
     );
     res.json({ data: rows });
-  } catch {
+  } catch (e) {
+    logger.error(e, "failed to list marketing templates");
     res.json({ data: [] });
   }
 });

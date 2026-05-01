@@ -262,7 +262,8 @@ router.get("/:id/download", requirePermission("documents:download"), async (req:
       } else {
         res.end();
       }
-    } catch {
+    } catch (e) {
+      logger.error(e, "document download: file not found in storage");
       throw new NotFoundError("الملف غير موجود في التخزين");
     }
   } catch (err) { handleRouteError(err, res, "documents"); }
@@ -299,7 +300,8 @@ router.get("/:id/preview", requirePermission("documents:download"), async (req: 
       } else {
         res.end();
       }
-    } catch {
+    } catch (e) {
+      logger.error(e, "document preview: file not found in storage");
       throw new NotFoundError("الملف غير موجود في التخزين");
     }
   } catch (err) { handleRouteError(err, res, "documents"); }
@@ -683,7 +685,7 @@ function buildDateContext() {
   let todayHijri = "";
   try {
     todayHijri = now.toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric", calendar: "islamic-umalqura" });
-  } catch { todayHijri = todayGregorian; }
+  } catch (e) { logger.warn(e, "Hijri date conversion failed, falling back to Gregorian"); todayHijri = todayGregorian; }
   return { today: todayGregorian, todayHijri };
 }
 
@@ -839,7 +841,7 @@ router.get("/templates/:id/variables", requirePermission("documents:read"), asyn
     const [template] = await rawQuery<any>(`SELECT variables FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
     if (!template) throw new NotFoundError("القالب غير موجود");
     let variables = [];
-    try { variables = typeof template.variables === "string" ? JSON.parse(template.variables) : (template.variables || []); } catch { variables = []; }
+    try { variables = typeof template.variables === "string" ? JSON.parse(template.variables) : (template.variables || []); } catch (e) { logger.warn(e, "failed to parse template variables JSON"); variables = []; }
     res.json({ variables });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });

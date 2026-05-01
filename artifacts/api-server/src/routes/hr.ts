@@ -3149,8 +3149,8 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
           [request.refId]
         );
         requesterId = refRow?.requesterId ?? undefined;
-      } catch {
-        // column may not exist for all entity types; skip check
+      } catch (e) {
+        logger.warn(e, "hr approval requester lookup (column may not exist for entity type)");
       }
     }
     if (requesterId !== undefined && requesterId === scope.activeAssignmentId) {
@@ -4401,7 +4401,7 @@ router.get("/onboarding-steps", requirePermission("hr:read"), async (req, res) =
       res.json({ data: val }); return;
     }
     res.json({ data: ["تسليم أجهزة IT", "توقيع عقد العمل", "تعريف المدير المباشر", "دورة التعريف بالشركة", "فتح حساب بنكي", "تسجيل التأمينات"] });
-  } catch { res.json({ data: [] }); }
+  } catch (e) { logger.error(e, "failed to load onboarding steps"); res.json({ data: [] }); }
 });
 
 router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res) => {
@@ -4549,7 +4549,8 @@ router.get("/employees-status", requirePermission("hr:read"), async (req, res) =
         try {
           const s = await computeEmployeeOperationalStatus(scope.companyId, emp.employeeId, emp.assignmentId);
           return { employeeId: emp.employeeId, ...s };
-        } catch {
+        } catch (e) {
+          logger.error(e, "failed to compute employee operational status");
           return { employeeId: emp.employeeId, status: "working", label: "على رأس العمل", color: "bg-green-100 text-green-700", reason: "" };
         }
       })
