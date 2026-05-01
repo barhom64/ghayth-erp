@@ -758,7 +758,7 @@ zatcaRouter.patch("/zatca/invoice/:id", requirePermission("finance:update"), asy
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const b = zodParse(zatcaInvoicePatchSchema.safeParse(req.body ?? {}));
 
     const sets: string[] = [];
@@ -770,7 +770,7 @@ zatcaRouter.patch("/zatca/invoice/:id", requirePermission("finance:update"), asy
     if (b.exemptionReason !== undefined) { sets.push(`"exemptionReason" = $${idx++}`); params.push(b.exemptionReason); }
     if (sets.length === 0) { throw new ValidationError("لا توجد بيانات للتحديث"); return; }
 
-    params.push(Number(id), scope.companyId);
+    params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE invoices SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING id, "isTaxLinked", "invoiceTypeCode", "taxCategoryCode", "exemptionReason", "zatcaStatus"`,
       params
@@ -789,7 +789,7 @@ zatcaRouter.patch("/zatca/expense/:id", requirePermission("finance:update"), asy
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const b = zodParse(zatcaExpensePatchSchema.safeParse(req.body ?? {}));
 
     const sets: string[] = [];
@@ -801,7 +801,7 @@ zatcaRouter.patch("/zatca/expense/:id", requirePermission("finance:update"), asy
     if (b.exemptionReason !== undefined) { sets.push(`"exemptionReason" = $${idx++}`); params.push(b.exemptionReason); }
     if (sets.length === 0) { throw new ValidationError("لا توجد بيانات للتحديث"); return; }
 
-    params.push(Number(id), scope.companyId);
+    params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE journal_entries SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND type = 'expense' AND "deletedAt" IS NULL RETURNING id, "isTaxLinked", "invoiceTypeCode", "taxCategoryCode", "exemptionReason", "zatcaStatus"`,
       params

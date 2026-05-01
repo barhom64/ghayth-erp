@@ -6763,7 +6763,9 @@ router.get("/employee-documents", requirePermission("hr:read"), async (req, res)
   try {
     const scope = req.scope!;
     const { employeeId, page = "1", limit: lim = "50" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Number(lim) || 50;
+    const offset = (pageNum - 1) * perPage;
 
     let paramIdx = 1;
     const params: any[] = [scope.companyId];
@@ -6771,7 +6773,7 @@ router.get("/employee-documents", requirePermission("hr:read"), async (req, res)
     const conditions: string[] = [`ed."companyId"=$1`, `ed.status != 'deleted'`];
     if (employeeId) {
       conditions.push(`ed."employeeId"=$${paramIdx}`);
-      params.push(Number(employeeId));
+      params.push(Number(employeeId) || 0);
       paramIdx++;
     }
     const where = `WHERE ${conditions.join(" AND ")}`;
@@ -6782,7 +6784,7 @@ router.get("/employee-documents", requirePermission("hr:read"), async (req, res)
       countParams
     ).catch((e) => { logger.error(e, "hr query failed"); return [{ total: 0 }] as any[]; });
 
-    params.push(Number(lim));
+    params.push(perPage);
     const limitParam = paramIdx++;
     params.push(offset);
     const offsetParam = paramIdx++;
@@ -6796,7 +6798,7 @@ router.get("/employee-documents", requirePermission("hr:read"), async (req, res)
        LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
-    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
+    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
 });
 
