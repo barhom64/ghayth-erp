@@ -258,6 +258,7 @@ router.get("/", async (req, res) => {
          LEFT JOIN employees e ON e.id = ea."employeeId"
          WHERE wi."currentAssignee" = $1
            AND wi.status IN ('pending', 'in_review', 'escalated')
+           AND wi."deletedAt" IS NULL
            AND wi."companyId" = ANY($2::int[])
            AND wi."requestType" NOT IN ('leave','purchase_request','official_letter','expense')
          ORDER BY wi."createdAt" DESC LIMIT 30`,

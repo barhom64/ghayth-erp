@@ -83,6 +83,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
                 'unit' AS type
          FROM property_units pu
          WHERE pu."companyId" = $1
+           AND pu."deletedAt" IS NULL
            AND (pu."unitNumber" ILIKE $2 OR pu.address ILIKE $2)
          LIMIT 10`,
         [scope.companyId, pattern]

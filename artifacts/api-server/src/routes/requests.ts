@@ -231,7 +231,7 @@ router.post("/", requirePermission("requests:write"), async (req, res) => {
         a && typeof a.name === "string" && typeof a.size === "number" && a.size <= 5 * 1024 * 1024
       ).map((a: any) => ({ name: a.name, size: a.size, type: a.type || "", dataUrl: a.dataUrl || "" }));
     }
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('request_number_seq') AS seq`).catch(() => [{ seq: Math.floor(Math.random() * 900000 + 100000) }]);
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('request_number_seq') AS seq`).catch((e) => { logger.error(e, "requests query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const ref = generateRef("REQ", seqRow.seq);
 
     const r = await rawExecute(

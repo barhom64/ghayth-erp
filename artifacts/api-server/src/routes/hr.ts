@@ -2662,7 +2662,7 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
       refType: "employee_violations",
       refId: insertId,
     }).catch((e) => logger.error(e, "hr background task failed"));
-    const managerAsn = await getManagerAssignmentId(scope.companyId, asn.branchId ?? scope.branchId ?? null).catch(() => null);
+    const managerAsn = await getManagerAssignmentId(scope.companyId, asn.branchId ?? scope.branchId ?? null).catch((e) => { logger.error(e, "hr manager lookup failed"); return null; });
     if (managerAsn && managerAsn !== Number(assignmentId)) {
       createNotification({
         companyId: scope.companyId,
@@ -3594,7 +3594,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
       });
     }
 
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('letter_number_seq') AS seq`).catch(() => [{ seq: Math.floor(Math.random() * 900000 + 100000) }]);
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('letter_number_seq') AS seq`).catch((e) => { logger.error(e, "hr query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const letterRef = generateRef("LTR", seqRow.seq);
 
     const { insertId } = await rawExecute(
@@ -6556,7 +6556,7 @@ router.get("/company-documents", requirePermission("hr:read"), async (req, res) 
     const [countRow] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM company_documents WHERE "companyId"=$1 AND status != 'deleted'`,
       [scope.companyId]
-    ).catch(() => [{ total: 0 }] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [{ total: 0 }] as any[]; });
     const rows = await rawQuery<any>(
       `SELECT * FROM company_documents WHERE "companyId"=$1 AND status != 'deleted' ORDER BY "expiryDate" ASC NULLS LAST LIMIT $2 OFFSET $3`,
       [scope.companyId, Number(lim), offset]
@@ -6613,7 +6613,7 @@ router.get("/employee-documents", requirePermission("hr:read"), async (req, res)
     const [countRow] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM employee_documents ed ${where}`,
       countParams
-    ).catch(() => [{ total: 0 }] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [{ total: 0 }] as any[]; });
 
     params.push(Number(lim));
     const limitParam = paramIdx++;

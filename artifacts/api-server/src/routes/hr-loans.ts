@@ -280,7 +280,7 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
       refType: "hr_employee_loan",
       refId: insertId,
       amount,
-    }).catch(() => null);
+    }).catch((e) => { logger.error(e, "hr-loans approval chain failed"); return null; });
 
     // ── محرك سير العمل ──
     submitWorkflow({
@@ -297,7 +297,7 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
 
     // ── إشعار المدير (fallback إذا لم توجد سلسلة) ──
     if (!approvalResult?.requiresApproval) {
-      const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId ?? scope.branchId).catch(() => null);
+      const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId ?? scope.branchId).catch((e) => { logger.error(e, "hr-loans manager lookup failed"); return null; });
       if (managerId) {
         createNotification({
           companyId: scope.companyId, assignmentId: managerId,

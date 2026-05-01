@@ -604,7 +604,7 @@ router.get("/cases/:id", requirePermission("legal:read"), async (req, res) => {
     const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("القضية غير موجودة");
 
-    const sessions = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 ORDER BY "sessionDate" DESC LIMIT 500`, [row.id]);
+    const sessions = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 AND "deletedAt" IS NULL ORDER BY "sessionDate" DESC LIMIT 500`, [row.id]);
 
     res.json({ ...row, sessions, allowedTransitions: VALID_CASE_TRANSITIONS[row.status] || [] });
   } catch (err) { handleRouteError(err, res, "Get case error:"); }
@@ -766,7 +766,7 @@ router.get("/cases/:caseId/sessions", requirePermission("legal:read"), async (re
     const caseId = parseId(req.params.caseId, "caseId");
     const [legalCase] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!legalCase) throw new NotFoundError("القضية غير موجودة");
-    const rows = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 ORDER BY "sessionDate" DESC LIMIT 500`, [caseId]);
+    const rows = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 AND "deletedAt" IS NULL ORDER BY "sessionDate" DESC LIMIT 500`, [caseId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal sessions error:"); }
 });
@@ -937,7 +937,7 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
       details: JSON.stringify({ caseId, sessionDate: b.sessionDate, location: b.location, judge: b.judge }),
     }).catch((e) => logger.error(e, "legal background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
     res.status(201).json({ ...row, distanceToCourtKm, invoiceId, invoiceError, journalEntryId, calendarTaskCreated: !!legalCase.lawyerName });
   } catch (err) { handleRouteError(err, res, "Create session error:"); }
 });
@@ -950,7 +950,7 @@ router.get("/stats", requirePermission("legal:read"), async (req, res) => {
     const [cases] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='in_progress') as "inProgress" FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [expiring] = await rawQuery<any>(`SELECT COUNT(*) as count FROM legal_contracts WHERE "companyId"=$1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND status='active' AND "deletedAt" IS NULL`, [cid]);
     const [sessions] = await rawQuery<any>(`SELECT COUNT(*) as upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id=ls."caseId" WHERE lc."companyId"=$1 AND lc."deletedAt" IS NULL AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`, [cid]);
-    const [contingent] = await rawQuery<any>(`SELECT COALESCE(SUM("financialRisk"),0) as total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`, [cid]).catch(() => [{ total: 0 }]);
+    const [contingent] = await rawQuery<any>(`SELECT COALESCE(SUM("financialRisk"),0) as total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`, [cid]).catch((e) => { logger.error(e, "legal query failed"); return [{ total: 0 }]; });
     res.json({
       totalContracts: Number(contracts.total), activeContracts: Number(contracts.active),
       totalCases: Number(cases.total), openCases: Number(cases.open), inProgressCases: Number(cases.inProgress),
@@ -1371,7 +1371,7 @@ router.get("/judgments/financial-report", requirePermission("legal:read"), async
     const [contingent] = await rawQuery<any>(
       `SELECT COALESCE(SUM("financialRisk"),0) AS total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`,
       [scope.companyId]
-    ).catch(() => [{ total: 0 }]);
+    ).catch((e) => { logger.error(e, "legal query failed"); return [{ total: 0 }]; });
     res.json({
       data: rows,
       totalAmount: Number(totals?.totalAmount || 0),
@@ -1401,7 +1401,7 @@ router.get("/financial-report", requirePermission("legal:read"), async (req, res
               COALESCE(SUM("paidAmount"),0) AS "totalPaid"
        FROM legal_judgments WHERE "companyId"=$1`,
       [scope.companyId]
-    ).catch(() => [{ totalJudgments: 0, totalPaid: 0 }]);
+    ).catch((e) => { logger.error(e, "legal query failed"); return [{ totalJudgments: 0, totalPaid: 0 }]; });
     res.json({
       data: {
         byStatus: cases,

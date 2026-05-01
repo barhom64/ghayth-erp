@@ -162,6 +162,7 @@ router.get("/jobs", portalLimiter, async (_req: Request, res: Response) => {
               "salaryMin", "salaryMax", status, "closingDate", "createdAt"
        FROM job_postings
        WHERE status = 'open'
+         AND "deletedAt" IS NULL
          AND ("isPublic" IS NULL OR "isPublic" = true)
          AND ("closingDate" IS NULL OR "closingDate" >= CURRENT_DATE)
        ORDER BY "createdAt" DESC LIMIT 500`
@@ -179,7 +180,7 @@ router.get("/jobs/:id", portalLimiter, async (req: Request, res: Response) => {
       `SELECT id, title, department, location, type, description, requirements,
               "salaryMin", "salaryMax", status, "closingDate", "createdAt"
        FROM job_postings
-       WHERE id = $1 AND status = 'open'`,
+       WHERE id = $1 AND status = 'open' AND "deletedAt" IS NULL`,
       [id]
     );
     if (rows.length === 0) {
@@ -274,6 +275,8 @@ router.get("/my-applications", careersAuth, async (req: Request, res: Response) 
        FROM job_applications ja
        JOIN job_postings jp ON jp.id = ja."postingId"
        WHERE ja."applicantAccountId" = $1
+         AND ja."deletedAt" IS NULL
+         AND jp."deletedAt" IS NULL
        ORDER BY ja."createdAt" DESC LIMIT 500`,
       [(req as any).applicantId]
     );

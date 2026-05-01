@@ -429,7 +429,7 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
        FROM attendance
        WHERE "companyId" = $1 AND date = $2::date`,
       [cid, date]
-    ).catch(() => [{ total: 0, present: 0, absent: 0, late: 0 }]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, present: 0, absent: 0, late: 0 }]; });
 
     const [tasks] = await rawQuery<any>(
       `SELECT
@@ -439,7 +439,7 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
        FROM tasks
        WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid, date]
-    ).catch(() => [{ scheduled: 0, completed: 0, overdue: 0 }]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{ scheduled: 0, completed: 0, overdue: 0 }]; });
 
     const [financial] = await rawQuery<any>(
       `SELECT
@@ -449,13 +449,13 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
        FROM invoices
        WHERE "companyId" = $1 AND "deletedAt" IS NULL AND DATE("createdAt") = $2::date`,
       [cid, date]
-    ).catch(() => [{ invoicesTotal: 0, paidTotal: 0, invoiceCount: 0 }]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{ invoicesTotal: 0, paidTotal: 0, invoiceCount: 0 }]; });
 
     const [leaves] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM hr_leave_requests
        WHERE "companyId" = $1 AND DATE("createdAt") = $2::date`,
       [cid, date]
-    ).catch(() => [{ total: 0 }]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0 }]; });
 
     const [tickets] = await rawQuery<any>(
       `SELECT
@@ -464,7 +464,7 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
        FROM support_tickets
        WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid, date]
-    ).catch(() => [{ opened: 0, resolved: 0 }]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{ opened: 0, resolved: 0 }]; });
 
     res.json({
       date,
@@ -508,7 +508,7 @@ router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, re
          FROM tasks
          WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "scheduledDate" BETWEEN $2::date AND $3::date`,
         [cid, startDate, endDate]
-      ).catch(() => [{ total: 0, completed: 0, overdue: 0, completionRate: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, completed: 0, overdue: 0, completionRate: 0 }]; });
 
       const [attendance] = await rawQuery<any>(
         `SELECT
@@ -518,14 +518,14 @@ router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, re
          FROM attendance
          WHERE "companyId" = $1 AND date BETWEEN $2::date AND $3::date`,
         [cid, startDate, endDate]
-      ).catch(() => [{ total: 0, present: 0, presentRate: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, present: 0, presentRate: 0 }]; });
 
       const [revenue] = await rawQuery<any>(
         `SELECT COALESCE(SUM("paidAmount"), 0) AS total
          FROM invoices
          WHERE "companyId" = $1 AND "deletedAt" IS NULL AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
         [cid, startDate, endDate]
-      ).catch(() => [{ total: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0 }]; });
 
       const [tickets] = await rawQuery<any>(
         `SELECT
@@ -534,7 +534,7 @@ router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, re
          FROM support_tickets
          WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
         [cid, startDate, endDate]
-      ).catch(() => [{ opened: 0, resolved: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ opened: 0, resolved: 0 }]; });
 
       return {
         tasks: {
@@ -606,7 +606,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
            ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'completed') / NULLIF(COUNT(*), 0), 0) AS "completionRate"
          FROM tasks WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "scheduledDate" BETWEEN $2::date AND $3::date`,
         [cid, startDate, endDate]
-      ).catch(() => [{ total: 0, completed: 0, overdue: 0, completionRate: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, completed: 0, overdue: 0, completionRate: 0 }]; });
 
       const [attendance] = await rawQuery<any>(
         `SELECT
@@ -617,7 +617,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
            ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'present') / NULLIF(COUNT(*), 0), 0) AS "presentRate"
          FROM attendance WHERE "companyId" = $1 AND date BETWEEN $2::date AND $3::date`,
         [cid, startDate, endDate]
-      ).catch(() => [{ total: 0, present: 0, absent: 0, late: 0, presentRate: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, present: 0, absent: 0, late: 0, presentRate: 0 }]; });
 
       const [financial] = await rawQuery<any>(
         `SELECT
@@ -627,7 +627,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
            COUNT(*) FILTER (WHERE status IN ('overdue','sent') AND "dueDate" < CURRENT_DATE) AS "overdueInvoices"
          FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
         [cid, startDate, endDate]
-      ).catch(() => [{ revenue: 0, collected: 0, invoiceCount: 0, overdueInvoices: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ revenue: 0, collected: 0, invoiceCount: 0, overdueInvoices: 0 }]; });
 
       const [hr] = await rawQuery<any>(
         `SELECT
@@ -635,7 +635,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
          FROM employee_assignments
          WHERE "companyId" = $1 AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
         [cid, startDate, endDate]
-      ).catch(() => [{ newEmployees: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ newEmployees: 0 }]; });
 
       const [leaves] = await rawQuery<any>(
         `SELECT
@@ -646,7 +646,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
          FROM hr_leave_requests
          WHERE "companyId" = $1 AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
         [cid, startDate, endDate]
-      ).catch(() => [{ total: 0, approved: 0, rejected: 0, totalDays: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, approved: 0, rejected: 0, totalDays: 0 }]; });
 
       const [tickets] = await rawQuery<any>(
         `SELECT
@@ -656,7 +656,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
              THEN EXTRACT(EPOCH FROM ("resolvedAt" - "createdAt")) / 3600 END), 1) AS "avgResolutionHours"
          FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
         [cid, startDate, endDate]
-      ).catch(() => [{ opened: 0, resolved: 0, avgResolutionHours: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ opened: 0, resolved: 0, avgResolutionHours: 0 }]; });
 
       return {
         tasks: {
@@ -735,7 +735,7 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
          COALESCE(SUM(total - "paidAmount") FILTER (WHERE status IN ('sent','partial','overdue') AND "dueDate" < CURRENT_DATE), 0) AS "overdueAmount"
        FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid, thisMonthStart, lastMonthStart, lastMonthEnd]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [expenses] = await rawQuery<any>(
       `SELECT
@@ -743,7 +743,7 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
          COALESCE(SUM(CASE WHEN DATE("createdAt") >= $3::date AND DATE("createdAt") <= $4::date THEN amount ELSE 0 END), 0) AS "expensesLastMonth"
        FROM vouchers WHERE "companyId" = $1 AND type = 'payment'`,
       [cid, thisMonthStart, lastMonthStart, lastMonthEnd]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [hr] = await rawQuery<any>(
       `SELECT
@@ -751,7 +751,7 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
          COUNT(*) FILTER (WHERE status = 'pending') AS "pendingLeaveRequests"
        FROM employee_assignments WHERE "companyId" = $1`,
       [cid]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [attendance] = await rawQuery<any>(
       `SELECT
@@ -759,12 +759,12 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
          COUNT(*) AS "totalToday"
        FROM attendance WHERE "companyId" = $1 AND date = CURRENT_DATE`,
       [cid]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [pendingLeave] = await rawQuery<any>(
       `SELECT COUNT(*) AS cnt FROM hr_leave_requests WHERE "companyId" = $1 AND status = 'pending'`,
       [cid]
-    ).catch(() => [{ cnt: 0 }]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{ cnt: 0 }]; });
 
     const [ops] = await rawQuery<any>(
       `SELECT
@@ -772,17 +772,17 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
          COUNT(*) AS "totalProjects"
        FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [tickets] = await rawQuery<any>(
       `SELECT COUNT(*) FILTER (WHERE status = 'open') AS "openTickets" FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [maintenance] = await rawQuery<any>(
       `SELECT COUNT(*) FILTER (WHERE status = 'pending') AS "pendingMaintenance" FROM maintenance_requests WHERE "companyId" = $1`,
       [cid]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [contracts] = await rawQuery<any>(
       `SELECT
@@ -790,13 +790,13 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
          COUNT(*) FILTER (WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 90) AS "expiringContracts90"
        FROM legal_contracts WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [docs] = await rawQuery<any>(
       `SELECT COUNT(*) AS "expiringDocs" FROM employee_documents
        WHERE "companyId" = $1 AND "expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`,
       [cid]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const revenueThisMonth = Number(financial?.revenueThisMonth ?? 0);
     const revenueLastMonth = Number(financial?.revenueLastMonth ?? 0);
@@ -863,20 +863,20 @@ router.get("/reports/branch-performance", requirePermission("bi:read"), async (r
          FROM invoices WHERE "companyId" = $1 AND "branchId" = $2 AND "deletedAt" IS NULL
            AND DATE("createdAt") BETWEEN $3::date AND $4::date`,
         [cid, branch.id, dateFrom, dateTo]
-      ).catch(() => [{}]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
       const [expenses] = await rawQuery<any>(
         `SELECT COALESCE(SUM(amount), 0) AS expenses FROM vouchers
          WHERE "companyId" = $1 AND "branchId" = $2 AND type = 'payment'
            AND DATE("createdAt") BETWEEN $3::date AND $4::date`,
         [cid, branch.id, dateFrom, dateTo]
-      ).catch(() => [{}]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
       const [employees] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM employee_assignments
          WHERE "companyId" = $1 AND "branchId" = $2 AND status = 'active'`,
         [cid, branch.id]
-      ).catch(() => [{}]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
       const [attRow] = await rawQuery<any>(
         `SELECT
@@ -886,20 +886,20 @@ router.get("/reports/branch-performance", requirePermission("bi:read"), async (r
          WHERE "companyId" = $1 AND "branchId" = $2
            AND date BETWEEN $3::date AND $4::date`,
         [cid, branch.id, dateFrom, dateTo]
-      ).catch(() => [{}]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
       const [ticketsRow] = await rawQuery<any>(
         `SELECT COUNT(*) AS cnt FROM support_tickets
          WHERE "companyId" = $1 AND status = 'open'`,
         [cid]
-      ).catch(() => [{}]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
       const [satisfactionRow] = await rawQuery<any>(
         `SELECT COALESCE(AVG(rating), 0) AS avg FROM support_tickets
          WHERE "companyId" = $1 AND rating IS NOT NULL
            AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
         [cid, dateFrom, dateTo]
-      ).catch(() => [{}]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
       const rev = Number(revenue?.revenue ?? 0);
       const exp = Number(expenses?.expenses ?? 0);
@@ -1164,7 +1164,7 @@ router.get("/reports/training-roi", requirePermission("bi:read"), async (req, re
        WHERE t."companyId" = $1
          AND DATE(t."startDate") BETWEEN $2::date AND $3::date`,
       [cid, dateFrom, dateTo]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const byProgram = await rawQuery<any>(
       `SELECT
@@ -1246,7 +1246,7 @@ router.get("/ai-insights", requirePermission("bi:read"), async (req, res) => {
          COUNT(*) FILTER (WHERE "isDismissed" = false) AS total
        FROM smart_alerts WHERE "companyId" = $1`,
       [cid]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     res.json({
       alerts,
@@ -1340,7 +1340,7 @@ router.get("/alert-fatigue/daily-count", requirePermission("bi:read"), async (re
       `SELECT COUNT(*) AS today_count FROM notifications
        WHERE "assignmentId" = $1 AND DATE("createdAt") = CURRENT_DATE`,
       [scope.activeAssignmentId]
-    ).catch(() => [{ today_count: 0 }]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{ today_count: 0 }]; });
     const limit = 50;
     const count = Number(row?.today_count ?? 0);
     res.json({ todayCount: count, dailyLimit: limit, isOverLimit: count >= limit });

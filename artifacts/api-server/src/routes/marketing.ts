@@ -161,7 +161,7 @@ router.get("/stats", requirePermission("marketing:read"), async (req, res) => {
     const [active] = await rawQuery(`SELECT COUNT(*) as count FROM marketing_campaigns WHERE status='active' AND "companyId"=$1`, [cid]);
     const [budget] = await rawQuery(`SELECT COALESCE(SUM(budget),0) as total FROM marketing_campaigns WHERE "companyId"=$1`, [cid]);
     const [spent] = await rawQuery(`SELECT COALESCE(SUM(spent),0) as total FROM marketing_campaigns WHERE "companyId"=$1`, [cid]);
-    const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM(revenue),0) as total FROM marketing_campaigns WHERE "companyId"=$1`, [cid]).catch(() => [{ total: 0 }]);
+    const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM(revenue),0) as total FROM marketing_campaigns WHERE "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "marketing query failed"); return [{ total: 0 }]; });
     const totalSpent = Number(spent.total);
     const totalRevenue = Number(revenue?.total || 0);
     const roas = totalSpent > 0 ? (totalRevenue / totalSpent).toFixed(2) : null;
@@ -193,7 +193,7 @@ router.get("/campaigns/:id/roas", requirePermission("marketing:read"), async (re
     const leads = await rawQuery<any>(
       `SELECT COUNT(*) AS count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND source=$2`,
       [scope.companyId, campaign.name]
-    ).catch(() => [{ count: 0 }]);
+    ).catch((e) => { logger.error(e, "marketing query failed"); return [{ count: 0 }]; });
     res.json({
       campaignId: id,
       campaignName: campaign.name,

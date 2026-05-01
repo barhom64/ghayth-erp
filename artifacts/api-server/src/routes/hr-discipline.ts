@@ -1233,7 +1233,7 @@ router.get("/auto-detection/summary", requirePermission("hr:read"), async (req, 
        WHERE "companyId" = $1
          AND "detectedAt" >= NOW() - INTERVAL '30 days'`,
       [scope.companyId]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "hr discipline query failed"); return [{}]; });
 
     // تفصيل حسب النوع من آخر 30 يوم
     const byType = await rawQuery<any>(

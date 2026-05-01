@@ -107,7 +107,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
          WHERE "companyId"=$1 AND status IN ('pending','in_review','escalated')
            AND "slaStatus" IN ('breached','at_risk')`,
         [companyId]
-      ).catch(() => [{ n: 0 }]);
+      ).catch((e) => { logger.error(e, "exec dashboard query failed"); return [{ n: 0 }]; });
       return {
         support: Number(support?.n ?? 0),
         workflow: Number(workflow?.n ?? 0),

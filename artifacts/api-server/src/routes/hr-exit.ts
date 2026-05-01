@@ -246,7 +246,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
       `SELECT COALESCE(SUM(balance), 0) AS balance FROM leave_balances
        WHERE "assignmentId" = $1 AND "companyId" = $2`,
       [b.assignmentId, scope.companyId]
-    ).catch(() => [{ balance: 0 }]);
+    ).catch((e) => { logger.error(e, "hr exit query failed"); return [{ balance: 0 }]; });
     const leaveBalance = Number(lb?.balance ?? 0);
     const dailyRate = salary / 30;
     const leaveCompensation = roundTo2(leaveBalance * dailyRate);
@@ -257,7 +257,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
        FROM hr_employee_loans
        WHERE "assignmentId" = $1 AND "companyId" = $2 AND status IN ('active','approved') AND "deletedAt" IS NULL`,
       [b.assignmentId, scope.companyId]
-    ).catch(() => [{ remaining: 0 }]);
+    ).catch((e) => { logger.error(e, "hr exit query failed"); return [{ remaining: 0 }]; });
     const loanDeductions = Number(loans?.remaining ?? 0);
     const otherDeductions = Number(b.otherDeductions || 0);
 
@@ -300,7 +300,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
       refType: "hr_exit_request",
       refId: insertId,
       amount: netSettlement,
-    }).catch(() => null);
+    }).catch((e) => { logger.error(e, "hr-exit approval chain failed"); return null; });
 
     // ── محرك سير العمل ──
     submitWorkflow({
@@ -317,7 +317,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
 
     // ── إشعار المدير (fallback) ──
     if (!approvalResult?.requiresApproval) {
-      const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId ?? scope.branchId).catch(() => null);
+      const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId ?? scope.branchId).catch((e) => { logger.error(e, "hr-exit manager lookup failed"); return null; });
       if (managerId) {
         createNotification({
           companyId: scope.companyId, assignmentId: managerId,

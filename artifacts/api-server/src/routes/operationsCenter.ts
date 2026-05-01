@@ -179,7 +179,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
       const [violations] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM employee_violations WHERE "companyId" = ANY($1::int[]) AND status IN ('pending_inquiry','pending_employee','pending_manager','pending_gm')`,
         [companies]
-      ).catch(() => [{ total: 0 }]);
+      ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; });
       const absentVal = Math.max(0, Number(absent?.total ?? 0));
       const pendingLeavesVal = Number(pendingLeaves?.total ?? 0);
       const expiringDocsVal = Number(expiringDocs?.total ?? 0);
@@ -204,17 +204,17 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
       const [pendingExpenses] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM expense_claims WHERE ${where} AND status='pending'`,
         params
-      ).catch(() => [{ total: 0 }]);
+      ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; });
       const [pendingPO] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM purchase_requests WHERE ${where} AND status='pending'`,
         params
-      ).catch(() => [{ total: 0 }]);
+      ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; });
       const [cashFlow] = await rawQuery<any>(
         `SELECT
            COALESCE((SELECT SUM(amount) FROM vouchers WHERE "companyId"=$1 AND type='receipt' AND "createdAt" >= date_trunc('month', CURRENT_DATE)), 0) AS inflow,
            COALESCE((SELECT SUM(amount) FROM vouchers WHERE "companyId"=$1 AND type='payment' AND "createdAt" >= date_trunc('month', CURRENT_DATE)), 0) AS outflow`,
         [cid]
-      ).catch(() => [{ inflow: 0, outflow: 0 }]);
+      ).catch((e) => { logger.error(e, "operations center query failed"); return [{ inflow: 0, outflow: 0 }]; });
       const inflow = Number(cashFlow?.inflow ?? 0);
       const outflow = Number(cashFlow?.outflow ?? 0);
       const netCashFlow = inflow - outflow;
@@ -243,7 +243,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
       const [activeTrips] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM fleet_trips WHERE ${where} AND status='in_progress'`,
         params
-      ).catch(() => [{ total: 0 }]);
+      ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; });
       const needServiceVal = Number(vehicleStats?.needService ?? 0);
       const activeTripsVal = Number(activeTrips?.total ?? 0);
       sections.fleet = {

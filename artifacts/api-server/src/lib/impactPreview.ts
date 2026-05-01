@@ -1,6 +1,7 @@
 import { rawQuery } from "./rawdb.js";
 import { currentPeriod, todayISO, roundTo2 } from "./businessHelpers.js";
 import { NotFoundError } from "./errorHandler.js";
+import { logger } from "./logger.js";
 
 export interface ImpactItem {
   category: string;
@@ -159,7 +160,7 @@ export async function computeTerminationImpact(
     `SELECT COALESCE(SUM(amount),0) AS total FROM custodies
      WHERE "companyId" = $1 AND "employeeId" = $2 AND status != 'settled'`,
     [companyId, employeeId]
-  ).catch(() => [{ total: 0 }]);
+  ).catch((e) => { logger.error(e, "impact preview query failed"); return [{ total: 0 }]; });
   const custodyTotal = Number(custodies?.total ?? 0);
   if (custodyTotal > 0) {
     items.push({
@@ -174,7 +175,7 @@ export async function computeTerminationImpact(
     `SELECT COALESCE(SUM("remainingAmount"),0) AS total FROM loans
      WHERE "companyId" = $1 AND "employeeId" = $2 AND status != 'settled'`,
     [companyId, employeeId]
-  ).catch(() => [{ total: 0 }]);
+  ).catch((e) => { logger.error(e, "impact preview query failed"); return [{ total: 0 }]; });
   const loanTotal = Number(loans?.total ?? 0);
   if (loanTotal > 0) {
     items.push({

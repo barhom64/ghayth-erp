@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, NotFoundError,
   parseId,
@@ -342,21 +342,25 @@ router.post("/definitions", requirePermission("admin:write"), async (req, res) =
     const body = zodParse(createDefinitionSchema.safeParse(req.body));
     const scope = req.scope!;
     const { requestType, requestTypeLabel, description, isReturnable, enableEscalation, defaultSlaHours, steps } = body;
-    const { insertId } = await rawExecute(
-      `INSERT INTO workflow_definitions ("companyId", "requestType", "requestTypeLabel", description, "isReturnable", "enableEscalation", "defaultSlaHours")
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [scope.companyId, requestType, requestTypeLabel, description ?? null, isReturnable ?? true, enableEscalation ?? true, defaultSlaHours ?? 48]
-    );
-    if (Array.isArray(steps)) {
-      for (let i = 0; i < steps.length; i++) {
-        const s = steps[i];
-        await rawExecute(
-          `INSERT INTO workflow_steps ("definitionId", "stepOrder", "stepName", "requiredRole", "slaHours", "autoApproveOnTimeout", "canReject", "canRefer")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-          [insertId, i + 1, s.stepName, s.requiredRole, s.slaHours ?? 48, s.autoApproveOnTimeout ?? false, s.canReject ?? true, s.canRefer ?? true]
-        );
+    const insertId = await withTransaction(async (client) => {
+      const defRes = await client.query(
+        `INSERT INTO workflow_definitions ("companyId", "requestType", "requestTypeLabel", description, "isReturnable", "enableEscalation", "defaultSlaHours")
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+        [scope.companyId, requestType, requestTypeLabel, description ?? null, isReturnable ?? true, enableEscalation ?? true, defaultSlaHours ?? 48]
+      );
+      const defId = defRes.rows[0].id;
+      if (Array.isArray(steps)) {
+        for (let i = 0; i < steps.length; i++) {
+          const s = steps[i];
+          await client.query(
+            `INSERT INTO workflow_steps ("definitionId", "stepOrder", "stepName", "requiredRole", "slaHours", "autoApproveOnTimeout", "canReject", "canRefer")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [defId, i + 1, s.stepName, s.requiredRole, s.slaHours ?? 48, s.autoApproveOnTimeout ?? false, s.canReject ?? true, s.canRefer ?? true]
+          );
+        }
       }
-    }
+      return defId;
+    });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_definitions", entityId: insertId, after: { requestType, requestTypeLabel } }).catch((e) => logger.error(e, "workflows background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "workflow_definitions", entityId: insertId, details: JSON.stringify({ requestType, requestTypeLabel }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.status(201).json({ id: insertId });
@@ -372,26 +376,28 @@ router.put("/definitions/:id", requirePermission("admin:write"), async (req, res
     const id = parseId(req.params.id, "id");
     const { requestTypeLabel, description, isReturnable, enableEscalation, defaultSlaHours, isActive, steps } = body;
 
-    await rawExecute(
-      `UPDATE workflow_definitions SET "requestTypeLabel" = COALESCE($1, "requestTypeLabel"),
-       description = COALESCE($2, description), "isReturnable" = COALESCE($3, "isReturnable"),
-       "enableEscalation" = COALESCE($4, "enableEscalation"), "defaultSlaHours" = COALESCE($5, "defaultSlaHours"),
-       "isActive" = COALESCE($6, "isActive"), "updatedAt" = NOW()
-       WHERE id = $7 AND "companyId" = $8`,
-      [requestTypeLabel ?? null, description ?? null, isReturnable ?? null, enableEscalation ?? null, defaultSlaHours ?? null, isActive ?? null, id, scope.companyId]
-    );
+    await withTransaction(async (client) => {
+      await client.query(
+        `UPDATE workflow_definitions SET "requestTypeLabel" = COALESCE($1, "requestTypeLabel"),
+         description = COALESCE($2, description), "isReturnable" = COALESCE($3, "isReturnable"),
+         "enableEscalation" = COALESCE($4, "enableEscalation"), "defaultSlaHours" = COALESCE($5, "defaultSlaHours"),
+         "isActive" = COALESCE($6, "isActive"), "updatedAt" = NOW()
+         WHERE id = $7 AND "companyId" = $8`,
+        [requestTypeLabel ?? null, description ?? null, isReturnable ?? null, enableEscalation ?? null, defaultSlaHours ?? null, isActive ?? null, id, scope.companyId]
+      );
 
-    if (Array.isArray(steps)) {
-      await rawExecute(`DELETE FROM workflow_steps WHERE "definitionId" = $1`, [id]);
-      for (let i = 0; i < steps.length; i++) {
-        const s = steps[i];
-        await rawExecute(
-          `INSERT INTO workflow_steps ("definitionId", "stepOrder", "stepName", "requiredRole", "slaHours", "autoApproveOnTimeout", "canReject", "canRefer")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-          [id, i + 1, s.stepName, s.requiredRole, s.slaHours ?? 48, s.autoApproveOnTimeout ?? false, s.canReject ?? true, s.canRefer ?? true]
-        );
+      if (Array.isArray(steps)) {
+        await client.query(`DELETE FROM workflow_steps WHERE "definitionId" = $1`, [id]);
+        for (let i = 0; i < steps.length; i++) {
+          const s = steps[i];
+          await client.query(
+            `INSERT INTO workflow_steps ("definitionId", "stepOrder", "stepName", "requiredRole", "slaHours", "autoApproveOnTimeout", "canReject", "canRefer")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [id, i + 1, s.stepName, s.requiredRole, s.slaHours ?? 48, s.autoApproveOnTimeout ?? false, s.canReject ?? true, s.canRefer ?? true]
+          );
+        }
       }
-    }
+    });
 
     const [def] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1`, [id]);
     const updatedSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" LIMIT 500`, [id]);

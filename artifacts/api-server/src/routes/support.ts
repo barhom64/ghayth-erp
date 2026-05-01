@@ -608,7 +608,7 @@ router.get("/stats", requirePermission("support:read"), async (req, res) => {
     const [tickets] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='resolved') as resolved, COUNT(*) FILTER (WHERE status IN ('open','in_progress','field_visit') AND "slaDeadline" < NOW()) as "slaBreach" FROM support_tickets WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [avgRes] = await rawQuery<any>(`SELECT AVG(EXTRACT(EPOCH FROM ("resolvedAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND status='resolved' AND "resolvedAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]);
     const [firstResponse] = await rawQuery<any>(`SELECT AVG(EXTRACT(EPOCH FROM ("firstResponseAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND "firstResponseAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]);
-    const [csat] = await rawQuery<any>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [cid]).catch(() => [{ avg: null, total: 0 }]);
+    const [csat] = await rawQuery<any>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "support query failed"); return [{ avg: null, total: 0 }]; });
     res.json({
       totalTickets: Number(tickets.total), openTickets: Number(tickets.open),
       resolvedTickets: Number(tickets.resolved), slaBreach: Number(tickets.slaBreach),

@@ -103,7 +103,7 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
       safe(() => rawQuery<any>(
         `SELECT id, "unitNumber", "insuranceExpiry" as "date"
          FROM property_units
-         WHERE "companyId" = $1 AND "insuranceExpiry" BETWEEN $2 AND $3
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "insuranceExpiry" BETWEEN $2 AND $3
          ORDER BY "insuranceExpiry" LIMIT 30`,
         [cid, now.slice(0, 10), cutoff.slice(0, 10)]
       ), []),

@@ -234,7 +234,7 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
       for (const p of productRows) productNameById.set(Number(p.id), p.name);
     }
 
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('pr_number_seq') AS seq`).catch(() => [{ seq: Math.floor(Math.random() * 900000 + 100000) }]);
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('pr_number_seq') AS seq`).catch((e) => { logger.error(e, "finance purchase query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const ref = generateRef("PR", seqRow.seq, 5);
 
     const { insertId } = await rawExecute(
@@ -377,7 +377,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
     const vatAmount = computeVat(subtotal, vatRate);
     const totalAmount = subtotal + vatAmount;
 
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch(() => [{ seq: Math.floor(Math.random() * 900000 + 100000) }]);
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch((e) => { logger.error(e, "finance purchase query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const poRef = generateRef("PO", seqRow.seq, 5);
 
     const { insertId: poId } = await rawExecute(
@@ -481,7 +481,7 @@ purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), asy
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies?.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
     const effectiveBranchId = branchId ?? scope.branchId;
 
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch(() => [{ seq: Math.floor(Math.random() * 900000 + 100000) }]);
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch((e) => { logger.error(e, "finance purchase query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const ref = generateRef("PO", seqRow.seq, 5);
 
     const { insertId } = await rawExecute(

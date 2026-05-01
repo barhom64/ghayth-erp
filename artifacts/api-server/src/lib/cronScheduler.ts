@@ -592,7 +592,7 @@ async function leaveReturnToWorkClosure(): Promise<string> {
         }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
 
         // Also nudge the direct manager so staffing dashboards update.
-        const managerAssignmentId = await getManagerAssignmentId(lv.companyId, asn.branchId).catch(() => null);
+        const managerAssignmentId = await getManagerAssignmentId(lv.companyId, asn.branchId).catch((e) => { logger.error(e, "[cronScheduler] manager lookup failed"); return null; });
         if (managerAssignmentId) {
           createNotification({
             companyId: lv.companyId,
@@ -676,7 +676,7 @@ async function inquiryMemoEscalation(): Promise<string> {
         }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
       }
 
-      const managerAssignmentId = await getManagerAssignmentId(memo.companyId, memo.branchId).catch(() => null);
+      const managerAssignmentId = await getManagerAssignmentId(memo.companyId, memo.branchId).catch((e) => { logger.error(e, "[cronScheduler] manager lookup failed"); return null; });
       if (managerAssignmentId) {
         createNotification({
           companyId: memo.companyId,
@@ -2445,22 +2445,22 @@ async function dailySystemHealthReport(): Promise<string> {
 
   const [errorCount] = await rawQuery<any>(
     `SELECT COUNT(*) AS cnt FROM cron_logs WHERE status = 'failed' AND "createdAt" > NOW() - INTERVAL '24 hours'`
-  ).catch(() => [{ cnt: 0 }]);
+  ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ cnt: 0 }]; });
 
   const [failedNotifs] = await rawQuery<any>(
     `SELECT COUNT(*) AS cnt FROM notification_delivery_log WHERE status = 'failed' AND "queuedAt" > NOW() - INTERVAL '24 hours'`
-  ).catch(() => [{ cnt: 0 }]);
+  ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ cnt: 0 }]; });
 
   const [dbSize] = await rawQuery<any>(
     `SELECT pg_size_pretty(pg_database_size(current_database())) AS size`
-  ).catch(() => [{ size: 'N/A' }]);
+  ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ size: 'N/A' }]; });
 
   for (const company of companies) {
     const [activeUsers] = await rawQuery<any>(
       `SELECT COUNT(DISTINCT "assignmentId") AS cnt FROM activity_logs
        WHERE "companyId" = $1 AND "createdAt" > NOW() - INTERVAL '24 hours'`,
       [company.id]
-    ).catch(() => [{ cnt: 0 }]);
+    ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ cnt: 0 }]; });
 
     const [techAsgn] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1
@@ -2712,7 +2712,7 @@ async function monthlyFxRevaluationReminder(): Promise<string> {
         `SELECT COUNT(*)::int AS n FROM invoices
          WHERE "companyId"=$1 AND currency IS NOT NULL AND currency<>'SAR' AND status NOT IN ('paid','cancelled')`,
         [c.id]
-      ).catch(() => [{ n: 0 }]);
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ n: 0 }]; });
       if (!fxExposure || fxExposure.n === 0) continue;
 
       const [cfoRow] = await rawQuery<{ id: number }>(

@@ -798,7 +798,7 @@ journalRouter.post("/journal", requirePermission("finance:create"), async (req, 
     const totalCredit = lines.reduce((s: number, l: any) => s + (Number(l.credit) || 0), 0);
     if (Math.abs(totalDebit - totalCredit) > 0.01) throw new ValidationError(`القيد غير متوازن: مدين ${totalDebit.toFixed(2)} ≠ دائن ${totalCredit.toFixed(2)}`, { field: "lines", fix: "تأكد من تساوي المدين والدائن" });
 
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('journal_number_seq') AS seq`).catch(() => [{ seq: Math.floor(Math.random() * 900000 + 100000) }]);
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('journal_number_seq') AS seq`).catch((e) => { logger.error(e, "finance journal query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const ref = generateRef("JE", seqRow.seq, 5);
     const { insertId } = await rawExecute(
       `INSERT INTO journal_entries ("companyId","branchId",ref,description,status,"createdAt") VALUES ($1,$2,$3,$4,'posted',$5)`,

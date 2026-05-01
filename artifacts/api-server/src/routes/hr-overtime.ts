@@ -277,7 +277,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
       refType: "hr_overtime_request",
       refId: insertId,
       amount: totalAmount,
-    }).catch(() => null);
+    }).catch((e) => { logger.error(e, "hr-overtime approval chain failed"); return null; });
 
     // ── محرك سير العمل ──
     submitWorkflow({
@@ -294,7 +294,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
 
     // ── إشعار المدير (fallback) ──
     if (!approvalResult?.requiresApproval) {
-      const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId ?? scope.branchId).catch(() => null);
+      const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId ?? scope.branchId).catch((e) => { logger.error(e, "hr-overtime manager lookup failed"); return null; });
       if (managerId) {
         createNotification({
           companyId: scope.companyId, assignmentId: managerId,
