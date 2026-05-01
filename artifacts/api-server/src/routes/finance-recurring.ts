@@ -147,27 +147,15 @@ recurringRouter.post("/recurring-journals", requirePermission("finance:create"),
     const scope = req.scope!;
 
     const {
-      name, description, frequency, startDate, active = true,
+      name, description, frequency, startDate, active,
       templateLines, templateRef, templateDescription,
-    } = req.body as any;
+    } = zodParse(createRecurringJournalSchema.safeParse(req.body ?? {}));
 
-    if (!name || !String(name).trim()) {
-      throw new ValidationError("اسم القيد الدوري مطلوب", {
-        field: "name",
-        fix: "أدخل اسماً واضحاً",
-      });
-    }
-    const freq = String(frequency || "").toLowerCase() as RecurringFrequency;
-    if (!["daily", "weekly", "monthly", "quarterly", "yearly"].includes(freq)) {
+    const freq = frequency.toLowerCase() as RecurringFrequency;
+    if (!(VALID_FREQUENCIES as readonly string[]).includes(freq)) {
       throw new ValidationError("تكرار غير صالح", {
         field: "frequency",
         fix: "اختر: daily أو weekly أو monthly أو quarterly أو yearly",
-      });
-    }
-    if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
-      throw new ValidationError("تاريخ البدء مطلوب", {
-        field: "startDate",
-        fix: "استخدم الصيغة YYYY-MM-DD",
       });
     }
     const v = validateTemplateLines(templateLines);
@@ -221,7 +209,7 @@ recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:upda
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
-    const b = req.body as any;
+    const b = zodParse(updateRecurringJournalSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<any>(
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -241,7 +229,7 @@ recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:upda
     addField("description", b.description);
     if (b.frequency !== undefined) {
       const freq = String(b.frequency).toLowerCase();
-      if (!["daily", "weekly", "monthly", "quarterly", "yearly"].includes(freq)) {
+      if (!(VALID_FREQUENCIES as readonly string[]).includes(freq)) {
         throw new ValidationError("تكرار غير صالح", {
           field: "frequency",
           fix: "اختر: daily أو weekly أو monthly أو quarterly أو yearly",

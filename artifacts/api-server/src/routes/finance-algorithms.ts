@@ -6,7 +6,9 @@ import {
   ForbiddenError,
   IntegrationError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
+import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -16,6 +18,94 @@ import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
 
 export const financeAlgorithmsRouter = Router();
 financeAlgorithmsRouter.use(authMiddleware);
+
+// ── Zod schemas ─────────────────────────────────────────────────────────────
+
+const bankReconciliationRowSchema = z.object({
+  amount: z.coerce.number().optional(),
+  debit: z.coerce.number().optional(),
+  credit: z.coerce.number().optional(),
+  date: z.string().optional(),
+  reference: z.string().optional(),
+  ref: z.string().optional(),
+  description: z.string().optional(),
+  narration: z.string().optional(),
+});
+
+const bankImportSchema = z.object({
+  rows: z.array(bankReconciliationRowSchema).min(1),
+  accountCode: z.string().default("1120"),
+  statementDate: z.string().optional(),
+});
+
+const bankAutoMatchSchema = z.object({
+  batchId: z.string().min(1),
+  accountCode: z.string().default("1120"),
+  toleranceDays: z.coerce.number().default(3),
+});
+
+const bankManualMatchSchema = z.object({
+  bankStatementId: z.coerce.number(),
+  journalLineId: z.coerce.number(),
+});
+
+const VALID_DEPRECIATION_METHODS = [
+  "straight_line", "declining_balance", "declining_balance_200",
+  "declining_balance_150", "sum_of_years_digits", "units_of_production",
+] as const;
+
+const createFixedAssetSchema = z.object({
+  name: z.string().min(1),
+  purchaseCost: z.coerce.number(),
+  purchaseDate: z.string().min(1),
+  usefulLifeYears: z.coerce.number().default(5),
+  salvageValue: z.coerce.number().default(0),
+  code: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  branchId: z.coerce.number().optional(),
+  depreciationMethod: z.string().default("straight_line"),
+  assetAccountCode: z.string().default("1500"),
+  depreciationAccountCode: z.string().default("6100"),
+  accDepreciationAccountCode: z.string().default("1590"),
+});
+
+const updateFixedAssetSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  salvageValue: z.coerce.number().optional(),
+  usefulLifeYears: z.coerce.number().optional(),
+  depreciationMethod: z.string().optional(),
+  status: z.string().optional(),
+});
+
+const depreciateAssetSchema = z.object({
+  period: z.string().min(1),
+  unitsThisPeriod: z.coerce.number().optional(),
+});
+
+const depreciateAllSchema = z.object({
+  period: z.string().min(1),
+});
+
+const roundingDiffSchema = z.object({
+  journalEntryId: z.coerce.number(),
+  roundingAmount: z.coerce.number(),
+  description: z.string().optional(),
+});
+
+const fxRateUpsertSchema = z.object({
+  rateDate: z.string().min(1),
+  fromCurrency: z.string().min(1),
+  toCurrency: z.string().default("SAR"),
+  rate: z.coerce.number().positive(),
+  type: z.string().default("spot"),
+});
+
+const fxRevaluationPostSchema = z.object({
+  period: z.string().regex(/^\d{4}-\d{2}$/),
+});
 
 function assertFinanceRole(scope: any): void {
   if (!FINANCE_ROLES.includes(scope.role)) {
@@ -259,10 +349,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/import", requirePermission("f
     const scope = req.scope!;
     assertFinanceRole(scope);
 
-    const { rows, accountCode = "1120", statementDate } = req.body as any;
-    if (!Array.isArray(rows) || rows.length === 0) {
-      throw new ValidationError("لا توجد بيانات في الكشف البنكي");
-    }
+    const { rows, accountCode, statementDate } = zodParse(bankImportSchema.safeParse(req.body ?? {}));
 
     const batchId = generateTimeRef("BANK");
     let imported = 0;
@@ -304,10 +391,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", requirePermissio
     const scope = req.scope!;
     assertFinanceRole(scope);
 
-    const { batchId, accountCode = "1120", toleranceDays = 3 } = req.body as any;
-    if (!batchId) {
-      throw new ValidationError("معرف الدفعة مطلوب", { field: "batchId" });
-    }
+    const { batchId, accountCode, toleranceDays } = zodParse(bankAutoMatchSchema.safeParse(req.body ?? {}));
 
     const bankRows = await rawQuery<any>(
       `SELECT * FROM bank_statements

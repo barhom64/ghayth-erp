@@ -5,8 +5,9 @@ import {
   ConflictError,
   ForbiddenError,
   IntegrationError,
+  zodParse,
 } from "../lib/errorHandler.js";
-
+import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -19,8 +20,37 @@ import { logger } from "../lib/logger.js";
 export const zatcaRouter = Router();
 zatcaRouter.use(authMiddleware);
 
+const zatcaSettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  environment: z.string().default("sandbox"),
+  vatRegistrationNumber: z.string().optional().nullable(),
+  crNumber: z.string().optional().nullable(),
+  organizationName: z.string().optional().nullable(),
+  organizationNameEn: z.string().optional().nullable(),
+  streetName: z.string().optional().nullable(),
+  buildingNumber: z.string().optional().nullable(),
+  cityName: z.string().optional().nullable(),
+  postalCode: z.string().optional().nullable(),
+  countryCode: z.string().default("SA"),
+  oauthClientId: z.string().optional().nullable(),
+  oauthClientSecret: z.string().optional().nullable(),
+  csid: z.string().optional().nullable(),
+  pihKey: z.string().optional().nullable(),
+});
 
+const zatcaInvoicePatchSchema = z.object({
+  isTaxLinked: z.boolean().optional(),
+  invoiceTypeCode: z.string().optional(),
+  taxCategoryCode: z.string().optional(),
+  exemptionReason: z.string().optional(),
+});
 
+const zatcaExpensePatchSchema = z.object({
+  isTaxLinked: z.boolean().optional(),
+  invoiceTypeCode: z.string().optional(),
+  taxCategoryCode: z.string().optional(),
+  exemptionReason: z.string().optional(),
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TLV (Tag-Length-Value) QR Code Encoder — ZATCA compliant
@@ -240,7 +270,7 @@ zatcaRouter.put("/zatca/settings", requirePermission("finance:update"), async (r
       organizationName, organizationNameEn, streetName, buildingNumber,
       cityName, postalCode, countryCode, oauthClientId, oauthClientSecret,
       csid, pihKey,
-    } = req.body as any;
+    } = zodParse(zatcaSettingsSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<any>(
       `SELECT id FROM zatca_settings WHERE "companyId" = $1`,
@@ -727,15 +757,15 @@ zatcaRouter.patch("/zatca/invoice/:id", requirePermission("finance:update"), asy
     const scope = req.scope!;
 
     const { id } = req.params;
-    const { isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason } = req.body as any;
+    const b = zodParse(zatcaInvoicePatchSchema.safeParse(req.body ?? {}));
 
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
-    if (isTaxLinked !== undefined) { sets.push(`"isTaxLinked" = $${idx++}`); params.push(isTaxLinked); }
-    if (invoiceTypeCode !== undefined) { sets.push(`"invoiceTypeCode" = $${idx++}`); params.push(invoiceTypeCode); }
-    if (taxCategoryCode !== undefined) { sets.push(`"taxCategoryCode" = $${idx++}`); params.push(taxCategoryCode); }
-    if (exemptionReason !== undefined) { sets.push(`"exemptionReason" = $${idx++}`); params.push(exemptionReason); }
+    if (b.isTaxLinked !== undefined) { sets.push(`"isTaxLinked" = $${idx++}`); params.push(b.isTaxLinked); }
+    if (b.invoiceTypeCode !== undefined) { sets.push(`"invoiceTypeCode" = $${idx++}`); params.push(b.invoiceTypeCode); }
+    if (b.taxCategoryCode !== undefined) { sets.push(`"taxCategoryCode" = $${idx++}`); params.push(b.taxCategoryCode); }
+    if (b.exemptionReason !== undefined) { sets.push(`"exemptionReason" = $${idx++}`); params.push(b.exemptionReason); }
     if (sets.length === 0) { throw new ValidationError("لا توجد بيانات للتحديث"); return; }
 
     params.push(Number(id), scope.companyId);
@@ -758,15 +788,15 @@ zatcaRouter.patch("/zatca/expense/:id", requirePermission("finance:update"), asy
     const scope = req.scope!;
 
     const { id } = req.params;
-    const { isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason } = req.body as any;
+    const b = zodParse(zatcaExpensePatchSchema.safeParse(req.body ?? {}));
 
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
-    if (isTaxLinked !== undefined) { sets.push(`"isTaxLinked" = $${idx++}`); params.push(isTaxLinked); }
-    if (invoiceTypeCode !== undefined) { sets.push(`"invoiceTypeCode" = $${idx++}`); params.push(invoiceTypeCode); }
-    if (taxCategoryCode !== undefined) { sets.push(`"taxCategoryCode" = $${idx++}`); params.push(taxCategoryCode); }
-    if (exemptionReason !== undefined) { sets.push(`"exemptionReason" = $${idx++}`); params.push(exemptionReason); }
+    if (b.isTaxLinked !== undefined) { sets.push(`"isTaxLinked" = $${idx++}`); params.push(b.isTaxLinked); }
+    if (b.invoiceTypeCode !== undefined) { sets.push(`"invoiceTypeCode" = $${idx++}`); params.push(b.invoiceTypeCode); }
+    if (b.taxCategoryCode !== undefined) { sets.push(`"taxCategoryCode" = $${idx++}`); params.push(b.taxCategoryCode); }
+    if (b.exemptionReason !== undefined) { sets.push(`"exemptionReason" = $${idx++}`); params.push(b.exemptionReason); }
     if (sets.length === 0) { throw new ValidationError("لا توجد بيانات للتحديث"); return; }
 
     params.push(Number(id), scope.companyId);
