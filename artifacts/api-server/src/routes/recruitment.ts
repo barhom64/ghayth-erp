@@ -54,6 +54,10 @@ const updateApplicationSchema = z.object({
   interviewDate: z.string().optional().nullable(),
 });
 
+const closePostingSchema = z.object({
+  reason: z.string().min(1, "سبب الإغلاق مطلوب"),
+});
+
 const router = Router();
 
 router.get("/postings", requirePermission("hr:read"), async (req, res) => {
@@ -144,8 +148,8 @@ router.post("/postings/:id/close", requirePermission("hr:write"), async (req, re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const reason = (req.body?.reason as string | undefined)?.trim();
-    if (!reason) throw new ValidationError("سبب الإغلاق مطلوب", { field: "reason" });
+    const { reason: rawReason } = zodParse(closePostingSchema.safeParse(req.body ?? {}));
+    const reason = rawReason.trim();
     const updated = await applyTransition({
       entity: "job_postings",
       id,

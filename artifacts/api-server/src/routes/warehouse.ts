@@ -33,6 +33,87 @@ const router = Router();
 // ─────────────────────────────────────────────────────────────────────────────
 const MOVEMENT_TYPES = ["in", "out", "return", "transfer_in", "transfer_out", "adjustment"] as const;
 
+const createProductSchema = z.object({
+  name: z.string().min(1, "اسم المنتج مطلوب"),
+  sku: z.string().min(1, "رمز المنتج (SKU) مطلوب"),
+  costPrice: z.coerce.number().min(0, "سعر التكلفة غير صالح").optional(),
+  sellPrice: z.coerce.number().min(0, "سعر البيع غير صالح").optional(),
+  description: z.string().optional().nullable(),
+  categoryId: z.coerce.number().optional().nullable(),
+  unit: z.string().optional(),
+  minStock: z.coerce.number().optional(),
+  maxStock: z.coerce.number().optional(),
+  currentStock: z.coerce.number().optional(),
+  location: z.string().optional().nullable(),
+  branchId: z.coerce.number().optional().nullable(),
+});
+
+const patchProductSchema = z.object({
+  name: z.string().min(1).optional(),
+  sku: z.string().min(1).optional(),
+  description: z.string().optional().nullable(),
+  categoryId: z.coerce.number().optional().nullable(),
+  unit: z.string().optional(),
+  minStock: z.coerce.number().optional(),
+  maxStock: z.coerce.number().optional(),
+  costPrice: z.coerce.number().min(0, "سعر التكلفة غير صالح").optional(),
+  sellPrice: z.coerce.number().min(0, "سعر البيع غير صالح").optional(),
+  location: z.string().optional().nullable(),
+  status: z.string().optional(),
+});
+
+const createTransferSchema = z.object({
+  productId: z.coerce.number({ required_error: "المنتج مطلوب" }).int().positive(),
+  quantity: z.coerce.number({ required_error: "الكمية مطلوبة" }).positive("الكمية يجب أن تكون أكبر من صفر"),
+  fromLocation: z.string().optional().nullable(),
+  toLocation: z.string().optional().nullable(),
+  fromWarehouseId: z.coerce.number().optional().nullable(),
+  toWarehouseId: z.coerce.number().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+const createCategorySchema = z.object({
+  name: z.string().min(1, "اسم الفئة مطلوب"),
+  parentId: z.coerce.number().optional().nullable(),
+});
+
+const patchCategorySchema = z.object({
+  name: z.string().min(1).optional(),
+  parentId: z.coerce.number().optional().nullable(),
+});
+
+const createSupplierSchema = z.object({
+  name: z.string().min(1, "اسم المورد مطلوب"),
+  contactPerson: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  email: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  taxNumber: z.string().optional().nullable(),
+  paymentTerms: z.coerce.number().optional(),
+});
+
+const patchSupplierSchema = z.object({
+  name: z.string().min(1).optional(),
+  contactPerson: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  email: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  taxNumber: z.string().optional().nullable(),
+  paymentTerms: z.coerce.number().optional(),
+});
+
+const createInventoryCountSchema = z.object({
+  countDate: z.string().optional(),
+  notes: z.string().optional().nullable(),
+  warehouseLocation: z.string().optional().nullable(),
+});
+
+const createCountItemSchema = z.object({
+  productId: z.coerce.number({ required_error: "المنتج مطلوب" }).int().positive(),
+  physicalCount: z.coerce.number().optional(),
+  notes: z.string().optional().nullable(),
+});
+
 const createMovementSchema = z.object({
   productId: z.coerce.number({ required_error: "المنتج مطلوب", invalid_type_error: "معرف المنتج يجب أن يكون رقماً" }).int().positive("معرف المنتج يجب أن يكون رقماً موجباً"),
   type: z.enum(MOVEMENT_TYPES, { errorMap: () => ({ message: `نوع الحركة غير صالح — اختر من: ${MOVEMENT_TYPES.join(", ")}` }) }),
@@ -217,22 +298,10 @@ router.get("/products", requirePermission("warehouse:read"), async (req, res) =>
 router.post("/products", requirePermission("warehouse:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createProductSchema.safeParse(req.body));
 
-    if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
-      throw new ValidationError("اسم المنتج مطلوب", { field: "name", fix: "أدخل اسم المنتج" });
-    }
-    if (!b.sku || typeof b.sku !== "string" || !b.sku.trim()) {
-      throw new ValidationError("رمز المنتج (SKU) مطلوب", { field: "sku", fix: "أدخل رمز تعريف فريد للمنتج" });
-    }
     const costPrice = Number(b.costPrice) || 0;
     const sellPrice = Number(b.sellPrice) || 0;
-    if (!Number.isFinite(costPrice) || costPrice < 0) {
-      throw new ValidationError("سعر التكلفة غير صالح", { field: "costPrice", fix: "أدخل قيمة غير سالبة" });
-    }
-    if (!Number.isFinite(sellPrice) || sellPrice < 0) {
-      throw new ValidationError("سعر البيع غير صالح", { field: "sellPrice", fix: "أدخل قيمة غير سالبة" });
-    }
     // Duplicate SKU check
     const [dup] = await rawQuery<any>(
       `SELECT id FROM warehouse_products WHERE sku=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -305,12 +374,12 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المنتج غير موجود");
-    const b = req.body;
+    const b = zodParse(patchProductSchema.safeParse(req.body));
 
     const statusChanging = b.status !== undefined && b.status !== existing.status;
 
     // Validate status value (applyTransition validates the transition itself)
-    if (statusChanging && !PRODUCT_STATUSES.includes(b.status)) {
+    if (statusChanging && !PRODUCT_STATUSES.includes(b.status as any)) {
       throw new ValidationError(
         `حالة منتج غير صالحة: ${b.status}`,
         { field: "status", fix: `اختر من: ${PRODUCT_STATUSES.join(", ")}` }
@@ -329,19 +398,6 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
         );
       }
     }
-    if (b.costPrice !== undefined) {
-      const c = Number(b.costPrice);
-      if (!Number.isFinite(c) || c < 0) {
-        throw new ValidationError("سعر التكلفة غير صالح", { field: "costPrice", fix: "أدخل قيمة غير سالبة" });
-      }
-    }
-    if (b.sellPrice !== undefined) {
-      const s = Number(b.sellPrice);
-      if (!Number.isFinite(s) || s < 0) {
-        throw new ValidationError("سعر البيع غير صالح", { field: "sellPrice", fix: "أدخل قيمة غير سالبة" });
-      }
-    }
-
     const effectiveCost = b.costPrice !== undefined ? Number(b.costPrice) : Number(existing.costPrice);
     const effectiveSell = b.sellPrice !== undefined ? Number(b.sellPrice) : Number(existing.sellPrice);
     const sellPriceWarning = effectiveSell > 0 && effectiveSell < effectiveCost;
@@ -385,7 +441,7 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
           ? "warehouse.product.discontinued"
           : "warehouse.product.reactivated";
       const fromStates = Object.entries(PRODUCT_TRANSITIONS)
-        .filter(([, targets]) => (targets as readonly string[]).includes(b.status))
+        .filter(([, targets]) => (targets as readonly string[]).includes(b.status!))
         .map(([src]) => src);
 
       row = await applyTransition({
@@ -394,7 +450,7 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
         scope,
         action: actionName,
         fromStates,
-        toState: b.status,
+        toState: b.status!,
         setExtras: Object.keys(extraSets).length > 0 ? extraSets : undefined,
         extraWhere: `"deletedAt" IS NULL`,
         after,
@@ -771,15 +827,9 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
 router.post("/transfers", requirePermission("warehouse:create"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createTransferSchema.safeParse(req.body));
 
-    if (!b.productId) {
-      throw new ValidationError("المنتج مطلوب", { field: "productId", fix: "اختر المنتج المراد تحويله" });
-    }
-    const qtyNum = Number(b.quantity);
-    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
-      throw new ValidationError("الكمية يجب أن تكون أكبر من صفر", { field: "quantity", fix: "أدخل كمية موجبة" });
-    }
+    const qtyNum = b.quantity;
 
     const transferRef = generateTimeRef("TRANSFER");
     const fromLocation = b.fromLocation || b.fromWarehouseId ? `مستودع-${b.fromWarehouseId}` : 'المستودع الرئيسي';
@@ -886,10 +936,7 @@ router.get("/categories/:id", requirePermission("warehouse:read"), async (req, r
 router.post("/categories", requirePermission("warehouse:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
-    if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
-      throw new ValidationError("اسم الفئة مطلوب", { field: "name", fix: "أدخل اسم الفئة" });
-    }
+    const b = zodParse(createCategorySchema.safeParse(req.body));
     if (b.parentId) {
       const [parent] = await rawQuery<any>(
         `SELECT id FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -956,10 +1003,7 @@ router.get("/suppliers/:id", requirePermission("warehouse:read"), async (req, re
 router.post("/suppliers", requirePermission("warehouse:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
-    if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
-      throw new ValidationError("اسم المورد مطلوب", { field: "name", fix: "أدخل اسم المورد" });
-    }
+    const b = zodParse(createSupplierSchema.safeParse(req.body));
     if (b.taxNumber) {
       const [dup] = await rawQuery<any>(
         `SELECT id FROM suppliers WHERE "taxNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -999,7 +1043,7 @@ router.patch("/categories/:id", requirePermission("warehouse:update"), async (re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(patchCategorySchema.safeParse(req.body));
     const fields: string[] = [];
     const params: any[] = [];
     if (b.name !== undefined) { params.push(b.name); fields.push(`name = $${params.length}`); }
@@ -1080,7 +1124,7 @@ router.patch("/suppliers/:id", requirePermission("warehouse:update"), async (req
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(patchSupplierSchema.safeParse(req.body));
     const fields: string[] = [];
     const params: any[] = [];
     const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
@@ -1175,7 +1219,7 @@ router.get("/inventory-counts", requirePermission("warehouse:read"), async (req,
 router.post("/inventory-counts", requirePermission("warehouse:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createInventoryCountSchema.safeParse(req.body));
     const { insertId } = await rawExecute(
       `INSERT INTO inventory_counts ("companyId","countDate","conductedBy",status,notes,"warehouseLocation")
        VALUES ($1,$2,$3,'draft',$4,$5)`,
@@ -1252,7 +1296,7 @@ router.post("/inventory-counts/:id/items", requirePermission("warehouse:create")
   try {
     const scope = req.scope!;
     const countId = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(createCountItemSchema.safeParse(req.body));
     // Ensure count exists and is in draft
     const [count] = await rawQuery<any>(`SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2`, [countId, scope.companyId]);
     if (!count) throw new NotFoundError("الجرد غير موجود");

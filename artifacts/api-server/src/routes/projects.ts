@@ -135,6 +135,14 @@ const createCostSchema = z.object({
   sourceType: z.string().optional(),
 });
 
+const impactPreviewSchema = z.object({
+  managerId: z.coerce.number().optional().nullable(),
+  budget: z.union([z.coerce.number(), z.string()]).optional().nullable(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+  type: z.string().optional().nullable(),
+});
+
 const closeProjectSchema = z.object({});
 
 const router = Router();
@@ -194,7 +202,8 @@ const RISK_TRANSITIONS: Record<string, readonly string[]> = {
 router.post("/impact-preview", requirePermission("projects:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { managerId, budget, startDate, endDate, type } = req.body as any;
+    const b = zodParse(impactPreviewSchema.safeParse(req.body ?? {}));
+    const { managerId, budget, startDate, endDate, type } = b;
 
     const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
 

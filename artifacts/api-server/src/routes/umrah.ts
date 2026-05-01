@@ -136,6 +136,162 @@ const createTransportSchema = z.object({
   notes: z.string().optional(),
 });
 
+const patchSeasonSchema = z.object({
+  title: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  status: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const patchAgentSchema = z.object({
+  name: z.string().optional(),
+  contactPerson: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  country: z.string().optional(),
+  profitMargin: z.coerce.number().optional(),
+  contractRef: z.string().optional(),
+  currency: z.string().optional(),
+  status: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const patchPackageSchema = z.object({
+  name: z.string().optional(),
+  seasonId: z.coerce.number().optional(),
+  costPrice: z.coerce.number().optional(),
+  sellPrice: z.coerce.number().optional(),
+  includesTransport: z.boolean().optional(),
+  includesHotel: z.boolean().optional(),
+  includesMeals: z.boolean().optional(),
+  includesZiyarat: z.boolean().optional(),
+  duration: z.coerce.number().optional(),
+  description: z.string().optional(),
+});
+
+const patchPilgrimSchema = z.object({
+  status: z.string().optional(),
+  agentId: z.coerce.number().optional().nullable(),
+  packageId: z.coerce.number().optional().nullable(),
+  fullName: z.string().optional(),
+  passportNumber: z.string().optional(),
+  visaNumber: z.string().optional().nullable(),
+  nationality: z.string().optional().nullable(),
+  gender: z.string().optional().nullable(),
+  dateOfBirth: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  arrivalDate: z.string().optional().nullable(),
+  departureDate: z.string().optional().nullable(),
+  actualArrival: z.string().optional().nullable(),
+  actualDeparture: z.string().optional().nullable(),
+  hotelName: z.string().optional().nullable(),
+  roomNumber: z.string().optional().nullable(),
+  transportAssigned: z.boolean().optional(),
+  notes: z.string().optional().nullable(),
+});
+
+const importPreviewSchema = z.object({
+  seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
+  rows: z.array(z.any()).min(1, "بيانات المعاينة غير مكتملة"),
+  fileType: z.string().optional(),
+});
+
+const importMutamersSchema = z.object({
+  seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
+  rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة"),
+});
+
+const importVouchersSchema = z.object({
+  seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
+  rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة"),
+});
+
+const importSchema = z.object({
+  seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
+  rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة"),
+  fileType: z.string().optional(),
+  fileName: z.string().optional(),
+});
+
+const runPenaltyEngineSchema = z.object({
+  overstayDays: z.coerce.number().optional(),
+  dailyRate: z.coerce.number().optional(),
+});
+
+const waivePenaltySchema = z.object({
+  reason: z.string().min(1, "سبب الإعفاء مطلوب"),
+});
+
+const recordPaymentSchema = z.object({
+  amount: z.coerce.number().positive("مبلغ الدفع مطلوب"),
+  paymentMethod: z.string().optional(),
+  reference: z.string().optional(),
+});
+
+const generateInvoiceSchema = z.object({
+  agentId: z.coerce.number({ required_error: "الوكيل مطلوب" }),
+  seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
+});
+
+const patchTransportSchema = z.object({
+  status: z.string().optional(),
+  seasonId: z.coerce.number().optional(),
+  tripDate: z.string().optional(),
+  fromLocation: z.string().optional(),
+  toLocation: z.string().optional(),
+  vehicleId: z.coerce.number().optional(),
+  driverId: z.coerce.number().optional(),
+  capacity: z.coerce.number().optional(),
+  pilgrimCount: z.coerce.number().optional(),
+  cost: z.coerce.number().optional(),
+  notes: z.string().optional(),
+});
+
+const assignPilgrimsSchema = z.object({
+  pilgrimIds: z.array(z.coerce.number()).min(1, "يجب تحديد معتمر واحد على الأقل"),
+});
+
+const bulkAssignSchema = z.object({
+  pilgrimIds: z.array(z.coerce.number()).min(1, "بيانات التوزيع غير مكتملة"),
+  agentId: z.coerce.number({ required_error: "بيانات التوزيع غير مكتملة" }),
+});
+
+const createViolationSchema = z.object({
+  type: z.string().min(1, "نوع المخالفة مطلوب"),
+  referenceType: z.string().optional().nullable(),
+  referenceNumber: z.string().optional().nullable(),
+  mutamerId: z.coerce.number().optional().nullable(),
+  agentId: z.coerce.number().optional().nullable(),
+  subAgentId: z.coerce.number().optional().nullable(),
+  description: z.string().optional().nullable(),
+  penaltyAmount: z.coerce.number().optional(),
+  status: z.string().optional(),
+});
+
+const patchViolationSchema = z.object({
+  type: z.string().optional(),
+  referenceType: z.string().optional().nullable(),
+  referenceNumber: z.string().optional().nullable(),
+  mutamerId: z.coerce.number().optional().nullable(),
+  agentId: z.coerce.number().optional().nullable(),
+  subAgentId: z.coerce.number().optional().nullable(),
+  description: z.string().optional().nullable(),
+  penaltyAmount: z.coerce.number().optional(),
+  status: z.string().optional(),
+  linkedInvoiceId: z.coerce.number().optional().nullable(),
+});
+
+const createPenaltySchema = z.object({
+  pilgrimId: z.coerce.number().optional().nullable(),
+  agentId: z.coerce.number().optional().nullable(),
+  seasonId: z.coerce.number().optional().nullable(),
+  type: z.string().optional(),
+  amount: z.coerce.number().optional(),
+  reason: z.string().optional().nullable(),
+  status: z.string().optional(),
+});
+
 router.get("/seasons", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -176,7 +332,7 @@ router.patch("/seasons/:id", requirePermission("umrah:write"), async (req, res):
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(patchSeasonSchema.safeParse(req.body));
     let originalStatus: string | undefined;
     if (b.status !== undefined) {
       const [existing] = await rawQuery<any>(`SELECT status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
@@ -272,7 +428,7 @@ router.patch("/agents/:id", requirePermission("umrah:write"), async (req, res) =
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(patchAgentSchema.safeParse(req.body));
     let originalAgentStatus: string | undefined;
     if (b.status !== undefined) {
       const [existing] = await rawQuery<any>(`SELECT status FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
@@ -290,7 +446,7 @@ router.patch("/agents/:id", requirePermission("umrah:write"), async (req, res) =
     }
     const params: any[] = [];
     const sets: string[] = [];
-    for (const key of ["name","contactPerson","phone","email","country","profitMargin","contractRef","currency","status","notes"]) {
+    for (const key of ["name","contactPerson","phone","email","country","profitMargin","contractRef","currency","status","notes"] as const) {
       if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
     }
     sets.push(`"updatedAt"=NOW()`);
@@ -368,10 +524,10 @@ router.patch("/packages/:id", requirePermission("umrah:write"), async (req, res)
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(patchPackageSchema.safeParse(req.body));
     const params: any[] = [];
     const sets: string[] = [];
-    for (const key of ["name","seasonId","costPrice","sellPrice","includesTransport","includesHotel","includesMeals","includesZiyarat","duration","description"]) {
+    for (const key of ["name","seasonId","costPrice","sellPrice","includesTransport","includesHotel","includesMeals","includesZiyarat","duration","description"] as const) {
       if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
     }
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
@@ -527,7 +683,7 @@ router.post("/pilgrims", requirePermission("umrah:write"), async (req, res) => {
 router.patch("/pilgrims/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(patchPilgrimSchema.safeParse(req.body));
     const pilgrimId = parseId(req.params.id, "id");
     const fieldKeys = ["agentId","packageId","fullName","passportNumber","visaNumber","nationality","gender","dateOfBirth","phone","arrivalDate","departureDate","actualArrival","actualDeparture","hotelName","roomNumber","transportAssigned","notes"] as const;
 
@@ -537,7 +693,7 @@ router.patch("/pilgrims/:id", requirePermission("umrah:write"), async (req, res)
         if (b[key] !== undefined) setExtras[key] = b[key];
       }
       const fromStates = Object.entries(PILGRIM_TRANSITIONS)
-        .filter(([, targets]) => targets.includes(b.status))
+        .filter(([, targets]) => targets.includes(b.status!))
         .map(([from]) => from);
 
       const row = await applyTransition({
@@ -546,7 +702,7 @@ router.patch("/pilgrims/:id", requirePermission("umrah:write"), async (req, res)
         scope,
         action: "umrah.pilgrim.status_changed",
         fromStates,
-        toState: b.status,
+        toState: b.status!,
         setExtras: Object.keys(setExtras).length > 0 ? setExtras : undefined,
         extraWhere: `"deletedAt" IS NULL`,
         after: { newStatus: b.status },
@@ -621,10 +777,7 @@ router.delete("/pilgrims/:id", requirePermission("umrah:write"), async (req, res
 router.post("/import/preview", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows, fileType } = req.body;
-    if (!seasonId || !Array.isArray(importRows) || importRows.length === 0) {
-      throw new ValidationError("بيانات المعاينة غير مكتملة");
-    }
+    const { seasonId, rows: importRows, fileType } = zodParse(importPreviewSchema.safeParse(req.body));
     const passportNumbers = importRows.filter((r: any) => r.passportNumber).map((r: any) => r.passportNumber);
     const existingRows = passportNumbers.length > 0
       ? await rawQuery<any>(`SELECT "passportNumber" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber" = ANY($3) AND "deletedAt" IS NULL`, [scope.companyId, seasonId, passportNumbers])
@@ -655,10 +808,7 @@ router.post("/import/preview", requirePermission("umrah:write"), async (req, res
 router.post("/import/mutamers", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows } = req.body;
-    if (!seasonId || !Array.isArray(importRows) || importRows.length === 0) {
-      throw new ValidationError("بيانات الاستيراد غير مكتملة");
-    }
+    const { seasonId, rows: importRows } = zodParse(importMutamersSchema.safeParse(req.body));
     const importBody = { seasonId, rows: importRows, fileType: "mutamers", fileName: "import-mutamers" };
     const fakeReq = { ...req, body: importBody };
     // Reuse existing import logic via internal redirect
@@ -670,10 +820,7 @@ router.post("/import/mutamers", requirePermission("umrah:write"), async (req, re
 router.post("/import/vouchers", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows } = req.body;
-    if (!seasonId || !Array.isArray(importRows) || importRows.length === 0) {
-      throw new ValidationError("بيانات الاستيراد غير مكتملة");
-    }
+    const { seasonId, rows: importRows } = zodParse(importVouchersSchema.safeParse(req.body));
     const result = await doImport(scope, { seasonId, rows: importRows, fileType: "vouchers", fileName: "import-vouchers" });
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import vouchers error"); }
@@ -748,7 +895,7 @@ async function doImport(scope: any, body: { seasonId: number; rows: any[]; fileT
 router.post("/import", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const result = await doImport(scope, req.body);
+    const result = await doImport(scope, zodParse(importSchema.safeParse(req.body)));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import error"); }
 });
@@ -865,7 +1012,7 @@ router.post("/run-daily-status", requirePermission("umrah:write"), async (req, r
 router.post("/run-penalty-engine", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { overstayDays = 3, dailyRate = 500 } = req.body;
+    const { overstayDays = 3, dailyRate = 500 } = zodParse(runPenaltyEngineSchema.safeParse(req.body));
     const today = todayISO();
     const overstayed = await rawQuery(
       `SELECT p.id, p."passportNumber", p."fullName", p."agentId", p."seasonId", p."departureDate",
@@ -954,8 +1101,7 @@ router.patch("/penalties/:id/waive", requirePermission("umrah:write"), async (re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { reason } = req.body;
-    if (!reason) throw new ValidationError("سبب الإعفاء مطلوب");
+    const { reason } = zodParse(waivePenaltySchema.safeParse(req.body));
     const [penalty] = await rawQuery<any>(`SELECT pen.*, p."fullName" as "pilgrimName" FROM umrah_penalties pen LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id WHERE pen.id=$1 AND pen."companyId"=$2`, [id, scope.companyId]);
     if (!penalty) throw new NotFoundError("العقوبة غير موجودة");
     await applyTransition({
@@ -991,8 +1137,7 @@ router.post("/agent-invoices/:id/record-payment", requirePermission("umrah:write
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { amount, paymentMethod, reference } = req.body;
-    if (!amount || Number(amount) <= 0) throw new ValidationError("مبلغ الدفع مطلوب");
+    const { amount, paymentMethod, reference } = zodParse(recordPaymentSchema.safeParse(req.body));
     const [invoice] = await rawQuery<any>(`SELECT * FROM umrah_agent_invoices WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
     const paidSoFar = Number(invoice.paidAmount || 0) + Number(amount);
@@ -1019,8 +1164,7 @@ router.post("/agent-invoices/:id/record-payment", requirePermission("umrah:write
 router.post("/agent-invoices/generate", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { agentId, seasonId } = req.body;
-    if (!agentId || !seasonId) { throw new ValidationError("الوكيل والموسم مطلوبان"); }
+    const { agentId, seasonId } = zodParse(generateInvoiceSchema.safeParse(req.body));
     const pilgrims = await rawQuery(
       `SELECT COUNT(*) as c FROM umrah_pilgrims WHERE "agentId"=$1 AND "seasonId"=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
       [agentId, seasonId, scope.companyId]
@@ -1235,7 +1379,7 @@ router.patch("/transport/:id", requirePermission("umrah:write"), async (req, res
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(patchTransportSchema.safeParse(req.body));
     if (b.vehicleId) {
       const [vehicle] = await rawQuery<any>(`SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2`, [b.vehicleId, scope.companyId]);
       if (!vehicle) throw new ValidationError("المركبة غير موجودة في الأسطول");
@@ -1252,7 +1396,7 @@ router.patch("/transport/:id", requirePermission("umrah:write"), async (req, res
       const setExtras: Record<string, any> = {};
       for (const key of fieldKeys) { if (b[key] !== undefined) setExtras[key] = b[key]; }
       const fromStates = Object.entries(TRANSPORT_TRANSITIONS)
-        .filter(([, targets]) => targets.includes(b.status))
+        .filter(([, targets]) => targets.includes(b.status!))
         .map(([from]) => from);
 
       const row = await applyTransition({
@@ -1261,7 +1405,7 @@ router.patch("/transport/:id", requirePermission("umrah:write"), async (req, res
         scope,
         action: "umrah.transport.status_changed",
         fromStates,
-        toState: b.status,
+        toState: b.status!,
         setExtras: Object.keys(setExtras).length > 0 ? setExtras : undefined,
         skipUpdatedAt: true,
       });
@@ -1269,7 +1413,7 @@ router.patch("/transport/:id", requirePermission("umrah:write"), async (req, res
     } else {
       const params: any[] = [];
       const sets: string[] = [];
-      for (const key of ["seasonId","tripDate","fromLocation","toLocation","vehicleId","driverId","capacity","pilgrimCount","cost","notes"]) {
+      for (const key of ["seasonId","tripDate","fromLocation","toLocation","vehicleId","driverId","capacity","pilgrimCount","cost","notes"] as const) {
         if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
       }
       if (sets.length === 0) {
@@ -1296,10 +1440,7 @@ router.post("/transport/:id/assign-pilgrims", requirePermission("umrah:write"), 
   try {
     const scope = req.scope!;
     const transportId = parseId(req.params.id, "id");
-    const { pilgrimIds } = req.body;
-    if (!Array.isArray(pilgrimIds) || pilgrimIds.length === 0) {
-      throw new ValidationError("يجب تحديد معتمر واحد على الأقل");
-    }
+    const { pilgrimIds } = zodParse(assignPilgrimsSchema.safeParse(req.body));
     const [transport] = await rawQuery<any>(`SELECT * FROM umrah_transport WHERE id=$1 AND "companyId"=$2`, [transportId, scope.companyId]);
     if (!transport) throw new NotFoundError("رحلة النقل غير موجودة");
     if (transport.status === "completed" || transport.status === "cancelled") {
@@ -1347,10 +1488,7 @@ router.get("/unassigned", requirePermission("umrah:read"), async (req, res) => {
 router.post("/assign-bulk", requirePermission("umrah:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { pilgrimIds, agentId } = req.body;
-    if (!agentId || !Array.isArray(pilgrimIds) || pilgrimIds.length === 0) {
-      throw new ValidationError("بيانات التوزيع غير مكتملة");
-    }
+    const { pilgrimIds, agentId } = zodParse(bulkAssignSchema.safeParse(req.body));
     const placeholders = pilgrimIds.map((_: any, i: number) => `$${i + 3}`).join(",");
     await rawExecute(
       `UPDATE umrah_pilgrims SET "agentId"=$1, "updatedAt"=NOW() WHERE "companyId"=$2 AND id IN (${placeholders})`,
@@ -1410,8 +1548,7 @@ router.get("/violations/:id", requirePermission("umrah:read"), async (req, res):
 router.post("/violations", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
-    if (!b.type) throw new ValidationError("نوع المخالفة مطلوب");
+    const b = zodParse(createViolationSchema.safeParse(req.body));
     const rows = await rawQuery(
       `INSERT INTO umrah_violations ("companyId","branchId",type,"referenceType","referenceNumber","mutamerId","agentId","subAgentId",description,"penaltyAmount",status,"createdBy","updatedAt")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW()) RETURNING *`,
@@ -1427,7 +1564,7 @@ router.patch("/violations/:id", requirePermission("umrah:write"), async (req, re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(patchViolationSchema.safeParse(req.body));
     const sets: string[] = ['"updatedAt"=NOW()', `"updatedBy"=${scope.userId}`];
     const params: any[] = [id, scope.companyId];
     for (const key of ["type","referenceType","referenceNumber","mutamerId","agentId","subAgentId","description","penaltyAmount","status","linkedInvoiceId"] as const) {
@@ -1468,7 +1605,7 @@ router.delete("/violations/:id", requirePermission("umrah:write"), async (req, r
 router.post("/penalties", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createPenaltySchema.safeParse(req.body));
     if (!b.pilgrimId && !b.agentId) throw new ValidationError("يجب تحديد المعتمر أو الوكيل");
     const rows = await rawQuery(
       `INSERT INTO umrah_penalties ("companyId","pilgrimId","agentId","seasonId",type,amount,reason,status,"createdBy")

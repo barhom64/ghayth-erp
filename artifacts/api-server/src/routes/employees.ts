@@ -99,6 +99,10 @@ const patchOnboardingTaskSchema = z.object({
 
 const seedObligationsSchema = z.object({}).optional();
 
+const deleteEmployeeSchema = z.object({
+  reason: z.string().optional(),
+});
+
 // Register document expiry obligations for an employee.
 // Called on create/update — idempotent via dedupeKey.
 async function registerEmployeeExpiryObligations(
@@ -1126,7 +1130,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
-    const { reason } = (req.body || {}) as { reason?: string };
+    const { reason } = zodParse(deleteEmployeeSchema.safeParse(req.body ?? {}));
     const [employee] = await rawQuery<any>(
       `SELECT e.id, ea.id AS "assignmentId" FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'

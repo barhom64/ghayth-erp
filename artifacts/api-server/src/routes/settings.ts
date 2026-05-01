@@ -27,6 +27,11 @@ const settingUpsertSchema = z.object({
   value: z.unknown(),
 });
 
+const settingDeleteSchema = z.object({
+  scopeOverride: z.enum(["system", "company", "branch"]).optional(),
+  key: z.string().min(1, "key مطلوب"),
+});
+
 const generalSettingsSchema = z.record(z.string().min(1), z.string());
 
 const createBranchSchema = z.object({
@@ -184,14 +189,8 @@ router.put("/", requirePermission("settings:write"), async (req, res) => {
 router.delete("/", requirePermission("settings:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { scopeOverride, key } = req.body as {
-      scopeOverride?: SettingScope;
-      key: string;
-    };
-
-    if (!key) {
-      throw new ValidationError("key مطلوب");
-    }
+    const b = zodParse(settingDeleteSchema.safeParse(req.body ?? {}));
+    const { scopeOverride, key } = b;
 
     const requestedScope: SettingScope = scopeOverride ?? "company";
 

@@ -249,6 +249,19 @@ const autoDetectionRunSchema = z.object({
   date: z.string().optional(),
 });
 
+const appealSchema = z.object({
+  reason: z.string().min(1, "سبب الاستئناف مطلوب"),
+});
+
+const appealDecisionSchema = z.object({
+  decision: z.enum(["accepted", "rejected"], { message: "القرار مطلوب (accepted أو rejected)" }),
+  comment: z.string().optional().nullable(),
+});
+
+const closeMemoSchema = z.object({
+  closureNote: z.string().optional().nullable(),
+});
+
 router.post("/regulation", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -873,10 +886,7 @@ router.post("/memos/:id/appeal", requirePermission("hr:read"), async (req, res) 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { reason } = req.body;
-    if (!reason || typeof reason !== "string" || !reason.trim()) {
-      throw new ValidationError("سبب الاستئناف مطلوب", { field: "reason", fix: "أدخل مبررات الاستئناف" });
-    }
+    const { reason } = zodParse(appealSchema.safeParse(req.body));
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
 
@@ -925,10 +935,7 @@ router.post("/memos/:id/appeal-decision", requirePermission("hr:discipline:appro
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { decision, comment } = req.body;
-    if (!decision || !["accepted", "rejected"].includes(decision)) {
-      throw new ValidationError("القرار مطلوب (accepted أو rejected)");
-    }
+    const { decision, comment } = zodParse(appealDecisionSchema.safeParse(req.body));
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
     const newStatus = decision === "accepted" ? "appeal_accepted" : "approved";

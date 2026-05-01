@@ -10,6 +10,7 @@ import {
   ForbiddenError,
   ConflictError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, generateRef } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -31,6 +32,19 @@ const createContractSchema = z.object({
   templateId: z.coerce.number().optional(),
   branchId: z.coerce.number().optional(),
   notes: z.string().optional(),
+});
+
+const rejectContractSchema = z.object({
+  reason: z.string().optional(),
+});
+
+const terminateContractSchema = z.object({
+  reason: z.string().optional(),
+});
+
+const renewContractSchema = z.object({
+  newEndDate: z.string().optional(),
+  newSalary: z.coerce.number().optional(),
 });
 
 // ── List all contracts ──
@@ -259,7 +273,8 @@ contractsRouter.post("/:id/reject", requirePermission("hr:approve"), async (req,
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { reason } = req.body as { reason?: string };
+    const b = zodParse(rejectContractSchema.safeParse(req.body ?? {}));
+    const { reason } = b;
     const [contract] = await rawQuery<any>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -383,7 +398,8 @@ contractsRouter.post("/:id/terminate", requirePermission("hr:update"), async (re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { reason } = req.body as { reason?: string };
+    const b = zodParse(terminateContractSchema.safeParse(req.body ?? {}));
+    const { reason } = b;
     const [contract] = await rawQuery<any>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -414,7 +430,8 @@ contractsRouter.post("/:id/renew", requirePermission("hr:create"), async (req, r
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { newEndDate, newSalary } = req.body as { newEndDate?: string; newSalary?: number };
+    const b = zodParse(renewContractSchema.safeParse(req.body ?? {}));
+    const { newEndDate, newSalary } = b;
     const [contract] = await rawQuery<any>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]

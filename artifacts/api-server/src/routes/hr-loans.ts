@@ -102,6 +102,12 @@ const rejectLoanSchema = z.object({
   reason: z.string().optional(),
 });
 
+const approvalDecisionSchema = z.object({
+  approved: z.boolean().default(true),
+  reason: z.string().optional(),
+  notes: z.string().optional(),
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/loans — قائمة السلف
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -337,7 +343,8 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
-    const { approved = true, reason, notes } = (req.body ?? {}) as { approved?: boolean; reason?: string; notes?: string };
+    const b = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
+    const { approved = true, reason, notes } = b;
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     if (!LOAN_APPROVAL_ROLES.includes(scope.role)) {

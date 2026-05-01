@@ -49,6 +49,36 @@ const updateLogSchema = z.object({
   status: z.string().optional(),
 });
 
+const pbxIncomingSchema = z.object({
+  callerNumber: z.string().optional(),
+  from: z.string().optional(),
+  calledNumber: z.string().optional(),
+  to: z.string().optional(),
+  callId: z.string().optional(),
+  CallSid: z.string().optional(),
+  direction: z.string().optional(),
+});
+
+const pbxCompletedSchema = z.object({
+  callId: z.string().optional(),
+  CallSid: z.string().optional(),
+  duration: z.coerce.number().optional(),
+  CallDuration: z.coerce.number().optional(),
+  status: z.string().optional(),
+  recordingUrl: z.string().optional(),
+  RecordingUrl: z.string().optional(),
+});
+
+const pbxStatusSchema = z.object({
+  callId: z.string({ required_error: "callId مطلوب" }).min(1, "callId مطلوب"),
+  status: z.string().optional(),
+  answeredBy: z.string().nullable().optional(),
+});
+
+const pushUnsubscribeSchema = z.object({
+  endpoint: z.string({ required_error: "endpoint مطلوب" }).min(1, "endpoint مطلوب"),
+});
+
 const router = Router();
 
 const WA_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? "ghayth_erp_verify";
@@ -232,7 +262,7 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
 
 router.post("/pbx/incoming", async (req, res): Promise<void> => {
   try {
-    const b = req.body;
+    const b = zodParse(pbxIncomingSchema.safeParse(req.body ?? {}));
     const callerNumber = b.callerNumber ?? b.from ?? "";
     const calledNumber = b.calledNumber ?? b.to ?? "";
     const callId = b.callId ?? b.CallSid ?? `CALL-${Date.now()}`;
@@ -309,9 +339,9 @@ router.post("/pbx/incoming", async (req, res): Promise<void> => {
 
 router.post("/pbx/completed", async (req, res): Promise<void> => {
   try {
-    const b = req.body;
+    const b = zodParse(pbxCompletedSchema.safeParse(req.body ?? {}));
     const callId = b.callId ?? b.CallSid ?? "";
-    const duration = Number(b.duration ?? b.CallDuration ?? 0);
+    const duration = b.duration ?? b.CallDuration ?? 0;
     const status = b.status ?? (duration > 0 ? "completed" : "no_answer");
     const recordingUrl = b.recordingUrl ?? b.RecordingUrl ?? null;
 
@@ -363,8 +393,7 @@ router.post("/pbx/completed", async (req, res): Promise<void> => {
 
 router.post("/pbx/status", async (req, res): Promise<void> => {
   try {
-    const { callId, status, answeredBy } = req.body;
-    if (!callId) throw new ValidationError("callId مطلوب", { field: "callId" });
+    const { callId, status, answeredBy } = zodParse(pbxStatusSchema.safeParse(req.body ?? {}));
 
     await rawExecute(
       `UPDATE pbx_calls SET status=$1, "answeredBy"=$2 WHERE "callId"=$3 AND status != 'completed'`,
@@ -400,18 +429,11 @@ router.get("/log", requirePermission("communications:read"), async (req, res): P
 
 router.post("/send", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
-    const parsed = zodParse(sendCommunicationSchema.safeParse(req.body));
+    const b = zodParse(sendCommunicationSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
-    const b = req.body;
 
-    if (!b.channel) {
-      throw new ValidationError("قناة المراسلة مطلوبة", {
-        field: "channel",
-        fix: "اختر القناة (whatsapp | sms | email | call)",
-      });
-    }
     const validChannels = ["whatsapp", "sms", "email", "call", "push"];
-    if (!validChannels.includes(String(b.channel).toLowerCase())) {
+    if (!(validChannels as readonly string[]).includes(b.channel.toLowerCase())) {
       throw new ValidationError(`قناة غير مدعومة: ${b.channel}`, {
         field: "channel",
         fix: `اختر قناة من: ${validChannels.join(", ")}`,
@@ -423,27 +445,21 @@ router.post("/send", requirePermission("communications:write"), async (req, res)
         fix: "أدخل رقم المستلم أو بريده الإلكتروني",
       });
     }
-    if (!b.body || !String(b.body).trim()) {
-      throw new ValidationError("محتوى الرسالة مطلوب", {
-        field: "body",
-        fix: "اكتب نص الرسالة",
-      });
-    }
 
     const { insertId } = await rawExecute(
       `INSERT INTO communications_log ("companyId",channel,direction,"fromNumber","toNumber",subject,body,status,"relatedType","relatedId") VALUES ($1,$2,'outbound',$3,$4,$5,$6,'queued',$7,$8)`,
-      [scope.companyId, String(b.channel).toLowerCase(), b.fromNumber ?? null, b.toNumber ?? b.toEmail, b.subject ?? null, String(b.body).trim(), b.relatedType ?? null, b.relatedId ?? null]
+      [scope.companyId, b.channel.toLowerCase(), b.fromNumber ?? null, b.toNumber ?? b.toEmail, b.subject ?? null, b.body.trim(), b.relatedType ?? null, b.relatedId ?? null]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM communications_log WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     if (!row) throw new NotFoundError("فشل في استرجاع السجل");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "communications_log", entityId: insertId, after: { channel: String(b.channel).toLowerCase(), toNumber: b.toNumber ?? b.toEmail } }).catch((e) => logger.error(e, "communications background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "communications_log", entityId: insertId, after: { channel: b.channel.toLowerCase(), toNumber: b.toNumber ?? b.toEmail } }).catch((e) => logger.error(e, "communications background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "communications.message.sent",
       entity: "communications_log",
       entityId: insertId,
-      details: JSON.stringify({ channel: String(b.channel).toLowerCase(), toNumber: b.toNumber ?? b.toEmail }),
+      details: JSON.stringify({ channel: b.channel.toLowerCase(), toNumber: b.toNumber ?? b.toEmail }),
     }).catch((e) => logger.error(e, "communications background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Send communication error:"); }
@@ -497,10 +513,10 @@ router.get("/pbx", requirePermission("communications:read"), async (req, res): P
 
 router.patch("/log/:id", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
-    const parsed = zodParse(updateLogSchema.safeParse(req.body));
+    const parsed = zodParse(updateLogSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { body, content, subject, direction, status } = req.body as any;
+    const { body, content, subject, direction, status } = parsed;
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
@@ -530,14 +546,10 @@ router.patch("/log/:id", requirePermission("communications:write"), async (req, 
 
 router.post("/log/:id/convert", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
-    const parsed = zodParse(convertLogSchema.safeParse(req.body));
+    const parsed = zodParse(convertLogSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
     const logId = parseId(req.params.id, "id");
-    const { targetType } = req.body;
-
-    if (!["task", "ticket", "request"].includes(targetType)) {
-      throw new ValidationError("نوع التحويل غير صالح. المتاح: task, ticket, request", { field: "targetType" });
-    }
+    const { targetType } = parsed;
 
     const [logEntry] = await rawQuery<any>(
       `SELECT * FROM communications_log WHERE id=$1 AND "companyId"=$2`,
@@ -727,16 +739,9 @@ router.get("/push/vapid-key", async (_req, res): Promise<void> => {
 
 router.post("/push/subscribe", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
-    const parsed = zodParse(pushSubscribeSchema.safeParse(req.body));
+    const parsed = zodParse(pushSubscribeSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
-    const { endpoint, keys } = req.body as {
-      endpoint: string;
-      keys: { p256dh: string; auth: string };
-    };
-
-    if (!endpoint || !keys?.p256dh || !keys?.auth) {
-      throw new ValidationError("بيانات الاشتراك غير مكتملة");
-    }
+    const { endpoint, keys } = parsed;
 
     const userAgent = req.headers["user-agent"]?.substring(0, 200) ?? null;
     const { encrypted: encryptedEndpoint, success: isEncrypted } = encryptPushEndpoint(endpoint);
@@ -770,11 +775,7 @@ router.post("/push/subscribe", requirePermission("communications:write"), async 
 router.delete("/push/unsubscribe", requirePermission("communications:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { endpoint } = req.body as { endpoint: string };
-
-    if (!endpoint) {
-      throw new ValidationError("endpoint مطلوب", { field: "endpoint" });
-    }
+    const { endpoint } = zodParse(pushUnsubscribeSchema.safeParse(req.body ?? {}));
 
     const endpointHash = hashPushEndpoint(endpoint);
     await rawExecute(

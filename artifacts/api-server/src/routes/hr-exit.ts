@@ -115,6 +115,12 @@ const updateClearanceSchema = z.object({
   notes: z.string().optional(),
 });
 
+const approvalDecisionSchema = z.object({
+  approved: z.boolean().default(true),
+  reason: z.string().optional(),
+  notes: z.string().optional(),
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/exit — قائمة طلبات نهاية الخدمة
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -353,7 +359,8 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, res): Promise<void> => {
   try {
-    const { approved = true, reason, notes } = (req.body ?? {}) as { approved?: boolean; reason?: string; notes?: string };
+    const b = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
+    const { approved = true, reason, notes } = b;
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     if (!HR_ROLES.includes(scope.role)) {

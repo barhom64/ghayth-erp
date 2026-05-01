@@ -26,6 +26,38 @@ const createBudgetSchema = z.object({
   branchId: z.coerce.number().optional().nullable(),
 });
 
+const validateBudgetSchema = z.object({
+  accountCode: z.string().min(1, "رمز الحساب مطلوب"),
+  amount: z.coerce.number({ required_error: "المبلغ مطلوب" }).positive("المبلغ يجب أن يكون أكبر من صفر"),
+  period: z.string().optional(),
+});
+
+const updateBudgetSchema = z.object({
+  accountCode: z.string().min(1).optional(),
+  period: z.string().min(1).optional(),
+  amount: z.coerce.number().min(0).optional(),
+});
+
+const APPROVAL_SOURCE_TYPES = ["purchase_order", "invoice", "expense", "manual"] as const;
+
+const createApprovalRequestSchema = z.object({
+  accountCode: z.string().min(1, "رمز الحساب مطلوب"),
+  period: z.string().min(1, "الفترة مطلوبة"),
+  requestedAmount: z.coerce.number({ required_error: "المبلغ مطلوب" }).positive("المبلغ يجب أن يكون أكبر من صفر"),
+  sourceType: z.string().optional().nullable(),
+  sourceId: z.coerce.number().optional().nullable(),
+  reason: z.string().optional().nullable(),
+});
+
+const APPROVAL_DECISIONS = ["approved", "rejected"] as const;
+
+const decideApprovalSchema = z.object({
+  decision: z.string().refine((v) => (APPROVAL_DECISIONS as readonly string[]).includes(v), {
+    message: "القرار يجب أن يكون approved أو rejected",
+  }),
+  notes: z.string().optional().nullable(),
+});
+
 export const budgetRouter = Router();
 budgetRouter.use(authMiddleware);
 
@@ -122,18 +154,12 @@ budgetRouter.post("/budget", requirePermission("finance:create"), async (req, re
 budgetRouter.post("/budget/validate", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { accountCode, amount, period } = req.body as any;
-    if (!accountCode || !amount) {
-      throw new ValidationError("الحساب والمبلغ مطلوبان", {
-        field: !accountCode ? "accountCode" : "amount",
-        fix: "أدخل رمز الحساب والمبلغ المراد التحقق منه",
-      });
-    }
+    const { accountCode, amount, period } = zodParse(validateBudgetSchema.safeParse(req.body ?? {}));
 
     const result = await validateBudget({
       companyId: scope.companyId,
       accountCode,
-      amount: Number(amount),
+      amount,
       period,
       role: scope.role,
     });
@@ -171,7 +197,7 @@ budgetRouter.patch("/budget/:id", requirePermission("finance:update"), async (re
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(updateBudgetSchema.safeParse(req.body ?? {}));
     const fields: string[] = [];
     const params: any[] = [];
     const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
@@ -316,13 +342,7 @@ async function ensureBudgetApprovalTable() {
 budgetRouter.post("/budget/approval-requests", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { accountCode, period, requestedAmount, sourceType, sourceId, reason } = req.body as any;
-    if (!accountCode || !period || !requestedAmount || Number(requestedAmount) <= 0) {
-      throw new ValidationError("الحساب والفترة والمبلغ مطلوبة", {
-        field: "requestedAmount",
-        fix: "أدخل قيمة موجبة والفترة بصيغة YYYY-MM",
-      });
-    }
+    const { accountCode, period, requestedAmount, sourceType, sourceId, reason } = zodParse(createApprovalRequestSchema.safeParse(req.body ?? {}));
     await ensureBudgetApprovalTable();
 
     const [budget] = await rawQuery<any>(
@@ -411,13 +431,7 @@ budgetRouter.post("/budget/approval-requests/:id/decide", requirePermission("fin
   try {
     const scope = req.scope!;
     const requestId = parseId(req.params.id, "id");
-    const { decision, notes } = req.body as any; // decision: 'approved' | 'rejected'
-    if (!["approved", "rejected"].includes(decision)) {
-      throw new ValidationError("القرار يجب أن يكون approved أو rejected", {
-        field: "decision",
-        fix: "استخدم approved أو rejected",
-      });
-    }
+    const { decision, notes } = zodParse(decideApprovalSchema.safeParse(req.body ?? {}));
     await ensureBudgetApprovalTable();
 
     // Fetch approval level + context to drive business rules that sit

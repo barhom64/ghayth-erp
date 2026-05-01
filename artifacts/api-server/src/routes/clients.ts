@@ -31,6 +31,22 @@ const updateClientSchema = z.object({
   isBlacklisted: z.boolean().optional(),
 });
 
+const autoCreateClientSchema = z.object({
+  phone: z.string().min(1, "رقم الهاتف مطلوب"),
+  name: z.string().optional(),
+  source: z.string().optional().default("auto"),
+});
+
+const createPortalAccountSchema = z.object({
+  email: z.string().min(1, "البريد الإلكتروني مطلوب"),
+  password: z.string().min(1, "كلمة المرور مطلوبة"),
+});
+
+const updatePortalAccountSchema = z.object({
+  isActive: z.boolean().optional(),
+  password: z.string().optional(),
+});
+
 const router = Router();
 
 router.get("/", requirePermission("crm:read"), async (req, res) => {
@@ -297,10 +313,8 @@ router.patch("/:id", requirePermission("crm:write"), async (req, res) => {
 router.post("/auto-create", requirePermission("crm:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { phone, name, source = "auto" } = req.body as any;
-    if (!phone) {
-      throw new ValidationError("رقم الهاتف مطلوب");
-    }
+    const b = zodParse(autoCreateClientSchema.safeParse(req.body ?? {}));
+    const { phone, name, source } = b;
 
     const existing = await rawQuery<any>(
       `SELECT * FROM clients WHERE phone = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
@@ -387,7 +401,8 @@ router.post("/:id/portal-account", requirePermission("crm:write"), async (req, r
   try {
     const scope = req.scope!;
     const { id } = req.params;
-    const { email: rawEmail, password } = req.body as { email: string; password: string };
+    const b2 = zodParse(createPortalAccountSchema.safeParse(req.body ?? {}));
+    const { email: rawEmail, password } = b2;
 
     if (!rawEmail || !password) {
       throw new ValidationError("البريد الإلكتروني وكلمة المرور مطلوبان");
@@ -442,7 +457,8 @@ router.patch("/:id/portal-account", requirePermission("crm:write"), async (req, 
   try {
     const scope = req.scope!;
     const { id } = req.params;
-    const { isActive, password } = req.body as { isActive?: boolean; password?: string };
+    const b3 = zodParse(updatePortalAccountSchema.safeParse(req.body ?? {}));
+    const { isActive, password } = b3;
 
     const [account] = await rawQuery<any>(
       `SELECT cpa.id FROM client_portal_accounts cpa

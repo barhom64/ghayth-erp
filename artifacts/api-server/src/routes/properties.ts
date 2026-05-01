@@ -141,6 +141,290 @@ const updateContractSchema = z.object({
   registrationDate: z.string().optional().nullable(),
 });
 
+const contractImpactPreviewSchema = z.object({
+  unitId: z.coerce.number().optional().nullable(),
+  tenantId: z.coerce.number().optional().nullable(),
+  monthlyRent: z.coerce.number().optional().nullable(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+  securityDeposit: z.coerce.number().optional().nullable(),
+});
+
+const createContractSchema = z.object({
+  unitId: z.coerce.number(),
+  tenantId: z.union([z.coerce.number(), z.string()]).optional().nullable(),
+  tenantName: z.string().min(1, "اسم المستأجر مطلوب"),
+  tenantPhone: z.string().optional().nullable(),
+  tenantEmail: z.string().optional().nullable(),
+  tenantIdNumber: z.string().optional().nullable(),
+  startDate: z.string().min(1, "تاريخ البداية مطلوب"),
+  endDate: z.string().min(1, "تاريخ النهاية مطلوب"),
+  monthlyRent: z.coerce.number().optional().nullable(),
+  depositAmount: z.coerce.number().optional().nullable(),
+  paymentDay: z.coerce.number().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  status: z.string().optional().nullable(),
+  contractNumber: z.string().optional().nullable(),
+  ejarNumber: z.string().optional().nullable(),
+  contractType: z.string().optional().nullable(),
+  paymentFrequency: z.string().optional().nullable(),
+  yearlyRent: z.coerce.number().optional().nullable(),
+  totalContractValue: z.coerce.number().optional().nullable(),
+  latePenaltyType: z.string().optional().nullable(),
+  latePenaltyValue: z.coerce.number().optional().nullable(),
+  gracePeriodDays: z.coerce.number().optional().nullable(),
+  terminationNoticeDays: z.coerce.number().optional().nullable(),
+  earlyTerminationFee: z.coerce.number().optional().nullable(),
+  autoRenewal: z.boolean().optional().nullable(),
+  renewalNoticeDays: z.coerce.number().optional().nullable(),
+  renewalPeriodMonths: z.coerce.number().optional().nullable(),
+  electricityResponsibility: z.string().optional().nullable(),
+  waterResponsibility: z.string().optional().nullable(),
+  gasResponsibility: z.string().optional().nullable(),
+  maintenanceResponsibility: z.string().optional().nullable(),
+  brokerageFee: z.coerce.number().optional().nullable(),
+  brokeragePayor: z.string().optional().nullable(),
+  depositHolder: z.string().optional().nullable(),
+  insuranceRequired: z.boolean().optional().nullable(),
+  ownerId: z.coerce.number().optional().nullable(),
+  numberOfInstallments: z.coerce.number().optional().nullable(),
+  specialConditions: z.string().optional().nullable(),
+  ejarStatus: z.string().optional().nullable(),
+  registrationDate: z.string().optional().nullable(),
+});
+
+const renewContractSchema = z.object({
+  renewalPeriodMonths: z.coerce.number().optional().nullable(),
+  newStartDate: z.string().optional().nullable(),
+  monthlyRent: z.coerce.number().optional().nullable(),
+  yearlyRent: z.coerce.number().optional().nullable(),
+  totalContractValue: z.coerce.number().optional().nullable(),
+});
+
+const terminateContractSchema = z.object({
+  reason: z.string().min(1, "يجب تحديد سبب الإنهاء"),
+  terminationDate: z.string().optional().nullable(),
+  earlyTerminationFee: z.coerce.number().optional().nullable(),
+});
+
+const updateTenantSchema = z.object({
+  name: z.string().optional(),
+  phone: z.string().optional().nullable(),
+  email: z.string().optional().nullable(),
+  nationalId: z.string().optional().nullable(),
+  nationality: z.string().optional().nullable(),
+  idType: z.string().optional().nullable(),
+  tenantType: z.string().optional().nullable(),
+  crNumber: z.string().optional().nullable(),
+  unifiedNumber: z.string().optional().nullable(),
+  birthDate: z.string().optional().nullable(),
+  gender: z.string().optional().nullable(),
+  guarantorName: z.string().optional().nullable(),
+  guarantorId: z.string().optional().nullable(),
+  guarantorPhone: z.string().optional().nullable(),
+  guarantorRelation: z.string().optional().nullable(),
+  emergencyContact: z.string().optional().nullable(),
+  emergencyName: z.string().optional().nullable(),
+  maritalStatus: z.string().optional().nullable(),
+  occupation: z.string().optional().nullable(),
+  monthlyIncome: z.coerce.number().optional().nullable(),
+  previousAddress: z.string().optional().nullable(),
+  previousLandlord: z.string().optional().nullable(),
+  previousLandlordPhone: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+const payRentPaymentSchema = z.object({
+  paidAmount: z.coerce.number().optional(),
+  amount: z.coerce.number().optional(),
+  paidDate: z.string().optional().nullable(),
+  method: z.string().optional().nullable(),
+});
+
+const createMaintenanceRequestSchema = z.object({
+  unitId: z.coerce.number(),
+  contractId: z.coerce.number().optional().nullable(),
+  tenantName: z.string().optional().nullable(),
+  tenantPhone: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  description: z.string().min(1, "وصف البلاغ مطلوب"),
+  priority: z.string().optional().nullable(),
+  assignedTo: z.coerce.number().optional().nullable(),
+  estimatedCost: z.coerce.number().optional().nullable(),
+  unitLat: z.coerce.number().optional().nullable(),
+  unitLon: z.coerce.number().optional().nullable(),
+});
+
+const approveMaintenanceSchema = z.object({
+  approved: z.boolean().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+const completeMaintenanceSchema = z.object({
+  closureReport: z.string().optional().nullable(),
+  afterPhotos: z.array(z.string()).optional().nullable(),
+  actualCost: z.coerce.number().optional().nullable(),
+  cost: z.coerce.number().optional().nullable(),
+  zeroCostConfirmed: z.boolean().optional().nullable(),
+  materialsUsed: z.array(z.any()).optional().nullable(),
+  coveredByContract: z.boolean().optional().nullable(),
+});
+
+const createTenantSchema = z.object({
+  name: z.string().min(1, "اسم المستأجر مطلوب"),
+  phone: z.string().optional().nullable(),
+  email: z.string().optional().nullable(),
+  nationalId: z.string().optional().nullable(),
+  nationality: z.string().optional().nullable(),
+  idType: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  tenantType: z.string().optional().nullable(),
+  crNumber: z.string().optional().nullable(),
+  unifiedNumber: z.string().optional().nullable(),
+  birthDate: z.string().optional().nullable(),
+  gender: z.string().optional().nullable(),
+  guarantorName: z.string().optional().nullable(),
+  guarantorId: z.string().optional().nullable(),
+  guarantorPhone: z.string().optional().nullable(),
+  guarantorRelation: z.string().optional().nullable(),
+  emergencyContact: z.string().optional().nullable(),
+  emergencyName: z.string().optional().nullable(),
+  maritalStatus: z.string().optional().nullable(),
+  occupation: z.string().optional().nullable(),
+  monthlyIncome: z.coerce.number().optional().nullable(),
+  previousAddress: z.string().optional().nullable(),
+  previousLandlord: z.string().optional().nullable(),
+  previousLandlordPhone: z.string().optional().nullable(),
+});
+
+const createBuildingSchema = z.object({
+  name: z.string().min(1, "اسم المبنى مطلوب"),
+  address: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  type: z.string().optional().nullable(),
+  deedNumber: z.string().optional().nullable(),
+  deedDate: z.string().optional().nullable(),
+  buildingPermitNumber: z.string().optional().nullable(),
+  nationalAddress: z.union([z.string(), z.record(z.any())]).optional().nullable(),
+  latitude: z.coerce.number().optional().nullable(),
+  longitude: z.coerce.number().optional().nullable(),
+  totalUnits: z.coerce.number().optional().nullable(),
+  totalArea: z.coerce.number().optional().nullable(),
+  yearBuilt: z.coerce.number().optional().nullable(),
+  ownerId: z.coerce.number().optional().nullable(),
+  managerId: z.coerce.number().optional().nullable(),
+  description: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  purchasePrice: z.coerce.number().optional().nullable(),
+  purchaseDate: z.string().optional().nullable(),
+  usefulLifeYears: z.coerce.number().optional().nullable(),
+  salvageValue: z.coerce.number().optional().nullable(),
+});
+
+const createMaintenanceSimpleSchema = z.object({
+  unitId: z.coerce.number(),
+  tenantName: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  description: z.string().min(1, "وصف الصيانة مطلوب"),
+  priority: z.string().optional().nullable(),
+});
+
+const updateMaintenanceRequestSchema = z.object({
+  status: z.string().optional(),
+  category: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  priority: z.string().optional().nullable(),
+  assignedTo: z.coerce.number().optional().nullable(),
+  technicianId: z.coerce.number().optional().nullable(),
+  costResponsibility: z.string().optional().nullable(),
+  estimatedCost: z.coerce.number().optional().nullable(),
+  actualCost: z.coerce.number().optional().nullable(),
+  closureReport: z.string().optional().nullable(),
+  clientRating: z.coerce.number().optional().nullable(),
+  clientComment: z.string().optional().nullable(),
+  beforePhotos: z.array(z.string()).optional().nullable(),
+  afterPhotos: z.array(z.string()).optional().nullable(),
+  materialsUsed: z.array(z.any()).optional().nullable(),
+  zeroCostConfirmed: z.boolean().optional().nullable(),
+});
+
+const createOwnerSchema = z.object({
+  name: z.string().min(1, "اسم المالك مطلوب"),
+  ownerType: z.string().optional().nullable(),
+  nationalId: z.string().optional().nullable(),
+  crNumber: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  email: z.string().optional().nullable(),
+  iban: z.string().optional().nullable(),
+  bankName: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  authorizationNumber: z.string().optional().nullable(),
+  authorizationDate: z.string().optional().nullable(),
+  authorizationExpiry: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+const updateOwnerSchema = z.object({
+  ownerType: z.string().optional().nullable(),
+  name: z.string().optional(),
+  nationalId: z.string().optional().nullable(),
+  crNumber: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  email: z.string().optional().nullable(),
+  iban: z.string().optional().nullable(),
+  bankName: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  authorizationNumber: z.string().optional().nullable(),
+  authorizationDate: z.string().optional().nullable(),
+  authorizationExpiry: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+const payInstallmentSchema = z.object({
+  paidAmount: z.coerce.number().optional(),
+  amount: z.coerce.number().optional(),
+  paidDate: z.string().optional().nullable(),
+  method: z.string().optional().nullable(),
+  receiptNumber: z.string().optional().nullable(),
+});
+
+const createInspectionSchema = z.object({
+  unitId: z.coerce.number(),
+  type: z.string().min(1, "نوع الفحص مطلوب"),
+  scheduledDate: z.string().optional().nullable(),
+  inspectorName: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  findings: z.any().optional().nullable(),
+  conditionRating: z.coerce.number().optional().nullable(),
+});
+
+const updateInspectionSchema = z.object({
+  status: z.string().optional(),
+  inspectionDate: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  findings: z.any().optional().nullable(),
+  conditionRating: z.coerce.number().optional().nullable(),
+  inspectorName: z.string().optional().nullable(),
+});
+
+const createDepositSchema = z.object({
+  contractId: z.coerce.number(),
+  amount: z.coerce.number(),
+  receivedDate: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  refundAmount: z.coerce.number().optional().nullable(),
+  refundDate: z.string().optional().nullable(),
+  refundReason: z.string().optional().nullable(),
+});
+
+const refundDepositSchema = z.object({
+  refundAmount: z.coerce.number().optional().nullable(),
+  refundDate: z.string().optional().nullable(),
+  refundReason: z.string().optional().nullable(),
+});
+
 const router = Router();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -568,7 +852,7 @@ router.delete("/units/:id", requirePermission("property:delete"), async (req, re
 router.post("/contracts/impact-preview", requirePermission("properties:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { unitId, tenantId, monthlyRent, startDate, endDate, securityDeposit } = req.body as any;
+    const { unitId, tenantId, monthlyRent, startDate, endDate, securityDeposit } = zodParse(contractImpactPreviewSchema.safeParse(req.body));
 
     const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
 
@@ -731,7 +1015,7 @@ router.get("/contracts/:id", requirePermission("properties:read"), async (req, r
 router.post("/contracts", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createContractSchema.safeParse(req.body)) as any;
 
     if (!b.unitId) {
       throw new ValidationError("لا يمكن إنشاء عقد إيجار بدون وحدة عقارية", { field: "unitId", fix: "حدد الوحدة العقارية المراد تأجيرها" });
@@ -1130,7 +1414,7 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body || {};
+    const b = zodParse(renewContractSchema.safeParse(req.body)) as any;
     // Pre-fetch the contract to compute renewal params. applyTransition will
     // re-fetch with SELECT FOR UPDATE inside the transaction.
     const [contract] = await rawQuery<any>(
@@ -1250,7 +1534,7 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body || {};
+    const b = zodParse(terminateContractSchema.safeParse(req.body)) as any;
     // Pre-fetch contract to compute termination params. applyTransition will
     // re-fetch with SELECT FOR UPDATE inside its transaction.
     const [contract] = await rawQuery<any>(
@@ -1416,7 +1700,7 @@ router.patch("/tenants/:id", requirePermission("property:update"), async (req, r
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المستأجر غير موجود");
-    const b = req.body;
+    const b = zodParse(updateTenantSchema.safeParse(req.body)) as any;
 
     if (b.nationalId && b.nationalId !== existing.nationalId) {
       const [dup] = await rawQuery<any>(
@@ -1582,7 +1866,7 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
   try {
     const scope = req.scope!;
     const { id } = req.params;
-    const b = req.body;
+    const b = zodParse(payRentPaymentSchema.safeParse(req.body)) as any;
     const paidAmount = Number(b.paidAmount ?? b.amount);
     if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
       throw new ValidationError("مبلغ السداد غير صالح", { field: "paidAmount", fix: "أدخل مبلغاً موجباً" });
@@ -1830,7 +2114,7 @@ router.get("/maintenance/:id", requirePermission("property:read"), async (req, r
 router.post("/maintenance-requests", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createMaintenanceRequestSchema.safeParse(req.body)) as any;
 
     if (!b.unitId) {
       throw new ValidationError("الوحدة مطلوبة", { field: "unitId", fix: "اختر الوحدة التي يتعلق بها البلاغ" });
@@ -1991,7 +2275,7 @@ router.patch("/maintenance-requests/:id/approve", requirePermission("property:up
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(approveMaintenanceSchema.safeParse(req.body));
 
     const [mr] = await rawQuery<any>(
       `SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`,
@@ -2058,7 +2342,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(completeMaintenanceSchema.safeParse(req.body)) as any;
     const [mr] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!mr) throw new NotFoundError("الطلب غير موجود");
 
@@ -2252,7 +2536,7 @@ router.get("/tenants", requirePermission("property:read"), async (req, res) => {
 router.post("/tenants", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createTenantSchema.safeParse(req.body)) as any;
     if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
       throw new ValidationError("اسم المستأجر مطلوب", { field: "name", fix: "أدخل الاسم الكامل للمستأجر" });
     }
@@ -2411,7 +2695,7 @@ router.get("/buildings/:id", requirePermission("property:read"), async (req, res
 router.post("/buildings", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createBuildingSchema.safeParse(req.body)) as any;
     if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
       throw new ValidationError("اسم المبنى مطلوب", { field: "name", fix: "أدخل اسم المبنى" });
     }
@@ -2617,7 +2901,7 @@ router.get("/maintenance", requirePermission("property:read"), async (req, res) 
 router.post("/maintenance", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createMaintenanceSimpleSchema.safeParse(req.body)) as any;
     if (!b.unitId) {
       throw new ValidationError("الوحدة مطلوبة", { field: "unitId", fix: "اختر الوحدة المطلوب صيانتها" });
     }
@@ -2729,7 +3013,7 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الطلب غير موجود");
-    const b = req.body;
+    const b = zodParse(updateMaintenanceRequestSchema.safeParse(req.body)) as any;
 
     // State machine — PATCH allowed to move through the allowlist only
     if (b.status !== undefined && b.status !== existing.status) {
@@ -2943,7 +3227,7 @@ router.get("/owners/:id", requirePermission("property:read"), async (req, res) =
 router.post("/owners", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createOwnerSchema.safeParse(req.body)) as any;
     if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
       throw new ValidationError("اسم المالك مطلوب", { field: "name", fix: "أدخل اسم المالك الكامل" });
     }
@@ -3003,7 +3287,7 @@ router.patch("/owners/:id", requirePermission("property:update"), async (req, re
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المالك غير موجود");
-    const b = req.body;
+    const b = zodParse(updateOwnerSchema.safeParse(req.body)) as any;
     const fields: string[] = [];
     const params: any[] = [];
     const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
@@ -3121,7 +3405,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
     const scope = req.scope!;
     const contractId = parseId(req.params.id, "id");
     const installmentId = parseId(req.params.installmentId, "installmentId");
-    const b = req.body;
+    const b = zodParse(payInstallmentSchema.safeParse(req.body)) as any;
     const paidAmount = Number(b.paidAmount ?? b.amount);
     const [existing] = await rawQuery<any>(
       `SELECT cps.*, rc."tenantName", u."unitNumber", u."buildingName" FROM contract_payment_schedule cps JOIN rental_contracts rc ON rc.id=cps."contractId" LEFT JOIN property_units u ON u.id=rc."unitId" WHERE cps.id=$1 AND cps."contractId"=$2 AND cps."companyId"=$3`,
@@ -3198,7 +3482,7 @@ router.get("/inspections", requirePermission("property:read"), async (req, res) 
 router.post("/inspections", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createInspectionSchema.safeParse(req.body)) as any;
     if (!b.unitId) {
       throw new ValidationError("الوحدة مطلوبة", { field: "unitId", fix: "اختر الوحدة المراد فحصها" });
     }
@@ -3253,7 +3537,7 @@ router.patch("/inspections/:id", requirePermission("property:update"), async (re
     );
     if (!existing) throw new NotFoundError("الفحص غير موجود");
 
-    const b = req.body;
+    const b = zodParse(updateInspectionSchema.safeParse(req.body)) as any;
 
     // Collect extra field changes
     const extraFields: Record<string, any> = {};
@@ -3367,7 +3651,7 @@ router.get("/deposits", requirePermission("property:read"), async (req, res) => 
 router.post("/deposits", requirePermission("property:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createDepositSchema.safeParse(req.body)) as any;
     if (!b.contractId) {
       throw new ValidationError("العقد مطلوب", { field: "contractId", fix: "اختر العقد المرتبط بالوديعة" });
     }
@@ -3435,7 +3719,7 @@ router.patch("/deposits/:id/refund", requirePermission("property:update"), async
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(refundDepositSchema.safeParse(req.body)) as any;
     const [deposit] = await rawQuery<any>(
       `SELECT * FROM property_security_deposits WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]

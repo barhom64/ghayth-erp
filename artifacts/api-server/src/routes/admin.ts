@@ -59,6 +59,28 @@ const createIntegrationSchema = z.object({
   type: z.string().min(1, "نوع التكامل مطلوب"),
   config: z.any().optional(),
   enabled: z.boolean().optional(),
+  status: z.string().optional(),
+  maxRetries: z.coerce.number().int().min(0).optional(),
+});
+
+const createCustomRoleSchema = z.object({
+  roleKey: z.string().min(1, "roleKey مطلوب").regex(/^[a-z_]+$/, "roleKey يجب أن يحتوي على أحرف إنجليزية صغيرة وشرطات سفلية فقط"),
+  label: z.string().min(1, "label مطلوب"),
+  level: z.coerce.number().int().min(1).max(99).optional().default(10),
+  modules: z.array(z.string()).optional().default([]),
+  permissions: z.array(z.string()).optional(),
+});
+
+const updateIntegrationSchema = z.object({
+  name: z.string().min(1, "اسم التكامل مطلوب").optional(),
+  type: z.string().min(1, "نوع التكامل مطلوب").optional(),
+  config: z.any().optional(),
+  status: z.string().optional(),
+  maxRetries: z.coerce.number().int().min(0).optional(),
+});
+
+const testIntegrationSchema = z.object({
+  testRecipient: z.string().optional(),
 });
 
 const resetPasswordLimiter = rateLimit({
@@ -356,16 +378,7 @@ router.post("/roles", requirePermission("admin:write"), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    zodParse(createRoleSchema.safeParse({
-      name: req.body?.label,
-      description: req.body?.description,
-      permissions: req.body?.permissions,
-    }));
-    const { roleKey, label, level, modules, permissions: rolePermissions } = req.body;
-    if (!roleKey || !label) { throw new ValidationError("roleKey و label مطلوبان"); }
-    if (!/^[a-z_]+$/.test(roleKey)) { throw new ValidationError("roleKey يجب أن يحتوي على أحرف إنجليزية صغيرة وشرطات سفلية فقط"); }
-    const roleLevel = Math.max(1, Math.min(99, Number(level) || 10));
-    const mods = Array.isArray(modules) ? modules : [];
+    const { roleKey, label, level: roleLevel, modules: mods, permissions: rolePermissions } = zodParse(createCustomRoleSchema.safeParse(req.body ?? {}));
     await withTransaction(async (tx) => {
       await tx.query(
         `INSERT INTO custom_roles ("companyId","roleKey",label,level,modules,"createdBy","createdAt")
@@ -553,8 +566,7 @@ router.post("/integrations", requirePermission("admin:write"), async (req, res) 
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const parsed = zodParse(createIntegrationSchema.safeParse(req.body));
-    const { type, name, config, status, maxRetries } = req.body;
+    const { type, name, config, status, maxRetries } = zodParse(createIntegrationSchema.safeParse(req.body ?? {}));
     const r = await rawExecute(
       `INSERT INTO integrations ("companyId",type,name,config,status,"maxRetries")
        VALUES ($1,$2,$3,$4,$5,$6)`,
@@ -583,7 +595,7 @@ router.patch("/integrations/:id", requirePermission("admin:write"), async (req, 
     await assertAdmin(req);
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(updateIntegrationSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
     const params: any[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
@@ -651,11 +663,12 @@ router.post("/integrations/:id/test", requirePermission("admin:write"), async (r
       [id, scope.companyId]
     );
     if (!integration) { throw new NotFoundError("التكامل غير موجود"); }
+    const { testRecipient } = zodParse(testIntegrationSchema.safeParse(req.body ?? {}));
 
     const result = await integrationService.send({
       companyId: scope.companyId,
       channel: integration.type,
-      recipient: req.body.testRecipient || "test@test.com",
+      recipient: testRecipient || "test@test.com",
       subject: "اختبار تكامل غيث ERP",
       body: "هذه رسالة اختبار من نظام غيث ERP للتحقق من إعداد التكامل.",
     });

@@ -215,6 +215,179 @@ const delegationSchema = z.object({
   endDate: z.string().optional(),
 });
 
+const checkOutSchema = z.object({
+  notes: z.string().optional(),
+  lat: z.coerce.number().optional(),
+  lon: z.coerce.number().optional(),
+});
+
+const approvalDecisionSchema = z.object({
+  approved: z.union([z.boolean(), z.literal("returned")]),
+  reason: z.string().optional(),
+});
+
+const payrollRunSchema = z.object({
+  month: z.string().optional(),
+});
+
+const approvalRequestDecisionSchema = z.object({
+  approved: z.boolean(),
+  reason: z.string().optional(),
+});
+
+const attendancePolicySchema = z.object({
+  lateThresholdMinutes: z.coerce.number().optional(),
+  gpsRadiusMeters: z.coerce.number().optional(),
+  penaltyLevel1: z.coerce.number().optional(),
+  penaltyLevel2: z.coerce.number().optional(),
+  penaltyLevel3: z.coerce.number().optional(),
+  penaltyLevel4: z.coerce.number().optional(),
+  penaltyLevel5: z.coerce.number().optional(),
+  penaltyLevel1Label: z.string().optional(),
+  penaltyLevel2Label: z.string().optional(),
+  penaltyLevel3Label: z.string().optional(),
+  penaltyLevel4Label: z.string().optional(),
+  penaltyLevel5Label: z.string().optional(),
+});
+
+const violationPatchSchema = z.object({
+  type: z.string().optional(),
+  severity: z.string().optional(),
+  deduction: z.coerce.number().optional(),
+  period: z.string().optional(),
+  description: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const violationApprovalSchema = z.object({
+  notes: z.string().optional(),
+});
+
+const shiftPatchSchema = z.object({
+  name: z.string().optional(),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+  days: z.any().optional(),
+  status: z.string().optional(),
+  isDefault: z.boolean().optional(),
+  branchId: z.coerce.number().optional().nullable(),
+  shiftType: z.enum(["fixed", "flexible", "remote", "split"]).optional(),
+  remoteAllowed: z.boolean().optional(),
+  splitBreakStart: z.string().optional(),
+  splitBreakEnd: z.string().optional(),
+  flexStartEarliest: z.string().optional(),
+  flexStartLatest: z.string().optional(),
+});
+
+const leaveRequestPatchSchema = z.object({
+  status: z.string().optional(),
+  reason: z.string().optional(),
+});
+
+const leaveCancelSchema = z.object({
+  reason: z.string().optional(),
+});
+
+const payrollPatchSchema = z.object({
+  status: z.string().optional(),
+});
+
+const performancePatchSchema = z.object({
+  overallScore: z.coerce.number().optional(),
+  score: z.coerce.number().optional(),
+  comments: z.string().optional(),
+  feedback: z.string().optional(),
+  status: z.string().optional(),
+  strengths: z.any().optional(),
+  improvements: z.any().optional(),
+  goals: z.any().optional(),
+});
+
+const officialLetterPatchSchema = z.object({
+  subject: z.string().optional(),
+  content: z.string().optional(),
+  status: z.string().optional(),
+  type: z.string().optional(),
+});
+
+const letterApprovalSchema = z.object({
+  approved: z.union([z.boolean(), z.literal("returned")]).optional(),
+  notes: z.string().optional(),
+});
+
+const onboardingStepsSchema = z.object({
+  steps: z.array(z.string()),
+});
+
+const impactPreviewLeaveSchema = z.object({
+  employeeId: z.coerce.number({ required_error: "معرف الموظف مطلوب" }),
+  leaveTypeId: z.coerce.number({ required_error: "نوع الإجازة مطلوب" }),
+  startDate: z.string().min(1, "تاريخ البداية مطلوب"),
+  endDate: z.string().min(1, "تاريخ النهاية مطلوب"),
+  days: z.coerce.number().optional(),
+});
+
+const impactPreviewTerminationSchema = z.object({
+  employeeId: z.coerce.number({ required_error: "معرف الموظف مطلوب" }),
+});
+
+const impactPreviewViolationSchema = z.object({
+  employeeId: z.coerce.number({ required_error: "معرف الموظف مطلوب" }),
+  deduction: z.coerce.number().optional().default(0),
+  severity: z.string().optional().default("medium"),
+});
+
+const peerEvaluationSchema = z.object({
+  overallScore: z.coerce.number().optional(),
+  scores: z.any().optional(),
+  comments: z.string().optional(),
+});
+
+const upwardReviewSchema = z.object({
+  managerId: z.coerce.number().optional(),
+  overallScore: z.coerce.number().optional(),
+  scores: z.any().optional(),
+  comments: z.string().optional(),
+});
+
+const publicHolidayPatchSchema = z.object({
+  name: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  type: z.string().optional(),
+  description: z.string().optional(),
+  isRecurring: z.boolean().optional(),
+});
+
+const transferApprovalSchema = z.object({
+  approved: z.boolean().optional(),
+  notes: z.string().optional(),
+});
+
+const transferConfirmSchema = z.object({
+  confirmed: z.boolean().optional(),
+  notes: z.string().optional(),
+});
+
+const idpPatchSchema = z.object({
+  title: z.string().optional(),
+  goals: z.any().optional(),
+  skills: z.any().optional(),
+  status: z.string().optional(),
+  targetDate: z.string().optional(),
+  notes: z.string().optional(),
+  progress: z.coerce.number().optional(),
+});
+
+const monthlyAccrualsSchema = z.object({
+  period: z.string().optional(),
+});
+
+const excuseApprovalSchema = z.object({
+  approved: z.boolean().optional(),
+  rejectionReason: z.string().optional(),
+});
+
 const router = Router();
 
 const checkInLimiter = rateLimit({
@@ -594,7 +767,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
     const now = new Date();
     const today = toDateISO(now);
     const period = today.slice(0, 7);
-    const { notes, lat, lon } = req.body as any;
+    const { notes, lat, lon } = zodParse(checkOutSchema.safeParse(req.body ?? {}));
 
     if (!scope.activeAssignmentId) {
       throw new ConflictError("لا يوجد تعيين نشط لهذا الحساب", {
@@ -1472,7 +1645,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
   try {
     const scope = req.scope!;
     const { id } = req.params;
-    const { approved, reason } = req.body as { approved: boolean | "returned"; reason?: string };
+    const { approved, reason } = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
 
     // Authorization: only branch_manager, hr_manager, or owner roles can approve leave
     if (!HR_APPROVAL_ROLES.includes(scope.role)) {
@@ -2123,7 +2296,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
         },
       });
     }
-    const { month } = req.body as { month?: string };
+    const { month } = zodParse(payrollRunSchema.safeParse(req.body ?? {}));
     const targetPeriod = month ?? currentPeriod();
 
     // P02-S5-CRIT — every other GL writer in this file (HR accruals at
@@ -3105,7 +3278,7 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { approved, reason } = req.body as any;
+    const { approved, reason } = zodParse(approvalRequestDecisionSchema.safeParse(req.body ?? {}));
 
     if (!OPS_CLOSE_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بالموافقة أو الرفض");
@@ -3256,7 +3429,7 @@ router.put("/attendance-policy", requirePermission("hr:update"), async (req, res
     if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح");
     }
-    const b = req.body as any;
+    const b = zodParse(attendancePolicySchema.safeParse(req.body ?? {}));
     await rawExecute(
       `INSERT INTO attendance_policies ("companyId","lateThresholdMinutes","gpsRadiusMeters",
         "penaltyLevel1","penaltyLevel2","penaltyLevel3","penaltyLevel4","penaltyLevel5",
@@ -3368,7 +3541,7 @@ router.patch("/violations/:id", requirePermission("hr:update"), async (req, res)
       throw new ForbiddenError("غير مصرح: تعديل المخالفات مقصور على HR أو المدير أو المالك");
     }
     const id = parseId(req.params.id, "id");
-    const b = req.body as any;
+    const b = zodParse(violationPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
     const params: any[] = [];
     if (b.type !== undefined) { params.push(b.type); sets.push(`type=$${params.length}`); }
@@ -3405,7 +3578,7 @@ async function violationApprovalAction(req: any, res: any, newStatus: "approved"
       throw new ForbiddenError("غير مصرح: اعتماد المخالفات مقصور على HR أو المدير أو المالك");
     }
     const id = parseId(req.params.id, "id");
-    const { notes } = req.body as any;
+    const { notes } = zodParse(violationApprovalSchema.safeParse(req.body ?? {}));
     const [violation] = await rawQuery<any>(
       `SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -3440,7 +3613,7 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body as any;
+    const b = zodParse(shiftPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
     const params: any[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
@@ -3683,7 +3856,7 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
     if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل طلبات الإجازة مقصور على HR أو المالك");
     }
-    const { status, reason } = req.body as any;
+    const { status, reason } = zodParse(leaveRequestPatchSchema.safeParse(req.body ?? {}));
     if (status && ["approved", "rejected"].includes(status)) {
       throw new ValidationError("استخدم نقطة نهاية الموافقة/الرفض المخصصة", { field: "status" });
     }
@@ -3721,7 +3894,7 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body || {};
+    const b = zodParse(leaveCancelSchema.safeParse(req.body ?? {}));
     if (!b.reason) {
       throw new ValidationError("سبب الإلغاء مطلوب", {
         field: "reason",
@@ -3880,7 +4053,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
     if (!PAYROLL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل الرواتب مقصور على HR أو المالية أو المالك");
     }
-    const { status } = req.body as any;
+    const { status } = zodParse(payrollPatchSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<any>(
       `SELECT id, status, period, "totalNet" FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -4047,7 +4220,7 @@ router.patch("/performance/:id", requirePermission("hr:update"), async (req, res
     if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل التقييمات مقصور على HR أو المدير أو المالك");
     }
-    const { overallScore, score, comments, feedback, status, strengths, improvements, goals } = req.body as any;
+    const { overallScore, score, comments, feedback, status, strengths, improvements, goals } = zodParse(performancePatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
@@ -4163,7 +4336,7 @@ router.patch("/official-letters/:id", requirePermission("hr:update"), async (req
     if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل الخطابات مقصور على HR أو المدير أو المالك");
     }
-    const { subject, content, status, type } = req.body as any;
+    const { subject, content, status, type } = zodParse(officialLetterPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
@@ -4223,7 +4396,7 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
       throw new ForbiddenError("غير مصرح: لا تملك صلاحية اعتماد الخطابات");
     }
     const { id } = req.params;
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(letterApprovalSchema.safeParse(req.body ?? {}));
 
     const [letter] = await rawQuery<any>(
       `SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -4410,7 +4583,7 @@ router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res)
     if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بتعديل إعدادات التهيئة");
     }
-    const { steps } = req.body as { steps: string[] };
+    const { steps } = zodParse(onboardingStepsSchema.safeParse(req.body ?? {}));
     if (!Array.isArray(steps)) {
       throw new ValidationError("الخطوات مطلوبة", { field: "steps" });
     }
@@ -5720,7 +5893,7 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
       });
     }
     const id = parseId(req.params.id, "id");
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(transferApprovalSchema.safeParse(req.body ?? {}));
     const [transfer] = await rawQuery<any>(
       `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
