@@ -304,7 +304,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
     const parsed = zodParse(updateOpportunitySchema.safeParse(req.body));
     const scope = req.scope!;
     const oppId = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = parsed;
 
     const [existing] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [oppId, scope.companyId]);
     if (!existing) throw new NotFoundError("الفرصة غير موجودة");

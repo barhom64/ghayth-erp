@@ -5263,7 +5263,7 @@ router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create
   try {
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
-    const { managerId, overallScore, scores, comments } = req.body as any;
+    const { managerId, overallScore, scores, comments } = zodParse(upwardReviewSchema.safeParse(req.body ?? {}));
 
     if (!managerId || !overallScore) {
       throw new ValidationError("managerId و overallScore مطلوبان", {
@@ -5663,7 +5663,7 @@ router.patch("/public-holidays/:id", requirePermission("hr:update"), async (req,
       throw new ForbiddenError("غير مصرح");
     }
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(publicHolidayPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
@@ -5978,7 +5978,7 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
       );
     }
     const id = parseId(req.params.id, "id");
-    const { confirmed, notes } = req.body as any;
+    const { confirmed, notes } = zodParse(transferConfirmSchema.safeParse(req.body ?? {}));
     const [transfer] = await rawQuery<any>(
       `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
@@ -6142,7 +6142,7 @@ router.patch("/idp/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(idpPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
@@ -6267,7 +6267,7 @@ router.get("/gratuity/:employeeId", requirePermission("hr:read"), async (req, re
 router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { period } = (req.body || {}) as { period?: string };
+    const { period } = zodParse(monthlyAccrualsSchema.safeParse(req.body ?? {}));
     const targetPeriod = period || currentPeriod();
 
     if (!/^\d{4}-\d{2}$/.test(targetPeriod)) {
@@ -6912,7 +6912,7 @@ router.patch("/excuse-requests/:id/approve", requirePermission("hr:update"), asy
   try {
     const scope = req.scope!;
     const excuseId = parseId(req.params.id, "id");
-    const { approved, rejectionReason } = req.body as any;
+    const { approved, rejectionReason } = zodParse(excuseApprovalSchema.safeParse(req.body ?? {}));
 
     const newStatus = approved ? "approved" : "rejected";
     if (!approved && !rejectionReason) {

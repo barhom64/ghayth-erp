@@ -1437,7 +1437,7 @@ journalRouter.post("/opening-balances", requirePermission("finance:create"), asy
     const scope = req.scope!;
 
     const { periodStart, lines, force } = zodParse(openingBalancesSchema.safeParse(req.body ?? {}));
-    const result = await createOpeningBalanceEntry({ scope, periodStart, lines, force: !!force });
+    const result = await createOpeningBalanceEntry({ scope, periodStart: periodStart ?? "", lines: (lines ?? []) as { accountCode: string; debit: number; credit: number }[], force: !!force });
     if ("error" in result) {
       res.status(result.status).json({ error: result.error, ...(result.details ?? {}) });
       return;

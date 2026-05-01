@@ -82,6 +82,53 @@ const createCustomerAdvanceSchema = z.object({
   receivedDate: z.string().optional(),
 });
 
+const impactPreviewSchema = z.object({
+  clientId: z.coerce.number().optional(),
+  lines: z.array(z.any()).optional(),
+  taxRate: z.coerce.number().optional(),
+  dueInDays: z.coerce.number().optional(),
+});
+
+const patchInvoiceSchema = z.object({
+  status: z.string().optional(),
+  description: z.string().optional(),
+  dueDate: z.string().optional(),
+});
+
+const createDebitMemoSchema = z.object({
+  amount: z.coerce.number().positive("المبلغ مطلوب ويجب أن يكون أكبر من صفر"),
+  reason: z.string().min(1, "سبب الإشعار المدين مطلوب"),
+  vatIncluded: z.boolean().optional(),
+  memoDate: z.string().optional(),
+});
+
+const badDebtPostSchema = z.object({
+  period: z.string().optional(),
+  asOf: z.string().optional(),
+  rates: z.object({
+    current: z.coerce.number().optional(),
+    d30: z.coerce.number().optional(),
+    d60: z.coerce.number().optional(),
+    d90: z.coerce.number().optional(),
+    d90plus: z.coerce.number().optional(),
+  }).optional(),
+  notes: z.string().optional(),
+});
+
+const applyAdvanceSchema = z.object({
+  invoiceId: z.coerce.number({ required_error: "الفاتورة مطلوبة" }),
+  amount: z.coerce.number().positive("المبلغ مطلوب"),
+});
+
+const invoiceApprovalActionSchema = z.object({
+  notes: z.string().optional(),
+});
+
+const dunningSendSchema = z.object({
+  invoiceIds: z.array(z.coerce.number()).min(1, "invoiceIds مطلوبة (قائمة معرفات الفواتير)"),
+  sentVia: z.string().optional(),
+});
+
 export const invoicesRouter = Router();
 invoicesRouter.use(authMiddleware);
 
@@ -114,7 +161,8 @@ const INVOICE_TRANSITIONS: Record<string, readonly string[]> = {
 invoicesRouter.post("/invoices/impact-preview", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { clientId, lines = [], taxRate = 15, dueInDays = 30 } = req.body as any;
+    const b = zodParse(impactPreviewSchema.safeParse(req.body ?? {}));
+    const { clientId, lines = [], taxRate = 15, dueInDays = 30 } = b as any;
 
     let clientName = "";
     if (clientId) {
@@ -730,7 +778,7 @@ invoicesRouter.patch("/invoices/:id", requirePermission("finance:update"), async
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
-    const { status, description, dueDate } = req.body as any;
+    const { status, description, dueDate } = zodParse(patchInvoiceSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<any>(
       `SELECT * FROM invoices WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,

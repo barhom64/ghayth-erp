@@ -116,6 +116,53 @@ const updateCapaSchema = z.object({
   dueDate: z.string().optional().nullable(),
 });
 
+const createComplianceActionSchema = z.object({
+  title: z.string().min(1, "عنوان الإجراء مطلوب"),
+  regulation: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  owner: z.string().optional().nullable(),
+  dueDate: z.string().optional().nullable(),
+  status: z.string().optional().nullable(),
+});
+
+const updateComplianceActionSchema = z.object({
+  title: z.string().optional(),
+  regulation: z.string().optional().nullable(),
+  owner: z.string().optional().nullable(),
+  dueDate: z.string().optional().nullable(),
+  status: z.string().optional(),
+  description: z.string().optional().nullable(),
+});
+
+const createPolicyComplianceActionSchema = z.object({
+  action: z.string().optional(),
+  title: z.string().optional(),
+  status: z.string().optional().nullable(),
+  responsiblePerson: z.string().optional().nullable(),
+  owner: z.string().optional().nullable(),
+  dueDate: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+});
+
+const updatePolicyComplianceActionSchema = z.object({
+  status: z.string().optional(),
+  action: z.string().optional(),
+  title: z.string().optional(),
+  responsiblePerson: z.string().optional().nullable(),
+  owner: z.string().optional().nullable(),
+  dueDate: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+});
+
+const updateRiskTreatmentSchema = z.object({
+  treatmentPlan: z.string().optional().nullable(),
+  treatmentOwner: z.string().optional().nullable(),
+  treatmentDueDate: z.string().optional().nullable(),
+  treatmentStatus: z.string().optional().nullable(),
+});
+
 const router = Router();
 
 router.get("/policies", requirePermission("governance:read"), async (req, res) => {
@@ -698,7 +745,7 @@ router.get("/compliance-actions", requirePermission("governance:read"), async (r
 router.post("/compliance-actions", requirePermission("governance:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createComplianceActionSchema.safeParse(req.body ?? {}));
     const r = await rawExecute(
       `INSERT INTO policy_compliance_actions ("companyId",title,regulation,description,owner,"dueDate",status) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [scope.companyId, b.title, b.regulation || null, b.description || null, b.owner || null, b.dueDate || null, b.status || 'open']
@@ -721,7 +768,7 @@ router.patch("/compliance-actions/:actionId", requirePermission("governance:writ
   try {
     const scope = req.scope!;
     const id = parseId(req.params.actionId, "actionId");
-    const b = req.body;
+    const b = zodParse(updateComplianceActionSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }

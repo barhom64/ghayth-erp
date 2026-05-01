@@ -6,6 +6,7 @@ import {
   NotFoundError,
   ConflictError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -14,7 +15,33 @@ import { applyTransition } from "../lib/lifecycleEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
 import { logger } from "../lib/logger.js";
+import { z } from "zod";
 
+// ── Zod schemas ──────────────────────────────────────────────────────────────
+const createVendorSchema = z.object({
+  name: z.string().min(1, "اسم المورد مطلوب"),
+  contactPerson: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  taxNumber: z.string().optional(),
+  address: z.string().optional(),
+  paymentTerms: z.string().optional(),
+  category: z.string().optional(),
+});
+
+const updateVendorSchema = z.object({
+  name: z.string().optional(),
+  contactPerson: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  taxNumber: z.string().optional(),
+  category: z.string().optional(),
+});
+
+const approvalSchema = z.object({
+  approved: z.union([z.boolean(), z.literal("returned")]),
+  notes: z.string().optional(),
+});
 
 export const vendorsRouter = Router();
 vendorsRouter.use(authMiddleware);
@@ -37,13 +64,7 @@ vendorsRouter.get("/vendors", requirePermission("finance:read"), async (req, res
 vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { name, contactPerson, phone, email, taxNumber, address, paymentTerms, category } = req.body as any;
-    if (!name) {
-      throw new ValidationError("اسم المورد مطلوب", {
-        field: "name",
-        fix: "أدخل اسم المورد",
-      });
-    }
+    const { name, contactPerson, phone, email, taxNumber, address, paymentTerms, category } = zodParse(createVendorSchema.safeParse(req.body ?? {}));
     const { insertId } = await rawExecute(
       `INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms", category)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
@@ -78,7 +99,7 @@ vendorsRouter.patch("/vendors/:id", requirePermission("finance:update"), async (
   try {
     const scope = req.scope!;
     const vendorId = parseId(req.params.id, "id");
-    const { name, contactPerson, phone, email, taxNumber, category } = req.body as any;
+    const { name, contactPerson, phone, email, taxNumber, category } = zodParse(updateVendorSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
@@ -385,7 +406,7 @@ vendorsRouter.patch("/commitments/:id/approve", requirePermission("finance:updat
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(approvalSchema.safeParse(req.body ?? {}));
     const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
     if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
     const updated = await applyTransition<any>({
@@ -412,7 +433,7 @@ vendorsRouter.patch("/receivables/:id/approve", requirePermission("finance:updat
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(approvalSchema.safeParse(req.body ?? {}));
     const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
     if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
     const updated = await applyTransition<any>({
@@ -439,7 +460,7 @@ vendorsRouter.patch("/vouchers/:id/approve", requirePermission("finance:update")
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(approvalSchema.safeParse(req.body ?? {}));
     const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
     if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
     const updated = await applyTransition<any>({
@@ -466,7 +487,7 @@ vendorsRouter.patch("/financial-requests/:id/approve", requirePermission("financ
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(approvalSchema.safeParse(req.body ?? {}));
     const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
     if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
     const updated = await applyTransition<any>({
@@ -492,7 +513,7 @@ vendorsRouter.patch("/budgets/:id/approve", requirePermission("finance:update"),
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(approvalSchema.safeParse(req.body ?? {}));
     const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
     if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
     const updated = await applyTransition<any>({

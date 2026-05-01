@@ -204,6 +204,18 @@ const updatePreventivePlanSchema = z.object({
   partsUsed: z.array(z.any()).optional(),
 });
 
+const createWaypointSchema = z.object({
+  lat: z.coerce.number().optional(),
+  latitude: z.coerce.number().optional(),
+  lon: z.coerce.number().optional(),
+  longitude: z.coerce.number().optional(),
+  speed: z.coerce.number().optional(),
+});
+
+const cancelMaintenanceSchema = z.object({
+  reason: z.string().min(1, "سبب الإلغاء مطلوب"),
+});
+
 const createTrafficViolationSchema = z.object({
   vehicleId: z.coerce.number({ required_error: "المركبة مطلوبة" }),
   driverId: z.coerce.number().optional(),
@@ -1242,7 +1254,7 @@ router.post("/trips/:id/waypoints", requirePermission("fleet:update"), async (re
   try {
     const scope = req.scope!;
     const tripId = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(createWaypointSchema.safeParse(req.body ?? {}));
     const [trip] = await rawQuery<any>(
       `SELECT "vehicleId","driverId", status FROM fleet_trips WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [tripId, scope.companyId]
@@ -1517,7 +1529,7 @@ router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body || {};
+    const b = zodParse(cancelMaintenanceSchema.safeParse(req.body ?? {}));
     const [m] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!m) throw new NotFoundError("سجل الصيانة غير موجود");
     if (m.status === "completed") {
@@ -1530,12 +1542,6 @@ router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async 
       throw new ValidationError("السجل ملغى بالفعل", {
         field: "status",
         fix: "لا حاجة لإلغاء سجل ملغى",
-      });
-    }
-    if (!b.reason) {
-      throw new ValidationError("سبب الإلغاء مطلوب", {
-        field: "reason",
-        fix: "أدخل سبب إلغاء الصيانة",
       });
     }
 

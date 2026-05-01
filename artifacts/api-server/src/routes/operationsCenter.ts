@@ -539,7 +539,7 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
     const today = todayISO();
     const userId = scope.userId;
     const cid = scope.companyId;
-    const forceClose = req.body?.force === true;
+    const forceClose = parsed.force === true;
     const overrideRoles = OWNER_GM_ROLES;
 
     if (!forceClose) {
@@ -575,7 +575,7 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
       throw new ConflictError("تم إقفال هذا اليوم مسبقاً");
     }
 
-    const notes = req.body?.notes || "";
+    const notes = parsed.notes || "";
     await rawQuery(
       `INSERT INTO daily_close_log ("companyId", "closeDate", "closedBy", notes, forced) VALUES ($1, $2, $3, $4, $5)`,
       [cid, today, userId, notes, forceClose]

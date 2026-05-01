@@ -5,7 +5,9 @@ import {
   ConflictError,
   ForbiddenError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
+import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -23,6 +25,104 @@ import { logger } from "../lib/logger.js";
 
 export const financeHardeningRouter = Router();
 financeHardeningRouter.use(authMiddleware);
+
+// ── Zod schemas ─────────────────────────────────────────────────────────────
+
+const createFiscalPeriodSchema = z.object({
+  name: z.string().min(1),
+  startDate: z.string().min(1),
+  endDate: z.string().min(1),
+  notes: z.string().optional(),
+});
+
+const closeFiscalPeriodSchema = z.object({
+  notes: z.string().optional(),
+});
+
+const reopenFiscalPeriodSchema = z.object({
+  reason: z.string().min(1),
+});
+
+const journalLineSchema = z.object({
+  accountCode: z.string(),
+  debit: z.coerce.number().default(0),
+  credit: z.coerce.number().default(0),
+  description: z.string().optional(),
+  costCenter: z.string().optional(),
+  departmentId: z.coerce.number().optional(),
+  projectId: z.coerce.number().optional(),
+  employeeId: z.coerce.number().optional(),
+});
+
+const createManualJournalSchema = z.object({
+  description: z.string().optional(),
+  lines: z.array(journalLineSchema).min(2),
+  costCenter: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const reviewJournalSchema = z.object({
+  approved: z.boolean(),
+  notes: z.string().optional(),
+});
+
+const approveJournalSchema = z.object({
+  approved: z.boolean(),
+  notes: z.string().optional(),
+});
+
+const createBankGuaranteeSchema = z.object({
+  ref: z.string().min(1),
+  bank: z.string().min(1),
+  beneficiary: z.string().min(1),
+  amount: z.coerce.number(),
+  issueDate: z.string().min(1),
+  expiryDate: z.string().min(1),
+  guaranteeType: z.string().optional(),
+  notes: z.string().optional(),
+  attachmentUrl: z.string().optional(),
+  branchId: z.coerce.number().optional(),
+});
+
+const updateBankGuaranteeSchema = z.object({
+  bank: z.string().optional(),
+  beneficiary: z.string().optional(),
+  amount: z.coerce.number().optional(),
+  expiryDate: z.string().optional(),
+  status: z.string().optional(),
+  notes: z.string().optional(),
+  attachmentUrl: z.string().optional(),
+  guaranteeType: z.string().optional(),
+});
+
+const cancelBankGuaranteeSchema = z.object({
+  reason: z.string().min(1),
+});
+
+const releaseBankGuaranteeSchema = z.object({
+  notes: z.string().optional(),
+});
+
+const createIntercompanySchema = z.object({
+  toCompanyId: z.coerce.number(),
+  amount: z.coerce.number(),
+  description: z.string().optional(),
+  transactionDate: z.string().optional(),
+  arAccountCode: z.string().default("1200"),
+  apAccountCode: z.string().default("2100"),
+  revenueAccountCode: z.string().default("4000"),
+  expenseAccountCode: z.string().default("5000"),
+});
+
+const createProjectSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  budget: z.coerce.number().default(0),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  branchId: z.coerce.number().optional(),
+  ref: z.string().optional(),
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FISCAL PERIODS — FULL CRUD + OPEN/CLOSE/REOPEN
@@ -52,13 +152,7 @@ financeHardeningRouter.post("/fiscal-periods-v2", requirePermission("finance:cre
   try {
     const scope = req.scope!;
 
-    const { name, startDate, endDate, notes } = req.body as any;
-    if (!name || !startDate || !endDate) {
-      throw new ValidationError("الاسم وتاريخ البداية والنهاية مطلوبة", {
-        field: !name ? "name" : !startDate ? "startDate" : "endDate",
-        fix: "أدخل اسم الفترة وتاريخي البداية والنهاية بصيغة YYYY-MM-DD",
-      });
-    }
+    const { name, startDate, endDate, notes } = zodParse(createFiscalPeriodSchema.safeParse(req.body ?? {}));
     const { insertId } = await rawExecute(
       `INSERT INTO financial_periods ("companyId",name,"startDate","endDate",status,notes)
        VALUES ($1,$2,$3,$4,'open',$5)`,
@@ -95,7 +189,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", requirePermission("f
     const scope = req.scope!;
 
     const periodId = parseId(req.params.id, "id");
-    const { notes } = req.body as any;
+    const { notes } = zodParse(closeFiscalPeriodSchema.safeParse(req.body ?? {}));
 
     // Pre-flight: refuse close when the period still has unposted manual
     // journals. The business rule lives here (not in applyTransition) so we
@@ -165,13 +259,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", requirePermission("
     const scope = req.scope!;
 
     const periodId = parseId(req.params.id, "id");
-    const { reason } = req.body as any;
-    if (!reason) {
-      throw new ValidationError("سبب فتح الفترة مطلوب", {
-        field: "reason",
-        fix: "اكتب سبب إعادة فتح الفترة المالية",
-      });
-    }
+    const { reason } = zodParse(reopenFiscalPeriodSchema.safeParse(req.body ?? {}));
 
     // Fetch only the name for the success message; the engine does the
     // state check and row update.
@@ -220,13 +308,7 @@ financeHardeningRouter.post("/journal-manual", requirePermission("finance:create
   try {
     const scope = req.scope!;
 
-    const { description, lines, costCenter, notes } = req.body as any;
-    if (!lines || !Array.isArray(lines) || lines.length < 2) {
-      throw new ValidationError("القيد يجب أن يحتوي على سطرين على الأقل", {
-        field: "lines",
-        fix: "أرسل سطرين أو أكثر بحيث يكون مجموع المدين = مجموع الدائن",
-      });
-    }
+    const { description, lines, costCenter, notes } = zodParse(createManualJournalSchema.safeParse(req.body ?? {}));
 
     const totalDebit = lines.reduce((s: number, l: any) => s + Number(l.debit ?? 0), 0);
     const totalCredit = lines.reduce((s: number, l: any) => s + Number(l.credit ?? 0), 0);
