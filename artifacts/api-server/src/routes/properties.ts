@@ -849,7 +849,7 @@ router.delete("/units/:id", requirePermission("property:delete"), async (req, re
 });
 
 // Impact preview — shows what will happen when the rental contract is created
-router.post("/contracts/impact-preview", requirePermission("properties:read"), async (req, res) => {
+router.post("/contracts/impact-preview", requirePermission("property:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { unitId, tenantId, monthlyRent, startDate, endDate, securityDeposit } = zodParse(contractImpactPreviewSchema.safeParse(req.body));
@@ -995,7 +995,7 @@ router.get("/contracts", requirePermission("property:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Rental contracts error:"); }
 });
 
-router.get("/contracts/:id", requirePermission("properties:read"), async (req, res) => {
+router.get("/contracts/:id", requirePermission("property:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const contractId = parseId(req.params.id, "id");

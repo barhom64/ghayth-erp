@@ -179,7 +179,7 @@ router.get("/sub-agents", requirePermission("umrah:read"), async (req, res) => {
       `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
        FROM umrah_sub_agents sa
        LEFT JOIN umrah_agents a ON sa."agentId" = a.id
-       LEFT JOIN clients c ON sa."clientId" = c.id
+       LEFT JOIN clients c ON sa."clientId" = c.id AND c."deletedAt" IS NULL
        WHERE sa."companyId" = $1 AND sa."deletedAt" IS NULL
        ORDER BY sa.name`,
       [scope.companyId]
@@ -311,7 +311,7 @@ router.put("/sub-agents/:id/link", requirePermission("umrah:write"), async (req,
 
     const [row] = await rawQuery(
       `SELECT sa.*, c.name AS "clientName" FROM umrah_sub_agents sa
-       LEFT JOIN clients c ON c.id = sa."clientId"
+       LEFT JOIN clients c ON c.id = sa."clientId" AND c."deletedAt" IS NULL
        WHERE sa.id=$1 AND sa."companyId"=$2 AND sa."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -791,7 +791,7 @@ router.get("/invoices", requirePermission("umrah:read"), async (req, res) => {
       `SELECT si.*, sa.name AS "subAgentName", c.name AS "clientName"
        FROM umrah_sales_invoices si
        LEFT JOIN umrah_sub_agents sa ON sa.id = si."subAgentId"
-       LEFT JOIN clients c ON c.id = si."clientId"
+       LEFT JOIN clients c ON c.id = si."clientId" AND c."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY si."createdAt" DESC`,
       params

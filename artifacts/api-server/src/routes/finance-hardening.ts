@@ -1207,7 +1207,7 @@ financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:rea
     const inflow30 = await rawQuery<any>(
       `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id=i."clientId"
+       LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
        WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
          AND i.status IN ('sent','partial','overdue')
          AND i."dueDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
@@ -1218,7 +1218,7 @@ financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:rea
     const inflow60 = await rawQuery<any>(
       `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id=i."clientId"
+       LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
        WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
          AND i.status IN ('sent','partial','overdue')
          AND i."dueDate" BETWEEN CURRENT_DATE + INTERVAL '31 days' AND CURRENT_DATE + INTERVAL '60 days'
@@ -1229,7 +1229,7 @@ financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:rea
     const inflow90 = await rawQuery<any>(
       `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id=i."clientId"
+       LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
        WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
          AND i.status IN ('sent','partial','overdue')
          AND i."dueDate" BETWEEN CURRENT_DATE + INTERVAL '61 days' AND CURRENT_DATE + INTERVAL '90 days'

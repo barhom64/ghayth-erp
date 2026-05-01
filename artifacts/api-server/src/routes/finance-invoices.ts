@@ -1712,7 +1712,7 @@ invoicesRouter.get("/customer-advances", requirePermission("finance:read"), asyn
                 ca.method, ca."receivedDate", ca.status, ca."journalId", ca."createdAt",
                 c.name AS "clientName"
            FROM customer_advances ca
-           LEFT JOIN clients c ON c.id = ca."clientId"
+           LEFT JOIN clients c ON c.id = ca."clientId" AND c."deletedAt" IS NULL
           WHERE ${where}
           ORDER BY ca."receivedDate" DESC, ca.id DESC`,
         params
@@ -1961,8 +1961,8 @@ invoicesRouter.get("/dunning/history", requirePermission("finance:read"), async 
     const rows = await rawQuery<any>(
       `SELECT dl.*, i.ref AS "invoiceNumber", c.name AS "clientName"
        FROM dunning_letters dl
-       LEFT JOIN invoices i ON i.id = dl."invoiceId"
-       LEFT JOIN clients c ON c.id = dl."clientId"
+       LEFT JOIN invoices i ON i.id = dl."invoiceId" AND i."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = dl."clientId" AND c."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY dl."sentAt" DESC LIMIT 500`,
       params

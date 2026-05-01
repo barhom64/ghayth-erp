@@ -103,7 +103,7 @@ router.get("/opportunities", requirePermission("crm:read"), async (req, res) => 
     if (stage) { where += ` AND o.stage = $${paramIdx}`; params.push(stage); paramIdx++; }
     if (status) { where += ` AND o.status = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" LEFT JOIN employees e ON e.id=o."assignedTo" WHERE ${where} AND o."deletedAt" IS NULL ORDER BY o.id DESC LIMIT 500`,
+      `SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" WHERE ${where} AND o."deletedAt" IS NULL ORDER BY o.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -741,7 +741,7 @@ router.get("/opportunities/:id", requirePermission("crm:read"), async (req, res)
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" LEFT JOIN employees e ON e.id=o."assignedTo" WHERE o.id=$1 AND o."companyId"=$2 AND o."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" WHERE o.id=$1 AND o."companyId"=$2 AND o."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الفرصة غير موجودة");
 
     const activities = await rawQuery<any>(

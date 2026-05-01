@@ -80,7 +80,6 @@ export const PERMISSIONS = [
   "property:create",
   "property:update",
   "property:delete",
-  "properties:read",
 
   // Projects + Operations
   "projects:read",
@@ -261,18 +260,18 @@ export const ADMIN_ROLES: readonly string[] = ["owner", "admin", "general_manage
 export const FINANCE_ROLES: readonly string[] = ["finance_manager", "general_manager", "owner"];
 export const HR_ROLES: readonly string[] = ["hr_manager", "owner", "general_manager"];
 export const MGR_ROLES: readonly string[] = ["branch_manager", "hr_manager", "owner", "general_manager"];
-export const MANAGER_ROLES: readonly string[] = ["owner", "general_manager", "hr_manager", "branch_manager"];
+export const MANAGER_ROLES = MGR_ROLES;
 export const EXEC_ROLES: readonly string[] = ["owner", "general_manager", "finance_manager", "director"];
-export const APPROVE_ROLES: readonly string[] = ["owner", "general_manager", "admin"];
+export const APPROVE_ROLES = ADMIN_ROLES;
 export const LEAVE_APPROVAL_ROLES: readonly string[] = ["branch_manager", "hr_manager", "owner"];
 export const PAYROLL_ROLES: readonly string[] = ["hr_manager", "finance_manager", "general_manager", "owner"];
 export const PR_APPROVAL_ROLES: readonly string[] = ["branch_manager", "general_manager", "owner"];
-export const LETTER_APPROVAL_ROLES: readonly string[] = ["hr_manager", "branch_manager", "general_manager", "owner"];
-export const HR_APPROVAL_ROLES: readonly string[] = ["hr_manager", "branch_manager", "general_manager", "owner"];
+export const LETTER_APPROVAL_ROLES = MGR_ROLES;
+export const HR_APPROVAL_ROLES = MGR_ROLES;
 export const LOAN_APPROVAL_ROLES: readonly string[] = ["owner", "hr_manager", "general_manager", "branch_manager", "finance_manager"];
 export const OWNER_GM_ROLES: readonly string[] = ["owner", "general_manager"];
 export const BRANCH_GM_ROLES: readonly string[] = ["branch_manager", "general_manager"];
-export const OPS_CLOSE_ROLES: readonly string[] = ["owner", "general_manager", "branch_manager", "hr_manager", "finance_manager"];
+export const OPS_CLOSE_ROLES = LOAN_APPROVAL_ROLES;
 export const APPROVAL_AUDIT_ROLES: readonly string[] = ["owner", "general_manager", "hr_manager", "finance_manager", "compliance", "audit"];
 export const ACTION_CENTER_ROLES: readonly string[] = ["owner", "general_manager", "branch_manager", "hr_manager", "finance_manager", "supervisor"];
 export const GOV_ADMIN_ROLES: readonly string[] = ["owner", "admin", "general_manager", "hr_manager", "operations"];
