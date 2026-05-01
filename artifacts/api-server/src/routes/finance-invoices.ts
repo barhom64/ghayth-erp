@@ -790,7 +790,7 @@ invoicesRouter.patch("/invoices/:id", requirePermission("finance:update"), async
     // paid→closed) must go through the dedicated endpoints. PATCH is
     // limited to allowlist edits.
     if (status !== undefined && status !== existing.status) {
-      if (!INVOICE_STATUSES.includes(status)) {
+      if (!(INVOICE_STATUSES as readonly string[]).includes(status)) {
         throw new ValidationError(
           `حالة فاتورة غير صالحة: ${status}`,
           { field: "status", fix: `اختر من: ${INVOICE_STATUSES.join(", ")}` }
@@ -930,7 +930,7 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
     const scope = req.scope!;
 
     const { id } = req.params;
-    const { notes } = req.body as any;
+    const { notes } = zodParse(invoiceApprovalActionSchema.safeParse(req.body ?? {}));
     if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
       throw new ValidationError(
         newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع",
@@ -1187,14 +1187,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
-    const { amount, reason, vatIncluded = true, memoDate } = req.body as any;
-
-    if (!amount || Number(amount) <= 0) {
-      throw new ValidationError("المبلغ مطلوب ويجب أن يكون أكبر من صفر");
-    }
-    if (!reason) {
-      throw new ValidationError("سبب الإشعار المدين مطلوب");
-    }
+    const { amount, reason, vatIncluded = true, memoDate } = zodParse(createDebitMemoSchema.safeParse(req.body ?? {}));
 
     const [invoice] = await rawQuery<any>(
       `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatRate"
@@ -1409,7 +1402,7 @@ invoicesRouter.post("/bad-debt/post", requirePermission("finance:create"), async
   try {
     const scope = req.scope!;
 
-    const { period, asOf, rates, notes } = req.body as any;
+    const { period, asOf, rates, notes } = zodParse(badDebtPostSchema.safeParse(req.body ?? {}));
 
     const targetPeriod = period || currentPeriod();
     if (!/^\d{4}-\d{2}$/.test(targetPeriod)) {
@@ -1619,11 +1612,8 @@ invoicesRouter.post("/customer-advances/:id/apply", requirePermission("finance:c
     const scope = req.scope!;
 
     const advanceId = parseId(req.params.id, "id");
-    const { invoiceId, amount } = req.body as any;
+    const { invoiceId, amount } = zodParse(applyAdvanceSchema.safeParse(req.body ?? {}));
 
-    if (!invoiceId || !amount || Number(amount) <= 0) {
-      throw new ValidationError("الفاتورة والمبلغ مطلوبان");
-    }
     const applyAmt = roundTo2(Number(amount));
 
     let advance: any;
@@ -1896,10 +1886,7 @@ invoicesRouter.post("/dunning/send", requirePermission("finance:create"), async 
     const scope = req.scope!;
 
     await ensureDunningTables();
-    const { invoiceIds, sentVia = "manual" } = req.body as any;
-    if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {
-      throw new ValidationError("invoiceIds مطلوبة (قائمة معرفات الفواتير)");
-    }
+    const { invoiceIds, sentVia = "manual" } = zodParse(dunningSendSchema.safeParse(req.body ?? {}));
 
     const today = todayISO();
     const results: any[] = [];

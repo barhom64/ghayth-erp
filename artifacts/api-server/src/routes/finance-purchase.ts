@@ -68,11 +68,60 @@ const executePaymentRunSchema = z.object({
   bankAccount: z.string().optional(),
 });
 
+const purchaseImpactPreviewSchema = z.object({
+  supplierId: z.coerce.number().optional(),
+  items: z.array(z.any()).optional(),
+  costCenter: z.string().optional(),
+});
+
+const prApprovalSchema = z.object({
+  approved: z.union([z.boolean(), z.literal("returned"), z.string()]),
+  notes: z.string().optional(),
+});
+
+const poApprovalNotesSchema = z.object({
+  notes: z.string().optional(),
+});
+
+const poReceiveSchema = z.object({
+  receivedDate: z.string().optional(),
+  qualityNotes: z.string().optional(),
+  lines: z.array(z.object({
+    poItemId: z.coerce.number(),
+    receivedQty: z.coerce.number().optional(),
+    notes: z.string().optional(),
+  })).optional(),
+});
+
+const convertToPOSchema = z.object({
+  expectedDelivery: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const vendorConfirmSchema = z.object({
+  confirmedDelivery: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const matchInvoiceSchema = z.object({
+  supplierInvoiceRef: z.string().min(1, "رقم فاتورة المورد مطلوب"),
+  invoicedAmount: z.coerce.number({ required_error: "المبلغ مطلوب" }),
+  invoicedDate: z.string().optional(),
+});
+
+const schedulePaymentSchema = z.object({
+  paymentDate: z.string().min(1, "تاريخ الدفع مطلوب"),
+  amount: z.coerce.number({ required_error: "المبلغ مطلوب" }),
+  method: z.string().optional(),
+  notes: z.string().optional(),
+});
+
 // Impact preview — shows what will happen when the purchase request is created
 purchaseRouter.post("/purchase-requests/impact-preview", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { supplierId, items = [], costCenter } = req.body as any;
+    const b = zodParse(purchaseImpactPreviewSchema.safeParse(req.body ?? {}));
+    const { supplierId, items = [], costCenter } = b as any;
 
     let supplierName = "";
     let outstanding = 0;
@@ -309,7 +358,7 @@ purchaseRouter.patch("/purchase-requests/:id/approve", requirePermission("financ
     const scope = req.scope!;
 
     const { id } = req.params;
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(prApprovalSchema.safeParse(req.body ?? {})) as any;
 
     const [pr] = await rawQuery<any>(`SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`, [Number(id), scope.companyId]);
     if (!pr) throw new NotFoundError("طلب الشراء غير موجود");
@@ -530,7 +579,7 @@ async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rej
     const scope = req.scope!;
 
     const { id } = req.params;
-    const { notes } = req.body as any;
+    const { notes } = zodParse(poApprovalNotesSchema.safeParse(req.body ?? {}));
 
     const [po] = await rawQuery<any>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
     if (!po) throw new NotFoundError("أمر الشراء غير موجود");
@@ -579,7 +628,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
     const scope = req.scope!;
 
     const { id } = req.params;
-    const { receivedDate, qualityNotes, lines } = req.body as any;
+    const { receivedDate, qualityNotes, lines } = zodParse(poReceiveSchema.safeParse(req.body ?? {})) as any;
 
     const [po] = await rawQuery<any>(
       `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -1100,7 +1149,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
     const scope = req.scope!;
 
     const { id } = req.params;
-    const { expectedDelivery, notes } = req.body as any;
+    const { expectedDelivery, notes } = zodParse(convertToPOSchema.safeParse(req.body ?? {}));
 
     const [pr] = await rawQuery<any>(
       `SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`,
@@ -1252,7 +1301,7 @@ purchaseRouter.patch("/purchase-orders/:id/vendor-confirm", requirePermission("f
     const scope = req.scope!;
 
     const { id } = req.params;
-    const { confirmedDelivery, notes } = req.body as any;
+    const { confirmedDelivery, notes } = zodParse(vendorConfirmSchema.safeParse(req.body ?? {}));
 
     const [po] = await rawQuery<any>(
       `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -1292,11 +1341,7 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", requirePermission("fin
     const scope = req.scope!;
 
     const { id } = req.params;
-    const { supplierInvoiceRef, invoicedAmount, invoicedDate } = req.body as any;
-
-    if (!supplierInvoiceRef || !invoicedAmount) {
-      throw new ValidationError("رقم فاتورة المورد والمبلغ مطلوبان");
-    }
+    const { supplierInvoiceRef, invoicedAmount, invoicedDate } = zodParse(matchInvoiceSchema.safeParse(req.body ?? {}));
 
     const [po] = await rawQuery<any>(
       `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -1398,11 +1443,7 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", requirePermission("
     const scope = req.scope!;
 
     const { id } = req.params;
-    const { paymentDate, amount, method = "bank_transfer", notes } = req.body as any;
-
-    if (!paymentDate || !amount) {
-      throw new ValidationError("تاريخ الدفع والمبلغ مطلوبان");
-    }
+    const { paymentDate, amount, method = "bank_transfer", notes } = zodParse(schedulePaymentSchema.safeParse(req.body ?? {})) as any;
 
     const [po] = await rawQuery<any>(
       `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,

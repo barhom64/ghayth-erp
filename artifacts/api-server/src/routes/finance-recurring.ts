@@ -4,7 +4,9 @@ import {
   NotFoundError,
   IntegrationError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
+import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -24,6 +26,41 @@ export type { RecurringFrequency };
 export { computeNextRunDate, runRecurringJournal, processDueRecurringJournals };
 
 export const recurringRouter = Router();
+
+const VALID_FREQUENCIES = ["daily", "weekly", "monthly", "quarterly", "yearly"] as const;
+
+const recurringJournalLineSchema = z.object({
+  accountCode: z.string(),
+  debit: z.coerce.number().default(0),
+  credit: z.coerce.number().default(0),
+  description: z.string().optional().nullable(),
+  costCenter: z.string().optional().nullable(),
+  departmentId: z.coerce.number().optional().nullable(),
+  projectId: z.coerce.number().optional().nullable(),
+});
+
+const createRecurringJournalSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  frequency: z.string(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  active: z.boolean().default(true),
+  templateLines: z.array(recurringJournalLineSchema),
+  templateRef: z.string().optional(),
+  templateDescription: z.string().optional(),
+});
+
+const updateRecurringJournalSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  frequency: z.string().optional(),
+  startDate: z.string().optional(),
+  nextRunDate: z.string().optional(),
+  active: z.boolean().optional(),
+  templateRef: z.string().optional(),
+  templateDescription: z.string().optional(),
+  templateLines: z.array(recurringJournalLineSchema).optional(),
+});
 
 recurringRouter.get("/recurring-journals", requirePermission("finance:read"), async (req, res) => {
   try {

@@ -119,6 +119,22 @@ const updateFinancialRiskSchema = z.object({
   riskLevel: z.string().optional(),
 });
 
+const renewContractSchema = z.object({
+  newEndDate: z.string().min(1, "تاريخ نهاية التجديد مطلوب"),
+  newValue: z.coerce.number().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+const terminateContractSchema = z.object({
+  reason: z.string().min(1, "سبب إنهاء العقد مطلوب"),
+  effectiveDate: z.string().optional().nullable(),
+});
+
+const closeCaseSchema = z.object({
+  closureReason: z.string().min(1, "سبب الإغلاق مطلوب"),
+  outcome: z.string().optional().nullable(),
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // LIFECYCLE STATE MACHINES — Phase C.6 Legal audit
 // ─────────────────────────────────────────────────────────────────────────────
@@ -419,13 +435,7 @@ router.post("/contracts/:id/renew", requirePermission("legal:write"), async (req
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { newEndDate, newValue, notes } = req.body ?? {};
-    if (!newEndDate) {
-      throw new ValidationError("تاريخ نهاية التجديد مطلوب", {
-        field: "newEndDate",
-        fix: "حدد تاريخ النهاية الجديد",
-      });
-    }
+    const { newEndDate, newValue, notes } = zodParse(renewContractSchema.safeParse(req.body ?? {}));
     const [current] = await rawQuery<any>(
       `SELECT id, "endDate", value, "renewalCount" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -496,13 +506,7 @@ router.post("/contracts/:id/terminate", requirePermission("legal:write"), async 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { reason, effectiveDate } = req.body ?? {};
-    if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
-      throw new ValidationError("سبب إنهاء العقد مطلوب", {
-        field: "reason",
-        fix: "اكتب سبب الإنهاء",
-      });
-    }
+    const { reason, effectiveDate } = zodParse(terminateContractSchema.safeParse(req.body ?? {}));
 
     const updated = await applyTransition({
       entity: "legal_contracts",
@@ -764,10 +768,7 @@ router.post("/cases/:id/close", requirePermission("legal:write"), async (req, re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body || {};
-    if (!b.closureReason || typeof b.closureReason !== "string" || !b.closureReason.trim()) {
-      throw new ValidationError("سبب الإغلاق مطلوب", { field: "closureReason", fix: "أدخل سبب إغلاق القضية" });
-    }
+    const b = zodParse(closeCaseSchema.safeParse(req.body ?? {}));
 
     const updated = await applyTransition<any>({
       entity: "legal_cases",

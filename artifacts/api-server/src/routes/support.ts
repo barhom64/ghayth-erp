@@ -62,6 +62,18 @@ const updateKbSchema = z.object({
   status: z.string().optional(),
 });
 
+const createFieldVisitSchema = z.object({
+  clientLat: z.coerce.number().optional().nullable(),
+  clientLon: z.coerce.number().optional().nullable(),
+  officeLat: z.coerce.number().optional().nullable(),
+  officeLon: z.coerce.number().optional().nullable(),
+  visitDate: z.string().optional().nullable(),
+});
+
+const kbFeedbackSchema = z.object({
+  helpful: z.any(),
+});
+
 const PRIORITY_KEYWORDS: Record<string, string[]> = {
   critical: ['عاجل', 'طارئ', 'كارثة', 'توقف', 'انهيار', 'حريق', 'خطير', 'فوري', 'down', 'outage', 'emergency', 'critical'],
   high: ['مهم', 'سريع', 'تعطل', 'خلل', 'broken', 'error', 'fail', 'urgent'],
@@ -360,11 +372,11 @@ router.post("/tickets/:id/field-visit", requirePermission("support:write"), asyn
   try {
     const scope = req.scope!;
     const ticketId = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(createFieldVisitSchema.safeParse(req.body ?? {}));
 
     let distanceKm: number | null = null;
     if (b.clientLat && b.clientLon && b.officeLat && b.officeLon) {
-      distanceKm = haversineKm(Number(b.officeLat), Number(b.officeLon), Number(b.clientLat), Number(b.clientLon));
+      distanceKm = haversineKm(b.officeLat, b.officeLon, b.clientLat, b.clientLon);
     }
 
     const row = await applyTransition<any>({
@@ -783,7 +795,7 @@ router.post("/kb/:id/feedback", requirePermission("support:read"), async (req, r
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { helpful } = req.body;
+    const { helpful } = zodParse(kbFeedbackSchema.safeParse(req.body ?? {}));
     const [row] = await rawQuery<any>(
       `SELECT id FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
       [id, scope.companyId]

@@ -479,7 +479,7 @@ financeHardeningRouter.patch("/journal-manual/:id/review", requirePermission("fi
     const scope = req.scope!;
 
     const journalId = parseId(req.params.id, "id");
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(reviewJournalSchema.safeParse(req.body ?? {}));
 
     // Fetch createdBy for the "cannot review your own entry" business rule
     // plus ref for the success message. State validation still happens in
@@ -543,7 +543,7 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", requirePermission("f
     const scope = req.scope!;
 
     const journalId = parseId(req.params.id, "id");
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(approveJournalSchema.safeParse(req.body ?? {}));
 
     const [je] = await rawQuery<any>(
       `SELECT ref FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
@@ -679,16 +679,7 @@ financeHardeningRouter.post("/bank-guarantees", requirePermission("finance:creat
   try {
     const scope = req.scope!;
 
-    const { ref, bank, beneficiary, amount, issueDate, expiryDate, guaranteeType, notes, attachmentUrl, branchId } = req.body as any;
-    if (!ref || !bank || !beneficiary || !amount || !issueDate || !expiryDate) {
-      throw new ValidationError(
-        "رقم الضمان والبنك والجهة المستفيدة والمبلغ والتواريخ مطلوبة",
-        {
-          field: !ref ? "ref" : !bank ? "bank" : !beneficiary ? "beneficiary" : !amount ? "amount" : !issueDate ? "issueDate" : "expiryDate",
-          fix: "أكمل جميع الحقول الأساسية للضمان البنكي",
-        },
-      );
-    }
+    const { ref, bank, beneficiary, amount, issueDate, expiryDate, guaranteeType, notes, attachmentUrl, branchId } = zodParse(createBankGuaranteeSchema.safeParse(req.body ?? {}));
     const { insertId } = await rawExecute(
       `INSERT INTO bank_guarantees ("companyId","branchId",ref,bank,beneficiary,amount,"issueDate","expiryDate","guaranteeType",notes,"attachmentUrl","createdBy")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
@@ -725,7 +716,7 @@ financeHardeningRouter.patch("/bank-guarantees/:id", requirePermission("finance:
     const scope = req.scope!;
 
     const { id } = req.params;
-    const b = req.body as any;
+    const b = zodParse(updateBankGuaranteeSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     const f = (col: string, val: any) => { if (val !== undefined) { params.push(val); sets.push(`"${col}"=$${params.length}`); } };
@@ -844,13 +835,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/cancel", requirePermission("fi
     const scope = req.scope!;
 
     const guaranteeId = parseId(req.params.id, "id");
-    const { reason } = req.body as any;
-    if (!reason || !String(reason).trim()) {
-      throw new ValidationError("سبب الإلغاء مطلوب", {
-        field: "reason",
-        fix: "اكتب سبب إلغاء الضمان البنكي",
-      });
-    }
+    const { reason } = zodParse(cancelBankGuaranteeSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<any>(
       `SELECT ref, bank, notes FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -897,7 +882,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/release", requirePermission("f
     const scope = req.scope!;
 
     const guaranteeId = parseId(req.params.id, "id");
-    const { notes } = req.body as any;
+    const { notes } = zodParse(releaseBankGuaranteeSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<any>(
       `SELECT ref, bank, notes FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -965,15 +950,9 @@ financeHardeningRouter.post("/intercompany", requirePermission("finance:create")
   try {
     const scope = req.scope!;
 
-    const { toCompanyId, amount, description, transactionDate, arAccountCode = "1200", apAccountCode = "2100", revenueAccountCode = "4000", expenseAccountCode = "5000" } = req.body as any;
+    const { toCompanyId, amount, description, transactionDate, arAccountCode, apAccountCode, revenueAccountCode, expenseAccountCode } = zodParse(createIntercompanySchema.safeParse(req.body ?? {}));
 
-    if (!toCompanyId || !amount) {
-      throw new ValidationError("الشركة المستلمة والمبلغ مطلوبان", {
-        field: !toCompanyId ? "toCompanyId" : "amount",
-        fix: "اختر شركة مستلمة وحدّد مبلغ المعاملة",
-      });
-    }
-    if (Number(toCompanyId) === scope.companyId) {
+    if (toCompanyId === scope.companyId) {
       throw new ValidationError("لا يمكن إنشاء معاملة بين الشركة ونفسها", {
         field: "toCompanyId",
         fix: "اختر شركة مختلفة عن الشركة الحالية",
@@ -1133,13 +1112,7 @@ financeHardeningRouter.post("/projects", requirePermission("finance:create"), as
   try {
     const scope = req.scope!;
 
-    const { name, description, budget, startDate, endDate, branchId, ref } = req.body as any;
-    if (!name) {
-      throw new ValidationError("اسم المشروع مطلوب", {
-        field: "name",
-        fix: "أدخل اسم المشروع",
-      });
-    }
+    const { name, description, budget, startDate, endDate, branchId, ref } = zodParse(createProjectSchema.safeParse(req.body ?? {}));
     const projectRef = ref ?? `PRJ-${Date.now()}`;
     const { insertId } = await rawExecute(
       `INSERT INTO projects ("companyId","branchId",ref,name,description,budget,"startDate","endDate","managerId")

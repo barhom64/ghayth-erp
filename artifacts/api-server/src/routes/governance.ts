@@ -822,7 +822,7 @@ router.post("/policies/:id/compliance-actions", requirePermission("governance:wr
   try {
     const scope = req.scope!;
     const policyId = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(createPolicyComplianceActionSchema.safeParse(req.body ?? {}));
     const r = await rawExecute(
       `INSERT INTO policy_compliance_actions ("policyId","companyId",title,status,owner,"dueDate",description) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [policyId, scope.companyId, b.action || b.title, b.status || 'open', b.responsiblePerson || b.owner || null, b.dueDate || null, b.notes || b.description || null]
@@ -845,7 +845,7 @@ router.patch("/compliance-actions/:id", requirePermission("governance:write"), a
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(updatePolicyComplianceActionSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
@@ -872,7 +872,7 @@ router.patch("/risks/:id/treatment", requirePermission("governance:write"), asyn
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(updateRiskTreatmentSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.treatmentPlan !== undefined) { params.push(b.treatmentPlan); sets.push(`"treatmentPlan"=$${params.length}`); }
