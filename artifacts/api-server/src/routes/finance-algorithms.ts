@@ -496,10 +496,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", requirePermiss
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const { bankStatementId, journalLineId } = req.body as any;
-    if (!bankStatementId || !journalLineId) {
-      throw new ValidationError("bankStatementId و journalLineId مطلوبان");
-    }
+    const { bankStatementId, journalLineId } = zodParse(bankManualMatchSchema.safeParse(req.body ?? {}));
     const [bs] = await rawQuery<any>(
       `SELECT * FROM bank_statements WHERE id=$1 AND "companyId"=$2 AND "matchStatus"='unmatched'`,
       [bankStatementId, scope.companyId]
@@ -606,16 +603,13 @@ financeAlgorithmsRouter.post("/fixed-assets", requirePermission("finance:create"
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const b = req.body as any;
-    if (!b.name || !b.purchaseCost || !b.purchaseDate) {
-      throw new ValidationError("الاسم والتكلفة وتاريخ الشراء مطلوبة");
-    }
-    const usefulYears = Number(b.usefulLifeYears ?? 5);
+    const b = zodParse(createFixedAssetSchema.safeParse(req.body ?? {}));
+    const usefulYears = b.usefulLifeYears;
     if (!usefulYears || usefulYears <= 0) {
       throw new ValidationError("العمر الإنتاجي يجب أن يكون أكبر من صفر");
     }
-    const purchaseCost = Number(b.purchaseCost);
-    const salvageValue = Number(b.salvageValue ?? 0);
+    const purchaseCost = b.purchaseCost;
+    const salvageValue = b.salvageValue;
 
     const { insertId } = await rawExecute(
       `INSERT INTO fixed_assets (
@@ -627,9 +621,9 @@ financeAlgorithmsRouter.post("/fixed-assets", requirePermission("finance:create"
       [scope.companyId, b.branchId ?? scope.branchId, b.code ?? null, b.name,
        b.description ?? null, b.category ?? null, b.purchaseDate,
        purchaseCost, salvageValue, usefulYears,
-       b.depreciationMethod ?? "straight_line", purchaseCost,
-       b.assetAccountCode ?? "1500", b.depreciationAccountCode ?? "6100",
-       b.accDepreciationAccountCode ?? "1590"]
+       b.depreciationMethod, purchaseCost,
+       b.assetAccountCode, b.depreciationAccountCode,
+       b.accDepreciationAccountCode]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM fixed_assets WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
     res.status(201).json(row);
@@ -662,10 +656,10 @@ financeAlgorithmsRouter.patch("/fixed-assets/:id", requirePermission("finance:up
     const scope = req.scope!;
     assertFinanceRole(scope);
     const id = parseId(req.params.id, "id");
-    const b = req.body as any;
+    const b = zodParse(updateFixedAssetSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
-    if (b.usefulLifeYears !== undefined && Number(b.usefulLifeYears) <= 0) {
+    if (b.usefulLifeYears !== undefined && b.usefulLifeYears <= 0) {
       throw new ValidationError("العمر الإنتاجي يجب أن يكون أكبر من صفر");
     }
     const f = (col: string, val: any) => { if (val !== undefined) { params.push(val); sets.push(`"${col}"=$${params.length}`); } };
