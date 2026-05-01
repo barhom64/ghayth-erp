@@ -205,7 +205,7 @@ router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
           `UPDATE gov_integrations SET "lastCheckedAt"=NOW(), "lastCheckStatus"=$2, "lastCheckMessage"=$3, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$4`,
           [id, checkStatus, checkMessage, scope.companyId]
         );
-        res.json({ success: false, status: checkStatus, message: checkMessage, checkedAt: new Date().toISOString() });
+        res.status(400).json({ success: false, status: checkStatus, message: checkMessage, checkedAt: new Date().toISOString() });
         return;
       }
 

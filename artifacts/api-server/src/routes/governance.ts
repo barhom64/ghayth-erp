@@ -31,6 +31,91 @@ const createRiskSchema = z.object({
   assignedTo: z.coerce.number().optional().nullable(),
 });
 
+const updatePolicySchema = z.object({
+  title: z.string().optional(),
+  description: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  status: z.string().optional(),
+  effectiveDate: z.string().optional().nullable(),
+  expiryDate: z.string().optional().nullable(),
+  modules: z.array(z.string()).optional().nullable(),
+});
+
+const newPolicyVersionSchema = z.object({
+  title: z.string().optional(),
+  description: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  effectiveDate: z.string().optional().nullable(),
+  expiryDate: z.string().optional().nullable(),
+});
+
+const updateRiskSchema = z.object({
+  title: z.string().optional(),
+  description: z.string().optional().nullable(),
+  severity: z.string().optional(),
+  likelihood: z.string().optional().nullable(),
+  impact: z.string().optional().nullable(),
+  status: z.string().optional(),
+  mitigationPlan: z.string().optional().nullable(),
+});
+
+const createAuditSchema = z.object({
+  title: z.string().min(1, "عنوان المراجعة مطلوب"),
+  scope: z.string().optional().nullable(),
+  status: z.string().optional(),
+  auditorName: z.string().optional().nullable(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+  findings: z.string().optional().nullable(),
+});
+
+const updateAuditSchema = z.object({
+  title: z.string().optional(),
+  scope: z.string().optional().nullable(),
+  status: z.string().optional(),
+  auditorName: z.string().optional().nullable(),
+  findings: z.string().optional().nullable(),
+});
+
+const createComplianceSchema = z.object({
+  regulation: z.string().min(1, "اسم اللائحة مطلوب"),
+  description: z.string().optional().nullable(),
+  status: z.string().optional(),
+  dueDate: z.string().optional().nullable(),
+  responsiblePerson: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+const updateComplianceSchema = z.object({
+  regulation: z.string().optional(),
+  description: z.string().optional().nullable(),
+  status: z.string().optional(),
+  dueDate: z.string().optional().nullable(),
+  responsiblePerson: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+const createCapaSchema = z.object({
+  auditId: z.coerce.number().optional().nullable(),
+  finding: z.string().min(1, "الملاحظة مطلوبة"),
+  rootCause: z.string().optional().nullable(),
+  correctiveAction: z.string().optional().nullable(),
+  preventiveAction: z.string().optional().nullable(),
+  status: z.string().optional(),
+  responsiblePerson: z.string().optional().nullable(),
+  dueDate: z.string().optional().nullable(),
+});
+
+const updateCapaSchema = z.object({
+  finding: z.string().optional(),
+  rootCause: z.string().optional().nullable(),
+  correctiveAction: z.string().optional().nullable(),
+  preventiveAction: z.string().optional().nullable(),
+  status: z.string().optional(),
+  responsiblePerson: z.string().optional().nullable(),
+  dueDate: z.string().optional().nullable(),
+});
+
 const router = Router();
 
 router.get("/policies", requirePermission("governance:read"), async (req, res) => {
@@ -114,7 +199,7 @@ router.patch("/policies/:id", requirePermission("governance:write"), async (req,
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(updatePolicySchema.safeParse(req.body));
     const sets: string[] = [];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
@@ -173,7 +258,7 @@ router.post("/policies/:id/new-version", requirePermission("governance:write"), 
     );
     const nextVersion = Number(maxVersion?.next || parent.version + 1);
 
-    const b = req.body;
+    const b = zodParse(newPolicyVersionSchema.safeParse(req.body));
     const existingLinks = await rawQuery<any>(`SELECT module FROM policy_module_links WHERE "policyId"=$1`, [parentId]);
 
     const { insertId } = await rawExecute(
@@ -328,7 +413,7 @@ router.patch("/risks/:id", requirePermission("governance:write"), async (req, re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(updateRiskSchema.safeParse(req.body));
     const sets: string[] = [];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
@@ -385,7 +470,7 @@ router.get("/audits", requirePermission("governance:read"), async (req, res) => 
 router.post("/audits", requirePermission("governance:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { title, scope: auditScope, status, auditorName, startDate, endDate, findings } = req.body;
+    const { title, scope: auditScope, status, auditorName, startDate, endDate, findings } = zodParse(createAuditSchema.safeParse(req.body)) as any;
     const r = await rawExecute(
       `INSERT INTO governance_audits (title, scope, status, "auditorName", "startDate", "endDate", findings, "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [title, auditScope, status || "planned", auditorName, startDate, endDate, findings, scope.companyId]
@@ -417,7 +502,7 @@ router.patch("/audits/:id", requirePermission("governance:write"), async (req, r
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(updateAuditSchema.safeParse(req.body));
     const sets: string[] = [];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
@@ -472,7 +557,7 @@ router.get("/compliance", requirePermission("governance:read"), async (req, res)
 router.post("/compliance", requirePermission("governance:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { regulation, description, status, dueDate, responsiblePerson, notes } = req.body;
+    const { regulation, description, status, dueDate, responsiblePerson, notes } = zodParse(createComplianceSchema.safeParse(req.body));
     const r = await rawExecute(
       `INSERT INTO governance_compliance (regulation, description, status, "dueDate", "responsiblePerson", notes, "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [regulation, description, status || "compliant", dueDate, responsiblePerson, notes, scope.companyId]
@@ -504,7 +589,7 @@ router.patch("/compliance/:id", requirePermission("governance:write"), async (re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(updateComplianceSchema.safeParse(req.body));
     const sets: string[] = [];
     const params: any[] = [];
     if (b.regulation !== undefined) { params.push(b.regulation); sets.push(`regulation=$${params.length}`); }
@@ -773,7 +858,7 @@ router.get("/capa", requirePermission("governance:read"), async (req, res) => {
 router.post("/capa", requirePermission("governance:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createCapaSchema.safeParse(req.body));
     const r = await rawExecute(
       `INSERT INTO governance_capa ("companyId","auditId",finding,"rootCause","correctiveAction","preventiveAction",status,"responsiblePerson","dueDate","completedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [scope.companyId, b.auditId || null, b.finding, b.rootCause || null, b.correctiveAction || null, b.preventiveAction || null, b.status || 'open', b.responsiblePerson || null, b.dueDate || null, null]
@@ -796,7 +881,7 @@ router.patch("/capa/:id", requirePermission("governance:write"), async (req, res
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(updateCapaSchema.safeParse(req.body));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.finding !== undefined) { params.push(b.finding); sets.push(`finding=$${params.length}`); }

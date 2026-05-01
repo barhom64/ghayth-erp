@@ -835,7 +835,7 @@ router.delete("/opportunities/:id", requirePermission("crm:delete"), async (req,
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الفرصة غير موجودة");
-    await rawExecute(`UPDATE crm_opportunities SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE crm_opportunities SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     await cancelObligation(scope.companyId, "crm_opportunity", id).catch((e) => logger.error(e, "crm background task failed"));
     emitEvent({
       companyId: scope.companyId,

@@ -1119,7 +1119,7 @@ router.delete("/suppliers/:id", requirePermission("warehouse:delete"), async (re
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM suppliers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المورد غير موجود");
-    await rawExecute(`UPDATE suppliers SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE suppliers SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,

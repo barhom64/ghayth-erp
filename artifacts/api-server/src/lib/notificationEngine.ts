@@ -92,10 +92,19 @@ interface DeliveryLogInsert {
   metadata?: Record<string, unknown>;
 }
 
+function escapeHtmlForTemplate(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function interpolateTemplate(template: string, vars: Record<string, string>): string {
   let result = template;
   for (const [key, val] of Object.entries(vars)) {
-    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), val);
+    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), escapeHtmlForTemplate(val));
   }
   return result;
 }

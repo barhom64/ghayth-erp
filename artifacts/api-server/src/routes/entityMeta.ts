@@ -32,7 +32,7 @@ router.get("/comments/:entityType/:entityId", requirePermission("operations:read
       `SELECT id, "entityType", "entityId", "userId", "userName", body, "createdAt"
        FROM entity_comments
        WHERE "entityType" = $1 AND "entityId" = $2 AND "companyId" = $3
-       ORDER BY "createdAt" DESC`,
+       ORDER BY "createdAt" DESC LIMIT 500`,
       [entityType, Number(entityId), scope.companyId]
     );
     res.json({ data: rows });

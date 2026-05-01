@@ -86,6 +86,39 @@ const createJudgmentSchema = z.object({
   appealWindowDays: z.coerce.number().optional(),
 });
 
+const updateContractSchema = z.object({
+  title: z.string().optional(),
+  status: z.string().optional(),
+  partyName: z.string().optional(),
+  partyContact: z.string().optional().nullable(),
+  contractType: z.string().optional().nullable(),
+  value: z.coerce.number().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  notes: z.string().optional().nullable(),
+});
+
+const updateCaseSchema = z.object({
+  title: z.string().optional(),
+  status: z.string().optional(),
+  priority: z.string().optional(),
+  lawyerName: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  court: z.string().optional().nullable(),
+});
+
+const updateJudgmentSchema = z.object({
+  paidAmount: z.coerce.number().optional(),
+  verdict: z.string().optional(),
+  notes: z.string().optional().nullable(),
+  dueDate: z.string().optional().nullable(),
+});
+
+const updateFinancialRiskSchema = z.object({
+  financialRisk: z.coerce.number().optional(),
+  riskLevel: z.string().optional(),
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // LIFECYCLE STATE MACHINES — Phase C.6 Legal audit
 // ─────────────────────────────────────────────────────────────────────────────
@@ -252,12 +285,12 @@ router.patch("/contracts/:id", requirePermission("legal:write"), async (req, res
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("العقد غير موجود");
-    const b = req.body;
+    const b = zodParse(updateContractSchema.safeParse(req.body));
 
     // State machine: PATCH cannot drive lifecycle transitions (use /renew,
     // /terminate). draft ↔ active is allowed for admin corrections.
     if (b.status !== undefined && b.status !== existing.status) {
-      if (!CONTRACT_STATUSES.includes(b.status)) {
+      if (!(CONTRACT_STATUSES as readonly string[]).includes(b.status)) {
         throw new ValidationError(
           `حالة عقد غير صالحة: ${b.status}`,
           { field: "status", fix: `اختر من: ${CONTRACT_STATUSES.join(", ")}` }
@@ -616,10 +649,10 @@ router.patch("/cases/:id", requirePermission("legal:write"), async (req, res) =>
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("القضية غير موجودة");
-    const b = req.body;
+    const b = zodParse(updateCaseSchema.safeParse(req.body));
 
     if (b.status !== undefined && b.status !== existing.status) {
-      if (!CASE_STATUSES.includes(b.status)) {
+      if (!(CASE_STATUSES as readonly string[]).includes(b.status)) {
         throw new ValidationError(
           `حالة قضية غير صالحة: ${b.status}`,
           { field: "status", fix: `اختر من: ${CASE_STATUSES.join(", ")}` }
@@ -1168,7 +1201,7 @@ router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), a
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const caseId = parseId(req.params.caseId, "caseId");
-    const b = req.body;
+    const b = zodParse(updateJudgmentSchema.safeParse(req.body));
 
     const [existingJ] = await rawQuery<any>(
       `SELECT * FROM legal_judgments WHERE id=$1 AND "caseId"=$2 AND "companyId"=$3`,
@@ -1232,7 +1265,7 @@ router.patch("/cases/:id/financial-risk", requirePermission("legal:write"), asyn
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { financialRisk, riskLevel } = req.body;
+    const { financialRisk, riskLevel } = zodParse(updateFinancialRiskSchema.safeParse(req.body));
     const [existing] = await rawQuery<any>(
       `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]

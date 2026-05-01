@@ -47,6 +47,21 @@ const createKbSchema = z.object({
   tags: z.any().optional(),
 });
 
+const updateTicketSchema = z.object({
+  status: z.string().optional(),
+  assigneeId: z.coerce.number().optional().nullable(),
+  priority: z.enum(["low", "medium", "high", "urgent", "critical"]).optional(),
+  billableAmount: z.coerce.number().optional(),
+});
+
+const updateKbSchema = z.object({
+  title: z.string().optional(),
+  content: z.string().optional(),
+  category: z.string().optional(),
+  tags: z.any().optional(),
+  status: z.string().optional(),
+});
+
 const PRIORITY_KEYWORDS: Record<string, string[]> = {
   critical: ['عاجل', 'طارئ', 'كارثة', 'توقف', 'انهيار', 'حريق', 'خطير', 'فوري', 'down', 'outage', 'emergency', 'critical'],
   high: ['مهم', 'سريع', 'تعطل', 'خلل', 'broken', 'error', 'fail', 'urgent'],
@@ -419,7 +434,7 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
   try {
     const scope = req.scope!;
     const ticketId = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(updateTicketSchema.safeParse(req.body));
 
     // Pre-read for transition validation and pre-update state snapshot.
     const [ticket] = await rawQuery<any>(
@@ -432,7 +447,7 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
 
     if (statusChanging) {
       const allowed = TICKET_TRANSITIONS[ticket.status] ?? [];
-      if (!allowed.includes(b.status)) {
+      if (!allowed.includes(b.status!)) {
         throw new ConflictError(
           `لا يمكن نقل التذكرة من "${ticket.status}" إلى "${b.status}"`,
           {
@@ -557,7 +572,7 @@ router.delete("/tickets/:id", requirePermission("support:delete"), async (req, r
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id, ref, status FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("التذكرة غير موجودة");
-    await rawExecute(`UPDATE support_tickets SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE support_tickets SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     emitEvent({
       companyId: scope.companyId,
@@ -720,7 +735,7 @@ router.patch("/kb/:id", requirePermission("support:write"), async (req, res) => 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(updateKbSchema.safeParse(req.body));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }

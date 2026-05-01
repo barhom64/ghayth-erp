@@ -254,6 +254,7 @@ router.get("/:id/download", requirePermission("documents:download"), async (req:
 
       res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(doc.fileName || 'file')}"`);
       if (doc.mimeType) res.setHeader("Content-Type", doc.mimeType);
+      res.setHeader("X-Content-Type-Options", "nosniff");
       res.status(response.status);
 
       if (response.body) {
@@ -291,6 +292,7 @@ router.get("/:id/preview", requirePermission("documents:download"), async (req: 
 
       res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(doc.fileName || 'file')}"`);
       if (doc.mimeType) res.setHeader("Content-Type", doc.mimeType);
+      res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Cache-Control", "private, max-age=300");
       res.status(response.status);
 
@@ -667,6 +669,15 @@ router.delete("/templates/:id", requirePermission("documents:delete"), async (re
   } catch (e: any) { handleRouteError(e, res, "Delete document template error"); }
 });
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function fillTemplate(htmlContent: string, data: Record<string, any>): string {
   return htmlContent.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (match, key) => {
     const parts = key.split(".");
@@ -675,7 +686,7 @@ function fillTemplate(htmlContent: string, data: Record<string, any>): string {
       if (value == null) return match;
       value = value[part];
     }
-    return value != null ? String(value) : match;
+    return value != null ? escapeHtml(String(value)) : match;
   });
 }
 

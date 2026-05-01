@@ -21,6 +21,16 @@ const createClientSchema = z.object({
   language: z.enum(["ar", "en"]).optional().default("ar"),
 });
 
+const updateClientSchema = z.object({
+  name: z.string().min(1).optional(),
+  phone: z.string().optional().nullable(),
+  email: z.string().email("البريد الإلكتروني غير صالح").optional().nullable(),
+  classification: z.enum(["regular", "vip", "prospect", "wholesale", "new", "inactive"]).optional(),
+  source: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  isBlacklisted: z.boolean().optional(),
+});
+
 const router = Router();
 
 router.get("/", requirePermission("crm:read"), async (req, res) => {
@@ -259,7 +269,7 @@ router.patch("/:id", requirePermission("crm:write"), async (req, res) => {
     );
     if (!existing) { throw new NotFoundError("العميل غير موجود"); }
 
-    const b = req.body;
+    const b = zodParse(updateClientSchema.safeParse(req.body));
     const sets: string[] = [];
     const params: any[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name = $${params.length}`); }

@@ -33,6 +33,27 @@ const createRoleSchema = z.object({
   permissions: z.array(z.string()).optional(),
 });
 
+const updateUserSchema = z.object({
+  isActive: z.boolean().optional(),
+  role: z.string().min(1).optional(),
+  employeeId: z.coerce.number().int().positive().optional().nullable(),
+});
+
+const createUserRoleSchema = z.object({
+  userId: z.coerce.number().int().positive("userId مطلوب"),
+  roleKey: z.string().min(1, "roleKey مطلوب"),
+});
+
+const createRolePermissionSchema = z.object({
+  role: z.string().min(1, "role مطلوب"),
+  permission: z.string().min(1, "permission مطلوب"),
+});
+
+const bulkRolePermissionsSchema = z.object({
+  role: z.string().min(1, "role مطلوب"),
+  permissions: z.array(z.string().min(1)).min(0),
+});
+
 const createIntegrationSchema = z.object({
   name: z.string().min(1, "اسم التكامل مطلوب"),
   type: z.string().min(1, "نوع التكامل مطلوب"),
@@ -193,7 +214,7 @@ router.patch("/users/:id", requirePermission("admin:write"), async (req, res) =>
       [id, scope.companyId]
     );
     if (!userBelongs) { throw new ForbiddenError("المستخدم لا ينتمي لشركتك"); }
-    const { isActive, role, employeeId } = req.body;
+    const { isActive, role, employeeId } = zodParse(updateUserSchema.safeParse(req.body));
     if (employeeId) {
       const [empCheck] = await rawQuery(
         `SELECT 1 FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 LIMIT 1`,
@@ -446,10 +467,7 @@ router.post("/user-roles", requirePermission("admin:write"), async (req, res) =>
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const { userId, roleKey } = req.body;
-    if (!userId || !roleKey || typeof userId !== "number") {
-      throw new ValidationError("بيانات غير صالحة: userId و roleKey مطلوبان");
-    }
+    const { userId, roleKey } = zodParse(createUserRoleSchema.safeParse(req.body));
     if (!await userBelongsToCompany(userId, scope.companyId)) {
       throw new ForbiddenError("المستخدم لا ينتمي لشركتك");
     }
@@ -1009,10 +1027,7 @@ router.post("/role-permissions", requirePermission("admin:write"), async (req, r
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const { role, permission } = req.body as any;
-    if (!role || !permission) {
-      throw new ValidationError("role و permission مطلوبان");
-    }
+    const { role, permission } = zodParse(createRolePermissionSchema.safeParse(req.body));
     const r = await rawExecute(
       `INSERT INTO role_permissions (role, permission, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
       [role, permission, scope.companyId]
@@ -1039,10 +1054,7 @@ router.put("/role-permissions/bulk", requirePermission("admin:write"), async (re
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const { role, permissions } = req.body as { role: string; permissions: string[] };
-    if (!role || !Array.isArray(permissions)) {
-      throw new ValidationError("role و permissions مطلوبان");
-    }
+    const { role, permissions } = zodParse(bulkRolePermissionsSchema.safeParse(req.body));
     await withTransaction(async (tx) => {
       await tx.query(`DELETE FROM role_permissions WHERE role=$1 AND "companyId"=$2`, [role, scope.companyId]);
       if (permissions.length > 0) {

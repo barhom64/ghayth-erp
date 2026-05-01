@@ -152,7 +152,7 @@ router.delete("/products/:id", requirePermission("store:write"), async (req, res
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المنتج غير موجود");
-    await rawExecute(`UPDATE store_products SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE store_products SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "store_products", entityId: id, before: existing }).catch((e) => logger.error(e, "store background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.product.deleted", entity: "store_products", entityId: id, details: JSON.stringify({ name: existing.name }) }).catch((e) => logger.error(e, "store background task failed"));
     res.json({ message: "تم حذف المنتج بنجاح" });

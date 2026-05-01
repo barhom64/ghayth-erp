@@ -110,7 +110,7 @@ router.post("/auth/register", portalLimiter, async (req: Request, res: Response)
     }).catch((e) => logger.error(e, "careersPortal background task failed"));
     emitEvent({ companyId: 0, branchId: 0, userId: result.insertId, action: "careers.account.registered", entity: "applicant_accounts", entityId: result.insertId, details: JSON.stringify({ name: name.trim(), email: email.trim().toLowerCase() }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
-    res.json({ token, accountId: result.insertId });
+    res.status(201).json({ token, accountId: result.insertId });
   } catch (err) {
     handleRouteError(err, res, "تسجيل حساب متقدم");
   }
@@ -329,7 +329,7 @@ router.post("/apply", careersAuth, async (req: Request, res: Response) => {
     }).catch((e) => logger.error(e, "careersPortal background task failed"));
     emitEvent({ companyId: 0, branchId: 0, userId: applicantId, action: "careers.application.submitted", entity: "job_applications", entityId: result.insertId, details: JSON.stringify({ postingId, applicantId }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
-    res.json({ applicationId: result.insertId, message: "تم تقديم طلبك بنجاح" });
+    res.status(201).json({ applicationId: result.insertId, message: "تم تقديم طلبك بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "تقديم طلب توظيف");
   }
