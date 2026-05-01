@@ -811,10 +811,7 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", requirePermission("
     const scope = req.scope!;
     assertFinanceRole(scope);
     const id = parseId(req.params.id, "id");
-    const { period, unitsThisPeriod } = req.body as any;
-    if (!period) {
-      throw new ValidationError("الفترة المحاسبية مطلوبة", { field: "period" });
-    }
+    const { period, unitsThisPeriod } = zodParse(depreciateAssetSchema.safeParse(req.body ?? {}));
     const targetPeriod = period;
 
     const [asset] = await rawQuery<any>(
@@ -891,10 +888,7 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", requirePermission("
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const { period } = req.body as any;
-    if (!period) {
-      throw new ValidationError("الفترة المحاسبية مطلوبة", { field: "period" });
-    }
+    const { period } = zodParse(depreciateAllSchema.safeParse(req.body ?? {}));
     const targetPeriod = period;
 
     const assets = await rawQuery<any>(
@@ -1101,11 +1095,11 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", requirePermission("f
     const scope = req.scope!;
     assertFinanceRole(scope);
 
-    const { journalEntryId, roundingAmount, description } = req.body as any;
-    if (!journalEntryId || Math.abs(Number(roundingAmount ?? 0)) === 0) {
-      throw new ValidationError("معرف القيد وفرق التقريب مطلوبان");
+    const { journalEntryId, roundingAmount, description } = zodParse(roundingDiffSchema.safeParse(req.body ?? {}));
+    if (Math.abs(roundingAmount) === 0) {
+      throw new ValidationError("فرق التقريب يجب أن يكون مختلفاً عن الصفر");
     }
-    const diff = roundTo2(Number(roundingAmount));
+    const diff = roundTo2(roundingAmount);
     if (Math.abs(diff) > 0.05) {
       throw new ValidationError("فرق التقريب يتجاوز الحد المسموح (0.05 ﷼)");
     }
@@ -1216,10 +1210,7 @@ financeAlgorithmsRouter.post("/fx/rates", requirePermission("finance:create"), a
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const { rateDate, fromCurrency, toCurrency = "SAR", rate, type = "spot" } = req.body as any;
-    if (!rateDate || !fromCurrency || !rate || Number(rate) <= 0) {
-      throw new ValidationError("rateDate / fromCurrency / rate مطلوبة", { field: "rate", fix: "أدخل قيمة موجبة للسعر والعملة والتاريخ" });
-    }
+    const { rateDate, fromCurrency, toCurrency, rate, type } = zodParse(fxRateUpsertSchema.safeParse(req.body ?? {}));
     await ensureFxTables();
     const [row] = await rawQuery<any>(
       `INSERT INTO fx_rates ("companyId","effectiveDate","fromCurrency","toCurrency",rate,source)
@@ -1227,7 +1218,7 @@ financeAlgorithmsRouter.post("/fx/rates", requirePermission("finance:create"), a
        ON CONFLICT ("companyId","effectiveDate","fromCurrency","toCurrency","source")
        DO UPDATE SET rate=EXCLUDED.rate
        RETURNING *`,
-      [scope.companyId, rateDate, String(fromCurrency).toUpperCase(), String(toCurrency).toUpperCase(), Number(rate), type]
+      [scope.companyId, rateDate, fromCurrency.toUpperCase(), toCurrency.toUpperCase(), rate, type]
     );
     res.status(201).json({ data: row });
   } catch (err) {
@@ -1365,10 +1356,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const period = (req.body?.period as string) ?? currentPeriod();
-    if (!/^\d{4}-\d{2}$/.test(period)) {
-      throw new ValidationError("period يجب أن يكون بصيغة YYYY-MM", { field: "period", fix: "استخدم صيغة YYYY-MM مثل 2026-04" });
-    }
+    const { period } = zodParse(fxRevaluationPostSchema.safeParse(req.body ?? {}));
     await ensureFxTables();
     const [yPeriod, mPeriod] = period.split("-").map(Number);
     const periodEndDate = toDateISO(new Date(yPeriod, mPeriod, 0));

@@ -134,9 +134,13 @@ describe("Legal contract renew lifecycle", () => {
   });
 
   it("renew requires newEndDate", () => {
+    // Validation message lives in the Zod schema (renewContractSchema)
+    // which is defined before the route handler — check the full file.
+    expect(LEGAL_ROUTE).toContain("تاريخ نهاية التجديد مطلوب");
     const idx = LEGAL_ROUTE.indexOf('"/contracts/:id/renew"');
-    const section = LEGAL_ROUTE.slice(idx, idx + 500);
-    expect(section).toContain("تاريخ نهاية التجديد مطلوب");
+    const endIdx = LEGAL_ROUTE.indexOf("router.", idx + 10);
+    const section = LEGAL_ROUTE.slice(idx, endIdx);
+    expect(section).toContain("renewContractSchema");
   });
 
   it("renew increments renewalCount", () => {
@@ -163,9 +167,13 @@ describe("Legal contract terminate lifecycle", () => {
   });
 
   it("terminate requires reason", () => {
+    // Validation message lives in the Zod schema (terminateContractSchema)
+    // which is defined before the route handler — check the full file.
+    expect(LEGAL_ROUTE).toContain("سبب إنهاء العقد مطلوب");
     const idx = LEGAL_ROUTE.indexOf('"/contracts/:id/terminate"');
-    const section = LEGAL_ROUTE.slice(idx, idx + 500);
-    expect(section).toContain("سبب إنهاء العقد مطلوب");
+    const endIdx = LEGAL_ROUTE.indexOf("router.", idx + 10);
+    const section = LEGAL_ROUTE.slice(idx, endIdx);
+    expect(section).toContain("terminateContractSchema");
   });
 
   it("terminate emits legal.contract.terminated event", () => {
@@ -194,9 +202,13 @@ describe("Legal case close lifecycle", () => {
   });
 
   it("close requires closureReason", () => {
+    // Validation message lives in the Zod schema (closeCaseSchema)
+    // which is defined before the route handler — check the full file.
+    expect(LEGAL_ROUTE).toContain("سبب الإغلاق مطلوب");
     const idx = LEGAL_ROUTE.indexOf('"/cases/:id/close"');
-    const section = LEGAL_ROUTE.slice(idx, idx + 800);
-    expect(section).toContain("سبب الإغلاق مطلوب");
+    const endIdx = LEGAL_ROUTE.indexOf("router.", idx + 10);
+    const section = LEGAL_ROUTE.slice(idx, endIdx);
+    expect(section).toContain("closeCaseSchema");
   });
 
   it("close cancels outstanding obligations", () => {
