@@ -122,7 +122,7 @@ const updateFinancialRiskSchema = z.object({
 const renewContractSchema = z.object({
   newEndDate: z.string().min(1, "تاريخ نهاية التجديد مطلوب"),
   newValue: z.coerce.number().optional().nullable(),
-  notes: z.string().optional().nullable(),
+  notes: z.string().optional(),
 });
 
 const terminateContractSchema = z.object({
@@ -470,7 +470,7 @@ router.post("/contracts/:id/renew", requirePermission("legal:write"), async (req
       action: "legal.contract.renewed",
       fromStates: ["active", "draft", "expired"],
       toState: "active",
-      reason: notes ?? null,
+      reason: notes ?? undefined,
       setExtras,
       extraWhere: `"deletedAt" IS NULL`,
       after: {

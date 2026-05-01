@@ -402,7 +402,7 @@ router.post("/roles", requirePermission("admin:write"), async (req, res) => {
     invalidatePermissionCache(roleKey, scope.companyId);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
-      action: "create", entity: "roles", entityId: roleKey,
+      action: "create", entity: "roles", entityId: 0,
       after: { roleKey, label, level: roleLevel, modules: mods },
     }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({

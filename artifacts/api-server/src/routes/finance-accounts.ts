@@ -42,7 +42,7 @@ const journalLineSchema = z.object({
   debit: z.coerce.number().min(0).default(0),
   credit: z.coerce.number().min(0).default(0),
   description: z.string().optional().default(""),
-  costCenter: z.string().optional().nullable(),
+  costCenter: z.string().optional(),
 });
 
 const createJournalSchema = z.object({
