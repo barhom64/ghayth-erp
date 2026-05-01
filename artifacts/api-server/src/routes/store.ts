@@ -76,7 +76,9 @@ router.get("/products", requirePermission("store:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Number(lim) || 50;
+    const offset = (pageNum - 1) * perPage;
 
     const [countRow] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM store_products WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
@@ -84,9 +86,9 @@ router.get("/products", requirePermission("store:read"), async (req, res) => {
     );
     const rows = await rawQuery(
       `SELECT * FROM store_products WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT $2 OFFSET $3`,
-      [scope.companyId, Number(lim), offset]
+      [scope.companyId, perPage, offset]
     );
-    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
+    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "List store products"); }
 });
 

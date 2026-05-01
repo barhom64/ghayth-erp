@@ -1296,7 +1296,7 @@ router.get("/maintenance", requirePermission("fleet:read"), async (req, res) => 
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
-    if (vehicleId) { where += ` AND m."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId)); paramIdx++; }
+    if (vehicleId) { where += ` AND m."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
     const rows = await rawQuery<any>(
       `SELECT m.*, m.type AS "maintenanceType", m.cost AS amount,
               m."serviceDate" AS "scheduledDate", m."serviceDate" AS date,
@@ -1716,7 +1716,7 @@ router.get("/fuel-logs", requirePermission("fleet:read"), async (req, res) => {
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'f."companyId"', branchColumn: 'f."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
-    if (vehicleId) { where += ` AND f."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId)); paramIdx++; }
+    if (vehicleId) { where += ` AND f."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
     const rows = await rawQuery<any>(
       `SELECT f.*, f.liters AS quantity, f."totalCost" AS cost, f."mileageAtFuel" AS mileage, f."stationName" AS station, f."fuelDate" AS date, v."plateNumber", v."plateNumber" AS "vehiclePlate" FROM fleet_fuel_logs f LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId" WHERE ${where} AND f."deletedAt" IS NULL ORDER BY f.id DESC LIMIT 1000`,
       params
@@ -1850,7 +1850,7 @@ router.get("/insurance", requirePermission("fleet:read"), async (req, res) => {
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
-    if (vehicleId) { where += ` AND i."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId)); paramIdx++; }
+    if (vehicleId) { where += ` AND i."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
     const rows = await rawQuery<any>(
       `SELECT i.*, v."plateNumber" FROM fleet_insurance i LEFT JOIN fleet_vehicles v ON v.id=i."vehicleId" WHERE ${where} ORDER BY i."endDate" ASC LIMIT 500`,
       params
@@ -2464,7 +2464,7 @@ router.get("/preventive-plans", requirePermission("fleet:read"), async (req, res
     const { vehicleId } = req.query as any;
     const conditions = [`p."companyId"=$1`];
     const params: any[] = [scope.companyId];
-    if (vehicleId) { params.push(Number(vehicleId)); conditions.push(`p."vehicleId"=$${params.length}`); }
+    if (vehicleId) { params.push(Number(vehicleId) || 0); conditions.push(`p."vehicleId"=$${params.length}`); }
     const rows = await rawQuery<any>(
       `SELECT p.*, v."plateNumber", v."currentMileage"
        FROM fleet_preventive_plans p
@@ -2634,8 +2634,8 @@ router.get("/traffic-violations", requirePermission("fleet:read"), async (req, r
     const { vehicleId, driverId } = req.query as any;
     const conditions = [`tv."companyId"=$1`];
     const params: any[] = [scope.companyId];
-    if (vehicleId) { params.push(Number(vehicleId)); conditions.push(`tv."vehicleId"=$${params.length}`); }
-    if (driverId) { params.push(Number(driverId)); conditions.push(`tv."driverId"=$${params.length}`); }
+    if (vehicleId) { params.push(Number(vehicleId) || 0); conditions.push(`tv."vehicleId"=$${params.length}`); }
+    if (driverId) { params.push(Number(driverId) || 0); conditions.push(`tv."driverId"=$${params.length}`); }
     const rows = await rawQuery<any>(
       `SELECT tv.*, v."plateNumber", d.name AS "driverName"
        FROM fleet_traffic_violations tv

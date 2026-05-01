@@ -1644,7 +1644,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
   // generic 403.
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const { approved, reason } = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
 
     // Authorization: only branch_manager, hr_manager, or owner roles can approve leave
@@ -1663,7 +1663,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
        FROM hr_leave_requests lr
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
        WHERE lr.id = $1 AND lr."companyId" = $2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!request) throw new NotFoundError("الطلب غير موجود");
     if (request.status !== "pending") {
@@ -1679,7 +1679,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
       `SELECT * FROM leave_approval_stages
        WHERE "leaveRequestId" = $1 AND status = 'pending'
        ORDER BY stage ASC LIMIT 1`,
-      [Number(id)]
+      [id]
     );
 
     // Enforce stage-role: approver's role must match the required role for the current stage
@@ -1734,7 +1734,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 
       await applyTransition({
         entity: "hr_leave_requests",
-        id: Number(id),
+        id,
         scope,
         action: "leave.rejected",
         fromStates: ["pending"],
@@ -1750,7 +1750,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
           assignmentId: reqAssignment.id,
           type: "leave_rejected", title: "تم رفض طلب الإجازة",
           body: `تم رفض طلب الإجازة. السبب: ${reason ?? "لم يحدد"}`,
-          priority: "high", refType: "leave_request", refId: Number(id),
+          priority: "high", refType: "leave_request", refId: id,
         }] : [],
         onApply: async (_row, client) => {
           if (currentStage) {
@@ -1769,7 +1769,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
           );
           await client.query(
             `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'rejected',$2,$3,$4)`,
-            [Number(id), reason || null, scope.userId, scope.companyId]
+            [id, reason || null, scope.userId, scope.companyId]
           ).catch((e) => logger.error(e, "hr approval action insert failed"));
         },
       });
@@ -1790,7 +1790,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 
       await applyTransition({
         entity: "hr_leave_requests",
-        id: Number(id),
+        id,
         scope,
         action: "leave.returned",
         fromStates: ["pending"],
@@ -1802,7 +1802,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
           assignmentId: reqAssignment.id,
           type: "leave_returned", title: "تم إرجاع طلب الإجازة",
           body: `تم إرجاع طلب الإجازة للمراجعة. السبب: ${reason}`,
-          priority: "medium", refType: "leave_request", refId: Number(id),
+          priority: "medium", refType: "leave_request", refId: id,
         }] : [],
         onApply: async (_row, client) => {
           if (currentStage) {
@@ -1819,7 +1819,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
           );
           await client.query(
             `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'returned',$2,$3,$4)`,
-            [Number(id), reason, scope.userId, scope.companyId]
+            [id, reason, scope.userId, scope.companyId]
           ).catch((e) => logger.error(e, "hr approval action insert failed"));
         },
       });
@@ -1879,22 +1879,22 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         await rawExecute(
           `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
            VALUES ($1,$2,$3,$4,$5)`,
-          [Number(id), nextStep.stepOrder, nextStep.requiredRole, nextAssignee.id, nextExpiresAt.toISOString()]
+          [id, nextStep.stepOrder, nextStep.requiredRole, nextAssignee.id, nextExpiresAt.toISOString()]
         );
 
         createNotification({
           companyId: scope.companyId, assignmentId: nextAssignee.id,
           type: "leave_request", title: `طلب إجازة يتطلب مراجعة ${nextStep.requiredRole}`,
           body: `أقر المرحلة ${currentStageNum} على طلب إجازة لمدة ${request.days} أيام`,
-          priority: "high", refType: "leave_request", refId: Number(id),
+          priority: "high", refType: "leave_request", refId: id,
         }).catch((e) => logger.error(e, "hr background task failed"));
 
         emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `leave.stage${currentStageNum}_approved`,
-          entity: "hr_leave_requests", entityId: Number(id) }).catch((e) => logger.error(e, "hr background task failed"));
+          entity: "hr_leave_requests", entityId: id }).catch((e) => logger.error(e, "hr background task failed"));
 
         createAuditLog({
           companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-          action: "update", entity: "hr_leave_requests", entityId: Number(id),
+          action: "update", entity: "hr_leave_requests", entityId: id,
           after: { status: "pending", stage: currentStageNum, nextStage: nextStep.stepOrder },
         }).catch((e) => logger.error(e, "hr background task failed"));
 
@@ -1917,7 +1917,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 
     await applyTransition({
       entity: "hr_leave_requests",
-      id: Number(id),
+      id,
       scope,
       action: "leave.approved",
       fromStates: ["pending"],
@@ -1952,7 +1952,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         await client.query(
           `UPDATE approval_requests SET status = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
            WHERE "refType" = 'leave_request' AND "refId" = $2 AND status = 'pending'`,
-          [scope.activeAssignmentId, Number(id)]
+          [scope.activeAssignmentId, id]
         );
 
         // Retroactive attendance: clear absences, insert on_leave records
@@ -1982,7 +1982,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 
         await client.query(
           `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'approved',$2,$3,$4)`,
-          [Number(id), reason || null, scope.userId, scope.companyId]
+          [id, reason || null, scope.userId, scope.companyId]
         ).catch((e) => logger.error(e, "hr approval action insert failed"));
       },
     });
@@ -1993,7 +1993,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         companyId: asn.companyId, assignmentId: asn.id,
         type: "leave_approved", title: "تمت الموافقة على طلب الإجازة",
         body: `تمت الموافقة على إجازة ${request.leaveTypeName} من ${request.startDate} إلى ${request.endDate}`,
-        priority: "high", refType: "leave_request", refId: Number(id),
+        priority: "high", refType: "leave_request", refId: id,
       }).catch((e) => logger.error(e, "hr background task failed"));
     }
     for (const asn of allAssignments) {
@@ -2017,7 +2017,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
             companyId: asn.companyId, assignmentId: managerAId.id,
             type: "leave_approved", title: "موظف في إجازة معتمدة",
             body: `تمت الموافقة على إجازة موظف من ${request.startDate} إلى ${request.endDate}. تم إعادة توزيع المهام.`,
-            priority: "normal", refType: "leave_request", refId: Number(id),
+            priority: "normal", refType: "leave_request", refId: id,
           }).catch((e) => logger.error(e, "hr background task failed"));
         }
       }).catch((e) => logger.error(e, "hr background task failed"));
@@ -2030,7 +2030,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         companyId: scope.companyId,
         branchId: scope.branchId ?? null,
         entityType: "hr_leave_request",
-        entityId: Number(id),
+        entityId: id,
         obligationType: "follow_up",
         title: `عودة للعمل — ${request.employeeName || `موظف #${request.employeeId}`} (${request.leaveTypeName || ""})`,
         dueAt: returnDate.toISOString(),
@@ -2054,11 +2054,11 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 router.get("/leave-requests/:id/stages", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     const [leaveReq] = await rawQuery<any>(
       `SELECT id FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!leaveReq) throw new NotFoundError("الطلب غير موجود");
 
@@ -2069,7 +2069,7 @@ router.get("/leave-requests/:id/stages", requirePermission("hr:read"), async (re
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE las."leaveRequestId" = $1
        ORDER BY las.stage ASC`,
-      [Number(id)]
+      [id]
     );
 
     // Also get the configured chain steps for context
@@ -2102,7 +2102,7 @@ router.get("/leave-requests/:id/stages", requirePermission("hr:read"), async (re
 router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: التصعيد متاح فقط للمدير أو HR أو المالك");
@@ -2110,7 +2110,7 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
 
     const [request] = await rawQuery<any>(
       `SELECT * FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!request) {
       throw new NotFoundError("الطلب غير موجود أو ليس معلقاً");
@@ -2122,7 +2122,7 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
        FROM leave_approval_stages
        WHERE "leaveRequestId" = $1 AND status = 'pending'
        ORDER BY stage ASC LIMIT 1`,
-      [Number(id)]
+      [id]
     );
 
     if (!currentPendingStage) {
@@ -2149,7 +2149,7 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
       `UPDATE leave_approval_stages
        SET status = 'escalated'
        WHERE "leaveRequestId" = $1 AND status = 'pending' AND "expiresAt" < NOW()`,
-      [Number(id)]
+      [id]
     );
 
     const [hrAssignment] = await rawQuery<any>(
@@ -2164,23 +2164,23 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
       await rawExecute(
         `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
          VALUES ($1,99,'hr_manager',$2,$3)`,
-        [Number(id), hrAssignment.id, escalateExpiresAt.toISOString()]
+        [id, hrAssignment.id, escalateExpiresAt.toISOString()]
       );
 
       createNotification({
         companyId: scope.companyId, assignmentId: hrAssignment.id,
         type: "leave_escalated", title: "تصعيد طلب إجازة",
         body: `تم تصعيد طلب إجازة (${id}) لعدم البت فيه خلال المهلة المحددة`,
-        priority: "urgent", refType: "leave_request", refId: Number(id),
+        priority: "urgent", refType: "leave_request", refId: id,
       }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.escalated",
-      entity: "hr_leave_requests", entityId: Number(id) }).catch((e) => logger.error(e, "hr background task failed"));
+      entity: "hr_leave_requests", entityId: id }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "hr_leave_requests", entityId: Number(id),
+      action: "update", entity: "hr_leave_requests", entityId: id,
       after: { status: "escalated" },
     }).catch((e) => logger.error(e, "hr background task failed"));
 
@@ -6716,7 +6716,9 @@ router.get("/company-documents", requirePermission("hr:read"), async (req, res) 
   try {
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Number(lim) || 50;
+    const offset = (pageNum - 1) * perPage;
 
     const [countRow] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM company_documents WHERE "companyId"=$1 AND status != 'deleted'`,
@@ -6724,9 +6726,9 @@ router.get("/company-documents", requirePermission("hr:read"), async (req, res) 
     ).catch((e) => { logger.error(e, "hr query failed"); return [{ total: 0 }] as any[]; });
     const rows = await rawQuery<any>(
       `SELECT * FROM company_documents WHERE "companyId"=$1 AND status != 'deleted' ORDER BY "expiryDate" ASC NULLS LAST LIMIT $2 OFFSET $3`,
-      [scope.companyId, Number(lim), offset]
+      [scope.companyId, perPage, offset]
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
-    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
+    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "Company documents error:"); }
 });
 

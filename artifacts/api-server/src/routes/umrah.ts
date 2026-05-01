@@ -573,9 +573,11 @@ router.get("/pilgrims", requirePermission("umrah:read"), async (req, res) => {
     if (status) { params.push(status); where += ` AND p.status=$${params.length}`; }
     if (agentId) { params.push(agentId); where += ` AND p."agentId"=$${params.length}`; }
     if (search) { params.push(`%${search}%`); where += ` AND (p."fullName" ILIKE $${params.length} OR p."passportNumber" ILIKE $${params.length} OR p."visaNumber" ILIKE $${params.length})`; }
-    const offset = (Number(page) - 1) * Number(limit);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Number(limit) || 20;
+    const offset = (pageNum - 1) * perPage;
     const countQ = await rawQuery(`SELECT COUNT(*) as c FROM umrah_pilgrims p WHERE ${where}`, params);
-    params.push(Number(limit)); params.push(offset);
+    params.push(perPage); params.push(offset);
     const rows = await rawQuery(
       `SELECT p.*, a.name as "agentName", pkg.name as "packageName"
        FROM umrah_pilgrims p
@@ -585,7 +587,7 @@ router.get("/pilgrims", requirePermission("umrah:read"), async (req, res) => {
        ORDER BY p."createdAt" DESC LIMIT $${params.length-1} OFFSET $${params.length}`,
       params
     );
-    res.json({ data: rows, total: Number(countQ[0]?.c || 0), page: Number(page), pageSize: Number(limit) });
+    res.json({ data: rows, total: Number(countQ[0]?.c || 0), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "List pilgrims error"); }
 });
 

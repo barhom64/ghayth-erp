@@ -54,7 +54,7 @@ eventsRouter.get("/log", async (req, res) => {
     let where = `"companyId" = $1`;
     if (action) { params.push(action); where += ` AND action = $${params.length}`; }
     if (entity) { params.push(entity); where += ` AND entity = $${params.length}`; }
-    if (entityId) { params.push(Number(entityId)); where += ` AND "entityId" = $${params.length}`; }
+    if (entityId) { params.push(Number(entityId) || 0); where += ` AND "entityId" = $${params.length}`; }
     if (from) { params.push(from); where += ` AND "createdAt" >= $${params.length}::timestamp`; }
     if (to) { params.push(to); where += ` AND "createdAt" <= $${params.length}::timestamp`; }
 

@@ -5,6 +5,7 @@ import {
   handleRouteError,
   NotFoundError,
   ValidationError,
+  parseId,
   zodParse,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -82,14 +83,14 @@ collectionRouter.post("/collection/:invoiceId/action", requirePermission("financ
   try {
     const scope = req.scope!;
 
-    const { invoiceId } = req.params;
+    const invoiceId = parseId(req.params.invoiceId, "invoiceId");
     const { stage, notes } = zodParse(collectionActionSchema.safeParse(req.body ?? {}));
 
     const [invoice] = await rawQuery<any>(
       `SELECT id, ref, status, "dueDate",
               EXTRACT(DAY FROM NOW() - "dueDate"::timestamptz)::int AS "daysOverdue"
        FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(invoiceId), scope.companyId]
+      [invoiceId, scope.companyId]
     );
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
 
@@ -120,7 +121,7 @@ collectionRouter.post("/collection/:invoiceId/action", requirePermission("financ
 
     const [lastStageRecord] = await rawQuery<any>(
       `SELECT stage FROM invoice_collection_stages WHERE "invoiceId" = $1 ORDER BY id DESC LIMIT 1`,
-      [Number(invoiceId)]
+      [invoiceId]
     );
     const lastStage = lastStageRecord ? Number(lastStageRecord.stage) : 0;
     if (requestedStage <= lastStage || requestedStage > lastStage + 1) {
@@ -140,7 +141,7 @@ collectionRouter.post("/collection/:invoiceId/action", requirePermission("financ
     if (invoice.status !== "overdue") {
       await applyTransition({
         entity: "invoices",
-        id: Number(invoiceId),
+        id: invoiceId,
         scope,
         action: "invoice.overdue",
         fromStates: ["sent", "posted", "partial"],
@@ -151,18 +152,18 @@ collectionRouter.post("/collection/:invoiceId/action", requirePermission("financ
     await rawExecute(
       `INSERT INTO invoice_collection_stages ("companyId","invoiceId",stage,"stageName",notes,"performedBy")
        VALUES ($1,$2,$3,$4,$5,$6)`,
-      [scope.companyId, Number(invoiceId), stageInfo.stage, stageInfo.name, notes ?? null, scope.activeAssignmentId]
+      [scope.companyId, invoiceId, stageInfo.stage, stageInfo.name, notes ?? null, scope.activeAssignmentId]
     );
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
-      action: `collection.${stageInfo.name}`, entity: "invoices", entityId: Number(invoiceId),
+      action: `collection.${stageInfo.name}`, entity: "invoices", entityId: invoiceId,
       details: JSON.stringify({ stage: stageInfo.stage, label: stageInfo.label, notes }),
     }).catch((err) => pushToDLQ("event", { action: `collection.${stageInfo.name}`, entityId: invoiceId }, err, scope.companyId));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: `collection.stage_${stage}`, entity: "invoices", entityId: Number(invoiceId),
+      action: `collection.stage_${stage}`, entity: "invoices", entityId: invoiceId,
       after: { stage: stageInfo.stage, action: stageInfo.name, notes },
     }).catch((err) => pushToDLQ("audit", { entity: "invoices", entityId: invoiceId }, err, scope.companyId));
 
@@ -175,11 +176,11 @@ collectionRouter.post("/collection/:invoiceId/action", requirePermission("financ
 collectionRouter.get("/collection/:invoiceId/history", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { invoiceId } = req.params;
+    const invoiceId = parseId(req.params.invoiceId, "invoiceId");
 
     const [invoice] = await rawQuery<any>(
       `SELECT id FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(invoiceId), scope.companyId]
+      [invoiceId, scope.companyId]
     );
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
 
@@ -190,7 +191,7 @@ collectionRouter.get("/collection/:invoiceId/history", requirePermission("financ
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE ics."invoiceId" = $1
        ORDER BY ics.id ASC`,
-      [Number(invoiceId)]
+      [invoiceId]
     );
 
     res.json(history);

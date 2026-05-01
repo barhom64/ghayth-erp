@@ -268,7 +268,9 @@ router.get("/products", requirePermission("warehouse:read"), async (req, res) =>
   try {
     const scope = req.scope!;
     const { search, status, page = "1", limit: lim = "50" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Number(lim) || 50;
+    const offset = (pageNum - 1) * perPage;
     const filters = parseScopeFilters(req);
     if (search) { filters.search = String(search); filters.searchColumns = ['p.name', 'p.sku']; }
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'p."companyId"', branchColumn: 'p."branchId"', enforceBranchScope: true });
@@ -282,7 +284,7 @@ router.get("/products", requirePermission("warehouse:read"), async (req, res) =>
       countParams
     );
 
-    params.push(Number(lim));
+    params.push(perPage);
     const limitParam = paramIdx++;
     params.push(offset);
     const offsetParam = paramIdx++;
@@ -291,7 +293,7 @@ router.get("/products", requirePermission("warehouse:read"), async (req, res) =>
       `SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.name LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
     );
-    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
+    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "Warehouse products error:"); }
 });
 
@@ -906,7 +908,9 @@ router.get("/categories", requirePermission("warehouse:read"), async (req, res) 
   try {
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Number(lim) || 50;
+    const offset = (pageNum - 1) * perPage;
 
     const [countRow] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM warehouse_categories WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
@@ -914,9 +918,9 @@ router.get("/categories", requirePermission("warehouse:read"), async (req, res) 
     );
     const rows = await rawQuery<any>(
       `SELECT * FROM warehouse_categories WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT $2 OFFSET $3`,
-      [scope.companyId, Number(lim), offset]
+      [scope.companyId, perPage, offset]
     );
-    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
+    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "Warehouse categories error:"); }
 });
 
@@ -973,7 +977,9 @@ router.get("/suppliers", requirePermission("warehouse:read"), async (req, res) =
   try {
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Number(lim) || 50;
+    const offset = (pageNum - 1) * perPage;
 
     const [countRow] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM suppliers WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
@@ -981,9 +987,9 @@ router.get("/suppliers", requirePermission("warehouse:read"), async (req, res) =
     );
     const rows = await rawQuery<any>(
       `SELECT * FROM suppliers WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT $2 OFFSET $3`,
-      [scope.companyId, Number(lim), offset]
+      [scope.companyId, perPage, offset]
     );
-    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
+    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "Suppliers error:"); }
 });
 

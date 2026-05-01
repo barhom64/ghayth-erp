@@ -210,13 +210,14 @@ purchaseRouter.get("/purchase-requests", requirePermission("finance:read"), asyn
     const filters = parseScopeFilters(req);
     const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'pr."companyId"', branchColumn: 'pr."branchId"', enforceBranchScope: true });
     const { status: filterStatus, page = "1", limit: lim = "20" } = req.query as any;
+    const safeLimPR = Number(lim) || 50;
 
     let extraWhere = "";
     let paramIdx = nextParamIndex;
     if (filterStatus) { params.push(filterStatus); extraWhere += ` AND pr.status = $${paramIdx++}`; }
 
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
-    params.push(Number(lim));
+    const offset = (Math.max(Number(page), 1) - 1) * safeLimPR;
+    params.push(safeLimPR);
     const limitIdx = paramIdx++;
     params.push(offset);
     const offsetIdx = paramIdx++;
@@ -357,10 +358,10 @@ purchaseRouter.patch("/purchase-requests/:id/approve", requirePermission("financ
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const { approved, notes } = zodParse(prApprovalSchema.safeParse(req.body ?? {})) as any;
 
-    const [pr] = await rawQuery<any>(`SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`, [Number(id), scope.companyId]);
+    const [pr] = await rawQuery<any>(`SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     if (!pr) throw new NotFoundError("طلب الشراء غير موجود");
 
     const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
@@ -382,14 +383,14 @@ purchaseRouter.patch("/purchase-requests/:id/approve", requirePermission("financ
         }. السبب: ${notes}`,
         priority: "high",
         refType: "purchase_request",
-        refId: Number(id),
+        refId: id,
         actionUrl: `/finance/purchase-orders/${id}`,
       });
     }
 
     await applyTransition({
       entity: "purchase_requests",
-      id: Number(id),
+      id,
       scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       action: `purchase_request.${newStatus}`,
       toState: newStatus,
@@ -399,7 +400,7 @@ purchaseRouter.patch("/purchase-requests/:id/approve", requirePermission("financ
       notifications: prNotifications.length > 0 ? prNotifications : undefined,
     });
 
-    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_request',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { logger.error(e, "finance-purchase error"); }
+    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_request',$1,$2,$3,$4,$5)`, [id, newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { logger.error(e, "finance-purchase error"); }
 
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
@@ -414,13 +415,13 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
-    const [pr] = await rawQuery<any>(`SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`, [Number(id), scope.companyId]);
+    const [pr] = await rawQuery<any>(`SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     if (!pr) throw new NotFoundError("طلب الشراء غير موجود");
     if (pr.status !== "approved") { throw new ValidationError("يمكن تحويل الطلبات المعتمدة فقط"); return; }
 
-    const items = await rawQuery<any>(`SELECT * FROM purchase_request_items WHERE "requestId" = $1 LIMIT 500`, [Number(id)]);
+    const items = await rawQuery<any>(`SELECT * FROM purchase_request_items WHERE "requestId" = $1 LIMIT 500`, [id]);
     const subtotal = Number(pr.totalAmount);
     const vatRate = Number(pr.vatRate ?? 15);
     const vatAmount = computeVat(subtotal, vatRate);
@@ -452,7 +453,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
 
     await applyTransition({
       entity: "purchase_requests",
-      id: Number(id),
+      id,
       scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       action: "purchase_request.converted",
       fromStates: ["approved"],
@@ -468,7 +469,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
       branchId: scope.branchId,
       userId: scope.userId,
       entity: "purchase_request",
-      entityId: Number(id),
+      entityId: id,
       action: "purchase_request.converted",
       after: { status: "converted", purchaseOrderId: poId, poRef, totalAmount },
     }).catch((e) => logger.error(e, "finance-purchase background task failed"));
@@ -487,15 +488,16 @@ purchaseRouter.get("/purchase-orders", requirePermission("finance:read"), async 
     const filters = parseScopeFilters(req);
     const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'po."companyId"', branchColumn: 'po."branchId"', enforceBranchScope: true });
     const { status: filterStatus, page = "1", limit: lim = "20" } = req.query as any;
+    const safeLim = Number(lim) || 50;
 
     let extraWhere = "";
     let paramIdx = nextParamIndex;
     if (filterStatus) { params.push(filterStatus); extraWhere += ` AND po.status = $${paramIdx++}`; }
     const { productId } = req.query as any;
-    if (productId) { params.push(Number(productId)); extraWhere += ` AND po.id IN (SELECT "purchaseOrderId" FROM purchase_order_lines WHERE "productId" = $${paramIdx++})`; }
+    if (productId) { params.push(Number(productId) || 0); extraWhere += ` AND po.id IN (SELECT "purchaseOrderId" FROM purchase_order_lines WHERE "productId" = $${paramIdx++})`; }
 
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
-    params.push(Number(lim));
+    const offset = (Math.max(Number(page), 1) - 1) * safeLim;
+    params.push(safeLim);
     const limitIdx = paramIdx++;
     params.push(offset);
     const offsetIdx = paramIdx++;
@@ -578,10 +580,10 @@ async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rej
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const { notes } = zodParse(poApprovalNotesSchema.safeParse(req.body ?? {}));
 
-    const [po] = await rawQuery<any>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
+    const [po] = await rawQuery<any>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!po) throw new NotFoundError("أمر الشراء غير موجود");
 
     if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
@@ -593,7 +595,7 @@ async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rej
 
     await applyTransition({
       entity: "purchase_orders",
-      id: Number(id),
+      id,
       scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       action: `purchase_order.${newStatus}`,
       toState: newStatus,
@@ -602,7 +604,7 @@ async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rej
       after: { status: newStatus, notes: notes ?? null },
     });
 
-    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_order',$1,$2,$3,$4,$5)`, [Number(id), newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { logger.error(e, "finance-purchase error"); }
+    try { await rawExecute(`INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('purchase_order',$1,$2,$3,$4,$5)`, [id, newStatus, notes || null, scope.userId, scope.companyId]); } catch (e) { logger.error(e, "finance-purchase error"); }
 
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({ message: labels[newStatus] || newStatus, status: newStatus });
@@ -627,12 +629,12 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const { receivedDate, qualityNotes, lines } = zodParse(poReceiveSchema.safeParse(req.body ?? {})) as any;
 
     const [po] = await rawQuery<any>(
       `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!po) throw new NotFoundError("أمر الشراء غير موجود");
     if (!["approved", "partially_received"].includes(po.status)) {
@@ -650,7 +652,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
               COALESCE("receivedQty",0) AS "receivedQty",
               COALESCE("invoicedQty",0) AS "invoicedQty"
        FROM purchase_order_items WHERE "orderId" = $1`,
-      [Number(id)]
+      [id]
     );
     if (poItems.length === 0) {
       throw new ValidationError("لا توجد بنود في أمر الشراء");
@@ -705,7 +707,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
     const { insertId: grnId } = await rawExecute(
       `INSERT INTO goods_receipts ("companyId","branchId","poId",ref,"receivedAt","receivedBy",notes)
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [scope.companyId, scope.branchId, Number(id), grnRef, receiptDate, scope.activeAssignmentId, qualityNotes ?? null]
+      [scope.companyId, scope.branchId, id, grnRef, receiptDate, scope.activeAssignmentId, qualityNotes ?? null]
     );
 
     // Insert GRN lines + update PO items cumulative receivedQty
@@ -758,13 +760,13 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
     const remainingItems = await rawQuery<any>(
       `SELECT SUM(quantity - COALESCE("receivedQty",0)) AS remaining
          FROM purchase_order_items WHERE "orderId" = $1`,
-      [Number(id)]
+      [id]
     );
     const totalRemaining = Number(remainingItems[0]?.remaining ?? 0);
     const newStatus = totalRemaining <= 0.0001 ? "received" : "partially_received";
     await applyTransition({
       entity: "purchase_orders",
-      id: Number(id),
+      id,
       scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       action: "purchase_order.received",
       fromStates: ["approved", "partially_received"],
@@ -917,7 +919,7 @@ purchaseRouter.get("/payment-run/pending", requirePermission("finance:read"), as
     const { cutoffDate, supplierId } = req.query as any;
     const params: any[] = [scope.companyId];
     let where = `po."companyId" = $1 AND po.status = 'invoice_matched' AND po."deletedAt" IS NULL`;
-    if (supplierId) { params.push(Number(supplierId)); where += ` AND po."supplierId" = $${params.length}`; }
+    if (supplierId) { params.push(Number(supplierId) || 0); where += ` AND po."supplierId" = $${params.length}`; }
     if (cutoffDate) { params.push(cutoffDate); where += ` AND COALESCE(po."expectedDelivery", po."createdAt") <= $${params.length}`; }
 
     const rows = await rawQuery<any>(
@@ -1148,12 +1150,12 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const { expectedDelivery, notes } = zodParse(convertToPOSchema.safeParse(req.body ?? {}));
 
     const [pr] = await rawQuery<any>(
       `SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!pr) {
       throw new NotFoundError("طلب الشراء غير موجود");
@@ -1173,7 +1175,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
         scope.companyId,
         poRef,
         pr.supplierId,
-        Number(id),
+        id,
         Number(pr.totalAmount),
         expectedDelivery ?? null,
         scope.activeAssignmentId,
@@ -1184,7 +1186,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
 
     await applyTransition({
       entity: "purchase_requests",
-      id: Number(id),
+      id,
       scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       action: "purchase_request.converted",
       fromStates: ["approved"],
@@ -1267,7 +1269,7 @@ purchaseRouter.get("/purchase-orders/pending-grn", requirePermission("finance:re
 purchaseRouter.get("/purchase-orders/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const [po] = await rawQuery<any>(
       `SELECT po.*, s.name AS "supplierName", s.phone AS "supplierPhone", s.email AS "supplierEmail",
               b.name AS "branchName", b."nameEn" AS "branchNameEn", b."logoUrl" AS "branchLogoUrl",
@@ -1278,7 +1280,7 @@ purchaseRouter.get("/purchase-orders/:id", requirePermission("finance:read"), as
        LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
        LEFT JOIN branches b ON b.id = po."branchId"
        WHERE po.id = $1 AND po."companyId" = $2 AND po."deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!po) throw new NotFoundError("أمر الشراء غير موجود");
 
@@ -1286,7 +1288,7 @@ purchaseRouter.get("/purchase-orders/:id", requirePermission("finance:read"), as
     try {
       lines = await rawQuery<any>(
         `SELECT * FROM purchase_order_lines WHERE "purchaseOrderId" = $1 ORDER BY id`,
-        [Number(id)]
+        [id]
       );
     } catch (e) { logger.error(e, "PO lines fetch error"); }
 
@@ -1300,12 +1302,12 @@ purchaseRouter.patch("/purchase-orders/:id/vendor-confirm", requirePermission("f
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const { confirmedDelivery, notes } = zodParse(vendorConfirmSchema.safeParse(req.body ?? {}));
 
     const [po] = await rawQuery<any>(
       `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!po) {
       throw new NotFoundError("أمر الشراء غير موجود");
@@ -1316,7 +1318,7 @@ purchaseRouter.patch("/purchase-orders/:id/vendor-confirm", requirePermission("f
 
     await applyTransition({
       entity: "purchase_orders",
-      id: Number(id),
+      id,
       scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       action: "purchase_order.vendor_confirmed",
       fromStates: ["pending", "sent"],
@@ -1340,12 +1342,12 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", requirePermission("fin
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const { supplierInvoiceRef, invoicedAmount, invoicedDate } = zodParse(matchInvoiceSchema.safeParse(req.body ?? {}));
 
     const [po] = await rawQuery<any>(
       `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!po) {
       throw new NotFoundError("أمر الشراء غير موجود");
@@ -1395,7 +1397,7 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", requirePermission("fin
             body: `فاتورة=${invAmount} | طلب=${prTotal} | أمر=${poTotal} | استلام=${receivedTotal}`,
             priority: "high" as const,
             refType: "purchase_orders",
-            refId: Number(id),
+            refId: id,
             actionUrl: `/finance/purchase-orders/${id}`,
           },
         ]
@@ -1403,7 +1405,7 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", requirePermission("fin
 
     await applyTransition({
       entity: "purchase_orders",
-      id: Number(id),
+      id,
       scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       action: isMatched ? "purchase_order.three_way_matched" : "purchase_order.three_way_mismatch",
       fromStates: ["received", "partial_received"],
@@ -1442,12 +1444,12 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", requirePermission("
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const { paymentDate, amount, method = "bank_transfer", notes } = zodParse(schedulePaymentSchema.safeParse(req.body ?? {})) as any;
 
     const [po] = await rawQuery<any>(
       `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!po) {
       throw new NotFoundError("أمر الشراء غير موجود");
@@ -1484,7 +1486,7 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", requirePermission("
       ref: `SCHED-PAY-${po.ref}`,
       description: `دفعة مجدولة لأمر الشراء ${po.ref} بتاريخ ${paymentDate}`,
       sourceType: "purchase_order_payment",
-      sourceId: Number(id),
+      sourceId: id,
       sourceKey: `finance:sched_payment:${id}:${paymentDate}`,
       lines: [
         { accountCode: schedApCode, debit: Number(amount), credit: 0, vendorId: po.supplierId },
@@ -1495,7 +1497,7 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", requirePermission("
     const schedNote = ` | دفعة مجدولة ${paymentDate}: ${amount} (${method})`;
     await applyTransition({
       entity: "purchase_orders",
-      id: Number(id),
+      id,
       scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       action: "purchase_order.payment_scheduled",
       toState: "payment_scheduled",

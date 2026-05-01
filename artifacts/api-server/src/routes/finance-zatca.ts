@@ -5,6 +5,7 @@ import {
   ConflictError,
   ForbiddenError,
   IntegrationError,
+  parseId,
   zodParse,
 } from "../lib/errorHandler.js";
 import { z } from "zod";
@@ -396,7 +397,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), asy
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     const [settings] = await rawQuery<any>(
       `SELECT * FROM zatca_settings WHERE "companyId" = $1`,
@@ -410,7 +411,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), asy
        LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        LEFT JOIN branches b ON b.id = i."branchId"
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
 
     if (!invoice) {
@@ -419,7 +420,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), asy
 
     const lines = await rawQuery<any>(
       `SELECT * FROM invoice_lines WHERE "invoiceId" = $1 ORDER BY id`,
-      [Number(id)]
+      [id]
     );
 
     const issueDate = toDateISO(invoice.createdAt);
@@ -428,7 +429,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), asy
     let uuid = invoice.zatcaUuid;
     if (!uuid) {
       uuid = crypto.randomUUID();
-      await rawExecute(`UPDATE invoices SET "zatcaUuid" = $1::uuid WHERE id = $2 AND "companyId" = $3`, [uuid, Number(id), scope.companyId]);
+      await rawExecute(`UPDATE invoices SET "zatcaUuid" = $1::uuid WHERE id = $2 AND "companyId" = $3`, [uuid, id, scope.companyId]);
     }
 
     const xml = generateZatcaXml({
@@ -483,7 +484,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     const [settings] = await rawQuery<any>(
       `SELECT * FROM zatca_settings WHERE "companyId" = $1`,
@@ -501,7 +502,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
        LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        LEFT JOIN branches b ON b.id = i."branchId"
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
 
     if (!invoice) {
@@ -514,7 +515,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
 
     const lines = await rawQuery<any>(
       `SELECT * FROM invoice_lines WHERE "invoiceId" = $1 ORDER BY id`,
-      [Number(id)]
+      [id]
     );
 
     const issueDate = toDateISO(invoice.createdAt);
@@ -577,7 +578,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
     await rawExecute(
       `UPDATE invoices SET "zatcaUuid" = $1::uuid, "zatcaHash" = $2, "zatcaStatus" = $3, "zatcaQrCode" = $4
        WHERE id = $5`,
-      [uuid, hash, submissionStatus, qrCode, Number(id)]
+      [uuid, hash, submissionStatus, qrCode, id]
     );
 
     const [logRow] = await rawQuery<any>(
@@ -586,7 +587,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
          status, environment, "requestPayload", "responsePayload", "submittedAt", "submittedBy")
        VALUES ($1,'invoice',$2,$3,$4::uuid,$5,$6,$7,$8,$9,NOW(),$10)
        RETURNING id`,
-      [scope.companyId, Number(id), invoice.ref, uuid, hash,
+      [scope.companyId, id, invoice.ref, uuid, hash,
         submissionStatus, settings.environment,
         xml.substring(0, 5000),
         JSON.stringify({ clearanceStatus: simulatedSuccess ? "CLEARED" : "REPORTED", uuid, hash }),
@@ -614,7 +615,7 @@ zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     const [settings] = await rawQuery<any>(
       `SELECT * FROM zatca_settings WHERE "companyId" = $1`,
@@ -627,7 +628,7 @@ zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"
 
     const [expense] = await rawQuery<any>(
       `SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND type = 'expense' AND "deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
 
     if (!expense) {
@@ -661,7 +662,7 @@ zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"
     await rawExecute(
       `UPDATE journal_entries SET "zatcaUuid" = $1::uuid, "zatcaHash" = $2, "zatcaStatus" = $3, "zatcaQrCode" = $4
        WHERE id = $5`,
-      [uuid, hash, submissionStatus, qrCode, Number(id)]
+      [uuid, hash, submissionStatus, qrCode, id]
     );
 
     await rawQuery<any>(
@@ -670,7 +671,7 @@ zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"
          status, environment, "submittedAt", "submittedBy")
        VALUES ($1,'expense',$2,$3,$4::uuid,$5,$6,$7,NOW(),$8)
        RETURNING id`,
-      [scope.companyId, Number(id), expense.ref || `EXP-${expense.id}`, uuid, hash,
+      [scope.companyId, id, expense.ref || `EXP-${expense.id}`, uuid, hash,
         submissionStatus, settings.environment, scope.activeAssignmentId]
     );
 
@@ -691,7 +692,8 @@ zatcaRouter.get("/zatca/submissions", requirePermission("finance:read"), async (
     const scope = req.scope!;
 
     const { page = "1", limit: lim = "20", status = "" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const safeLim = Number(lim) || 50;
+    const offset = (Math.max(Number(page), 1) - 1) * safeLim;
 
     let whereExtra = "";
     const params: any[] = [scope.companyId];
@@ -700,7 +702,7 @@ zatcaRouter.get("/zatca/submissions", requirePermission("finance:read"), async (
       whereExtra = ` AND l.status = $${params.length}`;
     }
 
-    params.push(Number(lim));
+    params.push(safeLim);
     const limitIdx = params.length;
     params.push(offset);
     const offsetIdx = params.length;

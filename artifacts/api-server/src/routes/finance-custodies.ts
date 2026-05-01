@@ -293,7 +293,7 @@ custodiesRouter.get("/custodies/summary", requirePermission("finance:read"), asy
 custodiesRouter.get("/custodies/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     const [custody] = await rawQuery<any>(
       `SELECT je.id, je.ref, je.description, je.status AS "approvalStatus",
@@ -311,7 +311,7 @@ custodiesRouter.get("/custodies/:id", requirePermission("finance:read"), async (
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je.notes, je."dueDate", e.name, ea.id`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
 
     if (!custody) throw new NotFoundError("العهدة غير موجودة");
@@ -347,7 +347,7 @@ custodiesRouter.get("/custodies/:id", requirePermission("finance:read"), async (
          LEFT JOIN employees e ON e.id = u."employeeId"
          WHERE aa."entityType" = 'custody' AND aa."entityId" = $1
          ORDER BY aa."createdAt" ASC`,
-        [Number(id)]
+        [id]
       );
     } catch (e) { logger.error(e, "custody approval actions fetch error"); }
 

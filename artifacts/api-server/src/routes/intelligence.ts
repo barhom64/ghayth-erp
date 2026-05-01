@@ -1,4 +1,4 @@
-import { handleRouteError, NotFoundError, zodParse } from "../lib/errorHandler.js";
+import { handleRouteError, NotFoundError, parseId, zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
@@ -113,19 +113,19 @@ router.post("/alerts/scan", requirePermission("admin:write"), async (req, res): 
 router.patch("/alerts/:id/read", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     await rawQuery(
       `UPDATE smart_alerts SET "isRead"=true WHERE id=$1 AND "companyId"=$2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "smart_alerts", entityId: Number(id), after: { isRead: true } }).catch((e) => logger.error(e, "intelligence background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "smart_alerts", entityId: id, after: { isRead: true } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
       userId: scope.userId,
       action: "intelligence.alert.read",
       entity: "smart_alerts",
-      entityId: Number(id),
+      entityId: id,
       details: JSON.stringify({ isRead: true }),
     }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ message: "تم تعليم التنبيه كمقروء" });
@@ -138,7 +138,7 @@ router.get("/kpis", requirePermission("admin:read"), async (req, res): Promise<v
     const { employeeId, metricName } = req.query as any;
     const conditions = [`"companyId" = $1`];
     const params: any[] = [scope.companyId];
-    if (employeeId) { params.push(Number(employeeId)); conditions.push(`"employeeId" = $${params.length}`); }
+    if (employeeId) { params.push(Number(employeeId) || 0); conditions.push(`"employeeId" = $${params.length}`); }
     if (metricName) { params.push(metricName); conditions.push(`"metricName" = $${params.length}`); }
     const rows = await rawQuery<any>(`SELECT * FROM kpi_snapshots WHERE ${conditions.join(" AND ")} ORDER BY "snapshotDate" DESC LIMIT 200`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -148,10 +148,10 @@ router.get("/kpis", requirePermission("admin:read"), async (req, res): Promise<v
 router.get("/kpis/employee/:employeeId", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { employeeId } = req.params;
+    const employeeId = parseId(req.params.employeeId, "employeeId");
     const date = (req.query.date as string) ?? todayISO();
-    const metrics = await calculateEmployeeKPIs(scope.companyId, Number(employeeId), date);
-    res.json({ employeeId: Number(employeeId), date, metrics });
+    const metrics = await calculateEmployeeKPIs(scope.companyId, employeeId, date);
+    res.json({ employeeId, date, metrics });
   } catch (err) { handleRouteError(err, res, "Employee KPI error:"); }
 });
 
@@ -168,9 +168,9 @@ router.get("/daily-schedule", requirePermission("admin:read"), async (req, res):
 router.get("/daily-schedule/employee/:employeeId", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { employeeId } = req.params;
+    const employeeId = parseId(req.params.employeeId, "employeeId");
     const date = (req.query.date as string) ?? todayISO();
-    const schedule = await buildEmployeeSchedule(scope.companyId, Number(employeeId), date);
+    const schedule = await buildEmployeeSchedule(scope.companyId, employeeId, date);
     res.json(schedule);
   } catch (err) { handleRouteError(err, res, "Employee schedule error:"); }
 });
@@ -614,10 +614,10 @@ router.get("/clients/analytics/recalculate", requireRole("branch_manager", "gene
 router.get("/clients/:clientId/rfm", requireRole("branch_manager", "general_manager", "owner", "finance_manager"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { clientId } = req.params;
-    const rfm = await calculateClientRFM(scope.companyId, Number(clientId));
+    const clientId = parseId(req.params.clientId, "clientId");
+    const rfm = await calculateClientRFM(scope.companyId, clientId);
     if (!rfm) throw new NotFoundError("العميل غير موجود");
-    const contactTime = await getBestContactTime(scope.companyId, Number(clientId));
+    const contactTime = await getBestContactTime(scope.companyId, clientId);
     res.json({ ...rfm, bestContactTime: contactTime });
   } catch (err) { handleRouteError(err, res, "Client RFM error:"); }
 });

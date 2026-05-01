@@ -53,9 +53,9 @@ obligationsRouter.get("/", requirePermission("operations:read"), async (req, res
     const rows = await queryObligations({
       companyId: scope.companyId,
       entityType,
-      entityId: entityId ? Number(entityId) : undefined,
+      entityId: entityId ? (Number(entityId) || 0) : undefined,
       status: statuses,
-      assignedTo: assignedTo ? Number(assignedTo) : undefined,
+      assignedTo: assignedTo ? (Number(assignedTo) || 0) : undefined,
       dueBefore,
       dueAfter,
       limit: limit ? Number(limit) : undefined,

@@ -152,7 +152,7 @@ router.get("/", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search = "", page = "1", limit: lim = "20" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const offset = (Math.max(Number(page) || 1, 1) - 1) * (Number(lim) || 20);
 
     const filters = parseScopeFilters(req);
     if (search) filters.search = String(search);
@@ -174,7 +174,7 @@ router.get("/", requirePermission("hr:read"), async (req, res) => {
       paramIdx++;
     }
 
-    params.push(Number(lim));
+    params.push(Number(lim) || 20);
     const limitIdx = paramIdx++;
     params.push(offset);
     const offsetIdx = paramIdx++;
@@ -722,10 +722,10 @@ router.get("/documents", requirePermission("hr:read"), async (req, res) => {
 router.get("/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     let extraCondition = "";
-    const queryParams: any[] = [Number(id), scope.companyId];
+    const queryParams: any[] = [id, scope.companyId];
     if (!scope.isOwner && scope.role === "employee" && scope.employeeId) {
       extraCondition = ` AND e.id = $3`;
       queryParams.push(scope.employeeId);
@@ -766,7 +766,7 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
          LEFT JOIN projects p ON p.id = pt."projectId"
          WHERE pt."assigneeId" = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL
          ORDER BY pt."dueDate" DESC NULLS LAST LIMIT 20`,
-        [Number(id), scope.companyId]
+        [id, scope.companyId]
       ),
       rawQuery<any>(
         `SELECT a.id, a.date, a."checkIn", a."checkOut", a."lateMinutes", a.status
@@ -782,7 +782,7 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
          JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
          WHERE lr."employeeId" = $1
          ORDER BY lr."createdAt" DESC LIMIT 20`,
-        [Number(id)]
+        [id]
       ),
       rawQuery<any>(
         `SELECT te.id, te.status, te."completedAt",
@@ -791,7 +791,7 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
          JOIN training_programs tp ON tp.id = te."programId"
          WHERE te."employeeId" = $1
          ORDER BY tp."startDate" DESC LIMIT 20`,
-        [Number(id)]
+        [id]
       ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
       rawQuery<any>(
         `SELECT pl.id, pl.basic, pl."grossSalary", pl.gosi, pl."lateDeduction", pl."netSalary",
@@ -850,7 +850,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const validatedBody = zodParse(patchEmployeeSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const {
       name, phone, email, jobTitle, role, salary, branchId, departmentId, status,
       borderNumber, visaNumber, visaType, visaExpiry, sponsorNumber,
@@ -878,7 +878,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
          JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status IN ('active','suspended','terminated')
         WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL
         ORDER BY ea.status = 'active' DESC, ea.id DESC LIMIT 1`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
 
     if (!before) {
@@ -901,7 +901,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     if (email !== undefined && email && email !== before.email) {
       const [clash] = await rawQuery<{ id: number }>(
         `SELECT id FROM employees WHERE email = $1 AND id <> $2 AND "deletedAt" IS NULL LIMIT 1`,
-        [email, Number(id)]
+        [email, id]
       );
       if (clash) {
         throw new ConflictError("البريد الإلكتروني مستخدم لموظف آخر", {
@@ -916,7 +916,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     if (nationalId !== undefined && nationalId && nationalId !== before.nationalId) {
       const [clash] = await rawQuery<{ id: number }>(
         `SELECT id FROM employees WHERE "nationalId" = $1 AND id <> $2 AND "deletedAt" IS NULL LIMIT 1`,
-        [nationalId, Number(id)]
+        [nationalId, id]
       );
       if (clash) {
         throw new ConflictError("رقم الهوية مستخدم لموظف آخر", {
@@ -979,7 +979,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     if (workPermitExpiry !== undefined) { empVals.push(workPermitExpiry || null); empFields.push(`"workPermitExpiry" = $${empVals.length}`); }
     if (iqamaStatus !== undefined) { empVals.push(iqamaStatus); empFields.push(`"iqamaStatus" = $${empVals.length}`); }
     if (empFields.length) {
-      empVals.push(Number(id), scope.companyId);
+      empVals.push(id, scope.companyId);
       await rawExecute(`UPDATE employees SET ${empFields.join(",")} WHERE id = $${empVals.length - 1} AND "companyId" = $${empVals.length}`, empVals);
     }
 
@@ -1001,11 +1001,11 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     if ([iqamaExpiry, passportExpiry, workPermitExpiry, visaExpiry].some((v) => v !== undefined)) {
       const [empRow] = await rawQuery<any>(
         `SELECT name, "iqamaExpiry", "passportExpiry", "workPermitExpiry", "visaExpiry" FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
-        [Number(id)]
+        [id]
       );
       if (empRow) {
         await registerEmployeeExpiryObligations(
-          scope.companyId, scope.branchId ?? null, Number(id), empRow.name,
+          scope.companyId, scope.branchId ?? null, id, empRow.name,
           {
             iqamaExpiry: empRow.iqamaExpiry,
             passportExpiry: empRow.passportExpiry,
@@ -1039,7 +1039,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
           rawExecute(
             `INSERT INTO salary_history ("employeeId","assignmentId","companyId","oldSalary","newSalary","effectiveDate","changedBy","createdAt")
              VALUES ($1,$2,$3,$4,$5,CURRENT_DATE,$6,NOW())`,
-            [Number(id), employee.assignmentId, scope.companyId, oldSalary, newSalary, scope.activeAssignmentId]
+            [id, employee.assignmentId, scope.companyId, oldSalary, newSalary, scope.activeAssignmentId]
           ).catch((e) => logger.error(e, "employees background task failed"));
         }
       }
@@ -1067,7 +1067,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
          JOIN employee_assignments ea ON ea.id = $2
          LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
         WHERE e.id = $1 AND e."deletedAt" IS NULL`,
-      [Number(id), employee.assignmentId]
+      [id, employee.assignmentId]
     );
 
     // Build a field-level diff for the audit log so operators can see what
@@ -1094,7 +1094,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       userId: scope.userId,
       action: "update",
       entity: "employees",
-      entityId: Number(id),
+      entityId: id,
       // Snapshot both sides — logAudit / computeDiff would otherwise have
       // nothing to compute. Sensitive fields (passwordHash, tempPassword)
       // are never on the employees table so the raw snapshot is safe.
@@ -1114,7 +1114,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       userId: scope.userId,
       action: "employee.updated",
       entity: "employees",
-      entityId: Number(id),
+      entityId: id,
       before,
       after,
       details: JSON.stringify({ changedFields }),
@@ -1129,13 +1129,13 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
 router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const { reason } = zodParse(deleteEmployeeSchema.safeParse(req.body ?? {}));
     const [employee] = await rawQuery<any>(
       `SELECT e.id, ea.id AS "assignmentId" FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
        WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!employee) throw new NotFoundError("الموظف غير موجود");
 
@@ -1153,7 +1153,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       );
       await tx.query(
         `UPDATE employees SET status = 'terminated' WHERE id = $1 AND "companyId" = $2 AND status = 'active'`,
-        [Number(id), scope.companyId]
+        [id, scope.companyId]
       );
 
       // 1. Deactivate contracts tied to this employee / assignment so
@@ -1162,7 +1162,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
         `UPDATE employee_contracts
            SET status = 'terminated', "probationStatus" = 'ended'
          WHERE "employeeId" = $1 AND "companyId" = $2 AND status <> 'terminated'`,
-        [Number(id), scope.companyId]
+        [id, scope.companyId]
       );
 
       // 2. Cancel pending leave requests + their approval stages so
@@ -1171,7 +1171,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
         `UPDATE hr_leave_requests
            SET status = 'cancelled'
          WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'pending'`,
-        [Number(id), scope.companyId]
+        [id, scope.companyId]
       );
       await tx.query(
         `UPDATE leave_approval_stages
@@ -1180,7 +1180,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
            SELECT id FROM hr_leave_requests
            WHERE "employeeId" = $1 AND "companyId" = $2
          ) AND status = 'pending'`,
-        [Number(id), scope.companyId]
+        [id, scope.companyId]
       );
 
       // 3. Cancel open tasks assigned to the terminated assignment so
@@ -1210,14 +1210,14 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       userId: scope.userId,
       action: "employee.terminated",
       entity: "employees",
-      entityId: Number(id),
+      entityId: id,
       before: { status: "active" },
       after: { status: "terminated", reason: reason || null, assignmentId: employee.assignmentId },
     }).catch((e) => logger.error(e, "employees background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "delete", entity: "employees", entityId: Number(id),
+      action: "delete", entity: "employees", entityId: id,
       after: { reason: reason || null },
     }).catch((e) => logger.error(e, "employees background task failed"));
     res.json({ message: "تم إنهاء خدمة الموظف بنجاح" });

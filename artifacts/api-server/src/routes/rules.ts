@@ -62,16 +62,18 @@ router.get("/logs", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { ruleId, limit: lim = "50", page = "1" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Number(lim) || 50;
+    const offset = (pageNum - 1) * perPage;
     const conditions = [`("companyId" IS NULL OR "companyId" = $1)`];
     const params: any[] = [scope.companyId];
 
     if (ruleId) {
-      params.push(Number(ruleId));
+      params.push(Number(ruleId) || 0);
       conditions.push(`"ruleId" = $${params.length}`);
     }
 
-    params.push(Number(lim));
+    params.push(perPage);
     const limitIdx = params.length;
     params.push(offset);
     const offsetIdx = params.length;
@@ -90,7 +92,7 @@ router.get("/logs", requirePermission("admin:write"), async (req, res) => {
       countParams
     );
 
-    res.json({ data: logs, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
+    res.json({ data: logs, total: Number(countRow?.total ?? 0), page: pageNum, pageSize: perPage });
   } catch (err) {
     handleRouteError(err, res, "سجل القواعد");
   }
