@@ -1,9 +1,11 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import {
   handleRouteError,
   NotFoundError,
   ValidationError,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -15,6 +17,11 @@ import { applyTransition } from "../lib/lifecycleEngine.js";
 
 export const collectionRouter = Router();
 collectionRouter.use(authMiddleware);
+
+const collectionActionSchema = z.object({
+  stage: z.coerce.number(),
+  notes: z.string().optional(),
+});
 
 const COLLECTION_STAGES = [
   { stage: 1, name: "sms_email_reminder", label: "تذكير SMS + إيميل", daysOverdue: 1 },
@@ -76,7 +83,7 @@ collectionRouter.post("/collection/:invoiceId/action", requirePermission("financ
     const scope = req.scope!;
 
     const { invoiceId } = req.params;
-    const { stage, notes } = req.body as any;
+    const { stage, notes } = zodParse(collectionActionSchema.safeParse(req.body ?? {}));
 
     const [invoice] = await rawQuery<any>(
       `SELECT id, ref, status, "dueDate",

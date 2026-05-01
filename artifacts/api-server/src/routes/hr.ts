@@ -4611,17 +4611,14 @@ router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res)
 router.post("/impact-preview/leave", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId, leaveTypeId, startDate, endDate, days } = req.body as any;
-    if (!employeeId || !leaveTypeId || !startDate || !endDate) {
-      throw new ValidationError("بيانات غير مكتملة");
-    }
+    const { employeeId, leaveTypeId, startDate, endDate, days } = zodParse(impactPreviewLeaveSchema.safeParse(req.body ?? {}));
     const [assignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
-      [Number(employeeId), scope.companyId]
+      [employeeId, scope.companyId]
     );
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
     const daysCount = days ?? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1);
-    const impact = await computeLeaveImpact(scope.companyId, Number(employeeId), assignment.id, Number(leaveTypeId), startDate, endDate, daysCount);
+    const impact = await computeLeaveImpact(scope.companyId, employeeId, assignment.id, leaveTypeId, startDate, endDate, daysCount);
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.leave.impact_preview", entity: "hr_leave_requests", entityId: Number(employeeId) }).catch((e) => logger.error(e, "hr background task failed"));
     createAuditLog({
@@ -4637,16 +4634,13 @@ router.post("/impact-preview/leave", requirePermission("hr:read"), async (req, r
 router.post("/impact-preview/termination", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId } = req.body as any;
-    if (!employeeId) {
-      throw new ValidationError("معرف الموظف مطلوب", { field: "employeeId" });
-    }
+    const { employeeId } = zodParse(impactPreviewTerminationSchema.safeParse(req.body ?? {}));
     const [assignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
-      [Number(employeeId), scope.companyId]
+      [employeeId, scope.companyId]
     );
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
-    const impact = await computeTerminationImpact(scope.companyId, Number(employeeId), assignment.id);
+    const impact = await computeTerminationImpact(scope.companyId, employeeId, assignment.id);
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.termination.impact_preview", entity: "employees", entityId: Number(employeeId) }).catch((e) => logger.error(e, "hr background task failed"));
     createAuditLog({
@@ -4662,16 +4656,13 @@ router.post("/impact-preview/termination", requirePermission("hr:read"), async (
 router.post("/impact-preview/violation", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId, deduction = 0, severity = "medium" } = req.body as any;
-    if (!employeeId) {
-      throw new ValidationError("معرف الموظف مطلوب", { field: "employeeId" });
-    }
+    const { employeeId, deduction, severity } = zodParse(impactPreviewViolationSchema.safeParse(req.body ?? {}));
     const [assignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
-      [Number(employeeId), scope.companyId]
+      [employeeId, scope.companyId]
     );
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
-    const impact = await computeViolationImpact(scope.companyId, Number(employeeId), assignment.id, Number(deduction), severity);
+    const impact = await computeViolationImpact(scope.companyId, employeeId, assignment.id, deduction, severity);
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.violation.impact_preview", entity: "employee_violations", entityId: Number(employeeId) }).catch((e) => logger.error(e, "hr background task failed"));
     createAuditLog({
@@ -5188,7 +5179,7 @@ router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:crea
   try {
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
-    const { overallScore, scores, comments } = req.body as any;
+    const { overallScore, scores, comments } = zodParse(peerEvaluationSchema.safeParse(req.body ?? {}));
 
     // Evaluator is always the authenticated user — prevents impersonation
     const evaluatorId = scope.employeeId;

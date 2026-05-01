@@ -152,9 +152,15 @@ const yearEndCloseSchema = z.object({
   force: z.boolean().optional().default(false),
 });
 
+const openingBalanceLineSchema = z.object({
+  accountCode: z.string(),
+  debit: z.number(),
+  credit: z.number(),
+});
+
 const openingBalancesSchema = z.object({
   periodStart: z.string().optional(),
-  lines: z.array(journalLineSchema).optional(),
+  lines: z.array(openingBalanceLineSchema).optional(),
   force: z.boolean().optional(),
 });
 
