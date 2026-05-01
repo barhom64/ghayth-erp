@@ -5,10 +5,11 @@ import { logger } from "./logger.js";
 import { OPS_CLOSE_ROLES } from "./rbacCatalog.js";
 
 async function handleLeaveApproval(refId: number, approvedBy?: number | null): Promise<void> {
-  await rawExecute(
-    `UPDATE hr_leave_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW() WHERE id = $2`,
+  const approveResult = await rawQuery<any>(
+    `UPDATE hr_leave_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW() WHERE id = $2 AND status = 'pending' RETURNING id`,
     [approvedBy ?? null, refId]
   );
+  if (approveResult.length === 0) return;
 
   const [request] = await rawQuery<any>(
     `SELECT lr."employeeId", lr."leaveTypeId", lr.days, lr."startDate", lr."endDate",
@@ -61,10 +62,11 @@ async function handleLeaveApproval(refId: number, approvedBy?: number | null): P
 }
 
 async function handleLeaveRejection(refId: number): Promise<void> {
-  await rawExecute(
-    `UPDATE hr_leave_requests SET status = 'rejected', "approvedAt" = NOW() WHERE id = $1`,
+  const rejectResult = await rawQuery<any>(
+    `UPDATE hr_leave_requests SET status = 'rejected', "approvedAt" = NOW() WHERE id = $1 AND status = 'pending' RETURNING id`,
     [refId]
   );
+  if (rejectResult.length === 0) return;
 
   const [request] = await rawQuery<any>(
     `SELECT "employeeId", "companyId", "leaveTypeId", days, "startDate" FROM hr_leave_requests WHERE id = $1`,
@@ -97,7 +99,7 @@ const DOMAIN_RECORD_HANDLERS: Record<
     } else if (outcome === "rejected") {
       await handleLeaveRejection(refId);
     } else {
-      await rawExecute(`UPDATE hr_leave_requests SET status = 'returned' WHERE id = $1`, [refId]);
+      await rawExecute(`UPDATE hr_leave_requests SET status = 'returned' WHERE id = $1 AND status = 'pending'`, [refId]);
       await rawExecute(
         `UPDATE leave_approval_stages SET status = 'returned', "decidedAt" = NOW()
          WHERE "leaveRequestId" = $1 AND status = 'pending'`,
@@ -107,64 +109,64 @@ const DOMAIN_RECORD_HANDLERS: Record<
   },
   official_letters: async (refId, outcome) => {
     const status = outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : "pending";
-    await rawExecute(`UPDATE official_letters SET status = $1 WHERE id = $2`, [status, refId]);
+    await rawExecute(`UPDATE official_letters SET status = $1 WHERE id = $2 AND status NOT IN ('approved','rejected')`, [status, refId]);
   },
   journal_entries: async (refId, outcome) => {
     const status = outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : "pending";
-    await rawExecute(`UPDATE journal_entries SET status = $1 WHERE id = $2`, [status, refId]);
+    await rawExecute(`UPDATE journal_entries SET status = $1 WHERE id = $2 AND status NOT IN ('approved','rejected')`, [status, refId]);
   },
   purchase_requests: async (refId, outcome) => {
     const status = outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : "draft";
-    await rawExecute(`UPDATE purchase_requests SET status = $1 WHERE id = $2`, [status, refId]);
+    await rawExecute(`UPDATE purchase_requests SET status = $1 WHERE id = $2 AND status NOT IN ('approved','rejected')`, [status, refId]);
   },
   expenses: async (refId, outcome) => {
     const status = outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : "pending";
-    await rawExecute(`UPDATE expenses SET status = $1 WHERE id = $2`, [status, refId]);
+    await rawExecute(`UPDATE expenses SET status = $1 WHERE id = $2 AND status NOT IN ('approved','rejected')`, [status, refId]);
   },
   hr_employee_loans: async (refId, outcome, approvedBy) => {
     if (outcome === "approved") {
       await rawExecute(
-        `UPDATE hr_employee_loans SET status = 'active', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2`,
+        `UPDATE hr_employee_loans SET status = 'active', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2 AND status = 'pending'`,
         [approvedBy ?? null, refId]
       );
     } else if (outcome === "rejected") {
-      await rawExecute(`UPDATE hr_employee_loans SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1`, [refId]);
+      await rawExecute(`UPDATE hr_employee_loans SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1 AND status = 'pending'`, [refId]);
     }
   },
   hr_overtime_requests: async (refId, outcome, approvedBy) => {
     if (outcome === "approved") {
       await rawExecute(
-        `UPDATE hr_overtime_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2`,
+        `UPDATE hr_overtime_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2 AND status = 'pending'`,
         [approvedBy ?? null, refId]
       );
     } else if (outcome === "rejected") {
-      await rawExecute(`UPDATE hr_overtime_requests SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1`, [refId]);
+      await rawExecute(`UPDATE hr_overtime_requests SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1 AND status = 'pending'`, [refId]);
     }
   },
   hr_exit_requests: async (refId, outcome, approvedBy) => {
     if (outcome === "approved") {
       await rawExecute(
-        `UPDATE hr_exit_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2`,
+        `UPDATE hr_exit_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2 AND status = 'pending'`,
         [approvedBy ?? null, refId]
       );
     } else if (outcome === "rejected") {
-      await rawExecute(`UPDATE hr_exit_requests SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1`, [refId]);
+      await rawExecute(`UPDATE hr_exit_requests SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1 AND status = 'pending'`, [refId]);
     }
   },
   employee_commission_calculations: async (refId, outcome, approvedBy) => {
     if (outcome === "approved") {
       await rawExecute(
-        `UPDATE employee_commission_calculations SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2`,
+        `UPDATE employee_commission_calculations SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2 AND status IN ('pending','calculated')`,
         [approvedBy ?? null, refId]
       );
     } else if (outcome === "rejected") {
       await rawExecute(
-        `UPDATE employee_commission_calculations SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1`,
+        `UPDATE employee_commission_calculations SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1 AND status IN ('pending','calculated')`,
         [refId]
       );
     } else {
       await rawExecute(
-        `UPDATE employee_commission_calculations SET status = 'calculated', "updatedAt" = NOW() WHERE id = $1`,
+        `UPDATE employee_commission_calculations SET status = 'calculated', "updatedAt" = NOW() WHERE id = $1 AND status = 'pending'`,
         [refId]
       );
     }
@@ -637,7 +639,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         }
         await rawExecute(
           `UPDATE workflow_instances SET status = 'approved', "completedAt" = NOW(),
-           "slaStatus" = 'normal', "updatedAt" = NOW() WHERE id = $1`,
+           "slaStatus" = 'normal', "updatedAt" = NOW() WHERE id = $1 AND status IN ('pending','in_review','escalated')`,
           [instanceId]
         );
         if (instance.submittedBy) {
@@ -673,7 +675,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         throw new Error(`تعذّر تحديث السجل الأساسي بعد الرفض: ${msg}`);
       }
       await rawExecute(
-        `UPDATE workflow_instances SET status = 'rejected', "completedAt" = NOW(), "updatedAt" = NOW() WHERE id = $1`,
+        `UPDATE workflow_instances SET status = 'rejected', "completedAt" = NOW(), "updatedAt" = NOW() WHERE id = $1 AND status IN ('pending','in_review','escalated')`,
         [instanceId]
       );
       if (instance.submittedBy) {
@@ -706,7 +708,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         throw new Error(`تعذّر تحديث السجل الأساسي بعد الإرجاع: ${msg}`);
       }
       await rawExecute(
-        `UPDATE workflow_instances SET status = 'returned', "updatedAt" = NOW() WHERE id = $1`,
+        `UPDATE workflow_instances SET status = 'returned', "updatedAt" = NOW() WHERE id = $1 AND status IN ('pending','in_review','escalated')`,
         [instanceId]
       );
       if (instance.submittedBy) {
@@ -889,7 +891,7 @@ export async function checkSlaStatus(companyId: number) {
       if (inst.autoApproveOnTimeout) {
         await rawExecute(
           `UPDATE workflow_instances SET status = 'approved', "completedAt" = NOW(),
-           "slaStatus" = 'auto_approved', "updatedAt" = NOW() WHERE id = $1`,
+           "slaStatus" = 'auto_approved', "updatedAt" = NOW() WHERE id = $1 AND status IN ('pending','in_review','escalated')`,
           [inst.id]
         );
         await rawExecute(
@@ -917,7 +919,7 @@ export async function checkSlaStatus(companyId: number) {
         } catch (e) { logger.warn(e, "workflow SLA: failed to resolve escalation assignee"); }
 
         await rawExecute(
-          `UPDATE workflow_instances SET "currentAssignee" = $1, "slaStatus" = 'escalated', "updatedAt" = NOW() WHERE id = $2`,
+          `UPDATE workflow_instances SET "currentAssignee" = $1, "slaStatus" = 'escalated', "updatedAt" = NOW() WHERE id = $2 AND "slaStatus" != 'escalated'`,
           [escalateAssignee, inst.id]
         );
         await rawExecute(
@@ -940,7 +942,7 @@ export async function checkSlaStatus(companyId: number) {
       }
     } else if (hoursSince >= deadlineH && inst.slaStatus !== "exceeded" && inst.slaStatus !== "escalated") {
       await rawExecute(
-        `UPDATE workflow_instances SET "slaStatus" = 'exceeded', "updatedAt" = NOW() WHERE id = $1`,
+        `UPDATE workflow_instances SET "slaStatus" = 'exceeded', "updatedAt" = NOW() WHERE id = $1 AND "slaStatus" NOT IN ('exceeded','escalated')`,
         [inst.id]
       );
       if (inst.currentAssignee) {
@@ -957,7 +959,7 @@ export async function checkSlaStatus(companyId: number) {
       warnings++;
     } else if (hoursSince >= warningH && inst.slaStatus === "normal") {
       await rawExecute(
-        `UPDATE workflow_instances SET "slaStatus" = 'warning', "updatedAt" = NOW() WHERE id = $1`,
+        `UPDATE workflow_instances SET "slaStatus" = 'warning', "updatedAt" = NOW() WHERE id = $1 AND "slaStatus" = 'normal'`,
         [inst.id]
       );
       if (inst.currentAssignee) {

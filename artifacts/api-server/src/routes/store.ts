@@ -193,10 +193,33 @@ router.post("/orders", requirePermission("store:write"), async (req, res) => {
         for (const item of items) {
           const unitPrice = Number(item.unitPrice || item.price || 0);
           const qty = Number(item.quantity || 1);
+          // Lock the product row and check available stock
+          if (item.productId) {
+            const stockRes = await client.query(
+              `SELECT quantity FROM store_products WHERE id = $1 FOR UPDATE`,
+              [item.productId]
+            );
+            const stockRow = stockRes.rows[0];
+            if (!stockRow) {
+              throw new ConflictError(`المنتج رقم ${item.productId} غير موجود`);
+            }
+            if (Number(stockRow.quantity) < qty) {
+              throw new ConflictError(
+                `الكمية المطلوبة (${qty}) من المنتج "${item.productName || item.name || item.productId}" تتجاوز المخزون المتاح (${stockRow.quantity})`
+              );
+            }
+          }
           await client.query(
             `INSERT INTO store_order_items ("orderId","productId","productName",quantity,"unitPrice",total,notes) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
             [newId, item.productId || null, item.productName || item.name || null, qty, unitPrice, unitPrice * qty, item.notes || null]
           );
+          // Deduct stock
+          if (item.productId) {
+            await client.query(
+              `UPDATE store_products SET quantity = quantity - $1 WHERE id = $2`,
+              [qty, item.productId]
+            );
+          }
         }
       }
       return newId;
@@ -286,9 +309,9 @@ router.delete("/orders/:id", requirePermission("store:write"), async (req, res) 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الطلب غير موجود");
-    await rawExecute(`UPDATE store_orders SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE store_orders SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "store_orders", entityId: id, before: existing }).catch((e) => logger.error(e, "store background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.order.deleted", entity: "store_orders", entityId: id, details: JSON.stringify({ orderNumber: existing.orderNumber }) }).catch((e) => logger.error(e, "store background task failed"));
     res.json({ message: "تم حذف الطلب بنجاح" });
