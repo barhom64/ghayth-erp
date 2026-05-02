@@ -322,6 +322,11 @@ router.put("/sub-agents/:id/link", requirePermission("umrah:write"), async (req,
       finalClientId = newClient.id;
     } else {
       if (!clientId) throw new ValidationError("معرف العميل مطلوب");
+      const [existingClient] = await rawQuery<any>(
+        `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [clientId, scope.companyId]
+      );
+      if (!existingClient) throw new NotFoundError("العميل غير موجود أو لا ينتمي لهذه الشركة");
       await rawExecute(
         `UPDATE clients SET classification = 'umrah_agent' WHERE id = $1 AND "companyId" = $2`,
         [clientId, scope.companyId]
@@ -353,6 +358,11 @@ router.post("/sub-agents/link-by-nusk", requirePermission("umrah:write"), async 
     const scope = req.scope!;
     const parsed = zodParse(linkByNuskSchema.safeParse(req.body));
     const { nuskCode, clientId } = parsed;
+    const [existingClient] = await rawQuery<any>(
+      `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [clientId, scope.companyId]
+    );
+    if (!existingClient) throw new NotFoundError("العميل غير موجود أو لا ينتمي لهذه الشركة");
     await rawExecute(
       `UPDATE umrah_sub_agents SET "clientId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
        WHERE "companyId"=$3 AND "nuskCode"=$4 AND "deletedAt" IS NULL`,
@@ -370,6 +380,11 @@ router.post("/sub-agents/:id/link-client", requirePermission("umrah:write"), asy
     const id = parseId(req.params.id, "id");
     const parsed = zodParse(linkClientSchema.safeParse(req.body));
     const { clientId } = parsed;
+    const [existingClient] = await rawQuery<any>(
+      `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [clientId, scope.companyId]
+    );
+    if (!existingClient) throw new NotFoundError("العميل غير موجود أو لا ينتمي لهذه الشركة");
     await rawExecute(
       `UPDATE umrah_sub_agents SET "clientId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
        WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,

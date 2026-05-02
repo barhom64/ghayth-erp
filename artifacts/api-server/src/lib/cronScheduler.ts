@@ -3139,6 +3139,11 @@ export async function triggerJobByName(jobName: string): Promise<{ success: bool
   const def = JOB_DEFINITIONS.find((j) => j.name === jobName);
   if (!def) return { success: false, error: `Job not found: ${jobName}` };
 
+  const acquired = await acquireCronLock(def.name);
+  if (!acquired) {
+    return { success: false, error: `Job "${jobName}" is already running on another instance` };
+  }
+
   const start = Date.now();
   try {
     const result = await def.handler();
@@ -3150,6 +3155,8 @@ export async function triggerJobByName(jobName: string): Promise<{ success: bool
     const errMsg = err instanceof Error ? err.message : String(err);
     await logCronJob(def.name, "failed", duration, "Job failed", errMsg);
     return { success: false, error: errMsg };
+  } finally {
+    await releaseCronLock(def.name);
   }
 }
 

@@ -1219,39 +1219,46 @@ router.get("/leaves/:id", requirePermission("hr:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Get leave detail error"); }
 });
 
+let leaveTablesEnsured = false;
+async function ensureLeaveSchema(): Promise<void> {
+  if (leaveTablesEnsured) return;
+  await rawExecute(`
+    CREATE TABLE IF NOT EXISTS leave_approval_stages (
+      id SERIAL PRIMARY KEY,
+      "leaveRequestId" INTEGER NOT NULL,
+      stage INTEGER NOT NULL DEFAULT 1,
+      "requiredRole" VARCHAR(50),
+      "assignedTo" INTEGER,
+      status VARCHAR(20) DEFAULT 'pending',
+      decision TEXT,
+      "decidedBy" INTEGER,
+      "decidedAt" TIMESTAMPTZ,
+      "expiresAt" TIMESTAMPTZ,
+      "reminderSentAt" TIMESTAMPTZ,
+      "warningSentAt" TIMESTAMPTZ,
+      "escalatedAt" TIMESTAMPTZ,
+      "autoApprovedAt" TIMESTAMPTZ,
+      "createdAt" TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch((e) => logger.error(e, "hr background task failed"));
+  await rawExecute(`DO $$ BEGIN
+    ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "genderRestriction" VARCHAR(10);
+    ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "minServiceMonths" INTEGER DEFAULT 0;
+    ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "oncePerCareer" BOOLEAN DEFAULT false;
+    ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "requiresDocument" BOOLEAN DEFAULT false;
+    ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "maxDeptAbsentPct" NUMERIC DEFAULT 25;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END $$`).catch((e) => logger.error(e, "hr background task failed"));
+  await rawExecute(`DO $$ BEGIN
+    ALTER TABLE hr_leave_balances ADD COLUMN IF NOT EXISTS reserved NUMERIC DEFAULT 0;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END $$`).catch((e) => logger.error(e, "hr background task failed"));
+  leaveTablesEnsured = true;
+}
+
 router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
   try {
-    await rawExecute(`
-      CREATE TABLE IF NOT EXISTS leave_approval_stages (
-        id SERIAL PRIMARY KEY,
-        "leaveRequestId" INTEGER NOT NULL,
-        stage INTEGER NOT NULL DEFAULT 1,
-        "requiredRole" VARCHAR(50),
-        "assignedTo" INTEGER,
-        status VARCHAR(20) DEFAULT 'pending',
-        decision TEXT,
-        "decidedBy" INTEGER,
-        "decidedAt" TIMESTAMPTZ,
-        "expiresAt" TIMESTAMPTZ,
-        "reminderSentAt" TIMESTAMPTZ,
-        "warningSentAt" TIMESTAMPTZ,
-        "escalatedAt" TIMESTAMPTZ,
-        "autoApprovedAt" TIMESTAMPTZ,
-        "createdAt" TIMESTAMPTZ DEFAULT NOW()
-      )
-    `).catch((e) => logger.error(e, "hr background task failed"));
-    await rawExecute(`DO $$ BEGIN
-      ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "genderRestriction" VARCHAR(10);
-      ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "minServiceMonths" INTEGER DEFAULT 0;
-      ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "oncePerCareer" BOOLEAN DEFAULT false;
-      ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "requiresDocument" BOOLEAN DEFAULT false;
-      ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "maxDeptAbsentPct" NUMERIC DEFAULT 25;
-    EXCEPTION WHEN OTHERS THEN NULL;
-    END $$`).catch((e) => logger.error(e, "hr background task failed"));
-    await rawExecute(`DO $$ BEGIN
-      ALTER TABLE hr_leave_balances ADD COLUMN IF NOT EXISTS reserved NUMERIC DEFAULT 0;
-    EXCEPTION WHEN OTHERS THEN NULL;
-    END $$`).catch((e) => logger.error(e, "hr background task failed"));
+    await ensureLeaveSchema();
 
     const scope = req.scope!;
     const parsed = zodParse(leaveRequestSchema.safeParse(req.body));
@@ -2195,7 +2202,7 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
 // PAYROLL – employee-level aggregation with multi-assignment, GOSI, absences, loans
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/payroll", requirePermission("hr:read"), async (req, res) => {
+router.get("/payroll", requireAnyPermission("hr:payroll", "hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const runs = await rawQuery<any>(
@@ -2220,7 +2227,7 @@ router.get("/payroll", requirePermission("hr:read"), async (req, res) => {
   }
 });
 
-router.get("/payroll/:id", requirePermission("hr:read"), async (req, res): Promise<any> => {
+router.get("/payroll/:id", requireAnyPermission("hr:payroll", "hr:read"), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2235,6 +2242,7 @@ router.get("/payroll/:id", requirePermission("hr:read"), async (req, res): Promi
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("مسير الرواتب غير موجود");
+    const canSeeSalary = PAYROLL_ROLES.includes(scope.role);
     const lines = await rawQuery<any>(
       `SELECT pl.*, e.name AS "employeeName"
        FROM payroll_lines pl
@@ -2246,16 +2254,22 @@ router.get("/payroll/:id", requirePermission("hr:read"), async (req, res): Promi
     const totalBasic = lines.reduce((s: number, l: any) => s + Number(l.basicSalary || 0), 0);
     const totalAllowances = lines.reduce((s: number, l: any) => s + Number(l.allowances || 0), 0);
     const totalDeductions = lines.reduce((s: number, l: any) => s + Number(l.deductions || 0), 0);
+    const sanitizedLines = canSeeSalary ? lines : lines.map((l: any) => ({
+      id: l.id, runId: l.runId, assignmentId: l.assignmentId, employeeName: l.employeeName,
+    }));
     res.json({
-      ...row, month: row.period, totalAmount: Number(row.totalNet),
-      basicSalary: totalBasic, allowances: totalAllowances, deductions: totalDeductions,
-      netSalary: Number(row.totalNet),
-      lines,
+      ...row, month: row.period, totalAmount: canSeeSalary ? Number(row.totalNet) : undefined,
+      basicSalary: canSeeSalary ? totalBasic : undefined,
+      allowances: canSeeSalary ? totalAllowances : undefined,
+      deductions: canSeeSalary ? totalDeductions : undefined,
+      netSalary: canSeeSalary ? Number(row.totalNet) : undefined,
+      employeeCount: lines.length,
+      lines: sanitizedLines,
     });
   } catch (err) { handleRouteError(err, res, "Get payroll detail error:"); }
 });
 
-router.get("/payroll/:id/lines", requirePermission("hr:read"), async (req, res) => {
+router.get("/payroll/:id/lines", requireAnyPermission("hr:payroll", "hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -2575,7 +2589,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     const runId = await withTransaction(async (client) => {
       const runResult = await client.query(
         `INSERT INTO payroll_runs ("companyId", period, status, "totalNet", "runBy")
-         VALUES ($1,$2,'completed',$3,$4) RETURNING id`,
+         VALUES ($1,$2,'pending_approval',$3,$4) RETURNING id`,
         [scope.companyId, targetPeriod, roundTo2(totalNet), scope.activeAssignmentId]
       );
       const newRunId = runResult.rows[0].id;
@@ -2712,6 +2726,34 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
   } catch (err) {
     handleRouteError(err, res, "Run payroll error:");
   }
+});
+
+router.post("/payroll/:id/approve", requirePermission("hr:create"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!PAYROLL_ROLES.includes(scope.role)) {
+      throw new ForbiddenError("ليس لديك الصلاحية للموافقة على مسير الرواتب");
+    }
+    const id = parseId(req.params.id, "id");
+    const [run] = await rawQuery<any>(
+      `SELECT id, status, "runBy" FROM payroll_runs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!run) throw new NotFoundError("مسير الرواتب غير موجود");
+    if (run.status !== "pending_approval") {
+      throw new ConflictError(`لا يمكن الموافقة — الحالة الحالية: ${run.status}`);
+    }
+    if (run.runBy === scope.activeAssignmentId) {
+      throw new ForbiddenError("لا يمكن للشخص الذي أنشأ المسير أن يوافق عليه (maker-checker)");
+    }
+    await rawExecute(
+      `UPDATE payroll_runs SET status='completed', "approvedBy"=$1, "approvedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+      [scope.activeAssignmentId, id, scope.companyId]
+    );
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "payroll.approved", entity: "payroll_runs", entityId: id, details: JSON.stringify({ approvedBy: scope.activeAssignmentId }) }).catch((e) => logger.error(e, "hr background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "payroll.approve", entity: "payroll_runs", entityId: id, after: { approvedBy: scope.activeAssignmentId } }).catch((e) => logger.error(e, "hr background task failed"));
+    res.json({ message: "تمت الموافقة على مسير الرواتب", status: "completed" });
+  } catch (err) { handleRouteError(err, res, "Approve payroll error:"); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
