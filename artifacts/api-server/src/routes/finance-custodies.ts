@@ -4,7 +4,9 @@ import {
   ValidationError,
   ConflictError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
+import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -21,6 +23,33 @@ import { logger } from "../lib/logger.js";
 export const custodiesRouter = Router();
 custodiesRouter.use(authMiddleware);
 
+const createCustodySchema = z.object({
+  assignmentId: z.coerce.number().optional(),
+  employeeName: z.string().optional(),
+  amount: z.coerce.number(),
+  description: z.string().optional(),
+  sourceAccountCode: z.string().optional(),
+  purpose: z.string().optional(),
+  expectedReturnDate: z.string().optional(),
+});
+
+const settleCustodySchema = z.object({
+  custodyRef: z.string(),
+  amount: z.coerce.number(),
+  description: z.string().optional(),
+  sourceAccountCode: z.string().optional(),
+});
+
+const settleCustodyByIdSchema = z.object({
+  amount: z.coerce.number(),
+  description: z.string().optional(),
+  sourceAccountCode: z.string().optional(),
+});
+
+const approveCustodySchema = z.object({
+  approved: z.union([z.boolean(), z.literal("returned")]),
+  notes: z.string().optional(),
+});
 
 custodiesRouter.get("/custodies", requirePermission("finance:read"), async (req, res) => {
   try {
@@ -264,7 +293,7 @@ custodiesRouter.get("/custodies/summary", requirePermission("finance:read"), asy
 custodiesRouter.get("/custodies/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     const [custody] = await rawQuery<any>(
       `SELECT je.id, je.ref, je.description, je.status AS "approvalStatus",
@@ -282,7 +311,7 @@ custodiesRouter.get("/custodies/:id", requirePermission("finance:read"), async (
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je.notes, je."dueDate", e.name, ea.id`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
 
     if (!custody) throw new NotFoundError("العهدة غير موجودة");
@@ -318,9 +347,9 @@ custodiesRouter.get("/custodies/:id", requirePermission("finance:read"), async (
          LEFT JOIN employees e ON e.id = u."employeeId"
          WHERE aa."entityType" = 'custody' AND aa."entityId" = $1
          ORDER BY aa."createdAt" ASC`,
-        [Number(id)]
+        [id]
       );
-    } catch { }
+    } catch (e) { logger.error(e, "custody approval actions fetch error"); }
 
     const isPending = custody.approvalStatus === "pending_approval" || custody.approvalStatus === "draft";
     const isRejected = custody.approvalStatus === "rejected";
@@ -366,7 +395,7 @@ custodiesRouter.post("/custodies", requirePermission("finance:create"), async (r
   try {
     const scope = req.scope!;
 
-    const { assignmentId, employeeName, amount, description, sourceAccountCode, purpose, expectedReturnDate } = req.body as any;
+    const { assignmentId, employeeName, amount, description, sourceAccountCode, purpose, expectedReturnDate } = zodParse(createCustodySchema.safeParse(req.body ?? {}));
 
     if (!amount) {
       throw new ValidationError("المبلغ مطلوب", {
@@ -487,7 +516,7 @@ custodiesRouter.post("/custodies/settle", requirePermission("finance:create"), a
   try {
     const scope = req.scope!;
 
-    const { custodyRef, amount, description, sourceAccountCode } = req.body as any;
+    const { custodyRef, amount, description, sourceAccountCode } = zodParse(settleCustodySchema.safeParse(req.body ?? {}));
 
     if (!amount || !custodyRef) {
       throw new ValidationError("مرجع العهدة ومبلغ التسوية مطلوبان", {
@@ -610,7 +639,7 @@ custodiesRouter.post("/custodies/:id/settle", requirePermission("finance:create"
     const scope = req.scope!;
 
     const custodyId = parseId(req.params.id, "id");
-    const { amount, description, sourceAccountCode } = req.body as any;
+    const { amount, description, sourceAccountCode } = zodParse(settleCustodyByIdSchema.safeParse(req.body ?? {}));
 
     const [custody] = await rawQuery<any>(
       `SELECT je.ref, je.status AS "approvalStatus" FROM journal_entries je
@@ -730,7 +759,7 @@ custodiesRouter.patch("/custodies/:id/approve", requirePermission("finance:updat
     const scope = req.scope!;
 
     const custodyId = parseId(req.params.id, "id");
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(approveCustodySchema.safeParse(req.body ?? {}));
 
     // Fetch ref for the success message + approval_actions audit row.
     // The engine validates state on the journal_entries row directly.

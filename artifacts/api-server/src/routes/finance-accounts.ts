@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import {
   handleRouteError,
@@ -6,6 +7,7 @@ import {
   NotFoundError,
   ConflictError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -14,6 +16,41 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
 import { logger } from "../lib/logger.js";
+
+const ACCOUNT_TYPES = ["asset", "liability", "equity", "revenue", "expense"] as const;
+const ACCOUNT_NATURES = ["debit", "credit"] as const;
+
+const createAccountSchema = z.object({
+  code: z.string().min(1, "رمز الحساب مطلوب"),
+  name: z.string().min(1, "اسم الحساب مطلوب"),
+  type: z.string().refine((v) => (ACCOUNT_TYPES as readonly string[]).includes(v), { message: "نوع الحساب غير صالح" }).optional().default("asset"),
+  parentCode: z.string().optional().nullable(),
+  nameEn: z.string().optional().nullable(),
+  nature: z.string().refine((v) => (ACCOUNT_NATURES as readonly string[]).includes(v), { message: "طبيعة الحساب غير صالحة" }).optional().default("debit"),
+  allowPosting: z.boolean().optional().default(true),
+  isAnalytical: z.boolean().optional().default(false),
+});
+
+const updateAccountSchema = z.object({
+  name: z.string().min(1).optional(),
+  type: z.string().refine((v) => (ACCOUNT_TYPES as readonly string[]).includes(v), { message: "نوع الحساب غير صالح" }).optional(),
+  parentCode: z.string().optional().nullable(),
+});
+
+const journalLineSchema = z.object({
+  accountCode: z.string().min(1, "رمز الحساب مطلوب"),
+  debit: z.coerce.number().min(0).default(0),
+  credit: z.coerce.number().min(0).default(0),
+  description: z.string().optional().default(""),
+  costCenter: z.string().optional(),
+});
+
+const createJournalSchema = z.object({
+  ref: z.string().optional(),
+  description: z.string().optional().default(""),
+  date: z.string().optional(),
+  lines: z.array(journalLineSchema).min(1, "بنود القيد مطلوبة"),
+});
 
 export const accountsRouter = Router();
 accountsRouter.use(authMiddleware);
@@ -70,19 +107,13 @@ accountsRouter.post("/accounts", requirePermission("finance:create"), async (req
   try {
     const scope = req.scope!;
 
-    const b = req.body;
-    if (!b.code || !b.name) {
-      throw new ValidationError("رمز الحساب واسمه مطلوبان", {
-        field: !b.code ? "code" : "name",
-        fix: "أدخل رمز الحساب واسمه",
-      });
-    }
+    const b = zodParse(createAccountSchema.safeParse(req.body ?? {}));
     const [row] = await rawQuery<any>(
       `INSERT INTO chart_of_accounts ("companyId", code, name, type, "parentCode", "nameEn", nature, "allowPosting", "isAnalytical")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT ("companyId", code) DO NOTHING
        RETURNING *`,
-      [scope.companyId, b.code, b.name, b.type || "asset", b.parentCode, b.nameEn ?? null, b.nature ?? "debit", b.allowPosting ?? true, b.isAnalytical ?? false]
+      [scope.companyId, b.code, b.name, b.type, b.parentCode ?? null, b.nameEn ?? null, b.nature, b.allowPosting, b.isAnalytical]
     );
     if (!row) throw new ConflictError("رمز الحساب مستخدم مسبقاً", { field: "code", fix: "استخدم رمزاً مختلفاً للحساب" });
 
@@ -115,7 +146,7 @@ accountsRouter.patch("/accounts/:id", requirePermission("finance:update"), async
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(updateAccountSchema.safeParse(req.body ?? {}));
     const fields: string[] = [];
     const params: any[] = [];
     const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
@@ -236,13 +267,7 @@ accountsRouter.post("/journal", requirePermission("finance:create"), async (req,
   try {
     const scope = req.scope!;
 
-    const { ref, description, lines, date: journalBodyDate } = req.body as any;
-    if (!lines || !Array.isArray(lines) || lines.length === 0) {
-      throw new ValidationError("بنود القيد مطلوبة", {
-        field: "lines",
-        fix: "أرسل مصفوفة بنود القيد (سطرين على الأقل)",
-      });
-    }
+    const { ref, description, lines, date: journalBodyDate } = zodParse(createJournalSchema.safeParse(req.body ?? {}));
     const journalDate = journalBodyDate
       ? toDateISO(journalBodyDate)
       : todayISO();

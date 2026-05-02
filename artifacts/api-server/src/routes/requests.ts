@@ -231,7 +231,7 @@ router.post("/", requirePermission("requests:write"), async (req, res) => {
         a && typeof a.name === "string" && typeof a.size === "number" && a.size <= 5 * 1024 * 1024
       ).map((a: any) => ({ name: a.name, size: a.size, type: a.type || "", dataUrl: a.dataUrl || "" }));
     }
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('request_number_seq') AS seq`).catch(() => [{ seq: Math.floor(Math.random() * 900000 + 100000) }]);
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('request_number_seq') AS seq`).catch((e) => { logger.error(e, "requests query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const ref = generateRef("REQ", seqRow.seq);
 
     const r = await rawExecute(
@@ -513,10 +513,10 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
 
 router.post("/:id/approve", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = zodParse(approveRequestSchema.safeParse(req.body));
+    const parsed = zodParse(approveRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { notes } = req.body;
+    const { notes } = parsed;
 
     const request = await validateRequestTransition(id, scope.companyId, "approved", scope);
     const isOverride = request?._isOverride === true;
@@ -576,10 +576,10 @@ router.post("/:id/approve", requirePermission("requests:write"), async (req, res
 
 router.post("/:id/reject", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = zodParse(rejectRequestSchema.safeParse(req.body));
+    const parsed = zodParse(rejectRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { notes } = req.body;
+    const { notes } = parsed;
     if (!notes) throw new ValidationError("يجب ذكر سبب الرفض", { field: "notes" });
 
     const request = await validateRequestTransition(id, scope.companyId, "rejected", scope);
@@ -637,10 +637,10 @@ router.post("/:id/reject", requirePermission("requests:write"), async (req, res)
 
 router.post("/:id/return", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = zodParse(returnRequestSchema.safeParse(req.body));
+    const parsed = zodParse(returnRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { notes } = req.body;
+    const { notes } = parsed;
     if (!notes) throw new ValidationError("يجب ذكر سبب الإرجاع", { field: "notes" });
 
     const request = await validateRequestTransition(id, scope.companyId, "returned", scope);
@@ -759,10 +759,10 @@ router.delete("/:id", requirePermission("requests:write"), async (req, res) => {
 
 router.post("/:id/convert", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = zodParse(convertRequestSchema.safeParse(req.body));
+    const parsed = zodParse(convertRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { targetType } = req.body;
+    const { targetType } = parsed;
 
     if (!["maintenance", "purchase", "case"].includes(targetType)) {
       throw new ValidationError("نوع التحويل غير صالح. المتاح: maintenance, purchase, case", { field: "targetType" });

@@ -116,7 +116,7 @@ router.get("/", requirePermission("tasks:read"), async (req, res) => {
        FROM tasks t
        LEFT JOIN employee_assignments ea ON ea.id = t."assignedTo"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       LEFT JOIN clients c ON c.id = t."clientId"
+       LEFT JOIN clients c ON c.id = t."clientId" AND c."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY t.priority DESC, t."scheduledDate" ASC NULLS LAST`,
       params
@@ -150,7 +150,7 @@ router.get("/", requirePermission("tasks:read"), async (req, res) => {
           const map = new Map<number, string>();
           for (const r of rows) map.set(Number(r.id), r.name);
           namesByType.set(type, map);
-        } catch { /* table may not exist in some deployments */ }
+        } catch (e) { logger.warn(e, "tasks: linked entity table may not exist"); }
       })
     );
     for (const task of tasks) {
@@ -207,7 +207,7 @@ router.get("/:id", requirePermission("tasks:read"), async (req, res) => {
        FROM tasks t
        LEFT JOIN employee_assignments ea ON ea.id = t."assignedTo"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       LEFT JOIN clients c ON c.id = t."clientId"
+       LEFT JOIN clients c ON c.id = t."clientId" AND c."deletedAt" IS NULL
        WHERE t.id = $1${scopeCondition} AND t."deletedAt" IS NULL`,
       params
     );

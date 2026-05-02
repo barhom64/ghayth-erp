@@ -102,7 +102,8 @@ async function releaseCronLock(jobName: string): Promise<void> {
       `DELETE FROM cron_locks WHERE job_name = $1 AND locked_by = $2`,
       [jobName, LOCK_OWNER]
     );
-  } catch {
+  } catch (e) {
+    logger.error(e, "[cronScheduler] failed to release cron lock");
   }
 }
 
@@ -215,7 +216,7 @@ async function documentExpiryAlerts(): Promise<string> {
          AND fv."insuranceExpiry" IS NOT NULL
          AND fv."insuranceExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'`,
       [company.id]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any[]; });
 
     // Company documents (commercial registration, municipality license, etc.)
     const companyDocAlerts = await rawQuery<any>(
@@ -227,7 +228,7 @@ async function documentExpiryAlerts(): Promise<string> {
          AND cd."expiryDate" IS NOT NULL
          AND cd."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'`,
       [company.id]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any[]; });
 
     const allDocsCombined = [
       ...allDocs,
@@ -335,12 +336,12 @@ async function fleetStatusCheck(): Promise<string> {
           action: "fleet.preventive.due", entity: "fleet_vehicles", entityId: Number(v.id),
           details: `المركبة ${v.plateNumber} تجاوزت موعد الصيانة — حالة needs_service`,
         });
-      } catch {}
+      } catch (e) { logger.error(e, "[cronScheduler] fleet preventive due event failed"); }
       emitEvent({
         companyId: company.id, branchId: 0, userId: null,
         action: "fleet.vehicle.breakdown", entity: "fleet_vehicles", entityId: Number(v.id),
         details: JSON.stringify({ plateNumber: v.plateNumber, description: "صيانة متأخرة — تجاوزت موعد الصيانة المحدد", source: "preventive_due" }),
-      }).catch(() => {});
+      }).catch((e) => logger.error(e, "[cronScheduler] fleet vehicle breakdown event failed"));
       actions++;
     }
 
@@ -569,7 +570,7 @@ async function leaveReturnToWorkClosure(): Promise<string> {
         `UPDATE approval_requests SET status = 'completed', "decidedAt" = NOW()
          WHERE "refType" = 'leave_request' AND "refId" = $1 AND status NOT IN ('completed','rejected')`,
         [lv.id]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] leave request approval cleanup failed"));
 
       // Find active employee assignment so we can notify the employee.
       const [asn] = await rawQuery<any>(
@@ -591,7 +592,7 @@ async function leaveReturnToWorkClosure(): Promise<string> {
         }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
 
         // Also nudge the direct manager so staffing dashboards update.
-        const managerAssignmentId = await getManagerAssignmentId(lv.companyId, asn.branchId).catch(() => null);
+        const managerAssignmentId = await getManagerAssignmentId(lv.companyId, asn.branchId).catch((e) => { logger.error(e, "[cronScheduler] manager lookup failed"); return null; });
         if (managerAssignmentId) {
           createNotification({
             companyId: lv.companyId,
@@ -657,7 +658,7 @@ async function inquiryMemoEscalation(): Promise<string> {
         `INSERT INTO hr_inquiry_memo_events ("memoId","companyId","actorRole",action,note,"createdAt")
          VALUES ($1,$2,'system','auto_declined','تجاوز مهلة 72 ساعة للرد — اعتُبر رفضاً ضمنياً',NOW())`,
         [memo.id, memo.companyId]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] inquiry memo auto-decline event insert failed"));
 
       // Tell the employee why their memo moved on — otherwise the auto-decline
       // is silent from the employee's perspective and they may later dispute
@@ -675,7 +676,7 @@ async function inquiryMemoEscalation(): Promise<string> {
         }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
       }
 
-      const managerAssignmentId = await getManagerAssignmentId(memo.companyId, memo.branchId).catch(() => null);
+      const managerAssignmentId = await getManagerAssignmentId(memo.companyId, memo.branchId).catch((e) => { logger.error(e, "[cronScheduler] manager lookup failed"); return null; });
       if (managerAssignmentId) {
         createNotification({
           companyId: memo.companyId,
@@ -928,7 +929,7 @@ async function dailyDeductionCheck(): Promise<string> {
            WHERE "companyId" = $1 AND "employeeId" = $2 AND date = CURRENT_DATE AND type = 'absence'
          )`,
         [company.id, a.employeeId, `خصم غياب تلقائي — ${a.name}`]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] absence deduction insert failed"));
       deductions++;
 
       // 2) تسجيل مخالفة + فتح محضر استفسار (idempotent) بموجب لائحة الانضباط
@@ -1021,7 +1022,7 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
                 END
           WHERE id = $2`,
         [phase, inv.id]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] invoice overdue phase update failed"));
 
       await broadcastAlert(
         company.id, "invoice_overdue",
@@ -1090,7 +1091,7 @@ async function dailyInventoryCheck(): Promise<string> {
           `INSERT INTO purchase_orders ("companyId", title, status, "totalAmount", "createdAt")
            VALUES ($1, $2, 'draft', 0, NOW())`,
           [company.id, `طلب شراء تلقائي: ${p.name} (المخزون ${p.currentStock}/${p.threshold})`]
-        ).catch(() => {});
+        ).catch((e) => logger.error(e, "[cronScheduler] auto purchase order insert failed"));
         pos++;
       }
     }
@@ -1144,14 +1145,14 @@ async function dailyPropertyCheck(): Promise<string> {
       );
       await rawExecute(
         `UPDATE rental_contracts SET "renewalNoticeSentAt"=NOW() WHERE id=$1`, [c.id]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] rental contract renewal notice update failed"));
       try {
         await emitEvent({
           companyId: company.id, userId: null,
           action: "lease.renewal_notice", entity: "rental_contracts", entityId: Number(c.id),
           details: `تنبيه تجديد — ينتهي ${c.endDate}`,
         });
-      } catch {}
+      } catch (e) { logger.error(e, "[cronScheduler] rental renewal notice event failed"); }
       renewalNotices++;
     }
 
@@ -1175,14 +1176,14 @@ async function dailyPropertyCheck(): Promise<string> {
       await rawExecute(
         `UPDATE rent_payments SET status='cancelled', "updatedAt"=NOW() WHERE "contractId"=$1 AND status IN ('pending','partial')`,
         [c.id]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] rent payments cancellation on contract expiry failed"));
       try {
         await emitEvent({
           companyId: company.id, userId: null,
           action: "lease.expired", entity: "rental_contracts", entityId: Number(c.id),
           details: `انتهاء تلقائي — ${c.tenantName ?? ''}`,
         });
-      } catch {}
+      } catch (e) { logger.error(e, "[cronScheduler] lease expired event failed"); }
       expired++;
     }
   }
@@ -1391,7 +1392,7 @@ async function monthlyRentPenalties(): Promise<string> {
         `INSERT INTO late_rent_actions ("contractId","paymentId",phase,action,"sentAt",notes)
          VALUES ($1,$2,$3,$4,NOW(),$5)`,
         [p.contractId, p.id, targetStage, actionLabel, `تأخر ${lateDays} يوم — ${actionLabel}`]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] late rent action insert failed"));
 
       try {
         await emitEvent({
@@ -1399,7 +1400,7 @@ async function monthlyRentPenalties(): Promise<string> {
           action: `rent.late.${targetStage}`, entity: "rent_payments", entityId: Number(p.id),
           details: `تأخر ${lateDays} يوم — ${actionLabel}`,
         });
-      } catch {}
+      } catch (e) { logger.error(e, "[cronScheduler] rent late escalation event failed"); }
     }
   }
   return `Rent escalation: ${penalties} penalties, ${legalHandoffs} legal handoffs`;
@@ -1677,7 +1678,7 @@ async function yearlyLeaveBalanceRenewal(): Promise<string> {
          VALUES ($1, $2, $3, $4, $5, 0, 0)
          ON CONFLICT DO NOTHING`,
         [company.id, b.employeeId, b.leaveTypeId, year, b.annual || 21]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] leave balance renewal insert failed"));
       renewed++;
     }
   }
@@ -2291,7 +2292,7 @@ async function runScheduledReports(): Promise<string> {
         `INSERT INTO scheduled_report_history ("scheduledReportId", status, "sentAt", error)
          VALUES ($1, 'failed', NOW(), $2)`,
         [report.id, errMsg]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] scheduled report error history insert failed"));
       errors++;
     }
   }
@@ -2403,7 +2404,7 @@ async function vendorContractExpiryAlerts(): Promise<string> {
              AND al."createdAt" > NOW() - INTERVAL '7 days'
          )`,
       [company.id]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return []; });
 
     for (const c of expiring) {
       const daysLeft = Number(c.daysLeft);
@@ -2413,7 +2414,7 @@ async function vendorContractExpiryAlerts(): Promise<string> {
         `SELECT id FROM employee_assignments WHERE "companyId" = $1
          AND role IN ('finance_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
         [company.id]
-      ).catch(() => [null]);
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [null]; });
 
       if (!purchaseAsgn) continue;
 
@@ -2431,7 +2432,7 @@ async function vendorContractExpiryAlerts(): Promise<string> {
         `INSERT INTO automation_logs ("companyId","automationType","triggerReason","actionTaken","entityType","entityId","createdAt")
          VALUES ($1,'vendor_contract_expiry',$2,$3,'vendor_contract',$4,NOW())`,
         [company.id, `عقد المورد ${c.vendorName} ينتهي خلال ${daysLeft} يوم`, "إرسال إشعار تنبيه للمشتريات", c.vendorId]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] vendor contract expiry log insert failed"));
       alerted++;
     }
   }
@@ -2444,28 +2445,28 @@ async function dailySystemHealthReport(): Promise<string> {
 
   const [errorCount] = await rawQuery<any>(
     `SELECT COUNT(*) AS cnt FROM cron_logs WHERE status = 'failed' AND "createdAt" > NOW() - INTERVAL '24 hours'`
-  ).catch(() => [{ cnt: 0 }]);
+  ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ cnt: 0 }]; });
 
   const [failedNotifs] = await rawQuery<any>(
     `SELECT COUNT(*) AS cnt FROM notification_delivery_log WHERE status = 'failed' AND "queuedAt" > NOW() - INTERVAL '24 hours'`
-  ).catch(() => [{ cnt: 0 }]);
+  ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ cnt: 0 }]; });
 
   const [dbSize] = await rawQuery<any>(
     `SELECT pg_size_pretty(pg_database_size(current_database())) AS size`
-  ).catch(() => [{ size: 'N/A' }]);
+  ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ size: 'N/A' }]; });
 
   for (const company of companies) {
     const [activeUsers] = await rawQuery<any>(
       `SELECT COUNT(DISTINCT "assignmentId") AS cnt FROM activity_logs
        WHERE "companyId" = $1 AND "createdAt" > NOW() - INTERVAL '24 hours'`,
       [company.id]
-    ).catch(() => [{ cnt: 0 }]);
+    ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ cnt: 0 }]; });
 
     const [techAsgn] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1
        AND role IN ('general_manager','owner') AND status = 'active' LIMIT 1`,
       [company.id]
-    ).catch(() => [null]);
+    ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [null]; });
 
     if (!techAsgn) continue;
 
@@ -2491,34 +2492,34 @@ async function weeklyDataCleanup(): Promise<string> {
 
   const { affectedRows: expiredSessions } = await rawExecute(
     `DELETE FROM user_sessions WHERE "expiresAt" < NOW() - INTERVAL '7 days'`
-  ).catch(() => ({ affectedRows: 0 }));
+  ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
   cleaned += expiredSessions;
 
   const { affectedRows: oldCronLogs } = await rawExecute(
     `DELETE FROM cron_logs WHERE "createdAt" < NOW() - INTERVAL '90 days'`
-  ).catch(() => ({ affectedRows: 0 }));
+  ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
   cleaned += oldCronLogs;
 
   const { affectedRows: oldDeliveryLogs } = await rawExecute(
     `DELETE FROM notification_delivery_log WHERE "queuedAt" < NOW() - INTERVAL '90 days' AND status IN ('delivered','failed')`
-  ).catch(() => ({ affectedRows: 0 }));
+  ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
   cleaned += oldDeliveryLogs;
 
   const { affectedRows: oldNotifLogs } = await rawExecute(
     `DELETE FROM notification_log WHERE "createdAt" < NOW() - INTERVAL '90 days'`
-  ).catch(() => ({ affectedRows: 0 }));
+  ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
   cleaned += oldNotifLogs;
 
   try {
     await rawExecute(
       `INSERT INTO audit_archive SELECT * FROM event_logs WHERE "createdAt" < NOW() - INTERVAL '365 days'
        ON CONFLICT DO NOTHING`
-    ).catch(() => {});
+    ).catch((e) => logger.error(e, "[cronScheduler] audit archive insert failed"));
     const { affectedRows: archivedLogs } = await rawExecute(
       `DELETE FROM event_logs WHERE "createdAt" < NOW() - INTERVAL '365 days'`
-    ).catch(() => ({ affectedRows: 0 }));
+    ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
     cleaned += archivedLogs;
-  } catch {}
+  } catch (e) { logger.error(e, "[cronScheduler] event log archival failed"); }
 
   // Orphaned workflow_instances: delete instances whose refTable row no longer exists.
   // Only handle the known refTables — safer than a generic EXISTS loop.
@@ -2535,10 +2536,10 @@ async function weeklyDataCleanup(): Promise<string> {
            WHERE wi."refTable" = $1
              AND NOT EXISTS (SELECT 1 FROM ${tbl} t WHERE t.id = wi."refId")`,
         [tbl]
-      ).catch(() => ({ affectedRows: 0 }));
+      ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
       cleaned += affectedRows;
     }
-  } catch {}
+  } catch (e) { logger.error(e, "[cronScheduler] orphaned workflow instances cleanup failed"); }
 
   // Mark orphaned approval_requests as cancelled when their referenced entity was hard-deleted.
   // approval_requests uses refType+refId (not a workflow FK).
@@ -2562,10 +2563,10 @@ async function weeklyDataCleanup(): Promise<string> {
             AND ar.status IN ('pending','in_progress')
             AND NOT EXISTS (SELECT 1 FROM ${tbl} t WHERE t.id = ar."refId")`,
         [refType]
-      ).catch(() => ({ affectedRows: 0 }));
+      ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
       cleaned += affectedRows;
     }
-  } catch {}
+  } catch (e) { logger.error(e, "[cronScheduler] orphaned approval requests cleanup failed"); }
 
   return `Data cleanup: ${cleaned} records cleaned`;
 }
@@ -2677,7 +2678,7 @@ async function monthlyBadDebtReminder(): Promise<string> {
          WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
          LIMIT 1`,
         [c.id]
-      ).catch(() => [] as any);
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any; });
       const cfoId = cfoRow?.id;
       if (!cfoId) continue;
       await createNotification({
@@ -2711,7 +2712,7 @@ async function monthlyFxRevaluationReminder(): Promise<string> {
         `SELECT COUNT(*)::int AS n FROM invoices
          WHERE "companyId"=$1 AND currency IS NOT NULL AND currency<>'SAR' AND status NOT IN ('paid','cancelled')`,
         [c.id]
-      ).catch(() => [{ n: 0 }]);
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ n: 0 }]; });
       if (!fxExposure || fxExposure.n === 0) continue;
 
       const [cfoRow] = await rawQuery<{ id: number }>(
@@ -2720,7 +2721,7 @@ async function monthlyFxRevaluationReminder(): Promise<string> {
          WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
          LIMIT 1`,
         [c.id]
-      ).catch(() => [] as any);
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any; });
       const cfoId = cfoRow?.id;
       if (!cfoId) continue;
       await createNotification({
@@ -2786,7 +2787,7 @@ async function dailyBudgetVarianceAlert(): Promise<string> {
          WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
          LIMIT 1`,
         [c.id]
-      ).catch(() => [] as any);
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any; });
       const cfoId = cfoRow?.id;
       if (!cfoId) continue;
 

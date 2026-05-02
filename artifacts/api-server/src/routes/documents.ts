@@ -119,7 +119,7 @@ router.get("/", requirePermission("documents:read"), async (req: Request, res: R
          JOIN document_entity_links del ON del."documentId" = d.id
          WHERE del."entityType" = $1 AND del."entityId" = $2
          AND (d."companyId" = $3 OR d."companyId" IS NULL) AND d."deletedAt" IS NULL
-         ORDER BY d."createdAt" DESC`,
+         ORDER BY d."createdAt" DESC LIMIT 500`,
         [entity, Number(entityId), scope.companyId]
       );
       res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -254,6 +254,7 @@ router.get("/:id/download", requirePermission("documents:download"), async (req:
 
       res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(doc.fileName || 'file')}"`);
       if (doc.mimeType) res.setHeader("Content-Type", doc.mimeType);
+      res.setHeader("X-Content-Type-Options", "nosniff");
       res.status(response.status);
 
       if (response.body) {
@@ -262,7 +263,8 @@ router.get("/:id/download", requirePermission("documents:download"), async (req:
       } else {
         res.end();
       }
-    } catch {
+    } catch (e) {
+      logger.error(e, "document download: file not found in storage");
       throw new NotFoundError("الملف غير موجود في التخزين");
     }
   } catch (err) { handleRouteError(err, res, "documents"); }
@@ -290,6 +292,7 @@ router.get("/:id/preview", requirePermission("documents:download"), async (req: 
 
       res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(doc.fileName || 'file')}"`);
       if (doc.mimeType) res.setHeader("Content-Type", doc.mimeType);
+      res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Cache-Control", "private, max-age=300");
       res.status(response.status);
 
@@ -299,7 +302,8 @@ router.get("/:id/preview", requirePermission("documents:download"), async (req: 
       } else {
         res.end();
       }
-    } catch {
+    } catch (e) {
+      logger.error(e, "document preview: file not found in storage");
       throw new NotFoundError("الملف غير موجود في التخزين");
     }
   } catch (err) { handleRouteError(err, res, "documents"); }
@@ -372,7 +376,7 @@ router.get("/:id/versions", requirePermission("documents:read"), async (req: Req
     if (!doc) throw new NotFoundError("المستند غير موجود");
 
     const versions = await rawQuery(
-      `SELECT * FROM document_versions WHERE "documentId"=$1 ORDER BY "versionNumber" DESC`,
+      `SELECT * FROM document_versions WHERE "documentId"=$1 ORDER BY "versionNumber" DESC LIMIT 500`,
       [docId]
     );
     res.json({ data: versions });
@@ -477,7 +481,7 @@ router.get("/:id/entity-links", requirePermission("documents:read"), async (req:
     if (!doc) throw new NotFoundError("المستند غير موجود");
 
     const links = await rawQuery(
-      `SELECT * FROM document_entity_links WHERE "documentId"=$1`,
+      `SELECT * FROM document_entity_links WHERE "documentId"=$1 LIMIT 500`,
       [docId]
     );
     res.json({ data: links });
@@ -540,7 +544,7 @@ router.get("/templates", requirePermission("documents:read"), async (req, res) =
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT * FROM document_templates WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC`,
+      `SELECT * FROM document_templates WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`,
       [scope.companyId]
     );
     res.json(rows);
@@ -665,6 +669,15 @@ router.delete("/templates/:id", requirePermission("documents:delete"), async (re
   } catch (e: any) { handleRouteError(e, res, "Delete document template error"); }
 });
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function fillTemplate(htmlContent: string, data: Record<string, any>): string {
   return htmlContent.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (match, key) => {
     const parts = key.split(".");
@@ -673,7 +686,7 @@ function fillTemplate(htmlContent: string, data: Record<string, any>): string {
       if (value == null) return match;
       value = value[part];
     }
-    return value != null ? String(value) : match;
+    return value != null ? escapeHtml(String(value)) : match;
   });
 }
 
@@ -683,7 +696,7 @@ function buildDateContext() {
   let todayHijri = "";
   try {
     todayHijri = now.toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric", calendar: "islamic-umalqura" });
-  } catch { todayHijri = todayGregorian; }
+  } catch (e) { logger.warn(e, "Hijri date conversion failed, falling back to Gregorian"); todayHijri = todayGregorian; }
   return { today: todayGregorian, todayHijri };
 }
 
@@ -839,7 +852,7 @@ router.get("/templates/:id/variables", requirePermission("documents:read"), asyn
     const [template] = await rawQuery<any>(`SELECT variables FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
     if (!template) throw new NotFoundError("القالب غير موجود");
     let variables = [];
-    try { variables = typeof template.variables === "string" ? JSON.parse(template.variables) : (template.variables || []); } catch { variables = []; }
+    try { variables = typeof template.variables === "string" ? JSON.parse(template.variables) : (template.variables || []); } catch (e) { logger.warn(e, "failed to parse template variables JSON"); variables = []; }
     res.json({ variables });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });

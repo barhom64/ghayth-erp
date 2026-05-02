@@ -1,6 +1,7 @@
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
 import { emitEvent, createGuardedJournalEntry, getAccountCodeFromMapping, roundTo2 } from "./businessHelpers.js";
 import { NotFoundError } from "./errorHandler.js";
+import { logger } from "./logger.js";
 
 type QueryFn = (sql: string, params: any[]) => Promise<{ rows: any[] }>;
 
@@ -128,7 +129,7 @@ export async function calculateCommissionForPlan(
       companyId: plan.companyId, branchId: plan.branchId, userId,
       action: "umrah.commission.calculated", entity: "employee_commission_plans", entityId: planId,
       after: { month, year, finalAmount: result.finalAmount, employeeId: plan.employeeId, assignmentId: plan.assignmentId },
-    }).catch(() => {});
+    }).catch((e) => logger.error(e, "umrah commission background task failed"));
 
     if (result.finalAmount > 0) {
       // GL: Debit Commission Expense, Credit Commission Payable (accrual) — BLOCKING
@@ -414,7 +415,7 @@ export async function calculateAllForCompany(
          VALUES ($1,$2,$3,$4,false)`,
         [companyId, "commission_calculation", p.id,
          `فشل حساب عمولة الخطة ${p.id} شهر ${month}/${year}: ${String(err)}`]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "umrah commission background task failed"));
     }
   }
   return results;

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError , zodParse } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError, parseId, zodParse } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -27,13 +27,14 @@ const router = Router();
 router.get("/comments/:entityType/:entityId", requirePermission("operations:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { entityType, entityId } = req.params;
+    const { entityType } = req.params;
+    const entityId = parseId(req.params.entityId, "entityId");
     const rows = await rawQuery(
       `SELECT id, "entityType", "entityId", "userId", "userName", body, "createdAt"
        FROM entity_comments
        WHERE "entityType" = $1 AND "entityId" = $2 AND "companyId" = $3
-       ORDER BY "createdAt" DESC`,
-      [entityType, Number(entityId), scope.companyId]
+       ORDER BY "createdAt" DESC LIMIT 500`,
+      [entityType, entityId, scope.companyId]
     );
     res.json({ data: rows });
   } catch (err) {
@@ -45,7 +46,8 @@ router.post("/comments/:entityType/:entityId", requirePermission("admin:write"),
   try {
     const validatedBody = zodParse(createCommentSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { entityType, entityId } = req.params;
+    const { entityType } = req.params;
+    const entityId = parseId(req.params.entityId, "entityId");
     const { body } = validatedBody;
     if (!body || !body.trim()) {
       throw new ValidationError("نص التعليق مطلوب");
@@ -53,15 +55,15 @@ router.post("/comments/:entityType/:entityId", requirePermission("admin:write"),
     const rows = await rawQuery(
       `INSERT INTO entity_comments ("entityType", "entityId", "companyId", "userId", "userName", body)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [entityType, Number(entityId), scope.companyId, scope.userId, scope.userName || "مستخدم", body.trim()]
+      [entityType, entityId, scope.companyId, scope.userId, scope.userName || "مستخدم", body.trim()]
     );
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "create_comment",
-      entity: String(entityType), entityId: Number(entityId),
+      entity: String(entityType), entityId: entityId,
       after: { body: body.trim() },
     }).catch((e) => logger.error(e, "entityMeta background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.comment.created", entity: "entity_comments", entityId: Number(entityId), details: JSON.stringify({ entityType, body: body.trim() }) }).catch((e) => logger.error(e, "entityMeta background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.comment.created", entity: "entity_comments", entityId: entityId, details: JSON.stringify({ entityType, body: body.trim() }) }).catch((e) => logger.error(e, "entityMeta background task failed"));
 
     if (!rows[0]) throw new NotFoundError("فشل في إنشاء التعليق");
     res.json(rows[0]);
@@ -73,22 +75,22 @@ router.post("/comments/:entityType/:entityId", requirePermission("admin:write"),
 router.delete("/comments/:id", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const [before] = await rawQuery(
       `SELECT * FROM entity_comments WHERE id = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     await rawExecute(
       `DELETE FROM entity_comments WHERE id = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_comment",
-      entity: "entity_comments", entityId: Number(id),
+      entity: "entity_comments", entityId: id,
       before,
     }).catch((e) => logger.error(e, "entityMeta background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.comment.deleted", entity: "entity_comments", entityId: Number(id), details: JSON.stringify({ id: Number(id) }) }).catch((e) => logger.error(e, "entityMeta background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.comment.deleted", entity: "entity_comments", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "entityMeta background task failed"));
 
     res.json({ success: true });
   } catch (err) {
@@ -99,13 +101,14 @@ router.delete("/comments/:id", requirePermission("admin:write"), async (req, res
 router.get("/tags/:entityType/:entityId", requirePermission("operations:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { entityType, entityId } = req.params;
+    const { entityType } = req.params;
+    const entityId = parseId(req.params.entityId, "entityId");
     const rows = await rawQuery(
       `SELECT id, "entityType", "entityId", tag, color, "createdAt"
        FROM entity_tags
        WHERE "entityType" = $1 AND "entityId" = $2 AND "companyId" = $3
        ORDER BY "createdAt" ASC`,
-      [entityType, Number(entityId), scope.companyId]
+      [entityType, entityId, scope.companyId]
     );
     res.json({ data: rows });
   } catch (err) {
@@ -117,7 +120,8 @@ router.post("/tags/:entityType/:entityId", requirePermission("admin:write"), asy
   try {
     const validatedBody = zodParse(createTagSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { entityType, entityId } = req.params;
+    const { entityType } = req.params;
+    const entityId = parseId(req.params.entityId, "entityId");
     const { tag, color } = validatedBody;
     if (!tag || !tag.trim()) {
       throw new ValidationError("اسم الوسم مطلوب");
@@ -127,7 +131,7 @@ router.post("/tags/:entityType/:entityId", requirePermission("admin:write"), asy
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT ("entityType", "entityId", tag, "companyId") DO NOTHING
        RETURNING *`,
-      [entityType, Number(entityId), scope.companyId, tag.trim(), color || "blue", scope.userId]
+      [entityType, entityId, scope.companyId, tag.trim(), color || "blue", scope.userId]
     );
     if (rows.length === 0) {
       throw new ConflictError("الوسم موجود بالفعل");
@@ -135,10 +139,10 @@ router.post("/tags/:entityType/:entityId", requirePermission("admin:write"), asy
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "create_tag",
-      entity: String(entityType), entityId: Number(entityId),
+      entity: String(entityType), entityId: entityId,
       after: { tag: tag.trim(), color: color || "blue" },
     }).catch((e) => logger.error(e, "entityMeta background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.tag.created", entity: "entity_tags", entityId: Number(entityId), details: JSON.stringify({ entityType, tag: tag.trim(), color: color || "blue" }) }).catch((e) => logger.error(e, "entityMeta background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.tag.created", entity: "entity_tags", entityId: entityId, details: JSON.stringify({ entityType, tag: tag.trim(), color: color || "blue" }) }).catch((e) => logger.error(e, "entityMeta background task failed"));
 
     res.json(rows[0]);
   } catch (err) {
@@ -149,22 +153,22 @@ router.post("/tags/:entityType/:entityId", requirePermission("admin:write"), asy
 router.delete("/tags/:id", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const [before] = await rawQuery(
       `SELECT * FROM entity_tags WHERE id = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     await rawExecute(
       `DELETE FROM entity_tags WHERE id = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_tag",
-      entity: "entity_tags", entityId: Number(id),
+      entity: "entity_tags", entityId: id,
       before,
     }).catch((e) => logger.error(e, "entityMeta background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.tag.deleted", entity: "entity_tags", entityId: Number(id), details: JSON.stringify({ id: Number(id) }) }).catch((e) => logger.error(e, "entityMeta background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "entity.tag.deleted", entity: "entity_tags", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "entityMeta background task failed"));
 
     res.json({ success: true });
   } catch (err) {
@@ -272,7 +276,7 @@ router.post("/bulk-action", requirePermission("admin:write"), async (req, res): 
       updated = affectedIds.length;
     } else if (action === "delete") {
       const result = await rawQuery<{ id: number }>(
-        `UPDATE ${table} SET "deletedAt" = NOW() WHERE id = ANY($1::int[]) AND "companyId" = $2 AND "deletedAt" IS NULL ${extraWhere} RETURNING id`,
+        `UPDATE ${table} SET "deletedAt" = NOW() WHERE id = ANY($1::int[]) AND "companyId" = $2 AND "deletedAt" IS NULL AND status NOT IN ('approved','posted','paid','completed') ${extraWhere} RETURNING id`,
         [validIds, scope.companyId]
       );
       affectedIds = result.map((r) => r.id);

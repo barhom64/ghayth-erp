@@ -1,3 +1,17 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// umrah-entities.ts — COMMERCIAL/FINANCE entities for the umrah module
+//
+// Owns: sub-agents (CRUD + linking), pricing, groups (CRUD), nusk-invoices,
+//       sales-invoices (generate + update), payments, statements,
+//       commissions (plans + calculate + simulate), import-batches,
+//       employee-assignments.
+//
+// Sister file: umrah.ts — CORE DOMAIN (lifecycle + operational)
+//   Owns: seasons, agents, packages, pilgrims, transport, import,
+//         daily-status, penalties, violations, agent-invoices, bulk-assign.
+//
+// Both mounted at /umrah with requireModule("operations") + requireGuards("financial").
+// ─────────────────────────────────────────────────────────────────────────────
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -179,7 +193,7 @@ router.get("/sub-agents", requirePermission("umrah:read"), async (req, res) => {
       `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
        FROM umrah_sub_agents sa
        LEFT JOIN umrah_agents a ON sa."agentId" = a.id
-       LEFT JOIN clients c ON sa."clientId" = c.id
+       LEFT JOIN clients c ON sa."clientId" = c.id AND c."deletedAt" IS NULL
        WHERE sa."companyId" = $1 AND sa."deletedAt" IS NULL
        ORDER BY sa.name`,
       [scope.companyId]
@@ -311,7 +325,7 @@ router.put("/sub-agents/:id/link", requirePermission("umrah:write"), async (req,
 
     const [row] = await rawQuery(
       `SELECT sa.*, c.name AS "clientName" FROM umrah_sub_agents sa
-       LEFT JOIN clients c ON c.id = sa."clientId"
+       LEFT JOIN clients c ON c.id = sa."clientId" AND c."deletedAt" IS NULL
        WHERE sa.id=$1 AND sa."companyId"=$2 AND sa."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -490,6 +504,114 @@ router.get("/groups", requirePermission("umrah:read"), async (req, res) => {
     );
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List groups"); }
+});
+
+const createGroupSchema = z.object({
+  nuskGroupNumber: z.string().min(1),
+  name: z.string().optional(),
+  agentId: z.number().optional(),
+  subAgentId: z.number().optional(),
+  seasonId: z.number(),
+  mutamerCount: z.number().int().min(0).default(0),
+  programDuration: z.number().int().optional(),
+});
+
+const patchGroupSchema = z.object({
+  name: z.string().optional(),
+  agentId: z.number().optional().nullable(),
+  subAgentId: z.number().optional().nullable(),
+  mutamerCount: z.number().int().min(0).optional(),
+  programDuration: z.number().int().optional(),
+  status: z.string().optional(),
+});
+
+router.get("/groups/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery(
+      `SELECT g.*, a.name AS "agentName", sa.name AS "subAgentName", s.title AS "seasonTitle"
+       FROM umrah_groups g
+       LEFT JOIN umrah_agents a ON g."agentId" = a.id
+       LEFT JOIN umrah_sub_agents sa ON g."subAgentId" = sa.id
+       LEFT JOIN umrah_seasons s ON g."seasonId" = s.id
+       WHERE g.id = $1 AND g."companyId" = $2 AND g."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("المجموعة غير موجودة");
+    const pilgrims = await rawQuery(
+      `SELECT id, "fullName", nationality, status FROM umrah_pilgrims WHERE "groupId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY "fullName"`,
+      [id, scope.companyId]
+    );
+    res.json({ ...row, pilgrims });
+  } catch (err) { handleRouteError(err, res, "Get group"); }
+});
+
+router.post("/groups", requirePermission("umrah:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createGroupSchema.safeParse(req.body));
+    const [season] = await rawQuery(`SELECT id FROM umrah_seasons WHERE id = $1 AND "companyId" = $2`, [b.seasonId, scope.companyId]);
+    if (!season) throw new ValidationError("الموسم غير موجود");
+    const rows = await rawQuery(
+      `INSERT INTO umrah_groups ("companyId","branchId","nuskGroupNumber",name,"agentId","subAgentId","seasonId","mutamerCount","programDuration","createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [scope.companyId, scope.branchId || null, b.nuskGroupNumber, b.name || null, b.agentId || null, b.subAgentId || null, b.seasonId, b.mutamerCount, b.programDuration || null, scope.userId]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_groups", entityId: rows[0]?.id, after: { nuskGroupNumber: b.nuskGroupNumber } }).catch((e) => logger.error(e, "umrah groups bg"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.group.created", entity: "umrah_groups", entityId: rows[0]?.id }).catch((e) => logger.error(e, "umrah groups bg"));
+    res.status(201).json(rows[0]);
+  } catch (err) { handleRouteError(err, res, "Create group"); }
+});
+
+router.patch("/groups/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(patchGroupSchema.safeParse(req.body));
+    const fieldKeys = ["name", "agentId", "subAgentId", "mutamerCount", "programDuration", "status"] as const;
+    const params: any[] = [];
+    const sets: string[] = [];
+    for (const key of fieldKeys) {
+      if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}" = $${params.length}`); }
+    }
+    if (sets.length === 0) {
+      const [row] = await rawQuery(`SELECT * FROM umrah_groups WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+      if (!row) throw new NotFoundError("المجموعة غير موجودة");
+      res.json(row);
+      return;
+    }
+    params.push(scope.userId); sets.push(`"updatedBy" = $${params.length}`);
+    sets.push(`"updatedAt" = NOW()`);
+    params.push(id); params.push(scope.companyId);
+    await rawExecute(
+      `UPDATE umrah_groups SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`,
+      params
+    );
+    const [row] = await rawQuery(`SELECT * FROM umrah_groups WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!row) throw new NotFoundError("المجموعة غير موجودة");
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_groups", entityId: id }).catch((e) => logger.error(e, "umrah groups bg"));
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Update group"); }
+});
+
+router.delete("/groups/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [existing] = await rawQuery<any>(
+      `SELECT id, "salesInvoiceId" FROM umrah_groups WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("المجموعة غير موجودة");
+    if (existing.salesInvoiceId) throw new ConflictError("لا يمكن حذف مجموعة مفوترة");
+    await rawExecute(
+      `UPDATE umrah_groups SET "deletedAt" = NOW(), "updatedBy" = $3, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId, scope.userId]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_groups", entityId: id }).catch((e) => logger.error(e, "umrah groups bg"));
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Delete group"); }
 });
 
 // ============================================================================
@@ -791,7 +913,7 @@ router.get("/invoices", requirePermission("umrah:read"), async (req, res) => {
       `SELECT si.*, sa.name AS "subAgentName", c.name AS "clientName"
        FROM umrah_sales_invoices si
        LEFT JOIN umrah_sub_agents sa ON sa.id = si."subAgentId"
-       LEFT JOIN clients c ON c.id = si."clientId"
+       LEFT JOIN clients c ON c.id = si."clientId" AND c."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY si."createdAt" DESC`,
       params

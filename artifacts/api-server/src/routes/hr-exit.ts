@@ -115,6 +115,12 @@ const updateClearanceSchema = z.object({
   notes: z.string().optional(),
 });
 
+const approvalDecisionSchema = z.object({
+  approved: z.boolean().default(true),
+  reason: z.string().optional(),
+  notes: z.string().optional(),
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/exit — قائمة طلبات نهاية الخدمة
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -246,7 +252,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
       `SELECT COALESCE(SUM(balance), 0) AS balance FROM leave_balances
        WHERE "assignmentId" = $1 AND "companyId" = $2`,
       [b.assignmentId, scope.companyId]
-    ).catch(() => [{ balance: 0 }]);
+    ).catch((e) => { logger.error(e, "hr exit query failed"); return [{ balance: 0 }]; });
     const leaveBalance = Number(lb?.balance ?? 0);
     const dailyRate = salary / 30;
     const leaveCompensation = roundTo2(leaveBalance * dailyRate);
@@ -257,7 +263,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
        FROM hr_employee_loans
        WHERE "assignmentId" = $1 AND "companyId" = $2 AND status IN ('active','approved') AND "deletedAt" IS NULL`,
       [b.assignmentId, scope.companyId]
-    ).catch(() => [{ remaining: 0 }]);
+    ).catch((e) => { logger.error(e, "hr exit query failed"); return [{ remaining: 0 }]; });
     const loanDeductions = Number(loans?.remaining ?? 0);
     const otherDeductions = Number(b.otherDeductions || 0);
 
@@ -300,7 +306,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
       refType: "hr_exit_request",
       refId: insertId,
       amount: netSettlement,
-    }).catch(() => null);
+    }).catch((e) => { logger.error(e, "hr-exit approval chain failed"); return null; });
 
     // ── محرك سير العمل ──
     submitWorkflow({
@@ -317,7 +323,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
 
     // ── إشعار المدير (fallback) ──
     if (!approvalResult?.requiresApproval) {
-      const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId ?? scope.branchId).catch(() => null);
+      const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId ?? scope.branchId).catch((e) => { logger.error(e, "hr-exit manager lookup failed"); return null; });
       if (managerId) {
         createNotification({
           companyId: scope.companyId, assignmentId: managerId,
@@ -353,7 +359,8 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, res): Promise<void> => {
   try {
-    const { approved = true, reason, notes } = (req.body ?? {}) as { approved?: boolean; reason?: string; notes?: string };
+    const b = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
+    const { approved = true, reason, notes } = b;
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     if (!HR_ROLES.includes(scope.role)) {
@@ -415,7 +422,7 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
       refId: item.id,
       approved: true,
       decidedBy: scope.activeAssignmentId,
-    }).catch(() => ({ status: "approved" as const, message: "" }));
+    }).catch((e) => { logger.error(e, "hr exit approval failed"); return { status: "approved" as const, message: "" }; });
 
     if (chainResult.status === "pending_next_step") {
       res.json({
@@ -490,8 +497,8 @@ router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, 
     );
     if (Number(remaining[0]?.cnt) === 0) {
       await rawExecute(
-        `UPDATE hr_exit_requests SET "clearanceCompleted" = TRUE, "updatedAt" = NOW() WHERE id = $1`,
-        [item.exitRequestId]
+        `UPDATE hr_exit_requests SET "clearanceCompleted" = TRUE, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status NOT IN ('cancelled','rejected')`,
+        [item.exitRequestId, scope.companyId]
       );
     }
 

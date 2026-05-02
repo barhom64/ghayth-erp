@@ -1,4 +1,4 @@
-import { handleRouteError, NotFoundError, zodParse } from "../lib/errorHandler.js";
+import { handleRouteError, NotFoundError, parseId, zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -44,12 +44,12 @@ router.get("/", requirePermission("notifications:read"), async (req, res) => {
 router.patch("/:id/read", requirePermission("notifications:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     const { affectedRows } = await rawExecute(
       `UPDATE notifications SET "isRead" = true, "readAt" = NOW()
        WHERE id = $1 AND "assignmentId" = $2 RETURNING id`,
-      [Number(id), scope.activeAssignmentId]
+      [id, scope.activeAssignmentId]
     );
 
     if (!affectedRows) {
@@ -58,10 +58,10 @@ router.patch("/:id/read", requirePermission("notifications:write"), async (req, 
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "mark_notification_read",
-      entity: "notifications", entityId: Number(id),
+      entity: "notifications", entityId: id,
       after: { isRead: true },
     }).catch((e) => logger.error(e, "notifications background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "notification.read", entity: "notifications", entityId: Number(id), details: JSON.stringify({ isRead: true }) }).catch((e) => logger.error(e, "notifications background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "notification.read", entity: "notifications", entityId: id, details: JSON.stringify({ isRead: true }) }).catch((e) => logger.error(e, "notifications background task failed"));
 
     res.json({ message: "تم تعليم الإشعار كمقروء" });
   } catch (err) {

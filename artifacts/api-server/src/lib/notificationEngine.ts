@@ -92,10 +92,19 @@ interface DeliveryLogInsert {
   metadata?: Record<string, unknown>;
 }
 
+function escapeHtmlForTemplate(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function interpolateTemplate(template: string, vars: Record<string, string>): string {
   let result = template;
   for (const [key, val] of Object.entries(vars)) {
-    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), val);
+    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), escapeHtmlForTemplate(val));
   }
   return result;
 }
@@ -250,8 +259,8 @@ async function dispatchWebhooks(companyId: number, eventCategory: string, payloa
     try {
       const parsedUrl = new URL(wh.url);
       if (!["http:", "https:"].includes(parsedUrl.protocol)) continue;
-    } catch {
-      logger.warn(`[NotifEngine] Invalid webhook URL for ${wh.name}: ${wh.url}`);
+    } catch (e) {
+      logger.warn(e, `[NotifEngine] Invalid webhook URL for ${wh.name}: ${wh.url}`);
       continue;
     }
 

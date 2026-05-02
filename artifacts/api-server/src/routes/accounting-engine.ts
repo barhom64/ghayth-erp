@@ -306,7 +306,7 @@ router.get("/journal-templates", requirePermission("finance:read"), async (req, 
          FROM journal_entry_template_lines tl
          LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId"
          WHERE tl."templateId" = $1
-         ORDER BY tl."sortOrder", tl.id`,
+         ORDER BY tl."sortOrder", tl.id LIMIT 500`,
         [t.id]
       );
     }
@@ -353,7 +353,7 @@ router.post("/journal-templates", requirePermission("finance:write"), async (req
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
        LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId"
-       WHERE tl."templateId" = $1 ORDER BY tl."sortOrder"`,
+       WHERE tl."templateId" = $1 ORDER BY tl."sortOrder" LIMIT 500`,
       [result]
     );
 
@@ -370,12 +370,12 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
     const body = zodParse(updateJournalTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
     requireFinance(scope);
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const { name, description, branchId, activityType, isActive, lines } = body;
 
     const [existing] = await rawQuery<any>(
       `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("القالب غير موجود");
 
@@ -386,32 +386,32 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
         "branchId" = $3, "activityType" = $4,
         "isActive" = COALESCE($5, "isActive"), "updatedAt" = NOW()
        WHERE id = $6 AND "companyId" = $7`,
-      [name ?? null, description ?? null, branchId ?? null, activityType ?? null, isActive ?? null, Number(id), scope.companyId]
+      [name ?? null, description ?? null, branchId ?? null, activityType ?? null, isActive ?? null, id, scope.companyId]
     );
 
     if (Array.isArray(lines)) {
-      await rawExecute(`DELETE FROM journal_entry_template_lines WHERE "templateId" = $1`, [Number(id)]);
+      await rawExecute(`DELETE FROM journal_entry_template_lines WHERE "templateId" = $1`, [id]);
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         await rawExecute(
           `INSERT INTO journal_entry_template_lines ("templateId","accountId","accountCode","lineType",description,"sortOrder")
            VALUES ($1,$2,$3,$4,$5,$6)`,
-          [Number(id), line.accountId ?? null, line.accountCode ?? null, line.lineType, line.description ?? null, i]
+          [id, line.accountId ?? null, line.accountCode ?? null, line.lineType, line.description ?? null, i]
         );
       }
     }
 
-    const [template] = await rawQuery<any>(`SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`, [Number(id), scope.companyId]);
+    const [template] = await rawQuery<any>(`SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     if (!template) throw new NotFoundError("القالب غير موجود");
     template.lines = await rawQuery<any>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
        LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId"
-       WHERE tl."templateId" = $1 ORDER BY tl."sortOrder"`,
-      [Number(id)]
+       WHERE tl."templateId" = $1 ORDER BY tl."sortOrder" LIMIT 500`,
+      [id]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "journal_entry_templates", entityId: Number(id), before: existing, after: template }).catch((e) => logger.error(e, "accounting-engine background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.updated", entity: "journal_entry_templates", entityId: Number(id), details: JSON.stringify({ name, operationType: existing.operationType }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "journal_entry_templates", entityId: id, before: existing, after: template }).catch((e) => logger.error(e, "accounting-engine background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.updated", entity: "journal_entry_templates", entityId: id, details: JSON.stringify({ name, operationType: existing.operationType }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     res.json(template);
   } catch (err) {
     handleRouteError(err, res, "Update journal template error:");
@@ -449,7 +449,7 @@ router.get("/subsidiary-accounts", requirePermission("finance:read"), async (req
     const params: any[] = [scope.companyId];
 
     if (entityType) { params.push(entityType); conditions.push(`sa."entityType" = $${params.length}`); }
-    if (entityId) { params.push(Number(entityId)); conditions.push(`sa."entityId" = $${params.length}`); }
+    if (entityId) { params.push(Number(entityId) || 0); conditions.push(`sa."entityId" = $${params.length}`); }
 
     const rows = await rawQuery<any>(
       `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName", ca.type AS "accountType2", ca."currentBalance"
@@ -469,15 +469,16 @@ router.get("/subsidiary-accounts", requirePermission("finance:read"), async (req
 router.get("/subsidiary-accounts/entity/:entityType/:entityId", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { entityType, entityId } = req.params;
+    const { entityType } = req.params;
+    const entityId = parseId(req.params.entityId, "entityId");
     const rows = await rawQuery<any>(
       `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName", ca.type AS "accountType2",
               ca."currentBalance", ca."allowPosting"
        FROM subsidiary_accounts sa
        JOIN chart_of_accounts ca ON ca.id = sa."accountId"
        WHERE sa."companyId" = $1 AND sa."entityType" = $2 AND sa."entityId" = $3 AND sa."isActive" = true
-       ORDER BY sa."accountType"`,
-      [scope.companyId, entityType, Number(entityId)]
+       ORDER BY sa."accountType" LIMIT 500`,
+      [scope.companyId, entityType, entityId]
     );
     res.json({ data: rows, total: rows.length });
   } catch (err) {

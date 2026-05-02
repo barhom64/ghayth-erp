@@ -144,7 +144,7 @@ router.delete("/campaigns/:id", requirePermission("marketing:delete"), async (re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT id FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT id FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الحملة غير موجودة");
     await rawExecute(`UPDATE marketing_campaigns SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.deleted", entity: "marketing_campaigns", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "marketing background task failed"));
@@ -161,14 +161,14 @@ router.get("/stats", requirePermission("marketing:read"), async (req, res) => {
     const [active] = await rawQuery(`SELECT COUNT(*) as count FROM marketing_campaigns WHERE status='active' AND "companyId"=$1`, [cid]);
     const [budget] = await rawQuery(`SELECT COALESCE(SUM(budget),0) as total FROM marketing_campaigns WHERE "companyId"=$1`, [cid]);
     const [spent] = await rawQuery(`SELECT COALESCE(SUM(spent),0) as total FROM marketing_campaigns WHERE "companyId"=$1`, [cid]);
-    const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM(revenue),0) as total FROM marketing_campaigns WHERE "companyId"=$1`, [cid]).catch(() => [{ total: 0 }]);
+    const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM(revenue),0) as total FROM marketing_campaigns WHERE "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "marketing query failed"); return [{ total: 0 }]; });
     const totalSpent = Number(spent.total);
     const totalRevenue = Number(revenue?.total || 0);
     const roas = totalSpent > 0 ? (totalRevenue / totalSpent).toFixed(2) : null;
     const sourceCounts = await rawQuery<any>(
       `SELECT source, COUNT(*) AS count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND source IS NOT NULL GROUP BY source ORDER BY count DESC`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "marketing query failed"); return []; });
     res.json({
       totalCampaigns: Number(total.count),
       activeCampaigns: Number(active.count),
@@ -193,7 +193,7 @@ router.get("/campaigns/:id/roas", requirePermission("marketing:read"), async (re
     const leads = await rawQuery<any>(
       `SELECT COUNT(*) AS count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND source=$2`,
       [scope.companyId, campaign.name]
-    ).catch(() => [{ count: 0 }]);
+    ).catch((e) => { logger.error(e, "marketing query failed"); return [{ count: 0 }]; });
     res.json({
       campaignId: id,
       campaignName: campaign.name,
@@ -219,7 +219,7 @@ router.get("/funnel", requirePermission("marketing:read"), async (req, res) => {
       `SELECT source, COUNT(*) AS total, COUNT(*) FILTER (WHERE stage='closed_won') AS won, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonValue"
        FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND source IS NOT NULL GROUP BY source ORDER BY total DESC`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "marketing query failed"); return []; });
     const conversionRates = stageData.map((s, i) => {
       const prev = i > 0 ? stageData[i - 1] : null;
       return {
@@ -253,7 +253,8 @@ router.get("/templates", requirePermission("marketing:read"), async (req, res) =
       [scope.companyId]
     );
     res.json({ data: rows });
-  } catch {
+  } catch (e) {
+    logger.error(e, "failed to list marketing templates");
     res.json({ data: [] });
   }
 });

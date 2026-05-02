@@ -105,8 +105,12 @@ app.use(cors({
   credentials: true,
 }));
 app.use(cookieParser());
-app.use(express.json({ limit: "100mb" }));
-app.use(express.urlencoded({ extended: true, limit: "100mb" }));
+// Higher body limit only for import/upload routes that receive large payloads
+app.use("/api/umrah/import", express.json({ limit: "50mb" }));
+app.use("/api/umrah/assign-bulk", express.json({ limit: "10mb" }));
+app.use("/api/storage", express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
 app.use(eventBusMiddleware);
 app.use(auditMiddleware);

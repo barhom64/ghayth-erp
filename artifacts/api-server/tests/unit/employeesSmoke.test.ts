@@ -278,7 +278,7 @@ describe("Employees — pagination", () => {
 
   it("GET / calculates offset using Math.max and returns total/page/pageSize", () => {
     const s = section('router.get("/",', 5000);
-    expect(s).toContain("Math.max(Number(page), 1) - 1");
+    expect(s).toContain("Math.max(Number(page) || 1, 1) - 1");
     expect(s).toContain("total:");
     expect(s).toContain("page:");
     expect(s).toContain("pageSize:");

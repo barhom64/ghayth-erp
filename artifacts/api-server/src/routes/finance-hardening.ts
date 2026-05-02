@@ -5,7 +5,9 @@ import {
   ConflictError,
   ForbiddenError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
+import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -23,6 +25,104 @@ import { logger } from "../lib/logger.js";
 
 export const financeHardeningRouter = Router();
 financeHardeningRouter.use(authMiddleware);
+
+// ── Zod schemas ─────────────────────────────────────────────────────────────
+
+const createFiscalPeriodSchema = z.object({
+  name: z.string().min(1),
+  startDate: z.string().min(1),
+  endDate: z.string().min(1),
+  notes: z.string().optional(),
+});
+
+const closeFiscalPeriodSchema = z.object({
+  notes: z.string().optional(),
+});
+
+const reopenFiscalPeriodSchema = z.object({
+  reason: z.string().min(1),
+});
+
+const journalLineSchema = z.object({
+  accountCode: z.string(),
+  debit: z.coerce.number().default(0),
+  credit: z.coerce.number().default(0),
+  description: z.string().optional(),
+  costCenter: z.string().optional(),
+  departmentId: z.coerce.number().optional(),
+  projectId: z.coerce.number().optional(),
+  employeeId: z.coerce.number().optional(),
+});
+
+const createManualJournalSchema = z.object({
+  description: z.string().optional(),
+  lines: z.array(journalLineSchema).min(2),
+  costCenter: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const reviewJournalSchema = z.object({
+  approved: z.boolean(),
+  notes: z.string().optional(),
+});
+
+const approveJournalSchema = z.object({
+  approved: z.boolean(),
+  notes: z.string().optional(),
+});
+
+const createBankGuaranteeSchema = z.object({
+  ref: z.string().min(1),
+  bank: z.string().min(1),
+  beneficiary: z.string().min(1),
+  amount: z.coerce.number(),
+  issueDate: z.string().min(1),
+  expiryDate: z.string().min(1),
+  guaranteeType: z.string().optional(),
+  notes: z.string().optional(),
+  attachmentUrl: z.string().optional(),
+  branchId: z.coerce.number().optional(),
+});
+
+const updateBankGuaranteeSchema = z.object({
+  bank: z.string().optional(),
+  beneficiary: z.string().optional(),
+  amount: z.coerce.number().optional(),
+  expiryDate: z.string().optional(),
+  status: z.string().optional(),
+  notes: z.string().optional(),
+  attachmentUrl: z.string().optional(),
+  guaranteeType: z.string().optional(),
+});
+
+const cancelBankGuaranteeSchema = z.object({
+  reason: z.string().min(1),
+});
+
+const releaseBankGuaranteeSchema = z.object({
+  notes: z.string().optional(),
+});
+
+const createIntercompanySchema = z.object({
+  toCompanyId: z.coerce.number(),
+  amount: z.coerce.number(),
+  description: z.string().optional(),
+  transactionDate: z.string().optional(),
+  arAccountCode: z.string().default("1200"),
+  apAccountCode: z.string().default("2100"),
+  revenueAccountCode: z.string().default("4000"),
+  expenseAccountCode: z.string().default("5000"),
+});
+
+const createProjectSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  budget: z.coerce.number().default(0),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  branchId: z.coerce.number().optional(),
+  ref: z.string().optional(),
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FISCAL PERIODS — FULL CRUD + OPEN/CLOSE/REOPEN
@@ -52,13 +152,7 @@ financeHardeningRouter.post("/fiscal-periods-v2", requirePermission("finance:cre
   try {
     const scope = req.scope!;
 
-    const { name, startDate, endDate, notes } = req.body as any;
-    if (!name || !startDate || !endDate) {
-      throw new ValidationError("الاسم وتاريخ البداية والنهاية مطلوبة", {
-        field: !name ? "name" : !startDate ? "startDate" : "endDate",
-        fix: "أدخل اسم الفترة وتاريخي البداية والنهاية بصيغة YYYY-MM-DD",
-      });
-    }
+    const { name, startDate, endDate, notes } = zodParse(createFiscalPeriodSchema.safeParse(req.body ?? {}));
     const { insertId } = await rawExecute(
       `INSERT INTO financial_periods ("companyId",name,"startDate","endDate",status,notes)
        VALUES ($1,$2,$3,$4,'open',$5)`,
@@ -95,7 +189,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", requirePermission("f
     const scope = req.scope!;
 
     const periodId = parseId(req.params.id, "id");
-    const { notes } = req.body as any;
+    const { notes } = zodParse(closeFiscalPeriodSchema.safeParse(req.body ?? {}));
 
     // Pre-flight: refuse close when the period still has unposted manual
     // journals. The business rule lives here (not in applyTransition) so we
@@ -165,13 +259,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", requirePermission("
     const scope = req.scope!;
 
     const periodId = parseId(req.params.id, "id");
-    const { reason } = req.body as any;
-    if (!reason) {
-      throw new ValidationError("سبب فتح الفترة مطلوب", {
-        field: "reason",
-        fix: "اكتب سبب إعادة فتح الفترة المالية",
-      });
-    }
+    const { reason } = zodParse(reopenFiscalPeriodSchema.safeParse(req.body ?? {}));
 
     // Fetch only the name for the success message; the engine does the
     // state check and row update.
@@ -220,13 +308,7 @@ financeHardeningRouter.post("/journal-manual", requirePermission("finance:create
   try {
     const scope = req.scope!;
 
-    const { description, lines, costCenter, notes } = req.body as any;
-    if (!lines || !Array.isArray(lines) || lines.length < 2) {
-      throw new ValidationError("القيد يجب أن يحتوي على سطرين على الأقل", {
-        field: "lines",
-        fix: "أرسل سطرين أو أكثر بحيث يكون مجموع المدين = مجموع الدائن",
-      });
-    }
+    const { description, lines, costCenter, notes } = zodParse(createManualJournalSchema.safeParse(req.body ?? {}));
 
     const totalDebit = lines.reduce((s: number, l: any) => s + Number(l.debit ?? 0), 0);
     const totalCredit = lines.reduce((s: number, l: any) => s + Number(l.credit ?? 0), 0);
@@ -397,7 +479,7 @@ financeHardeningRouter.patch("/journal-manual/:id/review", requirePermission("fi
     const scope = req.scope!;
 
     const journalId = parseId(req.params.id, "id");
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(reviewJournalSchema.safeParse(req.body ?? {}));
 
     // Fetch createdBy for the "cannot review your own entry" business rule
     // plus ref for the success message. State validation still happens in
@@ -461,7 +543,7 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", requirePermission("f
     const scope = req.scope!;
 
     const journalId = parseId(req.params.id, "id");
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(approveJournalSchema.safeParse(req.body ?? {}));
 
     const [je] = await rawQuery<any>(
       `SELECT ref FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
@@ -597,16 +679,7 @@ financeHardeningRouter.post("/bank-guarantees", requirePermission("finance:creat
   try {
     const scope = req.scope!;
 
-    const { ref, bank, beneficiary, amount, issueDate, expiryDate, guaranteeType, notes, attachmentUrl, branchId } = req.body as any;
-    if (!ref || !bank || !beneficiary || !amount || !issueDate || !expiryDate) {
-      throw new ValidationError(
-        "رقم الضمان والبنك والجهة المستفيدة والمبلغ والتواريخ مطلوبة",
-        {
-          field: !ref ? "ref" : !bank ? "bank" : !beneficiary ? "beneficiary" : !amount ? "amount" : !issueDate ? "issueDate" : "expiryDate",
-          fix: "أكمل جميع الحقول الأساسية للضمان البنكي",
-        },
-      );
-    }
+    const { ref, bank, beneficiary, amount, issueDate, expiryDate, guaranteeType, notes, attachmentUrl, branchId } = zodParse(createBankGuaranteeSchema.safeParse(req.body ?? {}));
     const { insertId } = await rawExecute(
       `INSERT INTO bank_guarantees ("companyId","branchId",ref,bank,beneficiary,amount,"issueDate","expiryDate","guaranteeType",notes,"attachmentUrl","createdBy")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
@@ -643,7 +716,7 @@ financeHardeningRouter.patch("/bank-guarantees/:id", requirePermission("finance:
     const scope = req.scope!;
 
     const { id } = req.params;
-    const b = req.body as any;
+    const b = zodParse(updateBankGuaranteeSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     const f = (col: string, val: any) => { if (val !== undefined) { params.push(val); sets.push(`"${col}"=$${params.length}`); } };
@@ -762,13 +835,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/cancel", requirePermission("fi
     const scope = req.scope!;
 
     const guaranteeId = parseId(req.params.id, "id");
-    const { reason } = req.body as any;
-    if (!reason || !String(reason).trim()) {
-      throw new ValidationError("سبب الإلغاء مطلوب", {
-        field: "reason",
-        fix: "اكتب سبب إلغاء الضمان البنكي",
-      });
-    }
+    const { reason } = zodParse(cancelBankGuaranteeSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<any>(
       `SELECT ref, bank, notes FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -815,7 +882,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/release", requirePermission("f
     const scope = req.scope!;
 
     const guaranteeId = parseId(req.params.id, "id");
-    const { notes } = req.body as any;
+    const { notes } = zodParse(releaseBankGuaranteeSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<any>(
       `SELECT ref, bank, notes FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -883,15 +950,9 @@ financeHardeningRouter.post("/intercompany", requirePermission("finance:create")
   try {
     const scope = req.scope!;
 
-    const { toCompanyId, amount, description, transactionDate, arAccountCode = "1200", apAccountCode = "2100", revenueAccountCode = "4000", expenseAccountCode = "5000" } = req.body as any;
+    const { toCompanyId, amount, description, transactionDate, arAccountCode, apAccountCode, revenueAccountCode, expenseAccountCode } = zodParse(createIntercompanySchema.safeParse(req.body ?? {}));
 
-    if (!toCompanyId || !amount) {
-      throw new ValidationError("الشركة المستلمة والمبلغ مطلوبان", {
-        field: !toCompanyId ? "toCompanyId" : "amount",
-        fix: "اختر شركة مستلمة وحدّد مبلغ المعاملة",
-      });
-    }
-    if (Number(toCompanyId) === scope.companyId) {
+    if (toCompanyId === scope.companyId) {
       throw new ValidationError("لا يمكن إنشاء معاملة بين الشركة ونفسها", {
         field: "toCompanyId",
         fix: "اختر شركة مختلفة عن الشركة الحالية",
@@ -1051,13 +1112,7 @@ financeHardeningRouter.post("/projects", requirePermission("finance:create"), as
   try {
     const scope = req.scope!;
 
-    const { name, description, budget, startDate, endDate, branchId, ref } = req.body as any;
-    if (!name) {
-      throw new ValidationError("اسم المشروع مطلوب", {
-        field: "name",
-        fix: "أدخل اسم المشروع",
-      });
-    }
+    const { name, description, budget, startDate, endDate, branchId, ref } = zodParse(createProjectSchema.safeParse(req.body ?? {}));
     const projectRef = ref ?? `PRJ-${Date.now()}`;
     const { insertId } = await rawExecute(
       `INSERT INTO projects ("companyId","branchId",ref,name,description,budget,"startDate","endDate","managerId")
@@ -1152,7 +1207,7 @@ financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:rea
     const inflow30 = await rawQuery<any>(
       `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id=i."clientId"
+       LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
        WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
          AND i.status IN ('sent','partial','overdue')
          AND i."dueDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
@@ -1163,7 +1218,7 @@ financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:rea
     const inflow60 = await rawQuery<any>(
       `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id=i."clientId"
+       LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
        WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
          AND i.status IN ('sent','partial','overdue')
          AND i."dueDate" BETWEEN CURRENT_DATE + INTERVAL '31 days' AND CURRENT_DATE + INTERVAL '60 days'
@@ -1174,7 +1229,7 @@ financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:rea
     const inflow90 = await rawQuery<any>(
       `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id=i."clientId"
+       LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
        WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
          AND i.status IN ('sent','partial','overdue')
          AND i."dueDate" BETWEEN CURRENT_DATE + INTERVAL '61 days' AND CURRENT_DATE + INTERVAL '90 days'

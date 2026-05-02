@@ -82,6 +82,53 @@ const createCustomerAdvanceSchema = z.object({
   receivedDate: z.string().optional(),
 });
 
+const impactPreviewSchema = z.object({
+  clientId: z.coerce.number().optional(),
+  lines: z.array(z.any()).optional(),
+  taxRate: z.coerce.number().optional(),
+  dueInDays: z.coerce.number().optional(),
+});
+
+const patchInvoiceSchema = z.object({
+  status: z.string().optional(),
+  description: z.string().optional(),
+  dueDate: z.string().optional(),
+});
+
+const createDebitMemoSchema = z.object({
+  amount: z.coerce.number().positive("المبلغ مطلوب ويجب أن يكون أكبر من صفر"),
+  reason: z.string().min(1, "سبب الإشعار المدين مطلوب"),
+  vatIncluded: z.boolean().optional(),
+  memoDate: z.string().optional(),
+});
+
+const badDebtPostSchema = z.object({
+  period: z.string().optional(),
+  asOf: z.string().optional(),
+  rates: z.object({
+    current: z.coerce.number().optional(),
+    d30: z.coerce.number().optional(),
+    d60: z.coerce.number().optional(),
+    d90: z.coerce.number().optional(),
+    d90plus: z.coerce.number().optional(),
+  }).optional(),
+  notes: z.string().optional(),
+});
+
+const applyAdvanceSchema = z.object({
+  invoiceId: z.coerce.number({ required_error: "الفاتورة مطلوبة" }),
+  amount: z.coerce.number().positive("المبلغ مطلوب"),
+});
+
+const invoiceApprovalActionSchema = z.object({
+  notes: z.string().optional(),
+});
+
+const dunningSendSchema = z.object({
+  invoiceIds: z.array(z.coerce.number()).min(1, "invoiceIds مطلوبة (قائمة معرفات الفواتير)"),
+  sentVia: z.string().optional(),
+});
+
 export const invoicesRouter = Router();
 invoicesRouter.use(authMiddleware);
 
@@ -114,7 +161,8 @@ const INVOICE_TRANSITIONS: Record<string, readonly string[]> = {
 invoicesRouter.post("/invoices/impact-preview", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { clientId, lines = [], taxRate = 15, dueInDays = 30 } = req.body as any;
+    const b = zodParse(impactPreviewSchema.safeParse(req.body ?? {}));
+    const { clientId, lines = [], taxRate = 15, dueInDays = 30 } = b as any;
 
     let clientName = "";
     if (clientId) {
@@ -203,7 +251,8 @@ invoicesRouter.get("/invoices", requirePermission("finance:read"), async (req, r
   try {
     const scope = req.scope!;
     const { status = "", page = "1", limit: lim = "20" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const safeLim = Number(lim) || 50;
+    const offset = (Math.max(Number(page), 1) - 1) * safeLim;
 
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, {
@@ -220,7 +269,7 @@ invoicesRouter.get("/invoices", requirePermission("finance:read"), async (req, r
       paramIdx++;
     }
 
-    params.push(Number(lim));
+    params.push(safeLim);
     const limitIdx = paramIdx++;
     params.push(offset);
     const offsetIdx = paramIdx++;
@@ -439,7 +488,7 @@ invoicesRouter.post("/invoices/:id/send", requirePermission("finance:create"), a
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     // Read the joined invoice+client view first — we need the contact info to
     // decide which delivery channels to log, and the ref/clientName for the
@@ -450,7 +499,7 @@ invoicesRouter.post("/invoices/:id/send", requirePermission("finance:create"), a
               c.name AS "clientName", c.phone AS "clientPhone", c.email AS "clientEmail"
        FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
 
@@ -464,7 +513,7 @@ invoicesRouter.post("/invoices/:id/send", requirePermission("finance:create"), a
     try {
       await applyTransition({
         entity: "invoices",
-        id: Number(id),
+        id,
         scope: {
           companyId: scope.companyId,
           branchId: scope.branchId ?? null,
@@ -491,7 +540,7 @@ invoicesRouter.post("/invoices/:id/send", requirePermission("finance:create"), a
       throw err;
     }
 
-    createNotification({ companyId: scope.companyId, assignmentId: scope.activeAssignmentId, type: "invoice_sent", title: `تم إرسال الفاتورة ${invoice.ref}`, body: `تم إرسال الفاتورة للعميل ${invoice.clientName || ""} عبر ${channels.join(" + ") || "النظام"}`, priority: "normal", refType: "invoices", refId: Number(id) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
+    createNotification({ companyId: scope.companyId, assignmentId: scope.activeAssignmentId, type: "invoice_sent", title: `تم إرسال الفاتورة ${invoice.ref}`, body: `تم إرسال الفاتورة للعميل ${invoice.clientName || ""} عبر ${channels.join(" + ") || "النظام"}`, priority: "normal", refType: "invoices", refId: id }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     res.json({ message: "تم إرسال الفاتورة بنجاح", status: "sent", channels, ref: invoice.ref });
   } catch (err) {
@@ -606,7 +655,7 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const { amount, method = "bank_transfer" } = zodParse(createPaymentSchema.safeParse(req.body));
 
     const { financialEngine } = await import("../lib/engines/index.js");
@@ -622,7 +671,7 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
       const invRes = await client.query(
         `SELECT id, total, "paidAmount", status, ref FROM invoices
          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
-        [Number(id), scope.companyId]
+        [id, scope.companyId]
       );
       const invoice = invRes.rows[0];
       if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
@@ -651,12 +700,12 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
       if (paidAt) {
         await client.query(
           `UPDATE invoices SET "paidAmount" = $1, status = $2, "paidAt" = $3 WHERE id = $4 AND "companyId" = $5`,
-          [newPaid, newStatus, paidAt, Number(id), scope.companyId]
+          [newPaid, newStatus, paidAt, id, scope.companyId]
         );
       } else {
         await client.query(
           `UPDATE invoices SET "paidAmount" = $1, status = $2 WHERE id = $3 AND "companyId" = $4`,
-          [newPaid, newStatus, Number(id), scope.companyId]
+          [newPaid, newStatus, id, scope.companyId]
         );
       }
 
@@ -681,7 +730,7 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
       description: `سداد فاتورة ${invoiceRef}`,
       type: "payment",
       sourceType: "invoice",
-      sourceId: Number(id),
+      sourceId: id,
       sourceKey: `finance:payment:${id}:${Date.now()}`,
       lines: [
         { accountCode: cashAccountCode, debit: paymentAmount, credit: 0 },
@@ -689,7 +738,7 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
       ],
     });
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.paid", entity: "invoices", entityId: Number(id), details: JSON.stringify({ amount, method, newStatus }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.paid", entity: "invoices", entityId: id, details: JSON.stringify({ amount, method, newStatus }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     res.json({ message: "تم تسجيل الدفعة", newPaidAmount: newPaid, status: newStatus });
   } catch (err) {
@@ -700,9 +749,7 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
 invoicesRouter.get("/invoices/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
-    const numId = Number(id);
-    if (!Number.isInteger(numId) || numId <= 0) { throw new ValidationError("معرّف غير صالح"); return; }
+    const id = parseId(req.params.id, "id");
     const [invoice] = await rawQuery<any>(
       `SELECT i.*, c.name AS "clientName", c.phone AS "clientPhone", c.email AS "clientEmail",
               b.name AS "branchName", b."nameEn" AS "branchNameEn", b."logoUrl" AS "branchLogoUrl",
@@ -711,10 +758,10 @@ invoicesRouter.get("/invoices/:id", requirePermission("finance:read"), async (re
               b."footerText" AS "branchFooterText", b.city AS "branchCity"
        FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL LEFT JOIN branches b ON b.id = i."branchId"
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
-    const lines = await rawQuery<any>(`SELECT * FROM invoice_lines WHERE "invoiceId" = $1 ORDER BY id LIMIT 500`, [Number(id)]);
+    const lines = await rawQuery<any>(`SELECT * FROM invoice_lines WHERE "invoiceId" = $1 ORDER BY id LIMIT 500`, [id]);
     const [payments, journalEntries] = await Promise.all([
       rawQuery<any>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE $2 AND jl."accountCode" = '1100' AND jl.debit > 0 GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `PAY-${invoice.ref}%`]),
       rawQuery<any>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND (je.ref LIKE $2 OR je.ref LIKE $3) ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `JE-${invoice.ref}%`, `PAY-${invoice.ref}%`]),
@@ -730,7 +777,7 @@ invoicesRouter.patch("/invoices/:id", requirePermission("finance:update"), async
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
-    const { status, description, dueDate } = req.body as any;
+    const { status, description, dueDate } = zodParse(patchInvoiceSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<any>(
       `SELECT * FROM invoices WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -742,7 +789,7 @@ invoicesRouter.patch("/invoices/:id", requirePermission("finance:update"), async
     // paid→closed) must go through the dedicated endpoints. PATCH is
     // limited to allowlist edits.
     if (status !== undefined && status !== existing.status) {
-      if (!INVOICE_STATUSES.includes(status)) {
+      if (!(INVOICE_STATUSES as readonly string[]).includes(status)) {
         throw new ValidationError(
           `حالة فاتورة غير صالحة: ${status}`,
           { field: "status", fix: `اختر من: ${INVOICE_STATUSES.join(", ")}` }
@@ -881,8 +928,8 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
-    const { notes } = req.body as any;
+    const id = parseId(req.params.id, "id");
+    const { notes } = zodParse(invoiceApprovalActionSchema.safeParse(req.body ?? {}));
     if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
       throw new ValidationError(
         newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع",
@@ -896,7 +943,7 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
 
     const row = await applyTransition({
       entity: "invoices",
-      id: Number(id),
+      id,
       scope,
       action: `invoice.${newStatus}`,
       fromStates,
@@ -924,7 +971,7 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
         try {
           await client.query(
             `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('invoice',$1,$2,$3,$4,$5)`,
-            [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
+            [id, newStatus, notes || null, scope.userId, scope.companyId]
           );
         } catch (e) { logger.error(e, "finance-invoices error"); }
       },
@@ -940,7 +987,7 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
         body: `الفاتورة ${row.ref || id}${notes ? ` — ${notes}` : ''}`,
         priority: newStatus === "rejected" ? "high" : "normal",
         refType: "invoice",
-        refId: Number(id),
+        refId: id,
         actionUrl: `/finance/invoices/${id}`,
       }).catch((e) => logger.error(e, "finance-invoices background task failed"));
     }
@@ -1139,14 +1186,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
-    const { amount, reason, vatIncluded = true, memoDate } = req.body as any;
-
-    if (!amount || Number(amount) <= 0) {
-      throw new ValidationError("المبلغ مطلوب ويجب أن يكون أكبر من صفر");
-    }
-    if (!reason) {
-      throw new ValidationError("سبب الإشعار المدين مطلوب");
-    }
+    const { amount, reason, vatIncluded = true, memoDate } = zodParse(createDebitMemoSchema.safeParse(req.body ?? {}));
 
     const [invoice] = await rawQuery<any>(
       `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatRate"
@@ -1283,14 +1323,14 @@ invoicesRouter.get("/invoices/:id/memos", requirePermission("finance:read"), asy
            FROM credit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY "memoDate" DESC`,
         [id, scope.companyId]
       );
-    } catch { /* table may not exist yet */ }
+    } catch (e) { logger.warn(e, "credit_memos table may not exist yet"); }
     try {
       debitMemos = await rawQuery<any>(
         `SELECT id, amount, "netAmount", "vatAmount", reason, "memoDate", "journalId", "createdAt"
            FROM debit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY "memoDate" DESC`,
         [id, scope.companyId]
       );
-    } catch { /* table may not exist yet */ }
+    } catch (e) { logger.warn(e, "debit_memos table may not exist yet"); }
     res.json({ creditMemos, debitMemos });
   } catch (err) {
     handleRouteError(err, res, "List memos error:");
@@ -1311,11 +1351,11 @@ invoicesRouter.get("/bad-debt/preview", requirePermission("finance:read"), async
     const scope = req.scope!;
     const asOf = (req.query.asOf as string) || todayISO();
     const rates = {
-      current: Number(req.query.rateCurrent ?? 0),
-      d30: Number(req.query.rate30 ?? 0.05),
-      d60: Number(req.query.rate60 ?? 0.25),
-      d90: Number(req.query.rate90 ?? 0.5),
-      d90plus: Number(req.query.rate90plus ?? 0.75),
+      current: Number.isFinite(Number(req.query.rateCurrent)) ? Number(req.query.rateCurrent) : 0,
+      d30: Number.isFinite(Number(req.query.rate30)) ? Number(req.query.rate30) : 0.05,
+      d60: Number.isFinite(Number(req.query.rate60)) ? Number(req.query.rate60) : 0.25,
+      d90: Number.isFinite(Number(req.query.rate90)) ? Number(req.query.rate90) : 0.5,
+      d90plus: Number.isFinite(Number(req.query.rate90plus)) ? Number(req.query.rate90plus) : 0.75,
     };
 
     const invoices = await rawQuery<any>(
@@ -1361,7 +1401,7 @@ invoicesRouter.post("/bad-debt/post", requirePermission("finance:create"), async
   try {
     const scope = req.scope!;
 
-    const { period, asOf, rates, notes } = req.body as any;
+    const { period, asOf, rates, notes } = zodParse(badDebtPostSchema.safeParse(req.body ?? {}));
 
     const targetPeriod = period || currentPeriod();
     if (!/^\d{4}-\d{2}$/.test(targetPeriod)) {
@@ -1571,11 +1611,8 @@ invoicesRouter.post("/customer-advances/:id/apply", requirePermission("finance:c
     const scope = req.scope!;
 
     const advanceId = parseId(req.params.id, "id");
-    const { invoiceId, amount } = req.body as any;
+    const { invoiceId, amount } = zodParse(applyAdvanceSchema.safeParse(req.body ?? {}));
 
-    if (!invoiceId || !amount || Number(amount) <= 0) {
-      throw new ValidationError("الفاتورة والمبلغ مطلوبان");
-    }
     const applyAmt = roundTo2(Number(amount));
 
     let advance: any;
@@ -1585,7 +1622,8 @@ invoicesRouter.post("/customer-advances/:id/apply", requirePermission("finance:c
            FROM customer_advances WHERE id = $1 AND "companyId" = $2`,
         [advanceId, scope.companyId]
       );
-    } catch {
+    } catch (e) {
+      logger.error(e, "failed to query customer_advances");
       throw new NotFoundError("الدفعة المقدمة غير موجودة");
     }
     if (!advance) throw new NotFoundError("الدفعة المقدمة غير موجودة");
@@ -1673,12 +1711,12 @@ invoicesRouter.get("/customer-advances", requirePermission("finance:read"), asyn
                 ca.method, ca."receivedDate", ca.status, ca."journalId", ca."createdAt",
                 c.name AS "clientName"
            FROM customer_advances ca
-           LEFT JOIN clients c ON c.id = ca."clientId"
+           LEFT JOIN clients c ON c.id = ca."clientId" AND c."deletedAt" IS NULL
           WHERE ${where}
           ORDER BY ca."receivedDate" DESC, ca.id DESC`,
         params
       );
-    } catch { /* table not yet created */ }
+    } catch (e) { logger.warn(e, "customer_advances table not yet created"); }
     res.json({ data: rows });
   } catch (err) {
     handleRouteError(err, res, "List customer advances error:");
@@ -1768,7 +1806,7 @@ invoicesRouter.get("/dunning/preview", requirePermission("finance:read"), async 
   try {
     const scope = req.scope!;
     await ensureDunningTables();
-    const minDays = Number(req.query.minDaysPastDue ?? 1);
+    const minDays = Number(req.query.minDaysPastDue) || 1;
     const today = todayISO();
 
     const rows = await rawQuery<any>(
@@ -1847,10 +1885,7 @@ invoicesRouter.post("/dunning/send", requirePermission("finance:create"), async 
     const scope = req.scope!;
 
     await ensureDunningTables();
-    const { invoiceIds, sentVia = "manual" } = req.body as any;
-    if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {
-      throw new ValidationError("invoiceIds مطلوبة (قائمة معرفات الفواتير)");
-    }
+    const { invoiceIds, sentVia = "manual" } = zodParse(dunningSendSchema.safeParse(req.body ?? {}));
 
     const today = todayISO();
     const results: any[] = [];
@@ -1925,8 +1960,8 @@ invoicesRouter.get("/dunning/history", requirePermission("finance:read"), async 
     const rows = await rawQuery<any>(
       `SELECT dl.*, i.ref AS "invoiceNumber", c.name AS "clientName"
        FROM dunning_letters dl
-       LEFT JOIN invoices i ON i.id = dl."invoiceId"
-       LEFT JOIN clients c ON c.id = dl."clientId"
+       LEFT JOIN invoices i ON i.id = dl."invoiceId" AND i."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = dl."clientId" AND c."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY dl."sentAt" DESC LIMIT 500`,
       params

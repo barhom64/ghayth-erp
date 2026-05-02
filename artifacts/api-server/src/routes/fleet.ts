@@ -90,6 +90,144 @@ const createInsuranceSchema = z.object({
   notes: z.string().optional(),
 });
 
+// ─── Zod schemas for PATCH / action route body validation ──────────────────
+const updateVehicleSchema = z.object({
+  plateNumber: z.string().optional(),
+  make: z.string().optional(),
+  model: z.string().optional(),
+  year: z.coerce.number().optional(),
+  color: z.string().optional(),
+  status: z.string().optional(),
+  fuelType: z.string().optional(),
+  notes: z.string().optional(),
+  assignedDriverId: z.coerce.number().nullable().optional(),
+  registrationNumber: z.string().optional(),
+  registrationExpiry: z.string().optional(),
+  inspectionDate: z.string().optional(),
+  nextInspectionDate: z.string().optional(),
+  plateType: z.string().optional(),
+  sequenceNumber: z.string().optional(),
+  vinNumber: z.string().optional(),
+});
+
+const updateDriverSchema = z.object({
+  name: z.string().optional(),
+  phone: z.string().optional(),
+  licenseNumber: z.string().optional(),
+  licenseExpiry: z.string().optional(),
+  status: z.string().optional(),
+  licenseType: z.string().optional(),
+});
+
+const createTripSchema = z.object({
+  vehicleId: z.coerce.number().optional(),
+  driverId: z.coerce.number().optional(),
+  clientId: z.coerce.number().optional(),
+  fromLocation: z.string().optional(),
+  toLocation: z.string().optional(),
+  fromLat: z.coerce.number().optional(),
+  fromLng: z.coerce.number().optional(),
+  toLat: z.coerce.number().optional(),
+  toLng: z.coerce.number().optional(),
+  distance: z.coerce.number().optional(),
+  startTime: z.string().optional(),
+  notes: z.string().optional(),
+  fuelPricePerLiter: z.coerce.number().optional(),
+  driverFare: z.coerce.number().optional(),
+});
+
+const completeTripSchema = z.object({
+  endMileage: z.coerce.number().optional(),
+  startMileage: z.coerce.number().optional(),
+  fuelPricePerLiter: z.coerce.number().optional(),
+  driverFare: z.coerce.number().optional(),
+});
+
+const cancelTripSchema = z.object({
+  reason: z.string().optional(),
+});
+
+const completeMaintenanceSchema = z.object({
+  cost: z.coerce.number().optional(),
+});
+
+const updateTripSchema = z.object({
+  fromLocation: z.string().optional(),
+  toLocation: z.string().optional(),
+  destination: z.string().optional(),
+  status: z.string().optional(),
+  notes: z.string().optional(),
+  cost: z.coerce.number().optional(),
+});
+
+const updateMaintenanceSchema = z.object({
+  description: z.string().optional(),
+  status: z.string().optional(),
+  cost: z.coerce.number().optional(),
+});
+
+const updateFuelLogSchema = z.object({
+  liters: z.coerce.number().optional(),
+  quantity: z.coerce.number().optional(),
+  costPerLiter: z.coerce.number().optional(),
+  totalCost: z.coerce.number().optional(),
+  stationName: z.string().optional(),
+});
+
+const updateInsuranceSchema = z.object({
+  provider: z.string().optional(),
+  policyNumber: z.string().optional(),
+  premium: z.coerce.number().optional(),
+  endDate: z.string().optional(),
+});
+
+const createPreventivePlanSchema = z.object({
+  vehicleId: z.coerce.number({ required_error: "المركبة مطلوبة" }),
+  serviceType: z.string().min(1, "نوع الخدمة مطلوب"),
+  intervalKm: z.coerce.number().optional(),
+  intervalDays: z.coerce.number().optional(),
+  lastServiceDate: z.string().optional(),
+  lastServiceMileage: z.coerce.number().optional(),
+  nextServiceDate: z.string().optional(),
+  nextServiceMileage: z.coerce.number().optional(),
+  estimatedCost: z.coerce.number().optional(),
+  notes: z.string().optional(),
+});
+
+const updatePreventivePlanSchema = z.object({
+  nextServiceDate: z.string().optional(),
+  nextServiceMileage: z.coerce.number().optional(),
+  lastServiceDate: z.string().optional(),
+  lastServiceMileage: z.coerce.number().optional(),
+  estimatedCost: z.coerce.number().optional(),
+  status: z.string().optional(),
+  partsUsed: z.array(z.any()).optional(),
+});
+
+const createWaypointSchema = z.object({
+  lat: z.coerce.number().optional(),
+  latitude: z.coerce.number().optional(),
+  lon: z.coerce.number().optional(),
+  longitude: z.coerce.number().optional(),
+  speed: z.coerce.number().optional(),
+});
+
+const cancelMaintenanceSchema = z.object({
+  reason: z.string().min(1, "سبب الإلغاء مطلوب"),
+});
+
+const createTrafficViolationSchema = z.object({
+  vehicleId: z.coerce.number({ required_error: "المركبة مطلوبة" }),
+  driverId: z.coerce.number().optional(),
+  violationType: z.string().min(1, "نوع المخالفة مطلوب"),
+  violationDate: z.string().optional(),
+  fineAmount: z.coerce.number().optional(),
+  location: z.string().optional(),
+  violationNumber: z.string().optional(),
+  notes: z.string().optional(),
+  liability: z.string().optional(),
+});
+
 const router = Router();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -306,7 +444,7 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
       `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","employeeId",status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.employeeId || null, b.status || 'available']
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name).catch((e) => logger.error(e, "fleet background task failed"));
 
@@ -384,12 +522,12 @@ router.patch("/vehicles/:id", requirePermission("fleet:update"), async (req, res
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المركبة غير موجودة");
-    const b = req.body;
+    const b = zodParse(updateVehicleSchema.safeParse(req.body));
 
     // State machine — if the caller is changing status, the transition must be
     // allowed from the current status. Unknown target → 422; disallowed → 409.
     if (b.status !== undefined && b.status !== existing.status) {
-      if (!VEHICLE_STATUSES.includes(b.status)) {
+      if (!(VEHICLE_STATUSES as readonly string[]).includes(b.status)) {
         throw new ValidationError(`حالة غير صالحة: ${b.status}`, { field: "status", fix: `اختر من: ${VEHICLE_STATUSES.join(", ")}` });
       }
       const allowedNext = VEHICLE_TRANSITIONS[existing.status] ?? [];
@@ -583,11 +721,11 @@ router.patch("/drivers/:id", requirePermission("fleet:update"), async (req, res)
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("السائق غير موجود");
-    const b = req.body;
+    const b = zodParse(updateDriverSchema.safeParse(req.body));
 
     // State machine on driver status
     if (b.status !== undefined && b.status !== existing.status) {
-      if (!DRIVER_STATUSES.includes(b.status)) {
+      if (!(DRIVER_STATUSES as readonly string[]).includes(b.status)) {
         throw new ValidationError(`حالة سائق غير صالحة: ${b.status}`, { field: "status", fix: `اختر من: ${DRIVER_STATUSES.join(", ")}` });
       }
       const allowedNext = DRIVER_TRANSITIONS[existing.status] ?? DRIVER_TRANSITIONS.available;
@@ -637,7 +775,7 @@ router.patch("/drivers/:id", requirePermission("fleet:update"), async (req, res)
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id);
     await rawExecute(`UPDATE fleet_drivers SET ${sets.join(",")} WHERE id=$${params.length} AND "companyId"=$${params.length + 1}`, [...params, scope.companyId]);
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -746,7 +884,7 @@ router.get("/trips/:id", requirePermission("fleet:read"), async (req, res) => {
 router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createTripSchema.safeParse(req.body));
 
     if (b.vehicleId) {
       const [vehicle] = await rawQuery<any>(
@@ -778,10 +916,10 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       }
     }
 
-    const fromLat = parseFloat(b.fromLat || 0);
-    const fromLng = parseFloat(b.fromLng || 0);
-    const toLat = parseFloat(b.toLat || 0);
-    const toLng = parseFloat(b.toLng || 0);
+    const fromLat = b.fromLat || 0;
+    const fromLng = b.fromLng || 0;
+    const toLat = b.toLat || 0;
+    const toLng = b.toLng || 0;
 
     let estimatedDistanceKm = b.distance || 0;
     if (fromLat && fromLng && toLat && toLng) {
@@ -962,7 +1100,7 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
   try {
     const scope = req.scope!;
     const tripId = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(completeTripSchema.safeParse(req.body));
 
     const [trip] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2`, [tripId, scope.companyId]);
     if (!trip) throw new NotFoundError("الرحلة غير موجودة");
@@ -1054,7 +1192,8 @@ router.post("/trips/:id/cancel", requirePermission("fleet:update"), async (req, 
   try {
     const scope = req.scope!;
     const tripId = parseId(req.params.id, "id");
-    const reason = (req.body?.reason as string | undefined)?.trim();
+    const { reason: rawReason } = zodParse(cancelTripSchema.safeParse(req.body));
+    const reason = (rawReason as string | undefined)?.trim();
     if (!reason) {
       throw new ValidationError("سبب الإلغاء مطلوب", {
         field: "reason",
@@ -1115,7 +1254,7 @@ router.post("/trips/:id/waypoints", requirePermission("fleet:update"), async (re
   try {
     const scope = req.scope!;
     const tripId = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(createWaypointSchema.safeParse(req.body ?? {}));
     const [trip] = await rawQuery<any>(
       `SELECT "vehicleId","driverId", status FROM fleet_trips WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [tripId, scope.companyId]
@@ -1157,7 +1296,7 @@ router.get("/maintenance", requirePermission("fleet:read"), async (req, res) => 
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
-    if (vehicleId) { where += ` AND m."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId)); paramIdx++; }
+    if (vehicleId) { where += ` AND m."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
     const rows = await rawQuery<any>(
       `SELECT m.*, m.type AS "maintenanceType", m.cost AS amount,
               m."serviceDate" AS "scheduledDate", m."serviceDate" AS date,
@@ -1304,7 +1443,7 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(completeMaintenanceSchema.safeParse(req.body));
     const [m] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!m) throw new NotFoundError("سجل الصيانة غير موجود");
     if (m.status === "completed") {
@@ -1390,7 +1529,7 @@ router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body || {};
+    const b = zodParse(cancelMaintenanceSchema.safeParse(req.body ?? {}));
     const [m] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!m) throw new NotFoundError("سجل الصيانة غير موجود");
     if (m.status === "completed") {
@@ -1403,12 +1542,6 @@ router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async 
       throw new ValidationError("السجل ملغى بالفعل", {
         field: "status",
         fix: "لا حاجة لإلغاء سجل ملغى",
-      });
-    }
-    if (!b.reason) {
-      throw new ValidationError("سبب الإلغاء مطلوب", {
-        field: "reason",
-        fix: "أدخل سبب إلغاء الصيانة",
       });
     }
 
@@ -1583,7 +1716,7 @@ router.get("/fuel-logs", requirePermission("fleet:read"), async (req, res) => {
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'f."companyId"', branchColumn: 'f."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
-    if (vehicleId) { where += ` AND f."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId)); paramIdx++; }
+    if (vehicleId) { where += ` AND f."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
     const rows = await rawQuery<any>(
       `SELECT f.*, f.liters AS quantity, f."totalCost" AS cost, f."mileageAtFuel" AS mileage, f."stationName" AS station, f."fuelDate" AS date, v."plateNumber", v."plateNumber" AS "vehiclePlate" FROM fleet_fuel_logs f LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId" WHERE ${where} AND f."deletedAt" IS NULL ORDER BY f.id DESC LIMIT 1000`,
       params
@@ -1717,7 +1850,7 @@ router.get("/insurance", requirePermission("fleet:read"), async (req, res) => {
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
-    if (vehicleId) { where += ` AND i."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId)); paramIdx++; }
+    if (vehicleId) { where += ` AND i."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
     const rows = await rawQuery<any>(
       `SELECT i.*, v."plateNumber" FROM fleet_insurance i LEFT JOIN fleet_vehicles v ON v.id=i."vehicleId" WHERE ${where} ORDER BY i."endDate" ASC LIMIT 500`,
       params
@@ -1813,14 +1946,14 @@ router.patch("/trips/:id", requirePermission("fleet:update"), async (req, res) =
     );
     if (!existing) throw new NotFoundError("الرحلة غير موجودة");
 
-    const { fromLocation, toLocation, destination, status, notes, cost } = req.body as any;
+    const { fromLocation, toLocation, destination, status, notes, cost } = zodParse(updateTripSchema.safeParse(req.body));
     const finalTo = toLocation ?? destination;
 
     // PATCH on trips is an edit surface only — lifecycle transitions must go
     // through /complete or /cancel. Explicit status writes here are limited to
     // the allowlist so the status machine can't be bypassed.
     if (status !== undefined && status !== existing.status) {
-      if (!TRIP_STATUSES.includes(status)) {
+      if (!(TRIP_STATUSES as readonly string[]).includes(status)) {
         throw new ValidationError(`حالة رحلة غير صالحة: ${status}`, { field: "status", fix: `اختر من: ${TRIP_STATUSES.join(", ")}` });
       }
       // Lifecycle-owned transitions MUST go through the dedicated endpoints.
@@ -1958,12 +2091,12 @@ router.patch("/maintenance/:id", requirePermission("fleet:update"), async (req, 
     );
     if (!existing) throw new NotFoundError("سجل الصيانة غير موجود");
 
-    const { description, status, cost } = req.body as any;
+    const { description, status, cost } = zodParse(updateMaintenanceSchema.safeParse(req.body));
 
     // State machine — lifecycle transitions still go through /complete + /cancel,
     // PATCH can only make non-lifecycle edits or same-status noops.
     if (status !== undefined && status !== existing.status) {
-      if (!MAINTENANCE_STATUSES.includes(status)) {
+      if (!(MAINTENANCE_STATUSES as readonly string[]).includes(status)) {
         throw new ValidationError(`حالة صيانة غير صالحة: ${status}`, { field: "status", fix: `اختر من: ${MAINTENANCE_STATUSES.join(", ")}` });
       }
       // Same defence-in-depth as PATCH /trips/:id — the allowlist permits
@@ -2094,7 +2227,7 @@ router.patch("/fuel-logs/:id", requirePermission("fleet:update"), async (req, re
     );
     if (!existing) throw new NotFoundError("سجل الوقود غير موجود");
 
-    const { liters, quantity, costPerLiter, totalCost, stationName } = req.body as any;
+    const { liters, quantity, costPerLiter, totalCost, stationName } = zodParse(updateFuelLogSchema.safeParse(req.body));
     const finalLiters = liters ?? quantity;
     if (finalLiters !== undefined) {
       const L = Number(finalLiters);
@@ -2201,7 +2334,7 @@ router.patch("/insurance/:id", requirePermission("fleet:update"), async (req, re
     );
     if (!existing) throw new NotFoundError("سجل التأمين غير موجود");
 
-    const { provider, policyNumber, premium, endDate } = req.body as any;
+    const { provider, policyNumber, premium, endDate } = zodParse(updateInsuranceSchema.safeParse(req.body));
 
     if (premium !== undefined) {
       const p = Number(premium);
@@ -2276,7 +2409,7 @@ router.delete("/insurance/:id", requirePermission("fleet:delete"), async (req, r
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM fleet_insurance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("سجل التأمين غير موجود");
-    await rawExecute(`UPDATE fleet_insurance SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE fleet_insurance SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     emitEvent({
       companyId: scope.companyId,
@@ -2331,7 +2464,7 @@ router.get("/preventive-plans", requirePermission("fleet:read"), async (req, res
     const { vehicleId } = req.query as any;
     const conditions = [`p."companyId"=$1`];
     const params: any[] = [scope.companyId];
-    if (vehicleId) { params.push(Number(vehicleId)); conditions.push(`p."vehicleId"=$${params.length}`); }
+    if (vehicleId) { params.push(Number(vehicleId) || 0); conditions.push(`p."vehicleId"=$${params.length}`); }
     const rows = await rawQuery<any>(
       `SELECT p.*, v."plateNumber", v."currentMileage"
        FROM fleet_preventive_plans p
@@ -2347,7 +2480,7 @@ router.get("/preventive-plans", requirePermission("fleet:read"), async (req, res
 router.post("/preventive-plans", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createPreventivePlanSchema.safeParse(req.body));
     if (!b.vehicleId) {
       throw new ValidationError("المركبة مطلوبة", { field: "vehicleId", fix: "اختر المركبة التي ستُنشأ لها خطة الصيانة" });
     }
@@ -2421,7 +2554,7 @@ router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(updatePreventivePlanSchema.safeParse(req.body));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
 
@@ -2501,8 +2634,8 @@ router.get("/traffic-violations", requirePermission("fleet:read"), async (req, r
     const { vehicleId, driverId } = req.query as any;
     const conditions = [`tv."companyId"=$1`];
     const params: any[] = [scope.companyId];
-    if (vehicleId) { params.push(Number(vehicleId)); conditions.push(`tv."vehicleId"=$${params.length}`); }
-    if (driverId) { params.push(Number(driverId)); conditions.push(`tv."driverId"=$${params.length}`); }
+    if (vehicleId) { params.push(Number(vehicleId) || 0); conditions.push(`tv."vehicleId"=$${params.length}`); }
+    if (driverId) { params.push(Number(driverId) || 0); conditions.push(`tv."driverId"=$${params.length}`); }
     const rows = await rawQuery<any>(
       `SELECT tv.*, v."plateNumber", d.name AS "driverName"
        FROM fleet_traffic_violations tv
@@ -2537,7 +2670,7 @@ router.get("/traffic-violations/:id", requirePermission("fleet:read"), async (re
 router.post("/traffic-violations", requirePermission("fleet:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createTrafficViolationSchema.safeParse(req.body));
     if (!b.vehicleId) {
       throw new ValidationError("المركبة مطلوبة", { field: "vehicleId", fix: "اختر المركبة المرتبطة بالمخالفة" });
     }

@@ -362,8 +362,8 @@ async function checkSpeedViolation(companyId: number): Promise<number> {
          VALUES ($1, $2, $3, $4, 'speed', $5, NOW())`,
         [companyId, row.vehicleId, row.driverId ?? null, row.tripId,
          `تجاوز سرعة: ${row.currentSpeed} كم/ساعة — الحد 120 كم/ساعة`]
-      ).catch(() => {});
-    } catch {}
+      ).catch((e) => logger.error(e, "smart alert background task failed"));
+    } catch (e) { logger.error(e, "Speed violation record insert error"); }
   }
   return rows.length;
 }
@@ -393,8 +393,8 @@ async function checkVehicleRepeatedBreakdowns(companyId: number): Promise<number
       await rawExecute(
         `UPDATE fleet_vehicles SET status = 'under_review' WHERE id = $1 AND status = 'active'`,
         [row.vehicleId]
-      ).catch(() => {});
-    } catch {}
+      ).catch((e) => logger.error(e, "smart alert background task failed"));
+    } catch (e) { logger.error(e, "Vehicle status update to under_review error"); }
   }
   return rows.length;
 }
@@ -609,7 +609,7 @@ async function checkConsecutiveUnpaidInvoices(companyId: number): Promise<number
         );
         count++;
       }
-    } catch { }
+    } catch (e) { logger.error(e, "Consecutive unpaid invoices check error"); }
     return count;
   }
 

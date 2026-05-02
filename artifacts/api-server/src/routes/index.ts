@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { logger } from "../lib/logger.js";
 import healthRouter from "./health.js";
 import authRouter from "./auth.js";
 import dashboardRouter from "./dashboard.js";
@@ -112,7 +113,7 @@ router.get("/settings/display", async (req, res) => {
         const SECRET = process.env.JWT_SECRET;
         const payload: any = jwt.default.verify(rawToken, SECRET!);
         if (payload?.companyId && payload?.type !== "client_portal") companyId = payload.companyId;
-      } catch {}
+      } catch (e) { logger.debug(e, "public-settings JWT decode (optional)"); }
     }
     const rows = await rawQuery<{ key: string; value: string }>(
       companyId
@@ -123,16 +124,20 @@ router.get("/settings/display", async (req, res) => {
     const result: Record<string, string> = {};
     for (const row of rows) result[row.key] = row.value;
     res.json({ data: result });
-  } catch {
+  } catch (e) {
+    logger.warn(e, "failed to load system settings, using defaults");
     res.json({ data: { currency: "SAR", timezone: "Asia/Riyadh", companyName: "" } });
   }
 });
 
-// Route discovery endpoint. Walks the router stack and returns every
-// registered { method, path } so integrators (and the frontend) can
-// confirm the real URL before firing a request. Public by design —
-// returns no data, only paths — so it lives before authMiddleware.
-router.get("/_routes", (_req, res) => {
+// Route discovery endpoint — disabled in production, admin-only otherwise.
+router.get("/_routes", (req, res, next): void => {
+  if (process.env.NODE_ENV === "production") {
+    res.status(404).json({ error: "المسار غير موجود" });
+    return;
+  }
+  next();
+}, (_req, res) => {
   const found: { method: string; path: string }[] = [];
   const walk = (stack: any[], prefix: string): void => {
     for (const layer of stack ?? []) {
@@ -222,7 +227,7 @@ router.use("/my-space", mySpaceRouter);
 router.use("/action-center", actionCenterRouter);
 router.use("/entity-meta", entityMetaRouter);
 router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahRouter);
-router.use("/umrah", requireModule("operations"), umrahEntitiesRouter);
+router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahEntitiesRouter);
 router.use("/operations-center", requireModule("operations"), requireMinLevel(40), operationsCenterRouter);
 router.use("/export", requireMinLevel(30), exportRouter);
 router.use("/scheduled-reports", requireMinLevel(50), scheduledReportsRouter);

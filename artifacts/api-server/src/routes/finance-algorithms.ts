@@ -6,7 +6,9 @@ import {
   ForbiddenError,
   IntegrationError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
+import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -16,6 +18,94 @@ import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
 
 export const financeAlgorithmsRouter = Router();
 financeAlgorithmsRouter.use(authMiddleware);
+
+// ── Zod schemas ─────────────────────────────────────────────────────────────
+
+const bankReconciliationRowSchema = z.object({
+  amount: z.coerce.number().optional(),
+  debit: z.coerce.number().optional(),
+  credit: z.coerce.number().optional(),
+  date: z.string().optional(),
+  reference: z.string().optional(),
+  ref: z.string().optional(),
+  description: z.string().optional(),
+  narration: z.string().optional(),
+});
+
+const bankImportSchema = z.object({
+  rows: z.array(bankReconciliationRowSchema).min(1),
+  accountCode: z.string().default("1120"),
+  statementDate: z.string().optional(),
+});
+
+const bankAutoMatchSchema = z.object({
+  batchId: z.string().min(1),
+  accountCode: z.string().default("1120"),
+  toleranceDays: z.coerce.number().default(3),
+});
+
+const bankManualMatchSchema = z.object({
+  bankStatementId: z.coerce.number(),
+  journalLineId: z.coerce.number(),
+});
+
+const VALID_DEPRECIATION_METHODS = [
+  "straight_line", "declining_balance", "declining_balance_200",
+  "declining_balance_150", "sum_of_years_digits", "units_of_production",
+] as const;
+
+const createFixedAssetSchema = z.object({
+  name: z.string().min(1),
+  purchaseCost: z.coerce.number(),
+  purchaseDate: z.string().min(1),
+  usefulLifeYears: z.coerce.number().default(5),
+  salvageValue: z.coerce.number().default(0),
+  code: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  branchId: z.coerce.number().optional(),
+  depreciationMethod: z.string().default("straight_line"),
+  assetAccountCode: z.string().default("1500"),
+  depreciationAccountCode: z.string().default("6100"),
+  accDepreciationAccountCode: z.string().default("1590"),
+});
+
+const updateFixedAssetSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  salvageValue: z.coerce.number().optional(),
+  usefulLifeYears: z.coerce.number().optional(),
+  depreciationMethod: z.string().optional(),
+  status: z.string().optional(),
+});
+
+const depreciateAssetSchema = z.object({
+  period: z.string().min(1),
+  unitsThisPeriod: z.coerce.number().optional(),
+});
+
+const depreciateAllSchema = z.object({
+  period: z.string().min(1),
+});
+
+const roundingDiffSchema = z.object({
+  journalEntryId: z.coerce.number(),
+  roundingAmount: z.coerce.number(),
+  description: z.string().optional(),
+});
+
+const fxRateUpsertSchema = z.object({
+  rateDate: z.string().min(1),
+  fromCurrency: z.string().min(1),
+  toCurrency: z.string().default("SAR"),
+  rate: z.coerce.number().positive(),
+  type: z.string().default("spot"),
+});
+
+const fxRevaluationPostSchema = z.object({
+  period: z.string().regex(/^\d{4}-\d{2}$/),
+});
 
 function assertFinanceRole(scope: any): void {
   if (!FINANCE_ROLES.includes(scope.role)) {
@@ -259,10 +349,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/import", requirePermission("f
     const scope = req.scope!;
     assertFinanceRole(scope);
 
-    const { rows, accountCode = "1120", statementDate } = req.body as any;
-    if (!Array.isArray(rows) || rows.length === 0) {
-      throw new ValidationError("لا توجد بيانات في الكشف البنكي");
-    }
+    const { rows, accountCode, statementDate } = zodParse(bankImportSchema.safeParse(req.body ?? {}));
 
     const batchId = generateTimeRef("BANK");
     let imported = 0;
@@ -304,10 +391,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", requirePermissio
     const scope = req.scope!;
     assertFinanceRole(scope);
 
-    const { batchId, accountCode = "1120", toleranceDays = 3 } = req.body as any;
-    if (!batchId) {
-      throw new ValidationError("معرف الدفعة مطلوب", { field: "batchId" });
-    }
+    const { batchId, accountCode, toleranceDays } = zodParse(bankAutoMatchSchema.safeParse(req.body ?? {}));
 
     const bankRows = await rawQuery<any>(
       `SELECT * FROM bank_statements
@@ -412,10 +496,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", requirePermiss
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const { bankStatementId, journalLineId } = req.body as any;
-    if (!bankStatementId || !journalLineId) {
-      throw new ValidationError("bankStatementId و journalLineId مطلوبان");
-    }
+    const { bankStatementId, journalLineId } = zodParse(bankManualMatchSchema.safeParse(req.body ?? {}));
     const [bs] = await rawQuery<any>(
       `SELECT * FROM bank_statements WHERE id=$1 AND "companyId"=$2 AND "matchStatus"='unmatched'`,
       [bankStatementId, scope.companyId]
@@ -522,16 +603,13 @@ financeAlgorithmsRouter.post("/fixed-assets", requirePermission("finance:create"
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const b = req.body as any;
-    if (!b.name || !b.purchaseCost || !b.purchaseDate) {
-      throw new ValidationError("الاسم والتكلفة وتاريخ الشراء مطلوبة");
-    }
-    const usefulYears = Number(b.usefulLifeYears ?? 5);
+    const b = zodParse(createFixedAssetSchema.safeParse(req.body ?? {}));
+    const usefulYears = b.usefulLifeYears;
     if (!usefulYears || usefulYears <= 0) {
       throw new ValidationError("العمر الإنتاجي يجب أن يكون أكبر من صفر");
     }
-    const purchaseCost = Number(b.purchaseCost);
-    const salvageValue = Number(b.salvageValue ?? 0);
+    const purchaseCost = b.purchaseCost;
+    const salvageValue = b.salvageValue;
 
     const { insertId } = await rawExecute(
       `INSERT INTO fixed_assets (
@@ -543,9 +621,9 @@ financeAlgorithmsRouter.post("/fixed-assets", requirePermission("finance:create"
       [scope.companyId, b.branchId ?? scope.branchId, b.code ?? null, b.name,
        b.description ?? null, b.category ?? null, b.purchaseDate,
        purchaseCost, salvageValue, usefulYears,
-       b.depreciationMethod ?? "straight_line", purchaseCost,
-       b.assetAccountCode ?? "1500", b.depreciationAccountCode ?? "6100",
-       b.accDepreciationAccountCode ?? "1590"]
+       b.depreciationMethod, purchaseCost,
+       b.assetAccountCode, b.depreciationAccountCode,
+       b.accDepreciationAccountCode]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM fixed_assets WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
     res.status(201).json(row);
@@ -578,10 +656,10 @@ financeAlgorithmsRouter.patch("/fixed-assets/:id", requirePermission("finance:up
     const scope = req.scope!;
     assertFinanceRole(scope);
     const id = parseId(req.params.id, "id");
-    const b = req.body as any;
+    const b = zodParse(updateFixedAssetSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
-    if (b.usefulLifeYears !== undefined && Number(b.usefulLifeYears) <= 0) {
+    if (b.usefulLifeYears !== undefined && b.usefulLifeYears <= 0) {
       throw new ValidationError("العمر الإنتاجي يجب أن يكون أكبر من صفر");
     }
     const f = (col: string, val: any) => { if (val !== undefined) { params.push(val); sets.push(`"${col}"=$${params.length}`); } };
@@ -733,10 +811,7 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", requirePermission("
     const scope = req.scope!;
     assertFinanceRole(scope);
     const id = parseId(req.params.id, "id");
-    const { period, unitsThisPeriod } = req.body as any;
-    if (!period) {
-      throw new ValidationError("الفترة المحاسبية مطلوبة", { field: "period" });
-    }
+    const { period, unitsThisPeriod } = zodParse(depreciateAssetSchema.safeParse(req.body ?? {}));
     const targetPeriod = period;
 
     const [asset] = await rawQuery<any>(
@@ -813,10 +888,7 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", requirePermission("
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const { period } = req.body as any;
-    if (!period) {
-      throw new ValidationError("الفترة المحاسبية مطلوبة", { field: "period" });
-    }
+    const { period } = zodParse(depreciateAllSchema.safeParse(req.body ?? {}));
     const targetPeriod = period;
 
     const assets = await rawQuery<any>(
@@ -1023,11 +1095,11 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", requirePermission("f
     const scope = req.scope!;
     assertFinanceRole(scope);
 
-    const { journalEntryId, roundingAmount, description } = req.body as any;
-    if (!journalEntryId || Math.abs(Number(roundingAmount ?? 0)) === 0) {
-      throw new ValidationError("معرف القيد وفرق التقريب مطلوبان");
+    const { journalEntryId, roundingAmount, description } = zodParse(roundingDiffSchema.safeParse(req.body ?? {}));
+    if (Math.abs(roundingAmount) === 0) {
+      throw new ValidationError("فرق التقريب يجب أن يكون مختلفاً عن الصفر");
     }
-    const diff = roundTo2(Number(roundingAmount));
+    const diff = roundTo2(roundingAmount);
     if (Math.abs(diff) > 0.05) {
       throw new ValidationError("فرق التقريب يتجاوز الحد المسموح (0.05 ﷼)");
     }
@@ -1138,10 +1210,7 @@ financeAlgorithmsRouter.post("/fx/rates", requirePermission("finance:create"), a
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const { rateDate, fromCurrency, toCurrency = "SAR", rate, type = "spot" } = req.body as any;
-    if (!rateDate || !fromCurrency || !rate || Number(rate) <= 0) {
-      throw new ValidationError("rateDate / fromCurrency / rate مطلوبة", { field: "rate", fix: "أدخل قيمة موجبة للسعر والعملة والتاريخ" });
-    }
+    const { rateDate, fromCurrency, toCurrency, rate, type } = zodParse(fxRateUpsertSchema.safeParse(req.body ?? {}));
     await ensureFxTables();
     const [row] = await rawQuery<any>(
       `INSERT INTO fx_rates ("companyId","effectiveDate","fromCurrency","toCurrency",rate,source)
@@ -1149,7 +1218,7 @@ financeAlgorithmsRouter.post("/fx/rates", requirePermission("finance:create"), a
        ON CONFLICT ("companyId","effectiveDate","fromCurrency","toCurrency","source")
        DO UPDATE SET rate=EXCLUDED.rate
        RETURNING *`,
-      [scope.companyId, rateDate, String(fromCurrency).toUpperCase(), String(toCurrency).toUpperCase(), Number(rate), type]
+      [scope.companyId, rateDate, fromCurrency.toUpperCase(), toCurrency.toUpperCase(), rate, type]
     );
     res.status(201).json({ data: row });
   } catch (err) {
@@ -1287,10 +1356,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const period = (req.body?.period as string) ?? currentPeriod();
-    if (!/^\d{4}-\d{2}$/.test(period)) {
-      throw new ValidationError("period يجب أن يكون بصيغة YYYY-MM", { field: "period", fix: "استخدم صيغة YYYY-MM مثل 2026-04" });
-    }
+    const { period } = zodParse(fxRevaluationPostSchema.safeParse(req.body ?? {}));
     await ensureFxTables();
     const [yPeriod, mPeriod] = period.split("-").map(Number);
     const periodEndDate = toDateISO(new Date(yPeriod, mPeriod, 0));

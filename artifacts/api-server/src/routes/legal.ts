@@ -86,6 +86,55 @@ const createJudgmentSchema = z.object({
   appealWindowDays: z.coerce.number().optional(),
 });
 
+const updateContractSchema = z.object({
+  title: z.string().optional(),
+  status: z.string().optional(),
+  partyName: z.string().optional(),
+  partyContact: z.string().optional().nullable(),
+  contractType: z.string().optional().nullable(),
+  value: z.coerce.number().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  notes: z.string().optional().nullable(),
+});
+
+const updateCaseSchema = z.object({
+  title: z.string().optional(),
+  status: z.string().optional(),
+  priority: z.string().optional(),
+  lawyerName: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  court: z.string().optional().nullable(),
+});
+
+const updateJudgmentSchema = z.object({
+  paidAmount: z.coerce.number().optional(),
+  verdict: z.string().optional(),
+  notes: z.string().optional().nullable(),
+  dueDate: z.string().optional().nullable(),
+});
+
+const updateFinancialRiskSchema = z.object({
+  financialRisk: z.coerce.number().optional(),
+  riskLevel: z.string().optional(),
+});
+
+const renewContractSchema = z.object({
+  newEndDate: z.string().min(1, "تاريخ نهاية التجديد مطلوب"),
+  newValue: z.coerce.number().optional().nullable(),
+  notes: z.string().optional(),
+});
+
+const terminateContractSchema = z.object({
+  reason: z.string().min(1, "سبب إنهاء العقد مطلوب"),
+  effectiveDate: z.string().optional().nullable(),
+});
+
+const closeCaseSchema = z.object({
+  closureReason: z.string().min(1, "سبب الإغلاق مطلوب"),
+  outcome: z.string().optional().nullable(),
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // LIFECYCLE STATE MACHINES — Phase C.6 Legal audit
 // ─────────────────────────────────────────────────────────────────────────────
@@ -252,12 +301,12 @@ router.patch("/contracts/:id", requirePermission("legal:write"), async (req, res
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("العقد غير موجود");
-    const b = req.body;
+    const b = zodParse(updateContractSchema.safeParse(req.body));
 
     // State machine: PATCH cannot drive lifecycle transitions (use /renew,
     // /terminate). draft ↔ active is allowed for admin corrections.
     if (b.status !== undefined && b.status !== existing.status) {
-      if (!CONTRACT_STATUSES.includes(b.status)) {
+      if (!(CONTRACT_STATUSES as readonly string[]).includes(b.status)) {
         throw new ValidationError(
           `حالة عقد غير صالحة: ${b.status}`,
           { field: "status", fix: `اختر من: ${CONTRACT_STATUSES.join(", ")}` }
@@ -386,13 +435,7 @@ router.post("/contracts/:id/renew", requirePermission("legal:write"), async (req
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { newEndDate, newValue, notes } = req.body ?? {};
-    if (!newEndDate) {
-      throw new ValidationError("تاريخ نهاية التجديد مطلوب", {
-        field: "newEndDate",
-        fix: "حدد تاريخ النهاية الجديد",
-      });
-    }
+    const { newEndDate, newValue, notes } = zodParse(renewContractSchema.safeParse(req.body ?? {}));
     const [current] = await rawQuery<any>(
       `SELECT id, "endDate", value, "renewalCount" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -427,7 +470,7 @@ router.post("/contracts/:id/renew", requirePermission("legal:write"), async (req
       action: "legal.contract.renewed",
       fromStates: ["active", "draft", "expired"],
       toState: "active",
-      reason: notes ?? null,
+      reason: notes ?? undefined,
       setExtras,
       extraWhere: `"deletedAt" IS NULL`,
       after: {
@@ -463,13 +506,7 @@ router.post("/contracts/:id/terminate", requirePermission("legal:write"), async 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { reason, effectiveDate } = req.body ?? {};
-    if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
-      throw new ValidationError("سبب إنهاء العقد مطلوب", {
-        field: "reason",
-        fix: "اكتب سبب الإنهاء",
-      });
-    }
+    const { reason, effectiveDate } = zodParse(terminateContractSchema.safeParse(req.body ?? {}));
 
     const updated = await applyTransition({
       entity: "legal_contracts",
@@ -604,7 +641,7 @@ router.get("/cases/:id", requirePermission("legal:read"), async (req, res) => {
     const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("القضية غير موجودة");
 
-    const sessions = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 ORDER BY "sessionDate" DESC LIMIT 500`, [row.id]);
+    const sessions = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 AND "deletedAt" IS NULL ORDER BY "sessionDate" DESC LIMIT 500`, [row.id]);
 
     res.json({ ...row, sessions, allowedTransitions: VALID_CASE_TRANSITIONS[row.status] || [] });
   } catch (err) { handleRouteError(err, res, "Get case error:"); }
@@ -616,10 +653,10 @@ router.patch("/cases/:id", requirePermission("legal:write"), async (req, res) =>
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("القضية غير موجودة");
-    const b = req.body;
+    const b = zodParse(updateCaseSchema.safeParse(req.body));
 
     if (b.status !== undefined && b.status !== existing.status) {
-      if (!CASE_STATUSES.includes(b.status)) {
+      if (!(CASE_STATUSES as readonly string[]).includes(b.status)) {
         throw new ValidationError(
           `حالة قضية غير صالحة: ${b.status}`,
           { field: "status", fix: `اختر من: ${CASE_STATUSES.join(", ")}` }
@@ -731,10 +768,7 @@ router.post("/cases/:id/close", requirePermission("legal:write"), async (req, re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body || {};
-    if (!b.closureReason || typeof b.closureReason !== "string" || !b.closureReason.trim()) {
-      throw new ValidationError("سبب الإغلاق مطلوب", { field: "closureReason", fix: "أدخل سبب إغلاق القضية" });
-    }
+    const b = zodParse(closeCaseSchema.safeParse(req.body ?? {}));
 
     const updated = await applyTransition<any>({
       entity: "legal_cases",
@@ -766,7 +800,7 @@ router.get("/cases/:caseId/sessions", requirePermission("legal:read"), async (re
     const caseId = parseId(req.params.caseId, "caseId");
     const [legalCase] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!legalCase) throw new NotFoundError("القضية غير موجودة");
-    const rows = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 ORDER BY "sessionDate" DESC LIMIT 500`, [caseId]);
+    const rows = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 AND "deletedAt" IS NULL ORDER BY "sessionDate" DESC LIMIT 500`, [caseId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal sessions error:"); }
 });
@@ -937,7 +971,7 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
       details: JSON.stringify({ caseId, sessionDate: b.sessionDate, location: b.location, judge: b.judge }),
     }).catch((e) => logger.error(e, "legal background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
     res.status(201).json({ ...row, distanceToCourtKm, invoiceId, invoiceError, journalEntryId, calendarTaskCreated: !!legalCase.lawyerName });
   } catch (err) { handleRouteError(err, res, "Create session error:"); }
 });
@@ -950,7 +984,7 @@ router.get("/stats", requirePermission("legal:read"), async (req, res) => {
     const [cases] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='in_progress') as "inProgress" FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [expiring] = await rawQuery<any>(`SELECT COUNT(*) as count FROM legal_contracts WHERE "companyId"=$1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND status='active' AND "deletedAt" IS NULL`, [cid]);
     const [sessions] = await rawQuery<any>(`SELECT COUNT(*) as upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id=ls."caseId" WHERE lc."companyId"=$1 AND lc."deletedAt" IS NULL AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`, [cid]);
-    const [contingent] = await rawQuery<any>(`SELECT COALESCE(SUM("financialRisk"),0) as total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`, [cid]).catch(() => [{ total: 0 }]);
+    const [contingent] = await rawQuery<any>(`SELECT COALESCE(SUM("financialRisk"),0) as total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`, [cid]).catch((e) => { logger.error(e, "legal query failed"); return [{ total: 0 }]; });
     res.json({
       totalContracts: Number(contracts.total), activeContracts: Number(contracts.active),
       totalCases: Number(cases.total), openCases: Number(cases.open), inProgressCases: Number(cases.inProgress),
@@ -1168,7 +1202,7 @@ router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), a
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const caseId = parseId(req.params.caseId, "caseId");
-    const b = req.body;
+    const b = zodParse(updateJudgmentSchema.safeParse(req.body));
 
     const [existingJ] = await rawQuery<any>(
       `SELECT * FROM legal_judgments WHERE id=$1 AND "caseId"=$2 AND "companyId"=$3`,
@@ -1232,7 +1266,7 @@ router.patch("/cases/:id/financial-risk", requirePermission("legal:write"), asyn
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { financialRisk, riskLevel } = req.body;
+    const { financialRisk, riskLevel } = zodParse(updateFinancialRiskSchema.safeParse(req.body));
     const [existing] = await rawQuery<any>(
       `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -1371,7 +1405,7 @@ router.get("/judgments/financial-report", requirePermission("legal:read"), async
     const [contingent] = await rawQuery<any>(
       `SELECT COALESCE(SUM("financialRisk"),0) AS total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`,
       [scope.companyId]
-    ).catch(() => [{ total: 0 }]);
+    ).catch((e) => { logger.error(e, "legal query failed"); return [{ total: 0 }]; });
     res.json({
       data: rows,
       totalAmount: Number(totals?.totalAmount || 0),
@@ -1401,7 +1435,7 @@ router.get("/financial-report", requirePermission("legal:read"), async (req, res
               COALESCE(SUM("paidAmount"),0) AS "totalPaid"
        FROM legal_judgments WHERE "companyId"=$1`,
       [scope.companyId]
-    ).catch(() => [{ totalJudgments: 0, totalPaid: 0 }]);
+    ).catch((e) => { logger.error(e, "legal query failed"); return [{ totalJudgments: 0, totalPaid: 0 }]; });
     res.json({
       data: {
         byStatus: cases,

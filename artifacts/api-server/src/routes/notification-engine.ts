@@ -605,6 +605,13 @@ router.post("/webhooks", requirePermission("admin:write"), async (req: Request, 
     if (!["http:", "https:"].includes(parsedUrl.protocol)) {
       throw new ValidationError("Webhook URL must use http or https");
     }
+    const hostname = parsedUrl.hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
+        || hostname.startsWith("10.") || hostname.startsWith("192.168.")
+        || /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)
+        || hostname.endsWith(".internal") || hostname.endsWith(".local")) {
+      throw new ValidationError("Webhook URL must not point to internal/private networks");
+    }
 
     const rows = await rawQuery<{ id: number }>(
       `INSERT INTO notification_webhooks ("companyId", name, url, secret, events, headers, "isActive", "createdBy")
@@ -647,6 +654,13 @@ router.put("/webhooks/:id", requirePermission("admin:write"), async (req: Reques
       const parsedUrl = new URL(url);
       if (!["http:", "https:"].includes(parsedUrl.protocol)) {
         throw new ValidationError("Webhook URL must use http or https");
+      }
+      const hostname = parsedUrl.hostname;
+      if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
+          || hostname.startsWith("10.") || hostname.startsWith("192.168.")
+          || /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)
+          || hostname.endsWith(".internal") || hostname.endsWith(".local")) {
+        throw new ValidationError("Webhook URL must not point to internal/private networks");
       }
     }
 

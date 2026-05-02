@@ -1,5 +1,5 @@
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
-import { createJournalEntry, createGuardedJournalEntry, getAccountCodeFromMapping, emitEvent, createAuditLog, currentYear, currentMonthPadded, roundTo2 } from "./businessHelpers.js";
+import { createGuardedJournalEntry, getAccountCodeFromMapping, emitEvent, createAuditLog, currentYear, currentMonthPadded, roundTo2 } from "./businessHelpers.js";
 import { NotFoundError, ConflictError, ValidationError } from "./errorHandler.js";
 import { logger } from "./logger.js";
 
@@ -72,6 +72,18 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     throw new NotFoundError("بعض المجموعات غير موجودة");
   }
 
+  const alreadyInvoiced = await rawQuery<any>(
+    `SELECT DISTINCT si."groupId", inv.ref
+     FROM umrah_sales_invoice_items si
+     JOIN umrah_sales_invoices inv ON inv.id = si."invoiceId"
+     WHERE si."groupId" = ANY($1) AND inv."companyId" = $2 AND inv.status != 'cancelled'`,
+    [groupIds, scope.companyId]
+  );
+  if (alreadyInvoiced.length > 0) {
+    const refs = alreadyInvoiced.map((r: any) => r.ref).join(", ");
+    throw new ConflictError(`بعض المجموعات مفوترة مسبقاً في: ${refs}`);
+  }
+
   const lineItems: InvoiceLineItem[] = [];
   let subtotal = 0;
   let totalPilgrims = 0;
@@ -82,6 +94,10 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     const mutamerCount = grp.mutamerCount || 0;
     const entryDate = grp.entryDate;
 
+    if (!entryDate) {
+      throw new ValidationError(`المجموعة ${grp.nuskGroupNumber} لا تحتوي على تاريخ دخول — لا يمكن تحديد السعر`);
+    }
+
     const [pricing] = await rawQuery<any>(
       `SELECT "pricePerMutamer" FROM umrah_pricing
        WHERE "companyId" = $1 AND "deletedAt" IS NULL
@@ -90,7 +106,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
          AND "validFrom" <= $5 AND "validTo" >= $5
        ORDER BY "subAgentId" DESC NULLS LAST, "validFrom" DESC
        LIMIT 1`,
-      [scope.companyId, subAgentId, subAgent.agentId, seasonId, entryDate || new Date()]
+      [scope.companyId, subAgentId, subAgent.agentId, seasonId, entryDate]
     );
 
     if (!pricing) {
@@ -563,7 +579,7 @@ export async function getDashboard(scope: Scope, seasonId: number) {
     `SELECT
        COUNT(*)::int AS "totalMutamers",
        COUNT(*) FILTER (WHERE "isInsideKingdom" = TRUE)::int AS "insideKingdom",
-       COUNT(*) FILTER (WHERE status IN ('overstayed','overstay'))::int AS "overstayCount",
+       COUNT(*) FILTER (WHERE status = 'overstayed')::int AS "overstayCount",
        COUNT(*) FILTER (WHERE status = 'absconded')::int AS "abscondedCount"
      FROM umrah_pilgrims
      WHERE "companyId" = $1 AND "seasonId" = $2 AND "deletedAt" IS NULL`,

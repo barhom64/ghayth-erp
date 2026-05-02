@@ -4,7 +4,9 @@ import {
   NotFoundError,
   IntegrationError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
+import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -24,6 +26,41 @@ export type { RecurringFrequency };
 export { computeNextRunDate, runRecurringJournal, processDueRecurringJournals };
 
 export const recurringRouter = Router();
+
+const VALID_FREQUENCIES = ["daily", "weekly", "monthly", "quarterly", "yearly"] as const;
+
+const recurringJournalLineSchema = z.object({
+  accountCode: z.string(),
+  debit: z.coerce.number().default(0),
+  credit: z.coerce.number().default(0),
+  description: z.string().optional().nullable(),
+  costCenter: z.string().optional().nullable(),
+  departmentId: z.coerce.number().optional().nullable(),
+  projectId: z.coerce.number().optional().nullable(),
+});
+
+const createRecurringJournalSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  frequency: z.string(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  active: z.boolean().default(true),
+  templateLines: z.array(recurringJournalLineSchema),
+  templateRef: z.string().optional(),
+  templateDescription: z.string().optional(),
+});
+
+const updateRecurringJournalSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  frequency: z.string().optional(),
+  startDate: z.string().optional(),
+  nextRunDate: z.string().optional(),
+  active: z.boolean().optional(),
+  templateRef: z.string().optional(),
+  templateDescription: z.string().optional(),
+  templateLines: z.array(recurringJournalLineSchema).optional(),
+});
 
 recurringRouter.get("/recurring-journals", requirePermission("finance:read"), async (req, res) => {
   try {
@@ -110,27 +147,15 @@ recurringRouter.post("/recurring-journals", requirePermission("finance:create"),
     const scope = req.scope!;
 
     const {
-      name, description, frequency, startDate, active = true,
+      name, description, frequency, startDate, active,
       templateLines, templateRef, templateDescription,
-    } = req.body as any;
+    } = zodParse(createRecurringJournalSchema.safeParse(req.body ?? {}));
 
-    if (!name || !String(name).trim()) {
-      throw new ValidationError("اسم القيد الدوري مطلوب", {
-        field: "name",
-        fix: "أدخل اسماً واضحاً",
-      });
-    }
-    const freq = String(frequency || "").toLowerCase() as RecurringFrequency;
-    if (!["daily", "weekly", "monthly", "quarterly", "yearly"].includes(freq)) {
+    const freq = frequency.toLowerCase() as RecurringFrequency;
+    if (!(VALID_FREQUENCIES as readonly string[]).includes(freq)) {
       throw new ValidationError("تكرار غير صالح", {
         field: "frequency",
         fix: "اختر: daily أو weekly أو monthly أو quarterly أو yearly",
-      });
-    }
-    if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
-      throw new ValidationError("تاريخ البدء مطلوب", {
-        field: "startDate",
-        fix: "استخدم الصيغة YYYY-MM-DD",
       });
     }
     const v = validateTemplateLines(templateLines);
@@ -184,7 +209,7 @@ recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:upda
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
-    const b = req.body as any;
+    const b = zodParse(updateRecurringJournalSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<any>(
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -204,7 +229,7 @@ recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:upda
     addField("description", b.description);
     if (b.frequency !== undefined) {
       const freq = String(b.frequency).toLowerCase();
-      if (!["daily", "weekly", "monthly", "quarterly", "yearly"].includes(freq)) {
+      if (!(VALID_FREQUENCIES as readonly string[]).includes(freq)) {
         throw new ValidationError("تكرار غير صالح", {
           field: "frequency",
           fix: "اختر: daily أو weekly أو monthly أو quarterly أو yearly",

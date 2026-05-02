@@ -47,6 +47,33 @@ const createKbSchema = z.object({
   tags: z.any().optional(),
 });
 
+const updateTicketSchema = z.object({
+  status: z.string().optional(),
+  assigneeId: z.coerce.number().optional().nullable(),
+  priority: z.enum(["low", "medium", "high", "urgent", "critical"]).optional(),
+  billableAmount: z.coerce.number().optional(),
+});
+
+const updateKbSchema = z.object({
+  title: z.string().optional(),
+  content: z.string().optional(),
+  category: z.string().optional(),
+  tags: z.any().optional(),
+  status: z.string().optional(),
+});
+
+const createFieldVisitSchema = z.object({
+  clientLat: z.coerce.number().optional().nullable(),
+  clientLon: z.coerce.number().optional().nullable(),
+  officeLat: z.coerce.number().optional().nullable(),
+  officeLon: z.coerce.number().optional().nullable(),
+  visitDate: z.string().optional().nullable(),
+});
+
+const kbFeedbackSchema = z.object({
+  helpful: z.any(),
+});
+
 const PRIORITY_KEYWORDS: Record<string, string[]> = {
   critical: ['عاجل', 'طارئ', 'كارثة', 'توقف', 'انهيار', 'حريق', 'خطير', 'فوري', 'down', 'outage', 'emergency', 'critical'],
   high: ['مهم', 'سريع', 'تعطل', 'خلل', 'broken', 'error', 'fail', 'urgent'],
@@ -73,7 +100,7 @@ router.get("/tickets", requirePermission("support:read"), async (req, res) => {
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
     if (priority) { where += ` AND t.priority = $${paramIdx}`; params.push(priority); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT t.*, cl.name AS "clientName", e.name AS "assigneeName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" LEFT JOIN employees e ON e.id=t."assigneeId" WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC LIMIT 500`,
+      `SELECT t.*, cl.name AS "clientName", e.name AS "assigneeName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=t."assigneeId" WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -233,7 +260,7 @@ router.post("/tickets/check-sla", requirePermission("support:read"), async (req,
   try {
     const scope = req.scope!;
     const breached = await rawQuery<any>(
-      `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" WHERE t."companyId"=$1 AND t.status IN ('open','in_progress','field_visit') AND t."slaDeadline" < NOW() AND t."deletedAt" IS NULL`,
+      `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."deletedAt" IS NULL WHERE t."companyId"=$1 AND t.status IN ('open','in_progress','field_visit') AND t."slaDeadline" < NOW() AND t."deletedAt" IS NULL`,
       [scope.companyId]
     );
     for (const ticket of breached) {
@@ -274,7 +301,7 @@ router.get("/tickets/:id", requirePermission("support:read"), async (req, res) =
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [ticket] = await rawQuery<any>(
-      `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" WHERE t.id=$1 AND t."companyId"=$2 AND t."deletedAt" IS NULL`,
+      `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."deletedAt" IS NULL WHERE t.id=$1 AND t."companyId"=$2 AND t."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
@@ -345,11 +372,11 @@ router.post("/tickets/:id/field-visit", requirePermission("support:write"), asyn
   try {
     const scope = req.scope!;
     const ticketId = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(createFieldVisitSchema.safeParse(req.body ?? {}));
 
     let distanceKm: number | null = null;
     if (b.clientLat && b.clientLon && b.officeLat && b.officeLon) {
-      distanceKm = haversineKm(Number(b.officeLat), Number(b.officeLon), Number(b.clientLat), Number(b.clientLon));
+      distanceKm = haversineKm(b.officeLat, b.officeLon, b.clientLat, b.clientLon);
     }
 
     const row = await applyTransition<any>({
@@ -419,7 +446,7 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
   try {
     const scope = req.scope!;
     const ticketId = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(updateTicketSchema.safeParse(req.body));
 
     // Pre-read for transition validation and pre-update state snapshot.
     const [ticket] = await rawQuery<any>(
@@ -432,7 +459,7 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
 
     if (statusChanging) {
       const allowed = TICKET_TRANSITIONS[ticket.status] ?? [];
-      if (!allowed.includes(b.status)) {
+      if (!allowed.includes(b.status!)) {
         throw new ConflictError(
           `لا يمكن نقل التذكرة من "${ticket.status}" إلى "${b.status}"`,
           {
@@ -557,7 +584,7 @@ router.delete("/tickets/:id", requirePermission("support:delete"), async (req, r
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id, ref, status FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("التذكرة غير موجودة");
-    await rawExecute(`UPDATE support_tickets SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE support_tickets SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     emitEvent({
       companyId: scope.companyId,
@@ -608,7 +635,7 @@ router.get("/stats", requirePermission("support:read"), async (req, res) => {
     const [tickets] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='resolved') as resolved, COUNT(*) FILTER (WHERE status IN ('open','in_progress','field_visit') AND "slaDeadline" < NOW()) as "slaBreach" FROM support_tickets WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [avgRes] = await rawQuery<any>(`SELECT AVG(EXTRACT(EPOCH FROM ("resolvedAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND status='resolved' AND "resolvedAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]);
     const [firstResponse] = await rawQuery<any>(`SELECT AVG(EXTRACT(EPOCH FROM ("firstResponseAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND "firstResponseAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]);
-    const [csat] = await rawQuery<any>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [cid]).catch(() => [{ avg: null, total: 0 }]);
+    const [csat] = await rawQuery<any>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "support query failed"); return [{ avg: null, total: 0 }]; });
     res.json({
       totalTickets: Number(tickets.total), openTickets: Number(tickets.open),
       resolvedTickets: Number(tickets.resolved), slaBreach: Number(tickets.slaBreach),
@@ -655,7 +682,7 @@ router.get("/csat", requirePermission("support:read"), async (req, res) => {
     const rows = await rawQuery<any>(
       `SELECT cr.*, t.ref AS "ticketRef", t.title AS "ticketTitle", e.name AS "assigneeName"
        FROM ticket_csat_ratings cr
-       LEFT JOIN support_tickets t ON t.id=cr."ticketId"
+       LEFT JOIN support_tickets t ON t.id=cr."ticketId" AND t."deletedAt" IS NULL
        LEFT JOIN employees e ON e.id=cr."assigneeId"
        WHERE cr."companyId"=$1 ORDER BY cr."createdAt" DESC LIMIT 100`,
       [scope.companyId]
@@ -720,7 +747,7 @@ router.patch("/kb/:id", requirePermission("support:write"), async (req, res) => 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(updateKbSchema.safeParse(req.body));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
@@ -768,7 +795,7 @@ router.post("/kb/:id/feedback", requirePermission("support:read"), async (req, r
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { helpful } = req.body;
+    const { helpful } = zodParse(kbFeedbackSchema.safeParse(req.body ?? {}));
     const [row] = await rawQuery<any>(
       `SELECT id FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
       [id, scope.companyId]

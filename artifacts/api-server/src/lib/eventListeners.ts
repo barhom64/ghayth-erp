@@ -1,7 +1,7 @@
 import { eventBus, registerCrossDomainHandler, type EventPayload } from "./eventBus.js";
 import { pool, rawQuery, rawExecute } from "./rawdb.js";
 import { logger } from "./logger.js";
-import { createNotification, getManagerAssignmentId, createJournalEntry, getAccountCodeFromMapping, todayISO, toDateISO, currentYear } from "./businessHelpers.js";
+import { createNotification, getManagerAssignmentId, createGuardedJournalEntry, getAccountCodeFromMapping, todayISO, toDateISO, currentYear } from "./businessHelpers.js";
 import { computeDiff } from "./auditDiff.js";
 import { calculateAllForCompany } from "./umrahCommissionEngine.js";
 import { registerObligation, markObligationMet } from "./obligationsEngine.js";
@@ -119,7 +119,7 @@ export function registerEventListeners() {
 
     // Cross-module: mark financial obligation as fulfilled
     if (payload.companyId && payload.entityId) {
-      await markObligationMet(payload.companyId, "invoices", payload.entityId as number, "payment").catch(() => {});
+      await markObligationMet(payload.companyId, "invoices", payload.entityId as number, "payment").catch((e) => logger.error(e, "event listener background task failed"));
     }
   });
 
@@ -351,7 +351,7 @@ export function registerEventListeners() {
            VALUES ($1,$2,$3,$4,false)`,
           [payload.companyId, "expense_obligation", payload.entityId ?? 0,
            `فشل تسجيل التزام المصروف: ${String(oblErr)}`]
-        ).catch(() => {});
+        ).catch((e) => logger.error(e, "event listener background task failed"));
       }
     }
   });
@@ -516,8 +516,8 @@ export function registerEventListeners() {
              VALUES ($1,$2,$3,'pending',NOW(),'official_letter',$4)`,
             [payload.companyId, letter.employeePhone, `${subject}\n\n${body}`, letterId]
           );
-        } catch {
-          /* whatsapp_queue may not exist in every deployment — ignore */
+        } catch (e) {
+          logger.warn(e, "whatsapp_queue table may not exist in this deployment");
         }
       }
 
@@ -550,7 +550,7 @@ export function registerEventListeners() {
          VALUES ($1,$2,$3,$4,false)`,
         [payload.companyId, "hr_letter_dispatch", payload.entityId ?? 0,
          `فشل إرسال الخطاب الرسمي: ${String(err)}`]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "event listener background task failed"));
     }
   });
 
@@ -745,7 +745,7 @@ export function registerEventListeners() {
            VALUES ($1,$2,$3,$4,false)`,
           [payload.companyId, "commission_suspension", payload.entityId ?? 0,
            `فشل تعليق خطط العمولة عند إنهاء خدمة الموظف: ${String(err)}`]
-        ).catch(() => {});
+        ).catch((e) => logger.error(e, "event listener background task failed"));
       }
     }
   });
@@ -791,7 +791,7 @@ export function registerEventListeners() {
            VALUES ($1,$2,$3,$4,false)`,
           [payload.companyId, "commission_auto_calc", payload.entityId ?? 0,
            `فشل حساب العمولات التلقائي عند إنشاء مسيّر الرواتب: ${String(commErr)}`]
-        ).catch(() => {});
+        ).catch((e) => logger.error(e, "event listener background task failed"));
       }
     }
   });
@@ -825,7 +825,7 @@ export function registerEventListeners() {
             lines.push({ accountCode: commPayableCode, debit: comm, credit: 0, description: "تسوية عمولات مستحقة سابقاً" });
             lines.push({ accountCode: salaryPayableCode, debit: 0, credit: comm, description: "عمولات ضمن الرواتب" });
           }
-          await createJournalEntry({
+          await createGuardedJournalEntry({
             companyId: payload.companyId,
             branchId: (payload.branchId as number) || 0,
             createdBy: (payload.userId as number) || 0,
@@ -835,15 +835,11 @@ export function registerEventListeners() {
             sourceType: "payroll_runs",
             sourceId: payload.entityId as number,
             lines,
-          });
+          }, { table: "payroll_runs", id: payload.entityId as number });
         }
       } catch (glErr) {
-        await rawExecute(
-          `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
-           VALUES ($1,$2,$3,$4,false)`,
-          [payload.companyId, "payroll_gl_posting", payload.entityId ?? 0,
-           `فشل ترحيل قيد الرواتب: ${String(glErr)}`]
-        ).catch(() => {});
+        // createGuardedJournalEntry already records in financial_posting_failures
+        logger.error(glErr, `[EventListener] payroll GL posting failed for run #${payload.entityId}`);
       }
     }
   });
@@ -1239,7 +1235,7 @@ export function registerEventListeners() {
          VALUES ($1,$2,$3,$4,false)`,
         [payload.companyId, "obligation_registration", payload.entityId ?? 0,
          `فشل تسجيل الالتزام: ${String(oblErr)}`]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "event listener background task failed"));
     }
 
     // Notification to manager
@@ -1278,7 +1274,7 @@ export function registerEventListeners() {
             getAccountCodeFromMapping(payload.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
             getAccountCodeFromMapping(payload.companyId, "invoice_payment_ar", "credit", "1200"),
           ]);
-          await createJournalEntry({
+          await createGuardedJournalEntry({
             companyId: payload.companyId,
             branchId: (payload.branchId as number) || 0,
             createdBy: (payload.userId as number) || 0,
@@ -1291,15 +1287,11 @@ export function registerEventListeners() {
               { accountCode: cashCode, debit: sarAmount, credit: 0 },
               { accountCode: arCode, debit: 0, credit: sarAmount },
             ],
-          });
+          }, { table: "umrah_payments", id: payload.entityId as number });
         }
       } catch (glErr) {
-        await rawExecute(
-          `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
-           VALUES ($1,$2,$3,$4,false)`,
-          [payload.companyId, "payment_gl_recovery", payload.entityId ?? 0,
-           `فشل استعادة قيد الدفعة: ${String(glErr)}`]
-        ).catch(() => {});
+        // createGuardedJournalEntry already records in financial_posting_failures
+        logger.error(glErr, `[EventListener] payment GL recovery failed for payment #${payload.entityId}`);
       }
     }
 
@@ -1311,7 +1303,7 @@ export function registerEventListeners() {
           [alloc.invoiceId, payload.companyId]
         );
         if (inv?.status === "paid") {
-          await markObligationMet(payload.companyId, "umrah_sales_invoices", alloc.invoiceId, "payment").catch(() => {});
+          await markObligationMet(payload.companyId, "umrah_sales_invoices", alloc.invoiceId, "payment").catch((e) => logger.error(e, "event listener background task failed"));
         }
       }
     }
@@ -1353,7 +1345,7 @@ export function registerEventListeners() {
             getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "6200"),
             getAccountCodeFromMapping(payload.companyId, "commission_payable", "credit", "2150"),
           ]);
-          await createJournalEntry({
+          await createGuardedJournalEntry({
             companyId: payload.companyId,
             branchId: (payload.branchId as number) || 0,
             createdBy: (payload.userId as number) || 0,
@@ -1366,14 +1358,10 @@ export function registerEventListeners() {
               { accountCode: expenseCode, debit: finalAmount, credit: 0, description: `مصروف عمولة` },
               { accountCode: payableCode, debit: 0, credit: finalAmount, description: `عمولة مستحقة` },
             ],
-          });
+          }, { table: "employee_commission_plans", id: planId });
         } catch (glErr) {
-          await rawExecute(
-            `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
-             VALUES ($1,$2,$3,$4,false)`,
-            [payload.companyId, "commission_gl_recovery", planId,
-             `فشل استعادة قيد العمولة: ${String(glErr)}`]
-          ).catch(() => {});
+          // createGuardedJournalEntry already records in financial_posting_failures
+          logger.error(glErr, `[EventListener] commission GL recovery failed for plan #${planId}`);
         }
       }
     }
@@ -1433,7 +1421,7 @@ export function registerEventListeners() {
              VALUES ($1,$2,$3,$4,false)`,
             [payload.companyId, "commission_payroll_link", planId,
              `فشل ربط العمولة بمسير الرواتب — خطة ${planId} شهر ${month}/${year}: ${String(plErr)}`]
-          ).catch(() => {});
+          ).catch((e) => logger.error(e, "event listener background task failed"));
         }
       } else if (!activeRun && mgr) {
         await createNotification({

@@ -171,7 +171,7 @@ export async function emitEvent(params: {
           [params.companyId, params.userId, params.action, params.entity,
            String(params.entityId), params.details ?? null]
         );
-      } catch { /* DB also failed — last resort */ }
+      } catch (e) { logger.error(e, "event_logs fallback insert also failed"); }
     }
     logger.error(err, "[emitEvent] listener failed, event persisted to event_logs:");
   }
@@ -429,7 +429,7 @@ export async function createGuardedJournalEntry(
         `UPDATE "${safeTable}" SET "glStatus" = 'failed', "updatedAt" = NOW() WHERE id = $1`,
         [guard.id]
       );
-    } catch { /* column may not exist — best effort */ }
+    } catch (e) { logger.warn(e, "glStatus column may not exist on source table"); }
 
     await rawExecute(
       `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,"createdAt")
@@ -753,7 +753,7 @@ export async function updateBudgetUsed(params: {
     `UPDATE budgets SET used = used + $1
      WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4`,
     [Number(params.amount), params.companyId, params.accountCode, targetPeriod]
-  ).catch(() => {});
+  ).catch((e) => logger.error(e, "budget usage update failed"));
 }
 
 export async function getAssignmentIdByRole(companyId: number, branchId: number, role: string): Promise<number | null> {

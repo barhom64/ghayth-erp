@@ -3,6 +3,7 @@
 // All journal entries go through the Financial Engine.
 
 import { financialEngine } from "./financialEngine.js";
+import { logger } from "../logger.js";
 import { eventBus } from "../eventBus.js";
 import { rawExecute } from "../rawdb.js";
 import type { DomainEngine } from "./domainEngineBase.js";
@@ -126,7 +127,7 @@ class ProjectsEngineImpl implements DomainEngine {
          AND status NOT IN ('completed','cancelled')
          AND ("dueDate" IS NULL OR "dueDate" BETWEEN $3 AND $4)`,
       [params.toEmployeeQuery.id, params.fromEmployeeQuery.id, params.startDate, params.endDate]
-    ).catch(() => {});
+    ).catch((e) => logger.error(e, "project task reassignment failed"));
   }
 }
 

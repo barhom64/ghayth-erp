@@ -413,7 +413,7 @@ router.get("/", async (req, res) => {
            AND lr."createdAt" < NOW() - INTERVAL '3 days'
          ORDER BY lr."createdAt" ASC LIMIT 5`,
         [scope.employeeId]
-      ).catch(() => []);
+      ).catch((e) => { logger.error(e, "my space query failed"); return []; });
       overdueItems = [...overdueTasks, ...overdueRequests];
     } catch (e) {
       logger.error(e, "my-space overdueItems error:");
@@ -430,7 +430,7 @@ router.get("/", async (req, res) => {
            AND "expiryDate" BETWEEN $2 AND $3
          ORDER BY "expiryDate" ASC LIMIT 10`,
         [scope.employeeId, today, toDateISO(thirtyDaysLater)]
-      ).catch(() => []);
+      ).catch((e) => { logger.error(e, "my space query failed"); return []; });
       const expiringContracts = await rawQuery<any>(
         `SELECT c.id, CONCAT('عقد إيجار - ', pu."unitNumber") AS title, 'contract' AS "itemType", c."endDate" AS "expiryDate"
          FROM rental_contracts c
@@ -439,7 +439,7 @@ router.get("/", async (req, res) => {
            AND c."endDate" BETWEEN $2 AND $3
          ORDER BY c."endDate" ASC LIMIT 10`,
         [scope.companyId, today, toDateISO(thirtyDaysLater)]
-      ).catch(() => []);
+      ).catch((e) => { logger.error(e, "my space query failed"); return []; });
       let expiringInsurance: any[] = [];
       try {
         expiringInsurance = await rawQuery<any>(
@@ -707,7 +707,7 @@ router.get("/requests", async (req, res) => {
       conditions.push(`wi."requestType" = $${params.length}`);
     }
 
-    params.push(Number(limit));
+    params.push(Number(limit) || 20);
     const rows = await rawQuery<any>(
       `SELECT wi.id, wi."requestType", wi.title, wi.status, wi."slaStatus",
               wi."currentStepOrder", wi."createdAt", wi."completedAt",
@@ -727,7 +727,7 @@ router.get("/requests", async (req, res) => {
        WHERE lr."employeeId" = $1 AND lr."deletedAt" IS NULL
        ORDER BY lr."createdAt" DESC LIMIT 20`,
       [scope.employeeId]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "my space query failed"); return []; });
 
     res.json({ data: rows, leaveRequests: leaveRows, total: rows.length });
   } catch (err) {

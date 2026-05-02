@@ -300,9 +300,9 @@ reportsRouter.get("/reports/cash-flow", requirePermission("finance:read"), async
 reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { entityType, entityId } = req.params;
+    const { entityType } = req.params;
     const { startDate, endDate } = req.query as any;
-    const id = Number(entityId);
+    const id = parseId(req.params.entityId, "entityId");
 
     function buildDateFilter(fixedCount: number, sd: string | undefined, ed: string | undefined) {
       const extraParams: any[] = [];
@@ -649,7 +649,7 @@ reportsRouter.get("/reports/entity-statement", requirePermission("finance:read")
         `SELECT e.name, ea.id AS aid FROM employees e
          JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1
          WHERE e.id = $2 LIMIT 1`,
-        [scope.companyId, Number(entityId)]
+        [scope.companyId, (Number(entityId) || 0)]
       );
       entityName = emp?.name || "";
       const aid = emp?.aid;
@@ -669,9 +669,9 @@ reportsRouter.get("/reports/entity-statement", requirePermission("finance:read")
         );
       }
     } else if (entityType === "client" && entityId) {
-      const [cl] = await rawQuery<any>(`SELECT name FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(entityId), scope.companyId]);
+      const [cl] = await rawQuery<any>(`SELECT name FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [(Number(entityId) || 0), scope.companyId]);
       entityName = cl?.name || "";
-      const qParams: any[] = [Number(entityId), scope.companyId];
+      const qParams: any[] = [(Number(entityId) || 0), scope.companyId];
       let dateFilter = "";
       if (startDate) { qParams.push(startDate); dateFilter += ` AND i."createdAt" >= $${qParams.length}`; }
       if (endDate) { qParams.push(endDate); dateFilter += ` AND i."createdAt" <= $${qParams.length}`; }
@@ -685,9 +685,9 @@ reportsRouter.get("/reports/entity-statement", requirePermission("finance:read")
         qParams
       );
     } else if (entityType === "supplier" && entityId) {
-      const [sup] = await rawQuery<any>(`SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2`, [Number(entityId), scope.companyId]);
+      const [sup] = await rawQuery<any>(`SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2`, [(Number(entityId) || 0), scope.companyId]);
       entityName = sup?.name || "";
-      const qParams: any[] = [Number(entityId), scope.companyId];
+      const qParams: any[] = [(Number(entityId) || 0), scope.companyId];
       let dateFilter = "";
       if (startDate) { qParams.push(startDate); dateFilter += ` AND po."createdAt" >= $${qParams.length}`; }
       if (endDate) { qParams.push(endDate); dateFilter += ` AND po."createdAt" <= $${qParams.length}`; }

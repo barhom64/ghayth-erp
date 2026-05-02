@@ -338,7 +338,9 @@ describe("Appeal workflow", () => {
   it("appeal requires reason", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('"/memos/:id/appeal"');
     const section = DISCIPLINE_ROUTE.slice(idx, idx + 800);
-    expect(section).toContain("سبب الاستئناف مطلوب");
+    expect(section).toContain("zodParse(appealSchema.safeParse");
+    // The validation message "سبب الاستئناف مطلوب" is defined in the appealSchema Zod definition
+    expect(DISCIPLINE_ROUTE).toContain("سبب الاستئناف مطلوب");
   });
 
   it("appeal-decision accepts accepted/rejected", () => {

@@ -280,9 +280,8 @@ describe("Validation schemas and checks", () => {
   it("POST /pbx/status validates callId is present", () => {
     const idx = COMM_ROUTE.indexOf('router.post("/pbx/status"');
     const section = COMM_ROUTE.slice(idx, idx + 3000);
-    expect(section).toContain("!callId");
-    expect(section).toContain("ValidationError");
-    expect(section).toContain("callId مطلوب");
+    expect(section).toContain("zodParse(pbxStatusSchema.safeParse");
+    expect(section).toContain("callId");
   });
 
   it("PATCH /log/:id throws when no updatable fields are provided", () => {
@@ -295,9 +294,8 @@ describe("Validation schemas and checks", () => {
   it("DELETE /push/unsubscribe validates endpoint is present", () => {
     const idx = COMM_ROUTE.indexOf('router.delete("/push/unsubscribe"');
     const section = COMM_ROUTE.slice(idx, idx + 3000);
-    expect(section).toContain("!endpoint");
-    expect(section).toContain("ValidationError");
-    expect(section).toContain("endpoint مطلوب");
+    expect(section).toContain("zodParse(pushUnsubscribeSchema.safeParse");
+    expect(section).toContain("endpoint");
   });
 });
 

@@ -9,12 +9,31 @@ import {
   NotFoundError,
   ConflictError,
   parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, currentYear, generateRef as makeRef } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
 const correspondenceRouter = Router();
 correspondenceRouter.use(authMiddleware);
+
+const respondSchema = z.object({
+  subject: z.string().optional(),
+  content: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const patchCorrespondenceSchema = z.object({
+  subject: z.string().optional(),
+  content: z.string().optional(),
+  senderName: z.string().optional(),
+  senderOrg: z.string().optional(),
+  recipientName: z.string().optional(),
+  recipientOrg: z.string().optional(),
+  channel: z.string().optional(),
+  notes: z.string().optional(),
+  branchId: z.coerce.number().optional(),
+});
 
 const createSchema = z.object({
   direction: z.enum(["outgoing", "incoming"]),
@@ -156,15 +175,16 @@ correspondenceRouter.patch("/:id", requirePermission("communications:write"), as
       throw new ValidationError("لا يمكن تعديل مراسلة تم إرسالها");
     }
 
+    const validated = zodParse(patchCorrespondenceSchema.safeParse(req.body ?? {}));
     const allowed = [
       "subject", "content", "senderName", "senderOrg",
       "recipientName", "recipientOrg", "channel", "notes", "branchId",
-    ];
+    ] as const;
     const sets: string[] = [];
     const params: any[] = [];
     for (const key of allowed) {
-      if (req.body[key] !== undefined) {
-        params.push(req.body[key]);
+      if ((validated as any)[key] !== undefined) {
+        params.push((validated as any)[key]);
         sets.push(`"${key}" = $${params.length}`);
       }
     }
@@ -222,7 +242,8 @@ correspondenceRouter.post("/:id/respond", requirePermission("communications:writ
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { subject, content, notes } = req.body as { subject?: string; content?: string; notes?: string };
+    const b = zodParse(respondSchema.safeParse(req.body ?? {}));
+    const { subject, content, notes } = b;
 
     const [original] = await rawQuery<any>(
       `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,

@@ -3,12 +3,13 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { logger } from "../lib/logger.js";
 
 export const calendarRouter = Router();
 calendarRouter.use(authMiddleware);
 
 async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
-  try { return await fn(); } catch { return fallback; }
+  try { return await fn(); } catch (e) { logger.error(e, "calendar query failed"); return fallback; }
 }
 
 calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req, res) => {
@@ -102,7 +103,7 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
       safe(() => rawQuery<any>(
         `SELECT id, "unitNumber", "insuranceExpiry" as "date"
          FROM property_units
-         WHERE "companyId" = $1 AND "insuranceExpiry" BETWEEN $2 AND $3
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "insuranceExpiry" BETWEEN $2 AND $3
          ORDER BY "insuranceExpiry" LIMIT 30`,
         [cid, now.slice(0, 10), cutoff.slice(0, 10)]
       ), []),

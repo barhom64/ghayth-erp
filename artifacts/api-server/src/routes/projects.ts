@@ -135,6 +135,14 @@ const createCostSchema = z.object({
   sourceType: z.string().optional(),
 });
 
+const impactPreviewSchema = z.object({
+  managerId: z.coerce.number().optional().nullable(),
+  budget: z.union([z.coerce.number(), z.string()]).optional().nullable(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+  type: z.string().optional().nullable(),
+});
+
 const closeProjectSchema = z.object({});
 
 const router = Router();
@@ -194,7 +202,8 @@ const RISK_TRANSITIONS: Record<string, readonly string[]> = {
 router.post("/impact-preview", requirePermission("projects:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { managerId, budget, startDate, endDate, type } = req.body as any;
+    const b = zodParse(impactPreviewSchema.safeParse(req.body ?? {}));
+    const { managerId, budget, startDate, endDate, type } = b;
 
     const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
 
@@ -327,7 +336,7 @@ router.get("/", requirePermission("projects:read"), async (req, res) => {
     }
 
     const rows = await rawQuery<any>(
-      `SELECT p.*, cl.name AS "clientName", e.name AS "managerName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" LEFT JOIN employees e ON e.id=p."managerId" WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.id DESC LIMIT 500`,
+      `SELECT p.*, cl.name AS "clientName", e.name AS "managerName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=p."managerId" WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -514,7 +523,7 @@ router.get("/:id", requirePermission("projects:read"), async (req, res) => {
       }
     }
 
-    const [project] = await rawQuery<any>(`SELECT p.*, cl.name AS "clientName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" WHERE ${detailWhere}`, detailParams);
+    const [project] = await rawQuery<any>(`SELECT p.*, cl.name AS "clientName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."deletedAt" IS NULL WHERE ${detailWhere}`, detailParams);
     if (!project) throw new NotFoundError("المشروع غير موجود");
     const phases = await rawQuery<any>(`SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`, [project.id]);
     const tasks = await rawQuery<any>(`SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" WHERE pt."projectId"=$1 AND pt."deletedAt" IS NULL ORDER BY pt."dueDate" LIMIT 500`, [project.id]);
@@ -584,7 +593,7 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
     }
     const [existing] = await rawQuery<any>(findQuery, findParams);
     if (!existing) throw new NotFoundError("المشروع غير موجود");
-    const b = req.body;
+    const b = parsed;
 
     // Closed/cancelled projects are frozen — refuse any PATCH on them, even
     // edits to non-status fields. The /close endpoint is the only way out.
@@ -602,7 +611,7 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
     // State machine — /close is the only way to reach `completed`; PATCH
     // refuses direct transitions to terminal states.
     if (b.status !== undefined && b.status !== existing.status) {
-      if (!PROJECT_STATUSES.includes(b.status)) {
+      if (!(PROJECT_STATUSES as readonly string[]).includes(b.status)) {
         throw new ValidationError(
           `حالة مشروع غير صالحة: ${b.status}`,
           { field: "status", fix: `اختر من: ${PROJECT_STATUSES.join(", ")}` }
@@ -1448,10 +1457,10 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
     );
     if (!existing) throw new NotFoundError("المعلم غير موجود");
     await assertProjectAccess(existing.projectId, scope);
-    const b = req.body;
+    const b = parsed;
 
     if (b.status !== undefined && b.status !== existing.status) {
-      if (!MILESTONE_STATUSES.includes(b.status)) {
+      if (!(MILESTONE_STATUSES as readonly string[]).includes(b.status)) {
         throw new ValidationError(
           `حالة معلَم غير صالحة: ${b.status}`,
           { field: "status", fix: `اختر من: ${MILESTONE_STATUSES.join(", ")}` }
@@ -1589,10 +1598,10 @@ router.patch("/risks/:riskId", requirePermission("projects:update"), async (req,
     );
     if (!existingRisk) throw new NotFoundError("المخاطرة غير موجودة");
     await assertProjectAccess(existingRisk.projectId, scope);
-    const b = req.body;
+    const b = parsed;
 
     if (b.status !== undefined && b.status !== existingRisk.status) {
-      if (!RISK_STATUSES.includes(b.status)) {
+      if (!(RISK_STATUSES as readonly string[]).includes(b.status)) {
         throw new ValidationError(
           `حالة مخاطرة غير صالحة: ${b.status}`,
           { field: "status", fix: `اختر من: ${RISK_STATUSES.join(", ")}` }

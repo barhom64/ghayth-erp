@@ -1,4 +1,4 @@
-import { handleRouteError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, NotFoundError, parseId } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -18,11 +18,11 @@ router.get("/cron-jobs", requirePermission("admin:read"), async (req, res): Prom
 router.post("/cron-jobs/:id/toggle", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
-    await rawExecute(`UPDATE cron_jobs SET "isActive" = NOT "isActive" WHERE id=$1`, [Number(id)]);
-    const [row] = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE id=$1`, [Number(id)]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "cron_jobs", entityId: Number(id), after: { isActive: row?.isActive } }).catch((e) => logger.error(e, "automation background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "automation.cron_job.toggled", entity: "cron_jobs", entityId: Number(id), details: JSON.stringify({ isActive: row?.isActive }) }).catch((e) => logger.error(e, "automation background task failed"));
+    const id = parseId(req.params.id, "id");
+    await rawExecute(`UPDATE cron_jobs SET "isActive" = NOT "isActive" WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE id=$1`, [id]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "cron_jobs", entityId: id, after: { isActive: row?.isActive } }).catch((e) => logger.error(e, "automation background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "automation.cron_job.toggled", entity: "cron_jobs", entityId: id, details: JSON.stringify({ isActive: row?.isActive }) }).catch((e) => logger.error(e, "automation background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Toggle cron error:"); }
 });
@@ -30,14 +30,14 @@ router.post("/cron-jobs/:id/toggle", requirePermission("admin:write"), async (re
 router.post("/cron-jobs/:id/trigger", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
-    const [job] = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE id=$1`, [Number(id)]);
+    const id = parseId(req.params.id, "id");
+    const [job] = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE id=$1`, [id]);
     if (!job) throw new NotFoundError("المهمة غير موجودة");
 
     const result = await triggerJobByName(job.name);
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "cron_jobs", entityId: Number(id), after: { jobName: job.name, success: result.success } }).catch((e) => logger.error(e, "automation background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "automation.cron_job.triggered", entity: "cron_jobs", entityId: Number(id), details: JSON.stringify({ jobName: job.name, success: result.success }) }).catch((e) => logger.error(e, "automation background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "cron_jobs", entityId: id, after: { jobName: job.name, success: result.success } }).catch((e) => logger.error(e, "automation background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "automation.cron_job.triggered", entity: "cron_jobs", entityId: id, details: JSON.stringify({ jobName: job.name, success: result.success }) }).catch((e) => logger.error(e, "automation background task failed"));
     if (result.success) {
       res.json({ success: true, message: "تم تشغيل المهمة بنجاح", result: result.result });
     } else {
@@ -51,7 +51,7 @@ router.get("/cron-logs", requirePermission("admin:read"), async (req, res): Prom
     const { jobId } = req.query as any;
     const conditions: string[] = [];
     const params: any[] = [];
-    if (jobId) { params.push(Number(jobId)); conditions.push(`"jobId" = $${params.length}`); }
+    if (jobId) { params.push(Number(jobId) || 0); conditions.push(`"jobId" = $${params.length}`); }
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : '';
     const rows = await rawQuery<any>(`SELECT * FROM cron_logs ${where} ORDER BY "createdAt" DESC LIMIT 100`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -102,18 +102,18 @@ router.get("/proactive-rules", requirePermission("admin:read"), async (req, res)
 router.post("/proactive-rules/:id/toggle", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     await rawExecute(
       `UPDATE proactive_rules SET "isActive" = NOT "isActive" WHERE id=$1 AND "companyId"=$2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     const [row] = await rawQuery<any>(
       `SELECT * FROM proactive_rules WHERE id=$1 AND "companyId"=$2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("القاعدة غير موجودة");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "proactive_rules", entityId: Number(id), after: { isActive: row?.isActive } }).catch((e) => logger.error(e, "automation background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "automation.proactive_rule.toggled", entity: "proactive_rules", entityId: Number(id), details: JSON.stringify({ isActive: row?.isActive }) }).catch((e) => logger.error(e, "automation background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "proactive_rules", entityId: id, after: { isActive: row?.isActive } }).catch((e) => logger.error(e, "automation background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "automation.proactive_rule.toggled", entity: "proactive_rules", entityId: id, details: JSON.stringify({ isActive: row?.isActive }) }).catch((e) => logger.error(e, "automation background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Toggle proactive rule error:"); }
 });

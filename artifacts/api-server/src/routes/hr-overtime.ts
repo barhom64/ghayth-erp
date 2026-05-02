@@ -88,6 +88,12 @@ const rejectOvertimeSchema = z.object({
   reason: z.string().optional(),
 });
 
+const approvalDecisionSchema = z.object({
+  approved: z.boolean().default(true),
+  reason: z.string().optional(),
+  notes: z.string().optional(),
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime — قائمة الطلبات
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -277,7 +283,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
       refType: "hr_overtime_request",
       refId: insertId,
       amount: totalAmount,
-    }).catch(() => null);
+    }).catch((e) => { logger.error(e, "hr-overtime approval chain failed"); return null; });
 
     // ── محرك سير العمل ──
     submitWorkflow({
@@ -294,7 +300,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
 
     // ── إشعار المدير (fallback) ──
     if (!approvalResult?.requiresApproval) {
-      const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId ?? scope.branchId).catch(() => null);
+      const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId ?? scope.branchId).catch((e) => { logger.error(e, "hr-overtime manager lookup failed"); return null; });
       if (managerId) {
         createNotification({
           companyId: scope.companyId, assignmentId: managerId,
@@ -334,7 +340,8 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req, res) => {
   try {
-    const { approved = true, reason, notes } = (req.body ?? {}) as { approved?: boolean; reason?: string; notes?: string };
+    const b = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
+    const { approved = true, reason, notes } = b;
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     if (!HR_APPROVAL_ROLES.includes(scope.role)) {
@@ -396,7 +403,7 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
       approved: true,
       decidedBy: scope.activeAssignmentId,
       requesterId: item.assignmentId,
-    }).catch(() => ({ status: "approved" as const, message: "" }));
+    }).catch((e) => { logger.error(e, "hr overtime approval failed"); return { status: "approved" as const, message: "" }; });
 
     if (chainResult.status === "pending_next_step") {
       res.json({

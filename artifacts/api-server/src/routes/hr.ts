@@ -215,6 +215,179 @@ const delegationSchema = z.object({
   endDate: z.string().optional(),
 });
 
+const checkOutSchema = z.object({
+  notes: z.string().optional(),
+  lat: z.coerce.number().optional(),
+  lon: z.coerce.number().optional(),
+});
+
+const approvalDecisionSchema = z.object({
+  approved: z.union([z.boolean(), z.literal("returned")]),
+  reason: z.string().optional(),
+});
+
+const payrollRunSchema = z.object({
+  month: z.string().optional(),
+});
+
+const approvalRequestDecisionSchema = z.object({
+  approved: z.boolean(),
+  reason: z.string().optional(),
+});
+
+const attendancePolicySchema = z.object({
+  lateThresholdMinutes: z.coerce.number().optional(),
+  gpsRadiusMeters: z.coerce.number().optional(),
+  penaltyLevel1: z.coerce.number().optional(),
+  penaltyLevel2: z.coerce.number().optional(),
+  penaltyLevel3: z.coerce.number().optional(),
+  penaltyLevel4: z.coerce.number().optional(),
+  penaltyLevel5: z.coerce.number().optional(),
+  penaltyLevel1Label: z.string().optional(),
+  penaltyLevel2Label: z.string().optional(),
+  penaltyLevel3Label: z.string().optional(),
+  penaltyLevel4Label: z.string().optional(),
+  penaltyLevel5Label: z.string().optional(),
+});
+
+const violationPatchSchema = z.object({
+  type: z.string().optional(),
+  severity: z.string().optional(),
+  deduction: z.coerce.number().optional(),
+  period: z.string().optional(),
+  description: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const violationApprovalSchema = z.object({
+  notes: z.string().optional(),
+});
+
+const shiftPatchSchema = z.object({
+  name: z.string().optional(),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+  days: z.any().optional(),
+  status: z.string().optional(),
+  isDefault: z.boolean().optional(),
+  branchId: z.coerce.number().optional().nullable(),
+  shiftType: z.enum(["fixed", "flexible", "remote", "split"]).optional(),
+  remoteAllowed: z.boolean().optional(),
+  splitBreakStart: z.string().optional(),
+  splitBreakEnd: z.string().optional(),
+  flexStartEarliest: z.string().optional(),
+  flexStartLatest: z.string().optional(),
+});
+
+const leaveRequestPatchSchema = z.object({
+  status: z.string().optional(),
+  reason: z.string().optional(),
+});
+
+const leaveCancelSchema = z.object({
+  reason: z.string().optional(),
+});
+
+const payrollPatchSchema = z.object({
+  status: z.string().optional(),
+});
+
+const performancePatchSchema = z.object({
+  overallScore: z.coerce.number().optional(),
+  score: z.coerce.number().optional(),
+  comments: z.string().optional(),
+  feedback: z.string().optional(),
+  status: z.string().optional(),
+  strengths: z.any().optional(),
+  improvements: z.any().optional(),
+  goals: z.any().optional(),
+});
+
+const officialLetterPatchSchema = z.object({
+  subject: z.string().optional(),
+  content: z.string().optional(),
+  status: z.string().optional(),
+  type: z.string().optional(),
+});
+
+const letterApprovalSchema = z.object({
+  approved: z.union([z.boolean(), z.literal("returned")]).optional(),
+  notes: z.string().optional(),
+});
+
+const onboardingStepsSchema = z.object({
+  steps: z.array(z.string()),
+});
+
+const impactPreviewLeaveSchema = z.object({
+  employeeId: z.coerce.number({ required_error: "معرف الموظف مطلوب" }),
+  leaveTypeId: z.coerce.number({ required_error: "نوع الإجازة مطلوب" }),
+  startDate: z.string().min(1, "تاريخ البداية مطلوب"),
+  endDate: z.string().min(1, "تاريخ النهاية مطلوب"),
+  days: z.coerce.number().optional(),
+});
+
+const impactPreviewTerminationSchema = z.object({
+  employeeId: z.coerce.number({ required_error: "معرف الموظف مطلوب" }),
+});
+
+const impactPreviewViolationSchema = z.object({
+  employeeId: z.coerce.number({ required_error: "معرف الموظف مطلوب" }),
+  deduction: z.coerce.number().optional().default(0),
+  severity: z.string().optional().default("medium"),
+});
+
+const peerEvaluationSchema = z.object({
+  overallScore: z.coerce.number().optional(),
+  scores: z.any().optional(),
+  comments: z.string().optional(),
+});
+
+const upwardReviewSchema = z.object({
+  managerId: z.coerce.number().optional(),
+  overallScore: z.coerce.number().optional(),
+  scores: z.any().optional(),
+  comments: z.string().optional(),
+});
+
+const publicHolidayPatchSchema = z.object({
+  name: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  type: z.string().optional(),
+  description: z.string().optional(),
+  isRecurring: z.boolean().optional(),
+});
+
+const transferApprovalSchema = z.object({
+  approved: z.boolean().optional(),
+  notes: z.string().optional(),
+});
+
+const transferConfirmSchema = z.object({
+  confirmed: z.boolean().optional(),
+  notes: z.string().optional(),
+});
+
+const idpPatchSchema = z.object({
+  title: z.string().optional(),
+  goals: z.any().optional(),
+  skills: z.any().optional(),
+  status: z.string().optional(),
+  targetDate: z.string().optional(),
+  notes: z.string().optional(),
+  progress: z.coerce.number().optional(),
+});
+
+const monthlyAccrualsSchema = z.object({
+  period: z.string().optional(),
+});
+
+const excuseApprovalSchema = z.object({
+  approved: z.boolean().optional(),
+  rejectionReason: z.string().optional(),
+});
+
 const router = Router();
 
 const checkInLimiter = rateLimit({
@@ -594,7 +767,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
     const now = new Date();
     const today = toDateISO(now);
     const period = today.slice(0, 7);
-    const { notes, lat, lon } = req.body as any;
+    const { notes, lat, lon } = zodParse(checkOutSchema.safeParse(req.body ?? {}));
 
     if (!scope.activeAssignmentId) {
       throw new ConflictError("لا يوجد تعيين نشط لهذا الحساب", {
@@ -728,7 +901,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
          WHERE "assignmentId" = $1 AND "excuseDate" = $2 AND status = 'approved' AND "excuseType" IN ('early_leave', 'personal')
          LIMIT 1`,
         [scope.activeAssignmentId, today]
-      ).catch(() => [null]);
+      ).catch((e) => { logger.error(e, "hr query failed"); return [null]; });
       if (approvedExcuse) {
         excusedEarlyLeave = true;
         await rawExecute(
@@ -1471,8 +1644,8 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
   // generic 403.
   try {
     const scope = req.scope!;
-    const { id } = req.params;
-    const { approved, reason } = req.body as { approved: boolean | "returned"; reason?: string };
+    const id = parseId(req.params.id, "id");
+    const { approved, reason } = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
 
     // Authorization: only branch_manager, hr_manager, or owner roles can approve leave
     if (!HR_APPROVAL_ROLES.includes(scope.role)) {
@@ -1490,7 +1663,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
        FROM hr_leave_requests lr
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
        WHERE lr.id = $1 AND lr."companyId" = $2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!request) throw new NotFoundError("الطلب غير موجود");
     if (request.status !== "pending") {
@@ -1506,7 +1679,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
       `SELECT * FROM leave_approval_stages
        WHERE "leaveRequestId" = $1 AND status = 'pending'
        ORDER BY stage ASC LIMIT 1`,
-      [Number(id)]
+      [id]
     );
 
     // Enforce stage-role: approver's role must match the required role for the current stage
@@ -1561,7 +1734,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 
       await applyTransition({
         entity: "hr_leave_requests",
-        id: Number(id),
+        id,
         scope,
         action: "leave.rejected",
         fromStates: ["pending"],
@@ -1577,7 +1750,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
           assignmentId: reqAssignment.id,
           type: "leave_rejected", title: "تم رفض طلب الإجازة",
           body: `تم رفض طلب الإجازة. السبب: ${reason ?? "لم يحدد"}`,
-          priority: "high", refType: "leave_request", refId: Number(id),
+          priority: "high", refType: "leave_request", refId: id,
         }] : [],
         onApply: async (_row, client) => {
           if (currentStage) {
@@ -1596,8 +1769,8 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
           );
           await client.query(
             `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'rejected',$2,$3,$4)`,
-            [Number(id), reason || null, scope.userId, scope.companyId]
-          ).catch(() => {});
+            [id, reason || null, scope.userId, scope.companyId]
+          ).catch((e) => logger.error(e, "hr approval action insert failed"));
         },
       });
 
@@ -1617,7 +1790,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 
       await applyTransition({
         entity: "hr_leave_requests",
-        id: Number(id),
+        id,
         scope,
         action: "leave.returned",
         fromStates: ["pending"],
@@ -1629,7 +1802,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
           assignmentId: reqAssignment.id,
           type: "leave_returned", title: "تم إرجاع طلب الإجازة",
           body: `تم إرجاع طلب الإجازة للمراجعة. السبب: ${reason}`,
-          priority: "medium", refType: "leave_request", refId: Number(id),
+          priority: "medium", refType: "leave_request", refId: id,
         }] : [],
         onApply: async (_row, client) => {
           if (currentStage) {
@@ -1646,8 +1819,8 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
           );
           await client.query(
             `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'returned',$2,$3,$4)`,
-            [Number(id), reason, scope.userId, scope.companyId]
-          ).catch(() => {});
+            [id, reason, scope.userId, scope.companyId]
+          ).catch((e) => logger.error(e, "hr approval action insert failed"));
         },
       });
 
@@ -1706,22 +1879,22 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         await rawExecute(
           `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
            VALUES ($1,$2,$3,$4,$5)`,
-          [Number(id), nextStep.stepOrder, nextStep.requiredRole, nextAssignee.id, nextExpiresAt.toISOString()]
+          [id, nextStep.stepOrder, nextStep.requiredRole, nextAssignee.id, nextExpiresAt.toISOString()]
         );
 
         createNotification({
           companyId: scope.companyId, assignmentId: nextAssignee.id,
           type: "leave_request", title: `طلب إجازة يتطلب مراجعة ${nextStep.requiredRole}`,
           body: `أقر المرحلة ${currentStageNum} على طلب إجازة لمدة ${request.days} أيام`,
-          priority: "high", refType: "leave_request", refId: Number(id),
+          priority: "high", refType: "leave_request", refId: id,
         }).catch((e) => logger.error(e, "hr background task failed"));
 
         emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `leave.stage${currentStageNum}_approved`,
-          entity: "hr_leave_requests", entityId: Number(id) }).catch((e) => logger.error(e, "hr background task failed"));
+          entity: "hr_leave_requests", entityId: id }).catch((e) => logger.error(e, "hr background task failed"));
 
         createAuditLog({
           companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-          action: "update", entity: "hr_leave_requests", entityId: Number(id),
+          action: "update", entity: "hr_leave_requests", entityId: id,
           after: { status: "pending", stage: currentStageNum, nextStage: nextStep.stepOrder },
         }).catch((e) => logger.error(e, "hr background task failed"));
 
@@ -1744,7 +1917,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 
     await applyTransition({
       entity: "hr_leave_requests",
-      id: Number(id),
+      id,
       scope,
       action: "leave.approved",
       fromStates: ["pending"],
@@ -1779,7 +1952,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         await client.query(
           `UPDATE approval_requests SET status = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
            WHERE "refType" = 'leave_request' AND "refId" = $2 AND status = 'pending'`,
-          [scope.activeAssignmentId, Number(id)]
+          [scope.activeAssignmentId, id]
         );
 
         // Retroactive attendance: clear absences, insert on_leave records
@@ -1809,8 +1982,8 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 
         await client.query(
           `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'approved',$2,$3,$4)`,
-          [Number(id), reason || null, scope.userId, scope.companyId]
-        ).catch(() => {});
+          [id, reason || null, scope.userId, scope.companyId]
+        ).catch((e) => logger.error(e, "hr approval action insert failed"));
       },
     });
 
@@ -1820,7 +1993,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         companyId: asn.companyId, assignmentId: asn.id,
         type: "leave_approved", title: "تمت الموافقة على طلب الإجازة",
         body: `تمت الموافقة على إجازة ${request.leaveTypeName} من ${request.startDate} إلى ${request.endDate}`,
-        priority: "high", refType: "leave_request", refId: Number(id),
+        priority: "high", refType: "leave_request", refId: id,
       }).catch((e) => logger.error(e, "hr background task failed"));
     }
     for (const asn of allAssignments) {
@@ -1844,7 +2017,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
             companyId: asn.companyId, assignmentId: managerAId.id,
             type: "leave_approved", title: "موظف في إجازة معتمدة",
             body: `تمت الموافقة على إجازة موظف من ${request.startDate} إلى ${request.endDate}. تم إعادة توزيع المهام.`,
-            priority: "normal", refType: "leave_request", refId: Number(id),
+            priority: "normal", refType: "leave_request", refId: id,
           }).catch((e) => logger.error(e, "hr background task failed"));
         }
       }).catch((e) => logger.error(e, "hr background task failed"));
@@ -1857,7 +2030,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         companyId: scope.companyId,
         branchId: scope.branchId ?? null,
         entityType: "hr_leave_request",
-        entityId: Number(id),
+        entityId: id,
         obligationType: "follow_up",
         title: `عودة للعمل — ${request.employeeName || `موظف #${request.employeeId}`} (${request.leaveTypeName || ""})`,
         dueAt: returnDate.toISOString(),
@@ -1881,11 +2054,11 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 router.get("/leave-requests/:id/stages", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     const [leaveReq] = await rawQuery<any>(
       `SELECT id FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!leaveReq) throw new NotFoundError("الطلب غير موجود");
 
@@ -1896,7 +2069,7 @@ router.get("/leave-requests/:id/stages", requirePermission("hr:read"), async (re
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE las."leaveRequestId" = $1
        ORDER BY las.stage ASC`,
-      [Number(id)]
+      [id]
     );
 
     // Also get the configured chain steps for context
@@ -1929,7 +2102,7 @@ router.get("/leave-requests/:id/stages", requirePermission("hr:read"), async (re
 router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: التصعيد متاح فقط للمدير أو HR أو المالك");
@@ -1937,7 +2110,7 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
 
     const [request] = await rawQuery<any>(
       `SELECT * FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!request) {
       throw new NotFoundError("الطلب غير موجود أو ليس معلقاً");
@@ -1949,7 +2122,7 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
        FROM leave_approval_stages
        WHERE "leaveRequestId" = $1 AND status = 'pending'
        ORDER BY stage ASC LIMIT 1`,
-      [Number(id)]
+      [id]
     );
 
     if (!currentPendingStage) {
@@ -1976,7 +2149,7 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
       `UPDATE leave_approval_stages
        SET status = 'escalated'
        WHERE "leaveRequestId" = $1 AND status = 'pending' AND "expiresAt" < NOW()`,
-      [Number(id)]
+      [id]
     );
 
     const [hrAssignment] = await rawQuery<any>(
@@ -1991,23 +2164,23 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
       await rawExecute(
         `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
          VALUES ($1,99,'hr_manager',$2,$3)`,
-        [Number(id), hrAssignment.id, escalateExpiresAt.toISOString()]
+        [id, hrAssignment.id, escalateExpiresAt.toISOString()]
       );
 
       createNotification({
         companyId: scope.companyId, assignmentId: hrAssignment.id,
         type: "leave_escalated", title: "تصعيد طلب إجازة",
         body: `تم تصعيد طلب إجازة (${id}) لعدم البت فيه خلال المهلة المحددة`,
-        priority: "urgent", refType: "leave_request", refId: Number(id),
+        priority: "urgent", refType: "leave_request", refId: id,
       }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.escalated",
-      entity: "hr_leave_requests", entityId: Number(id) }).catch((e) => logger.error(e, "hr background task failed"));
+      entity: "hr_leave_requests", entityId: id }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "hr_leave_requests", entityId: Number(id),
+      action: "update", entity: "hr_leave_requests", entityId: id,
       after: { status: "escalated" },
     }).catch((e) => logger.error(e, "hr background task failed"));
 
@@ -2123,7 +2296,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
         },
       });
     }
-    const { month } = req.body as { month?: string };
+    const { month } = zodParse(payrollRunSchema.safeParse(req.body ?? {}));
     const targetPeriod = month ?? currentPeriod();
 
     // P02-S5-CRIT — every other GL writer in this file (HR accruals at
@@ -2292,7 +2465,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
        WHERE li."companyId" = $1 AND li.period = $2 AND li.status = 'pending'
        GROUP BY li."assignmentId"`,
       [scope.companyId, targetPeriod]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     for (const row of hrLoanRows) {
       const aId = Number(row.assignmentId);
       loanMap.set(aId, (loanMap.get(aId) ?? 0) + Number(row.installment ?? 0));
@@ -2316,7 +2489,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
        WHERE "companyId" = $1 AND TO_CHAR("overtimeDate", 'YYYY-MM') = $2 AND status = 'approved'
        GROUP BY "assignmentId"`,
       [scope.companyId, targetPeriod]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     const hrOtMap = new Map<number, number>();
     for (const row of hrOtRows) hrOtMap.set(Number(row.assignmentId), Number(row.otAmount ?? 0));
 
@@ -2583,7 +2756,7 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
        WHERE m."violationId" = $1 AND m."companyId" = $2
        ORDER BY m."createdAt" DESC`,
       [item.id, scope.companyId]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
 
     res.json({ ...item, memos });
   } catch (err) { handleRouteError(err, res, "Get violation detail error"); }
@@ -2662,7 +2835,7 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
       refType: "employee_violations",
       refId: insertId,
     }).catch((e) => logger.error(e, "hr background task failed"));
-    const managerAsn = await getManagerAssignmentId(scope.companyId, asn.branchId ?? scope.branchId ?? null).catch(() => null);
+    const managerAsn = await getManagerAssignmentId(scope.companyId, asn.branchId ?? scope.branchId ?? null).catch((e) => { logger.error(e, "hr manager lookup failed"); return null; });
     if (managerAsn && managerAsn !== Number(assignmentId)) {
       createNotification({
         companyId: scope.companyId,
@@ -3105,7 +3278,7 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { approved, reason } = req.body as any;
+    const { approved, reason } = zodParse(approvalRequestDecisionSchema.safeParse(req.body ?? {}));
 
     if (!OPS_CLOSE_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بالموافقة أو الرفض");
@@ -3149,8 +3322,8 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
           [request.refId]
         );
         requesterId = refRow?.requesterId ?? undefined;
-      } catch {
-        // column may not exist for all entity types; skip check
+      } catch (e) {
+        logger.warn(e, "hr approval requester lookup (column may not exist for entity type)");
       }
     }
     if (requesterId !== undefined && requesterId === scope.activeAssignmentId) {
@@ -3172,7 +3345,7 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       const target = entityUpdateMap[request.refType];
       if (target) {
         await rawExecute(
-          `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1 AND "companyId" = $2`,
+          `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status IN ('pending','pending_approval','draft')`,
           [request.refId, scope.companyId]
         );
       }
@@ -3189,7 +3362,7 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       const target = entityUpdateMap[request.refType];
       if (target) {
         await rawExecute(
-          `UPDATE ${target.table} SET ${target.column} = 'rejected' WHERE id = $1 AND "companyId" = $2`,
+          `UPDATE ${target.table} SET ${target.column} = 'rejected' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status IN ('pending','pending_approval','draft')`,
           [request.refId, scope.companyId]
         );
       }
@@ -3211,7 +3384,7 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
           `UPDATE whatsapp_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
             WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
           [request.refId]
-        ).catch(() => { /* whatsapp_queue may not exist */ });
+        ).catch((e) => { logger.warn(e, "hr whatsapp_queue insert failed (table may not exist)"); });
       }
     }
 
@@ -3247,7 +3420,7 @@ router.get("/attendance-policy", requirePermission("hr:read"), async (req, res) 
       penaltyLevel3Label: "خصم يوم", penaltyLevel4Label: "خصم يومين",
       penaltyLevel5Label: "خصم ثلاثة أيام + إنذار نهائي",
     });
-  } catch (_e) { res.json({}); }
+  } catch (e) { logger.error(e, "attendance-policy GET error"); res.json({}); }
 });
 
 router.put("/attendance-policy", requirePermission("hr:update"), async (req, res) => {
@@ -3256,7 +3429,7 @@ router.put("/attendance-policy", requirePermission("hr:update"), async (req, res
     if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح");
     }
-    const b = req.body as any;
+    const b = zodParse(attendancePolicySchema.safeParse(req.body ?? {}));
     await rawExecute(
       `INSERT INTO attendance_policies ("companyId","lateThresholdMinutes","gpsRadiusMeters",
         "penaltyLevel1","penaltyLevel2","penaltyLevel3","penaltyLevel4","penaltyLevel5",
@@ -3368,7 +3541,7 @@ router.patch("/violations/:id", requirePermission("hr:update"), async (req, res)
       throw new ForbiddenError("غير مصرح: تعديل المخالفات مقصور على HR أو المدير أو المالك");
     }
     const id = parseId(req.params.id, "id");
-    const b = req.body as any;
+    const b = zodParse(violationPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
     const params: any[] = [];
     if (b.type !== undefined) { params.push(b.type); sets.push(`type=$${params.length}`); }
@@ -3405,7 +3578,7 @@ async function violationApprovalAction(req: any, res: any, newStatus: "approved"
       throw new ForbiddenError("غير مصرح: اعتماد المخالفات مقصور على HR أو المدير أو المالك");
     }
     const id = parseId(req.params.id, "id");
-    const { notes } = req.body as any;
+    const { notes } = zodParse(violationApprovalSchema.safeParse(req.body ?? {}));
     const [violation] = await rawQuery<any>(
       `SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -3440,7 +3613,7 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body as any;
+    const b = zodParse(shiftPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
     const params: any[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
@@ -3594,7 +3767,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
       });
     }
 
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('letter_number_seq') AS seq`).catch(() => [{ seq: Math.floor(Math.random() * 900000 + 100000) }]);
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('letter_number_seq') AS seq`).catch((e) => { logger.error(e, "hr query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const letterRef = generateRef("LTR", seqRow.seq);
 
     const { insertId } = await rawExecute(
@@ -3683,7 +3856,7 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
     if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل طلبات الإجازة مقصور على HR أو المالك");
     }
-    const { status, reason } = req.body as any;
+    const { status, reason } = zodParse(leaveRequestPatchSchema.safeParse(req.body ?? {}));
     if (status && ["approved", "rejected"].includes(status)) {
       throw new ValidationError("استخدم نقطة نهاية الموافقة/الرفض المخصصة", { field: "status" });
     }
@@ -3721,7 +3894,7 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body || {};
+    const b = zodParse(leaveCancelSchema.safeParse(req.body ?? {}));
     if (!b.reason) {
       throw new ValidationError("سبب الإلغاء مطلوب", {
         field: "reason",
@@ -3880,7 +4053,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
     if (!PAYROLL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل الرواتب مقصور على HR أو المالية أو المالك");
     }
-    const { status } = req.body as any;
+    const { status } = zodParse(payrollPatchSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<any>(
       `SELECT id, status, period, "totalNet" FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -4047,7 +4220,7 @@ router.patch("/performance/:id", requirePermission("hr:update"), async (req, res
     if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل التقييمات مقصور على HR أو المدير أو المالك");
     }
-    const { overallScore, score, comments, feedback, status, strengths, improvements, goals } = req.body as any;
+    const { overallScore, score, comments, feedback, status, strengths, improvements, goals } = zodParse(performancePatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
@@ -4163,7 +4336,7 @@ router.patch("/official-letters/:id", requirePermission("hr:update"), async (req
     if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل الخطابات مقصور على HR أو المدير أو المالك");
     }
-    const { subject, content, status, type } = req.body as any;
+    const { subject, content, status, type } = zodParse(officialLetterPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
@@ -4223,7 +4396,7 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
       throw new ForbiddenError("غير مصرح: لا تملك صلاحية اعتماد الخطابات");
     }
     const { id } = req.params;
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(letterApprovalSchema.safeParse(req.body ?? {}));
 
     const [letter] = await rawQuery<any>(
       `SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -4262,7 +4435,7 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
         `UPDATE whatsapp_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
           WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
         [Number(id)]
-      ).catch(() => { /* whatsapp_queue may not exist */ });
+      ).catch((e) => { logger.warn(e, "hr whatsapp_queue insert failed (table may not exist)"); });
 
       // Notify whoever filed the letter about the rejection/return so they
       // can see the reason and take action. Prefer the creator assignment
@@ -4401,7 +4574,7 @@ router.get("/onboarding-steps", requirePermission("hr:read"), async (req, res) =
       res.json({ data: val }); return;
     }
     res.json({ data: ["تسليم أجهزة IT", "توقيع عقد العمل", "تعريف المدير المباشر", "دورة التعريف بالشركة", "فتح حساب بنكي", "تسجيل التأمينات"] });
-  } catch { res.json({ data: [] }); }
+  } catch (e) { logger.error(e, "failed to load onboarding steps"); res.json({ data: [] }); }
 });
 
 router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res) => {
@@ -4410,7 +4583,7 @@ router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res)
     if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بتعديل إعدادات التهيئة");
     }
-    const { steps } = req.body as { steps: string[] };
+    const { steps } = zodParse(onboardingStepsSchema.safeParse(req.body ?? {}));
     if (!Array.isArray(steps)) {
       throw new ValidationError("الخطوات مطلوبة", { field: "steps" });
     }
@@ -4438,17 +4611,14 @@ router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res)
 router.post("/impact-preview/leave", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId, leaveTypeId, startDate, endDate, days } = req.body as any;
-    if (!employeeId || !leaveTypeId || !startDate || !endDate) {
-      throw new ValidationError("بيانات غير مكتملة");
-    }
+    const { employeeId, leaveTypeId, startDate, endDate, days } = zodParse(impactPreviewLeaveSchema.safeParse(req.body ?? {}));
     const [assignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
-      [Number(employeeId), scope.companyId]
+      [employeeId, scope.companyId]
     );
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
     const daysCount = days ?? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1);
-    const impact = await computeLeaveImpact(scope.companyId, Number(employeeId), assignment.id, Number(leaveTypeId), startDate, endDate, daysCount);
+    const impact = await computeLeaveImpact(scope.companyId, employeeId, assignment.id, leaveTypeId, startDate, endDate, daysCount);
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.leave.impact_preview", entity: "hr_leave_requests", entityId: Number(employeeId) }).catch((e) => logger.error(e, "hr background task failed"));
     createAuditLog({
@@ -4464,16 +4634,13 @@ router.post("/impact-preview/leave", requirePermission("hr:read"), async (req, r
 router.post("/impact-preview/termination", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId } = req.body as any;
-    if (!employeeId) {
-      throw new ValidationError("معرف الموظف مطلوب", { field: "employeeId" });
-    }
+    const { employeeId } = zodParse(impactPreviewTerminationSchema.safeParse(req.body ?? {}));
     const [assignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
-      [Number(employeeId), scope.companyId]
+      [employeeId, scope.companyId]
     );
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
-    const impact = await computeTerminationImpact(scope.companyId, Number(employeeId), assignment.id);
+    const impact = await computeTerminationImpact(scope.companyId, employeeId, assignment.id);
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.termination.impact_preview", entity: "employees", entityId: Number(employeeId) }).catch((e) => logger.error(e, "hr background task failed"));
     createAuditLog({
@@ -4489,16 +4656,13 @@ router.post("/impact-preview/termination", requirePermission("hr:read"), async (
 router.post("/impact-preview/violation", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId, deduction = 0, severity = "medium" } = req.body as any;
-    if (!employeeId) {
-      throw new ValidationError("معرف الموظف مطلوب", { field: "employeeId" });
-    }
+    const { employeeId, deduction, severity } = zodParse(impactPreviewViolationSchema.safeParse(req.body ?? {}));
     const [assignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
-      [Number(employeeId), scope.companyId]
+      [employeeId, scope.companyId]
     );
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
-    const impact = await computeViolationImpact(scope.companyId, Number(employeeId), assignment.id, Number(deduction), severity);
+    const impact = await computeViolationImpact(scope.companyId, employeeId, assignment.id, deduction, severity);
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.violation.impact_preview", entity: "employee_violations", entityId: Number(employeeId) }).catch((e) => logger.error(e, "hr background task failed"));
     createAuditLog({
@@ -4549,7 +4713,8 @@ router.get("/employees-status", requirePermission("hr:read"), async (req, res) =
         try {
           const s = await computeEmployeeOperationalStatus(scope.companyId, emp.employeeId, emp.assignmentId);
           return { employeeId: emp.employeeId, ...s };
-        } catch {
+        } catch (e) {
+          logger.error(e, "failed to compute employee operational status");
           return { employeeId: emp.employeeId, status: "working", label: "على رأس العمل", color: "bg-green-100 text-green-700", reason: "" };
         }
       })
@@ -5014,7 +5179,7 @@ router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:crea
   try {
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
-    const { overallScore, scores, comments } = req.body as any;
+    const { overallScore, scores, comments } = zodParse(peerEvaluationSchema.safeParse(req.body ?? {}));
 
     // Evaluator is always the authenticated user — prevents impersonation
     const evaluatorId = scope.employeeId;
@@ -5098,7 +5263,7 @@ router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create
   try {
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
-    const { managerId, overallScore, scores, comments } = req.body as any;
+    const { managerId, overallScore, scores, comments } = zodParse(upwardReviewSchema.safeParse(req.body ?? {}));
 
     if (!managerId || !overallScore) {
       throw new ValidationError("managerId و overallScore مطلوبان", {
@@ -5386,7 +5551,7 @@ router.get("/delegations", requirePermission("hr:read"), async (req, res) => {
        ORDER BY d."createdAt" DESC
        LIMIT 50`,
       [scope.companyId]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     res.json({ data: rows, total: rows.length });
   } catch (err) { res.json({ data: [], total: 0 }); }
 });
@@ -5498,7 +5663,7 @@ router.patch("/public-holidays/:id", requirePermission("hr:update"), async (req,
       throw new ForbiddenError("غير مصرح");
     }
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(publicHolidayPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
@@ -5719,7 +5884,7 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
       });
     }
     const id = parseId(req.params.id, "id");
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(transferApprovalSchema.safeParse(req.body ?? {}));
     const [transfer] = await rawQuery<any>(
       `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
@@ -5813,7 +5978,7 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
       );
     }
     const id = parseId(req.params.id, "id");
-    const { confirmed, notes } = req.body as any;
+    const { confirmed, notes } = zodParse(transferConfirmSchema.safeParse(req.body ?? {}));
     const [transfer] = await rawQuery<any>(
       `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
@@ -5977,7 +6142,7 @@ router.patch("/idp/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = zodParse(idpPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
@@ -6102,7 +6267,7 @@ router.get("/gratuity/:employeeId", requirePermission("hr:read"), async (req, re
 router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { period } = (req.body || {}) as { period?: string };
+    const { period } = zodParse(monthlyAccrualsSchema.safeParse(req.body ?? {}));
     const targetPeriod = period || currentPeriod();
 
     if (!/^\d{4}-\d{2}$/.test(targetPeriod)) {
@@ -6395,7 +6560,7 @@ router.get("/turnover-report", requirePermission("hr:read"), async (req, res) =>
 router.get("/expiring-documents", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const days = Number(req.query.days || 90);
+    const days = Number(req.query.days) || 90;
 
     const workPermits = await rawQuery<any>(
       `SELECT e.id AS "employeeId", e.name AS "employeeName", e."workPermitExpiry" AS "expiryDate",
@@ -6511,7 +6676,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
          AND ed."expiryDate" IS NOT NULL
          AND ed."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
 
     // Company documents (commercial registration, chamber of commerce, etc.)
     const companyDocs = await rawQuery<any>(
@@ -6524,7 +6689,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
          AND cd."expiryDate" IS NOT NULL
          AND cd."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
 
     const all = [
       ...workPermits.map((d: any) => ({ ...d, entityType: 'employee' })),
@@ -6551,17 +6716,19 @@ router.get("/company-documents", requirePermission("hr:read"), async (req, res) 
   try {
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Number(lim) || 50;
+    const offset = (pageNum - 1) * perPage;
 
     const [countRow] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM company_documents WHERE "companyId"=$1 AND status != 'deleted'`,
       [scope.companyId]
-    ).catch(() => [{ total: 0 }] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [{ total: 0 }] as any[]; });
     const rows = await rawQuery<any>(
       `SELECT * FROM company_documents WHERE "companyId"=$1 AND status != 'deleted' ORDER BY "expiryDate" ASC NULLS LAST LIMIT $2 OFFSET $3`,
-      [scope.companyId, Number(lim), offset]
-    ).catch(() => [] as any[]);
-    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
+      [scope.companyId, perPage, offset]
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
+    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "Company documents error:"); }
 });
 
@@ -6596,7 +6763,9 @@ router.get("/employee-documents", requirePermission("hr:read"), async (req, res)
   try {
     const scope = req.scope!;
     const { employeeId, page = "1", limit: lim = "50" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Number(lim) || 50;
+    const offset = (pageNum - 1) * perPage;
 
     let paramIdx = 1;
     const params: any[] = [scope.companyId];
@@ -6604,7 +6773,7 @@ router.get("/employee-documents", requirePermission("hr:read"), async (req, res)
     const conditions: string[] = [`ed."companyId"=$1`, `ed.status != 'deleted'`];
     if (employeeId) {
       conditions.push(`ed."employeeId"=$${paramIdx}`);
-      params.push(Number(employeeId));
+      params.push(Number(employeeId) || 0);
       paramIdx++;
     }
     const where = `WHERE ${conditions.join(" AND ")}`;
@@ -6613,9 +6782,9 @@ router.get("/employee-documents", requirePermission("hr:read"), async (req, res)
     const [countRow] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM employee_documents ed ${where}`,
       countParams
-    ).catch(() => [{ total: 0 }] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [{ total: 0 }] as any[]; });
 
-    params.push(Number(lim));
+    params.push(perPage);
     const limitParam = paramIdx++;
     params.push(offset);
     const offsetParam = paramIdx++;
@@ -6628,8 +6797,8 @@ router.get("/employee-documents", requirePermission("hr:read"), async (req, res)
        ORDER BY ed."expiryDate" ASC NULLS LAST
        LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
-    ).catch(() => [] as any[]);
-    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
+    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
 });
 
@@ -6747,7 +6916,7 @@ router.patch("/excuse-requests/:id/approve", requirePermission("hr:update"), asy
   try {
     const scope = req.scope!;
     const excuseId = parseId(req.params.id, "id");
-    const { approved, rejectionReason } = req.body as any;
+    const { approved, rejectionReason } = zodParse(excuseApprovalSchema.safeParse(req.body ?? {}));
 
     const newStatus = approved ? "approved" : "rejected";
     if (!approved && !rejectionReason) {

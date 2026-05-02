@@ -92,7 +92,8 @@ export async function getAutoDetectionSettings(companyId: number): Promise<AutoD
     try {
       const parsed = typeof row.value === "string" ? JSON.parse(row.value) : row.value;
       return { ...DEFAULT_SETTINGS, ...parsed };
-    } catch {
+    } catch (e) {
+      logger.warn(e, "failed to parse auto-detection settings JSON");
       return DEFAULT_SETTINGS;
     }
   }
@@ -458,7 +459,7 @@ export async function runAutoDetection(
       companyId, branchId: 0, userId: null,
       action: "hr.auto_detection.completed", entity: "auto_detection_log", entityId: 0,
       details: JSON.stringify({ date, detected: result.detected, memosCreated: result.memosCreated }),
-    }).catch(() => {});
+    }).catch((e) => logger.error(e, "auto violation event emit failed"));
   }
 
   return result;
@@ -585,8 +586,8 @@ export async function getDetectionLog(
     );
 
     return { data, total };
-  } catch {
-    // الجدول قد لا يكون موجوداً
+  } catch (e) {
+    logger.warn(e, "auto_violations table may not exist");
     return { data: [], total: 0 };
   }
 }

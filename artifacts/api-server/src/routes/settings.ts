@@ -27,6 +27,11 @@ const settingUpsertSchema = z.object({
   value: z.unknown(),
 });
 
+const settingDeleteSchema = z.object({
+  scopeOverride: z.enum(["system", "company", "branch"]).optional(),
+  key: z.string().min(1, "key مطلوب"),
+});
+
 const generalSettingsSchema = z.record(z.string().min(1), z.string());
 
 const createBranchSchema = z.object({
@@ -110,7 +115,8 @@ publicRouter.get("/display", async (_req, res) => {
     const result: Record<string, string> = {};
     for (const row of rows) result[row.key] = row.value;
     res.json({ data: result });
-  } catch {
+  } catch (e) {
+    logger.warn(e, "failed to load public system settings, using defaults");
     res.json({ data: { currency: "SAR", timezone: "Asia/Riyadh", companyName: "" } });
   }
 });
@@ -183,14 +189,8 @@ router.put("/", requirePermission("settings:write"), async (req, res) => {
 router.delete("/", requirePermission("settings:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { scopeOverride, key } = req.body as {
-      scopeOverride?: SettingScope;
-      key: string;
-    };
-
-    if (!key) {
-      throw new ValidationError("key مطلوب");
-    }
+    const b = zodParse(settingDeleteSchema.safeParse(req.body ?? {}));
+    const { scopeOverride, key } = b;
 
     const requestedScope: SettingScope = scopeOverride ?? "company";
 
@@ -401,8 +401,7 @@ router.put("/branches/:id", requirePermission("settings:write"), async (req, res
 
 router.delete("/branches/:id", requirePermission("settings:write"), async (req, res) => {
   try {
-    const { id } = req.params;
-    const branchId = Number(id);
+    const branchId = parseId(req.params.id, "id");
     const scope = req.scope!;
 
     const [activeEmployees] = await rawQuery<any>(
@@ -426,7 +425,7 @@ router.delete("/branches/:id", requirePermission("settings:write"), async (req, 
     }
 
     const [beforeBranch] = await rawQuery(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [branchId, scope.companyId]);
-    await rawExecute(`DELETE FROM branches WHERE id=$1 AND "companyId"=$2 RETURNING id`, [id, scope.companyId]);
+    await rawExecute(`DELETE FROM branches WHERE id=$1 AND "companyId"=$2 RETURNING id`, [branchId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_branch",
       entity: "branches", entityId: branchId,
@@ -456,23 +455,23 @@ router.post("/departments", requirePermission("settings:write"), async (req, res
 router.put("/departments/:id", requirePermission("settings:write"), async (req, res) => {
   try {
     const body = zodParse(updateDepartmentSchema.safeParse(req.body));
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const { name, manager } = body;
     const scope = req.scope!;
     await rawExecute(`UPDATE departments SET name=$1, "managerId"=$2 WHERE id=$3 RETURNING id`, [name, manager || null, id]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_department",
-      entity: "departments", entityId: Number(id),
+      entity: "departments", entityId: id,
       after: { name, manager },
     }).catch((e) => logger.error(e, "settings background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "department" }) }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: id, details: JSON.stringify({ key: "department" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
 router.delete("/departments/:id", requirePermission("settings:write"), async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const [empCheck] = await rawQuery<any>(
       `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "departmentId" = $1 AND status = 'active'`,
       [id]
@@ -486,10 +485,10 @@ router.delete("/departments/:id", requirePermission("settings:write"), async (re
     await rawExecute(`DELETE FROM departments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_department",
-      entity: "departments", entityId: Number(id),
+      entity: "departments", entityId: id,
       before: beforeDept,
     }).catch((e) => logger.error(e, "settings background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "department" }) }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: id, details: JSON.stringify({ key: "department" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -558,32 +557,32 @@ router.post("/companies", requirePermission("settings:write"), async (req, res) 
 router.put("/companies/:id", requirePermission("settings:write"), async (req, res) => {
   try {
     const body = zodParse(updateCompanySchema.safeParse(req.body));
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const { name, nameEn, taxNumber, crNumber } = body;
     const scope = req.scope!;
     await rawExecute(`UPDATE companies SET name=$1, "nameEn"=$2, "vatNumber"=$3, "crNumber"=$4 WHERE id=$5 RETURNING id`, [name, nameEn || null, taxNumber || null, crNumber || null, id]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_company",
-      entity: "companies", entityId: Number(id),
+      entity: "companies", entityId: id,
       after: { name, nameEn, taxNumber, crNumber },
     }).catch((e) => logger.error(e, "settings background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "company" }) }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: id, details: JSON.stringify({ key: "company" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
 router.delete("/companies/:id", requirePermission("settings:write"), async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const scope = req.scope!;
     const [beforeCompany] = await rawQuery(`SELECT * FROM companies WHERE id=$1`, [id]);
     await rawExecute(`DELETE FROM companies WHERE id=$1 RETURNING id`, [id]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_company",
-      entity: "companies", entityId: Number(id),
+      entity: "companies", entityId: id,
       before: beforeCompany,
     }).catch((e) => logger.error(e, "settings background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "company" }) }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: id, details: JSON.stringify({ key: "company" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -593,7 +592,8 @@ router.get("/timezone", requirePermission("settings:read"), async (_req, res) =>
     const rows = await rawQuery(`SELECT value FROM system_settings WHERE key='timezone' AND "companyId" IS NULL AND "branchId" IS NULL`);
     const timezone = rows.length > 0 ? rows[0].value : "Asia/Riyadh";
     res.json({ timezone });
-  } catch {
+  } catch (e) {
+    logger.warn(e, "failed to load timezone setting, using default");
     res.json({ timezone: "Asia/Riyadh" });
   }
 });
@@ -605,7 +605,7 @@ router.get("/system-controls", requirePermission("settings:read"), async (_req, 
     );
     const controls: Record<string, any> = {};
     for (const r of rows) {
-      try { controls[r.key] = JSON.parse(r.value as string); } catch { controls[r.key] = r.value; }
+      try { controls[r.key] = JSON.parse(r.value as string); } catch (e) { logger.warn(e, `failed to parse system control JSON for key ${r.key}`); controls[r.key] = r.value; }
     }
     res.json({ data: controls });
   } catch (err) { handleRouteError(err, res, "settings"); }

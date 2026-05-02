@@ -271,7 +271,7 @@ describe("Contract termination flow", () => {
 
   it("terminate records who, when, and reason", () => {
     const idx = CONTRACTS_ROUTE.indexOf('/:id/terminate"');
-    const section = CONTRACTS_ROUTE.slice(idx, idx + 800);
+    const section = CONTRACTS_ROUTE.slice(idx, idx + 1000);
     expect(section).toContain('"terminatedAt"');
     expect(section).toContain('"terminatedBy"');
     expect(section).toContain('"terminationReason"');

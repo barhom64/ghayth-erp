@@ -260,7 +260,7 @@ router.get("/role-data", async (req, res) => {
     if (HR_ROLES.includes(role)) {
       const [onboarding] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM tasks WHERE ${where} AND category = 'onboarding' AND status != 'completed'`, params
-      ).catch(() => [{ total: 0 }]);
+      ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ total: 0 }]; });
       const probationRows = await rawQuery<any>(
         `SELECT e.name, ec."probationEndDate"
          FROM employee_contracts ec
@@ -268,11 +268,11 @@ router.get("/role-data", async (req, res) => {
          WHERE ec."companyId" = ANY($1::int[]) AND ec."deletedAt" IS NULL AND ec."probationEndDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
          LIMIT 10`,
         [scope.allowedCompanies]
-      ).catch(() => []);
+      ).catch((e) => { logger.error(e, "dashboard query failed"); return []; });
       const [expiringDocs] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM employee_documents WHERE "companyId" = ANY($1::int[]) AND "expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`,
         [scope.allowedCompanies]
-      ).catch(() => [{ total: 0 }]);
+      ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ total: 0 }]; });
       result.hr = {
         pendingOnboarding: Number(onboarding?.total ?? 0),
         probationEnding: probationRows,
@@ -284,20 +284,20 @@ router.get("/role-data", async (req, res) => {
       const [overdueInvoices] = await rawQuery<any>(
         `SELECT COUNT(*) AS count, COALESCE(SUM(total - "paidAmount"), 0) AS amount
          FROM invoices WHERE ${where} AND "deletedAt" IS NULL AND status IN ('overdue','sent') AND "dueDate" < CURRENT_DATE`, params
-      ).catch(() => [{ count: 0, amount: 0 }]);
+      ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ count: 0, amount: 0 }]; });
       const [advancedCollection] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM invoice_collection_stages ics
          JOIN invoices i ON i.id = ics."invoiceId" AND i."deletedAt" IS NULL
          WHERE i."companyId" = ANY($1::int[]) AND ics.stage >= 4`,
         [scope.allowedCompanies]
-      ).catch(() => [{ total: 0 }]);
+      ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ total: 0 }]; });
       const [budgetUsage] = await rawQuery<any>(
         `SELECT COALESCE(AVG(CASE WHEN b."totalAmount" > 0 THEN (COALESCE(bl_used.total,0)::numeric / b."totalAmount") * 100 ELSE 0 END), 0) AS avg
          FROM budgets b
          LEFT JOIN LATERAL (SELECT COALESCE(SUM(bl.amount),0) AS total FROM budget_lines bl WHERE bl."budgetId" = b.id) bl_used ON TRUE
          WHERE b."companyId" = ANY($1::int[]) AND b."deletedAt" IS NULL AND b.status = 'active'`,
         [scope.allowedCompanies]
-      ).catch(() => [{ avg: 0 }]);
+      ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ avg: 0 }]; });
       result.finance = {
         overdueCount: Number(overdueInvoices?.count ?? 0),
         overdueAmount: Number(overdueInvoices?.amount ?? 0),
@@ -313,7 +313,7 @@ router.get("/role-data", async (req, res) => {
            COUNT(*) FILTER (WHERE status = 'completed') AS completed,
            COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "scheduledDate" < CURRENT_DATE) AS overdue
          FROM tasks WHERE ${where}`, params
-      ).catch(() => [{ total: 0, completed: 0, overdue: 0 }]);
+      ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ total: 0, completed: 0, overdue: 0 }]; });
       result.manager = {
         teamTasksTotal: Number(teamTasks?.total ?? 0),
         teamTasksCompleted: Number(teamTasks?.completed ?? 0),
@@ -359,7 +359,7 @@ router.get("/charts/revenue", async (req, res) => {
          AND v."createdAt" >= (CURRENT_DATE - INTERVAL '6 months')
        GROUP BY month_key`,
       [...voucherParams]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "dashboard query failed"); return [] as any[]; });
     const expenseMap: Record<string, number> = {};
     for (const e of expenseRows) expenseMap[e.month_key] = Number(e.total);
 

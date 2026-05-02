@@ -1,4 +1,4 @@
-import { handleRouteError, NotFoundError, zodParse } from "../lib/errorHandler.js";
+import { handleRouteError, NotFoundError, parseId, zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
@@ -113,19 +113,19 @@ router.post("/alerts/scan", requirePermission("admin:write"), async (req, res): 
 router.patch("/alerts/:id/read", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     await rawQuery(
       `UPDATE smart_alerts SET "isRead"=true WHERE id=$1 AND "companyId"=$2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "smart_alerts", entityId: Number(id), after: { isRead: true } }).catch((e) => logger.error(e, "intelligence background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "smart_alerts", entityId: id, after: { isRead: true } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
       userId: scope.userId,
       action: "intelligence.alert.read",
       entity: "smart_alerts",
-      entityId: Number(id),
+      entityId: id,
       details: JSON.stringify({ isRead: true }),
     }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ message: "تم تعليم التنبيه كمقروء" });
@@ -138,7 +138,7 @@ router.get("/kpis", requirePermission("admin:read"), async (req, res): Promise<v
     const { employeeId, metricName } = req.query as any;
     const conditions = [`"companyId" = $1`];
     const params: any[] = [scope.companyId];
-    if (employeeId) { params.push(Number(employeeId)); conditions.push(`"employeeId" = $${params.length}`); }
+    if (employeeId) { params.push(Number(employeeId) || 0); conditions.push(`"employeeId" = $${params.length}`); }
     if (metricName) { params.push(metricName); conditions.push(`"metricName" = $${params.length}`); }
     const rows = await rawQuery<any>(`SELECT * FROM kpi_snapshots WHERE ${conditions.join(" AND ")} ORDER BY "snapshotDate" DESC LIMIT 200`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -148,10 +148,10 @@ router.get("/kpis", requirePermission("admin:read"), async (req, res): Promise<v
 router.get("/kpis/employee/:employeeId", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { employeeId } = req.params;
+    const employeeId = parseId(req.params.employeeId, "employeeId");
     const date = (req.query.date as string) ?? todayISO();
-    const metrics = await calculateEmployeeKPIs(scope.companyId, Number(employeeId), date);
-    res.json({ employeeId: Number(employeeId), date, metrics });
+    const metrics = await calculateEmployeeKPIs(scope.companyId, employeeId, date);
+    res.json({ employeeId, date, metrics });
   } catch (err) { handleRouteError(err, res, "Employee KPI error:"); }
 });
 
@@ -168,9 +168,9 @@ router.get("/daily-schedule", requirePermission("admin:read"), async (req, res):
 router.get("/daily-schedule/employee/:employeeId", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { employeeId } = req.params;
+    const employeeId = parseId(req.params.employeeId, "employeeId");
     const date = (req.query.date as string) ?? todayISO();
-    const schedule = await buildEmployeeSchedule(scope.companyId, Number(employeeId), date);
+    const schedule = await buildEmployeeSchedule(scope.companyId, employeeId, date);
     res.json(schedule);
   } catch (err) { handleRouteError(err, res, "Employee schedule error:"); }
 });
@@ -217,7 +217,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
               AND t.status NOT IN ('completed','cancelled'))::int > 6
        LIMIT 5`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const emp of overloadedEmployees) {
       suggestions.push({
@@ -236,7 +236,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
          AND lc."endDate"::date - CURRENT_DATE BETWEEN 0 AND 30
        ORDER BY "daysLeft" ASC LIMIT 5`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const c of expiringContracts) {
       suggestions.push({
@@ -258,7 +258,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
        HAVING MAX(CURRENT_DATE - i."dueDate"::date) > 30
        ORDER BY "maxDaysLate" DESC LIMIT 5`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const cl of overdueClients) {
       suggestions.push({
@@ -281,7 +281,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
        HAVING AVG(EXTRACT(EPOCH FROM (NOW() - lr."createdAt")) / 86400) > 2
        ORDER BY "avgDays" DESC LIMIT 3`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const dept of slowDepartments) {
       suggestions.push({
@@ -302,7 +302,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
        GROUP BY fv.id, fv."plateNumber"
        ORDER BY "maintenanceCost" DESC LIMIT 3`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const v of costlyVehicles) {
       suggestions.push({
@@ -334,7 +334,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
        WHERE h.rate > 0.3 AND r.rate < h.rate * 0.7
        LIMIT 3`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
     for (const emp of prodDrops) {
       suggestions.push({
         id: `prod-drop-${emp.assignedTo}`, type: "productivity_drop_historical", severity: "warning",
@@ -351,7 +351,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
          COALESCE(SUM(CASE WHEN "createdAt" BETWEEN CURRENT_DATE - INTERVAL '60 days' AND CURRENT_DATE - INTERVAL '30 days' THEN "paidAmount" ELSE 0 END),0)::float AS prev
        FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status NOT IN ('cancelled','draft')`,
       [cid]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return [] as any[]; });
     const revTrend = revTrendRows[0] ?? null;
     if (revTrend && revTrend.prev > 0) {
       const revChange = Math.round(((revTrend.curr - revTrend.prev) / revTrend.prev) * 100);
@@ -380,7 +380,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
        WHERE rs."companyId"=$1 AND rs."churnRisk"='high'
        ORDER BY rs."churnScore" DESC LIMIT 3`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
     for (const cl of churnClients) {
       suggestions.push({
         id: `churn-hist-${cl.name}`, type: "churn_risk_historical", severity: "warning",
@@ -614,10 +614,10 @@ router.get("/clients/analytics/recalculate", requireRole("branch_manager", "gene
 router.get("/clients/:clientId/rfm", requireRole("branch_manager", "general_manager", "owner", "finance_manager"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { clientId } = req.params;
-    const rfm = await calculateClientRFM(scope.companyId, Number(clientId));
+    const clientId = parseId(req.params.clientId, "clientId");
+    const rfm = await calculateClientRFM(scope.companyId, clientId);
     if (!rfm) throw new NotFoundError("العميل غير موجود");
-    const contactTime = await getBestContactTime(scope.companyId, Number(clientId));
+    const contactTime = await getBestContactTime(scope.companyId, clientId);
     res.json({ ...rfm, bestContactTime: contactTime });
   } catch (err) { handleRouteError(err, res, "Client RFM error:"); }
 });

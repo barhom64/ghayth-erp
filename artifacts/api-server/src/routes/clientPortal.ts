@@ -305,7 +305,9 @@ protectedRouter.get("/invoices", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
     const { status, page = "1", limit: lim = "20" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Number(lim) || 20;
+    const offset = (pageNum - 1) * perPage;
 
     const extra: string[] = ["\"deletedAt\" IS NULL"];
     const extraParams: any[] = [];
@@ -316,7 +318,7 @@ protectedRouter.get("/invoices", withPortalScope(async (req, res) => {
       extraWhere: extra.join(" AND "),
     });
 
-    params.push(Number(lim), offset);
+    params.push(perPage, offset);
     const limitParam = params.length - 1;
     const offsetParam = params.length;
 
@@ -333,7 +335,7 @@ protectedRouter.get("/invoices", withPortalScope(async (req, res) => {
       `SELECT COUNT(*) AS total FROM invoices WHERE ${where}`,
       countParams
     );
-    res.json({ data: invoices, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
+    res.json({ data: invoices, total: Number(countRow?.total ?? 0), page: pageNum, pageSize: perPage });
   } catch (err) {
     handleRouteError(err, res, "Portal invoices error:");
   }
@@ -342,7 +344,7 @@ protectedRouter.get("/invoices", withPortalScope(async (req, res) => {
 protectedRouter.get("/invoices/:id", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const [invoice] = await portalScopedQuery<any>(scope,
       `SELECT i.*,
               json_agg(json_build_object('description', il.description, 'qty', il.quantity, 'unitPrice', il."unitPrice", 'total', il."lineTotal") ORDER BY il.id) AS items
@@ -350,7 +352,7 @@ protectedRouter.get("/invoices/:id", withPortalScope(async (req, res) => {
        LEFT JOIN invoice_lines il ON il."invoiceId" = i.id
        WHERE i.id = $3 AND i."clientId" = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL
        GROUP BY i.id`,
-      [scope.clientId, scope.companyId, Number(id)]
+      [scope.clientId, scope.companyId, id]
     );
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
     res.json(invoice);
@@ -363,7 +365,9 @@ protectedRouter.get("/tickets", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
     const { status, page = "1", limit: lim = "20" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Number(lim) || 20;
+    const offset = (pageNum - 1) * perPage;
 
     const extraParams: any[] = [];
     const extraWhereParts: string[] = [];
@@ -374,7 +378,7 @@ protectedRouter.get("/tickets", withPortalScope(async (req, res) => {
       extraWhere: extraWhereParts.length ? extraWhereParts.join(" AND ") : undefined,
     });
 
-    params.push(Number(lim), offset);
+    params.push(perPage, offset);
     const limitParam = params.length - 1;
     const offsetParam = params.length;
 
@@ -391,7 +395,7 @@ protectedRouter.get("/tickets", withPortalScope(async (req, res) => {
       `SELECT COUNT(*) AS total FROM support_tickets WHERE ${where} AND "deletedAt" IS NULL`,
       countParams
     );
-    res.json({ data: tickets, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
+    res.json({ data: tickets, total: Number(countRow?.total ?? 0), page: pageNum, pageSize: perPage });
   } catch (err) {
     handleRouteError(err, res, "Portal tickets error:");
   }
@@ -400,12 +404,12 @@ protectedRouter.get("/tickets", withPortalScope(async (req, res) => {
 protectedRouter.get("/tickets/:id", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const [ticket] = await portalScopedQuery<any>(scope,
       `SELECT id, ref, title, description, status, priority, category, "createdAt", "updatedAt"
        FROM support_tickets
        WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
-      [scope.clientId, scope.companyId, Number(id)]
+      [scope.clientId, scope.companyId, id]
     );
     if (!ticket) throw new NotFoundError("الطلب غير موجود");
     res.json(ticket);
@@ -417,10 +421,10 @@ protectedRouter.get("/tickets/:id", withPortalScope(async (req, res) => {
 protectedRouter.get("/tickets/:id/replies", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const [ticket] = await portalScopedQuery<any>(scope,
       `SELECT id FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [scope.clientId, scope.companyId, Number(id)]
+      [scope.clientId, scope.companyId, id]
     );
     if (!ticket) throw new NotFoundError("الطلب غير موجود");
     const replies = await rawQuery<any>(
@@ -428,7 +432,7 @@ protectedRouter.get("/tickets/:id/replies", withPortalScope(async (req, res) => 
        FROM ticket_replies tr
        WHERE tr."ticketId" = $1
        ORDER BY tr."createdAt" ASC`,
-      [Number(id)]
+      [id]
     );
     res.json({ data: replies });
   } catch (err) {
@@ -439,7 +443,7 @@ protectedRouter.get("/tickets/:id/replies", withPortalScope(async (req, res) => 
 protectedRouter.post("/tickets/:id/replies", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const body = zodParse(portalTicketReplySchema.safeParse(req.body));
     const message = body.message.trim();
     if (!message) {
@@ -447,7 +451,7 @@ protectedRouter.post("/tickets/:id/replies", withPortalScope(async (req, res) =>
     }
     const [ticket] = await portalScopedQuery<any>(scope,
       `SELECT id, status FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [scope.clientId, scope.companyId, Number(id)]
+      [scope.clientId, scope.companyId, id]
     );
     if (!ticket) throw new NotFoundError("الطلب غير موجود");
     if (ticket.status === "closed" || ticket.status === "resolved") {
@@ -456,18 +460,18 @@ protectedRouter.post("/tickets/:id/replies", withPortalScope(async (req, res) =>
     await rawExecute(
       `INSERT INTO ticket_replies ("ticketId", message, "isInternal", "authorName")
        VALUES ($1, $2, false, 'العميل')`,
-      [Number(id), message]
+      [id, message]
     );
     const { supportEngine } = await import("../lib/engines/index.js");
-    await supportEngine.markTicketInProgress(Number(id));
+    await supportEngine.markTicketInProgress(id);
     createAuditLog({
       companyId: scope.companyId, userId: scope.accountId,
-      action: "create", entity: "ticket_replies", entityId: Number(id),
+      action: "create", entity: "ticket_replies", entityId: id,
     }).catch((e) => logger.error(e, "clientPortal background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.accountId,
-      action: "portal.ticket_reply.created", entity: "ticket_replies", entityId: Number(id),
-      details: JSON.stringify({ ticketId: Number(id), clientId: scope.clientId }),
+      action: "portal.ticket_reply.created", entity: "ticket_replies", entityId: id,
+      details: JSON.stringify({ ticketId: id, clientId: scope.clientId }),
     }).catch((e) => logger.error(e, "clientPortal background task failed"));
     res.status(201).json({ message: "تم إرسال الرد بنجاح" });
   } catch (err) {
@@ -553,13 +557,13 @@ protectedRouter.patch("/profile/password", withPortalScope(async (req, res) => {
 protectedRouter.post("/invoices/:id/pay", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const body = zodParse(portalInvoicePaySchema.safeParse(req.body));
     const { amount, transactionRef } = body;
     const method = body.method ?? "online";
     const [invoice] = await portalScopedQuery<any>(scope,
       `SELECT id, ref, total, "paidAmount", status FROM invoices WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [scope.clientId, scope.companyId, Number(id)]
+      [scope.clientId, scope.companyId, id]
     );
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
     if (invoice.status === 'paid') throw new ValidationError("الفاتورة مدفوعة بالكامل مسبقاً");
@@ -603,29 +607,29 @@ protectedRouter.post("/invoices/:id/pay", withPortalScope(async (req, res) => {
 protectedRouter.post("/invoices/:id/csat", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const body = zodParse(portalCsatSchema.safeParse(req.body));
     const { score, comment } = body;
     const [ticket] = await portalScopedQuery<any>(scope,
       `SELECT id, "assigneeId", status FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [scope.clientId, scope.companyId, Number(id)]
+      [scope.clientId, scope.companyId, id]
     );
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
     if (!['resolved', 'closed'].includes(ticket.status)) throw new ValidationError("لا يمكن تقييم تذكرة مفتوحة");
     await rawExecute(
       `INSERT INTO ticket_csat_ratings ("ticketId","companyId","assigneeId",score,comment) VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("ticketId") DO UPDATE SET score=$4, comment=$5, "updatedAt"=NOW()`,
-      [Number(id), scope.companyId, ticket.assigneeId, score, comment || null]
+      [id, scope.companyId, ticket.assigneeId, score, comment || null]
     );
     createAuditLog({
       companyId: scope.companyId, userId: scope.accountId,
-      action: "create", entity: "invoice_csat", entityId: Number(id),
+      action: "create", entity: "invoice_csat", entityId: id,
     }).catch((e) => logger.error(e, "clientPortal background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.accountId,
-      action: "portal.csat.submitted", entity: "invoice_csat", entityId: Number(id),
-      details: JSON.stringify({ score, ticketId: Number(id), clientId: scope.clientId }),
+      action: "portal.csat.submitted", entity: "invoice_csat", entityId: id,
+      details: JSON.stringify({ score, ticketId: id, clientId: scope.clientId }),
     }).catch((e) => logger.error(e, "clientPortal background task failed"));
-    res.status(201).json({ ticketId: Number(id), score, comment });
+    res.status(201).json({ ticketId: id, score, comment });
   } catch (err) {
     handleRouteError(err, res, "Portal CSAT error:");
   }

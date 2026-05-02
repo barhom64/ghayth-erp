@@ -109,6 +109,9 @@ const auditViolationsGuard: GuardFn = async (companyId, context) => {
 
 export type GuardScope = "financial" | "hr" | "operational" | "all";
 
+/** Scopes that are considered financial — errors in these guards must fail closed. */
+const FINANCIAL_SCOPES: ReadonlySet<GuardScope> = new Set(["financial"]);
+
 const GUARD_REGISTRY: Array<{ guard: GuardFn; scope: GuardScope }> = [
   { guard: companyActiveGuard, scope: "all" },
   { guard: financialPeriodGuard, scope: "financial" },
@@ -128,7 +131,19 @@ export async function checkSystemGuards(
 
   const results = await Promise.all(
     applicableGuards.map((g) =>
-      g.guard(companyId, context).catch((): GuardResult => ({ allowed: true, guardName: "error" }))
+      g.guard(companyId, context).catch((err): GuardResult => {
+        if (FINANCIAL_SCOPES.has(g.scope)) {
+          // Financial guards fail closed — an error must NOT allow the operation.
+          return {
+            allowed: false,
+            guardName: "error",
+            reason: `فشل التحقق من حارس مالي (${g.scope}) — تم رفض العملية احتياطياً: ${String(err)}`,
+          };
+        }
+        // Non-financial / advisory guards fail open with a warning.
+        console.warn(`[SystemGovernor] non-financial guard error (scope=${g.scope}):`, err);
+        return { allowed: true, guardName: "error" };
+      })
     )
   );
 
@@ -151,8 +166,18 @@ export function requireGuards(scope: GuardScope = "financial") {
     const s = (req as any).scope;
     const companyId = s?.companyId;
     if (!companyId) return next();
+
+    // Prefer an explicit posting/document date from the request body;
+    // fall back to today only when the body carries no date field.
+    const body: Record<string, unknown> | undefined = req.body;
+    const postingDate =
+      (body?.postingDate as string | undefined) ??
+      (body?.invoiceDate as string | undefined) ??
+      (body?.date as string | undefined) ??
+      todayISO();
+
     const result = await checkSystemGuards(companyId, scope, {
-      date: todayISO(),
+      date: postingDate,
       entity: req.path.split("/")[1],
       role: s?.role,
     });
