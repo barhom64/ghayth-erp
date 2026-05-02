@@ -66,6 +66,15 @@ export type ExtraValue =
   | null
   | { raw: string };
 
+const ALLOWED_RAW_EXPRESSIONS = new Set([
+  "NOW()",
+  "NULL",
+  "TRUE",
+  "FALSE",
+  "CURRENT_TIMESTAMP",
+  "CURRENT_DATE",
+]);
+
 export interface ApplyTransitionOptions {
   /** Physical table being mutated. Must be a valid SQL identifier. */
   entity: string;
@@ -185,6 +194,9 @@ export async function applyTransition<TRow = any>(
     if (setExtras) {
       for (const [col, val] of Object.entries(setExtras)) {
         if (val && typeof val === "object" && "raw" in val) {
+          if (!ALLOWED_RAW_EXPRESSIONS.has(val.raw.toUpperCase().trim())) {
+            throw new Error(`Blocked raw SQL expression in setExtras: "${val.raw}". Use parameterized values instead.`);
+          }
           sets.push(`${quoteIdent(col)} = ${val.raw}`);
           continue;
         }
@@ -199,16 +211,17 @@ export async function applyTransition<TRow = any>(
 
     if (sets.length > 0) {
       params.push(id);
+      params.push(scope.companyId);
       await client.query(
-        `UPDATE ${tableId} SET ${sets.join(", ")} WHERE id = $${params.length}`,
+        `UPDATE ${tableId} SET ${sets.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length}`,
         params
       );
     }
 
     // 3. Read the updated row back.
     const updatedRes = await client.query(
-      `SELECT * FROM ${tableId} WHERE id = $1`,
-      [id]
+      `SELECT * FROM ${tableId} WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
     );
     const updatedRow = updatedRes.rows[0];
 
@@ -363,7 +376,6 @@ export const STATE_MACHINES: StateMachine[] = [
       sent: ["confirmed", "partially_received", "received", "cancelled"],
       confirmed: ["partially_received", "received", "cancelled"],
       partially_received: ["received", "invoice_matched", "invoice_mismatch"],
-      partial_received: ["received", "invoice_matched", "invoice_mismatch"],
       received: ["invoice_matched", "invoice_mismatch", "paid"],
       invoice_matched: ["paid", "payment_scheduled"],
       invoice_mismatch: ["invoice_matched", "cancelled"],

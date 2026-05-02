@@ -180,6 +180,10 @@ export async function advanceJourney(
     params
   );
   if (instances.length === 0) return null;
+  const def = JOURNEY_DEFINITIONS.find((d) => d.type === journeyType);
+  const validKeys = def ? new Set(def.steps.map((s) => s.key)) : null;
+  if (validKeys && !validKeys.has(stepKey)) return null;
+
   const inst = instances[0];
   const steps: string[] = Array.isArray(inst.completedSteps) ? inst.completedSteps : [];
   if (steps.includes(stepKey)) return { journeyId: inst.id, completed: false, progress: steps.length / inst.totalSteps };

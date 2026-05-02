@@ -87,6 +87,7 @@ export interface DLQEntry {
   createdAt: Date;
 }
 
+const MAX_DLQ_BUFFER = 1000;
 const dlqBuffer: DLQEntry[] = [];
 let flushTimer: NodeJS.Timeout | null = null;
 
@@ -131,6 +132,10 @@ export function pushToDLQ(
   eventName?: string
 ): void {
   const errMsg = error instanceof Error ? error.message : String(error);
+  if (dlqBuffer.length >= MAX_DLQ_BUFFER) {
+    logger.error(`[DLQ] Buffer full (${MAX_DLQ_BUFFER} entries) — dropping oldest entry`);
+    dlqBuffer.shift();
+  }
   dlqBuffer.push({ type, eventName, payload, error: errMsg, companyId, retryCount: 0, createdAt: new Date() });
   scheduleDLQFlush();
 }

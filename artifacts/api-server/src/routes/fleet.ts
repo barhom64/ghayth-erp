@@ -1553,7 +1553,7 @@ router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async 
       fromStates: ["scheduled", "in_progress"],
       toState: "cancelled",
       reason: b.reason,
-      setExtras: { description: { raw: `COALESCE(description,'') || ' | إلغاء: ' || '${b.reason.replace(/'/g, "''")}'` } },
+      setExtras: { description: `${(m as any).description || ""} | إلغاء: ${b.reason}`.trim() },
       onApply: async (_row, client) => {
         if (m.vehicleId) {
           await client.query(`UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='maintenance'`, [m.vehicleId, scope.companyId]);
@@ -1633,11 +1633,12 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
       `SELECT g.speed, g.latitude, g.longitude, g."recordedAt",
               v."plateNumber", d.name AS "driverName"
        FROM fleet_gps_tracking g
-       LEFT JOIN fleet_vehicles v ON v.id=g."vehicleId"
-       LEFT JOIN fleet_drivers d ON d.id=g."driverId"
+       LEFT JOIN fleet_vehicles v ON v.id=g."vehicleId" AND v."companyId"=$1
+       LEFT JOIN fleet_drivers d ON d.id=g."driverId" AND d."companyId"=$1
        WHERE g.speed > 120 AND g."recordedAt" > NOW() - INTERVAL '24 hours'
+         AND v."companyId" = $1
        ORDER BY g."recordedAt" DESC LIMIT 50`,
-      []
+      [scope.companyId]
     );
     for (const s of speedAlerts) {
       alerts.push({
@@ -2051,7 +2052,7 @@ router.delete("/trips/:id", requirePermission("fleet:delete"), async (req, res) 
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
-      `SELECT id, status FROM fleet_trips WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      `SELECT id, status, "vehicleId", "driverId" FROM fleet_trips WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("الرحلة غير موجودة");
@@ -2059,6 +2060,22 @@ router.delete("/trips/:id", requirePermission("fleet:delete"), async (req, res) 
       throw new ConflictError("لا يمكن حذف رحلة قيد التنفيذ", { field: "status", fix: "ألغِ الرحلة عبر /trips/:id/cancel أو أكملها قبل الحذف" });
     }
     await rawExecute(`UPDATE fleet_trips SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    // Release vehicle and driver if trip was scheduled/planned (not yet started)
+    if (["scheduled", "planned"].includes(existing.status)) {
+      if (existing.vehicleId) {
+        await rawExecute(
+          `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status IN ('in_use','on_trip')`,
+          [existing.vehicleId, scope.companyId]
+        );
+      }
+      if (existing.driverId) {
+        await rawExecute(
+          `UPDATE fleet_drivers SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='on_trip'`,
+          [existing.driverId, scope.companyId]
+        );
+      }
+    }
 
     emitEvent({
       companyId: scope.companyId,
@@ -2195,6 +2212,14 @@ router.delete("/maintenance/:id", requirePermission("fleet:delete"), async (req,
       throw new ConflictError("لا يمكن حذف صيانة قيد التنفيذ", { field: "status", fix: "ألغِ الصيانة عبر /maintenance/:id/cancel أو أكملها قبل الحذف" });
     }
     await rawExecute(`UPDATE fleet_maintenance SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    // Release the vehicle if it was held for this maintenance record
+    if (existing.vehicleId) {
+      await rawExecute(
+        `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='maintenance'`,
+        [existing.vehicleId, scope.companyId]
+      );
+    }
 
     emitEvent({
       companyId: scope.companyId,

@@ -1132,8 +1132,9 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
     const id = parseId(req.params.id, "id");
     const { reason } = zodParse(deleteEmployeeSchema.safeParse(req.body ?? {}));
     const [employee] = await rawQuery<any>(
-      `SELECT e.id, ea.id AS "assignmentId" FROM employees e
+      `SELECT e.id, ea.id AS "assignmentId", u.id AS "userId" FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+       LEFT JOIN users u ON u."employeeId" = e.id
        WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1202,6 +1203,15 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
          WHERE "assignedTo" = $1 AND status = 'pending'`,
         [employee.assignmentId]
       );
+
+      // 5. Deactivate the associated user account so the terminated
+      //    employee can no longer log in.
+      if (employee.userId) {
+        await tx.query(
+          `UPDATE users SET "isActive" = false, "updatedAt" = NOW() WHERE id = $1`,
+          [employee.userId]
+        );
+      }
     });
 
     emitEvent({

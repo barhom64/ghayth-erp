@@ -119,7 +119,7 @@ const systemStopGuard: GuardFn = async (companyId, context) => {
        AND (scope = $2 OR scope = 'all')
      LIMIT 1`,
     [companyId, scope]
-  ).catch(() => [] as any[]);
+  ).catch(() => [{ scope: "all", reason: "فشل التحقق من إيقاف النظام" }] as any[]);
 
   if (rows.length > 0) {
     return {

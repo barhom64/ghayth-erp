@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { rawQuery, rawExecute, pool } from "./rawdb.js";
+import { rawQuery, rawExecute, pool, withTransaction } from "./rawdb.js";
 import { logger } from "./logger.js";
 import { saveAllCompaniesKPISnapshots } from "./kpiEngine.js";
 import { runSmartAlertsAllCompanies } from "./smartAlerts.js";
@@ -406,92 +406,132 @@ async function leaveEscalationCheck(): Promise<string> {
     const hoursSinceCreation = (now.getTime() - stageCreatedAt.getTime()) / 3600000;
 
     if (hoursSinceCreation >= 28 && !stage.autoApprovedAt) {
-      await rawExecute(
-        `UPDATE leave_approval_stages SET status = 'approved', decision = 'موافقة تلقائية - تجاوز المهلة', "autoApprovedAt" = NOW() WHERE id = $1`,
-        [stage.id]
-      );
-      await rawExecute(
-        `UPDATE hr_leave_requests SET status = 'approved', "approvedAt" = NOW() WHERE id = $1`,
-        [stage.leaveRequestId]
-      );
-      const year = new Date(stage.startDate).getFullYear();
-      await rawExecute(
-        `UPDATE hr_leave_balances SET used = used + $1, reserved = reserved - $1
-         WHERE "employeeId" = $2 AND "companyId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-        [stage.days, stage.employeeId, stage.companyId, stage.leaveTypeId, year]
-      );
-      await rawExecute(
-        `UPDATE approval_requests SET status = 'approved', "decidedAt" = NOW()
-         WHERE "refType" = 'leave_request' AND "refId" = $1`,
-        [stage.leaveRequestId]
-      ).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
-
-      const allAssignments = await rawQuery<any>(
-        `SELECT id, "companyId", "branchId" FROM employee_assignments
-         WHERE "employeeId" = $1 AND status = 'active'`,
-        [stage.employeeId]
-      );
-      const leaveStart = new Date(stage.startDate);
-      const leaveEnd = new Date(stage.endDate);
-      for (const asn of allAssignments) {
-        for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
-          const dateStr = toDateISO(d);
-          await rawExecute(
-            `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
-             VALUES ($1,$2,$3,$4,'on_leave',$5) ON CONFLICT DO NOTHING`,
-            [asn.id, asn.companyId, asn.branchId, dateStr, `إجازة معتمدة تلقائياً - طلب رقم ${stage.leaveRequestId}`]
-          ).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
-        }
-        const [managerAId] = await rawQuery<any>(
-          `SELECT ea.id FROM employee_assignments ea
-           WHERE ea."companyId" = $1 AND ea."branchId" = $2
-             AND ea.role IN ('branch_manager','hr_manager','general_manager','owner') AND ea.status = 'active' AND ea.id != $3
-           ORDER BY CASE ea.role WHEN 'branch_manager' THEN 1 WHEN 'hr_manager' THEN 2 WHEN 'general_manager' THEN 3 ELSE 4 END LIMIT 1`,
-          [asn.companyId, asn.branchId, asn.id]
+      // Wrap all database writes in a transaction to prevent partial updates
+      // on crash. Notifications and events are fire-and-forget and stay outside.
+      const { allAssignments, managersByAsn, isFullyApproved } = await withTransaction(async (client) => {
+        // 1. Approve this stage
+        await client.query(
+          `UPDATE leave_approval_stages SET status = 'approved', decision = 'موافقة تلقائية - تجاوز المهلة', "autoApprovedAt" = NOW() WHERE id = $1`,
+          [stage.id]
         );
-        if (managerAId) {
-          await rawExecute(
-            `UPDATE project_tasks SET "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1)
-             WHERE "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $2)
-               AND status NOT IN ('completed','cancelled')
-               AND ("dueDate" IS NULL OR "dueDate" BETWEEN $3 AND $4)`,
-            [managerAId.id, asn.id, stage.startDate, stage.endDate]
-          ).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
+
+        // 2. Check if there are remaining unapproved stages for this leave request
+        const remainingRes = await client.query(
+          `SELECT COUNT(*)::int AS cnt FROM leave_approval_stages
+           WHERE "leaveRequestId" = $1 AND id != $2 AND status NOT IN ('approved','skipped')`,
+          [stage.leaveRequestId, stage.id]
+        );
+        const remainingUnapproved = remainingRes.rows[0]?.cnt ?? 0;
+        const fullyApproved = remainingUnapproved === 0;
+
+        if (fullyApproved) {
+          // 3. Only mark the overall leave request approved when ALL stages are done
+          await client.query(
+            `UPDATE hr_leave_requests SET status = 'approved', "approvedAt" = NOW() WHERE id = $1`,
+            [stage.leaveRequestId]
+          );
+
+          // 4. Deduct leave balance
+          const year = new Date(stage.startDate).getFullYear();
+          await client.query(
+            `UPDATE hr_leave_balances SET used = used + $1, reserved = reserved - $1
+             WHERE "employeeId" = $2 AND "companyId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+            [stage.days, stage.employeeId, stage.companyId, stage.leaveTypeId, year]
+          );
+
+          // 5. Mark approval_requests as completed
+          await client.query(
+            `UPDATE approval_requests SET status = 'approved', "decidedAt" = NOW()
+             WHERE "refType" = 'leave_request' AND "refId" = $1`,
+            [stage.leaveRequestId]
+          );
+
+          // 6. Fetch assignments inside the transaction so reads are consistent
+          const asnRes = await client.query(
+            `SELECT id, "companyId", "branchId" FROM employee_assignments
+             WHERE "employeeId" = $1 AND status = 'active'`,
+            [stage.employeeId]
+          );
+          const assignments = asnRes.rows;
+
+          // 7. Insert attendance records and reassign tasks
+          const leaveStart = new Date(stage.startDate);
+          const leaveEnd = new Date(stage.endDate);
+          const managers: Record<string, any> = {};
+          for (const asn of assignments) {
+            for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
+              const dateStr = toDateISO(d);
+              await client.query(
+                `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
+                 VALUES ($1,$2,$3,$4,'on_leave',$5) ON CONFLICT DO NOTHING`,
+                [asn.id, asn.companyId, asn.branchId, dateStr, `إجازة معتمدة تلقائياً - طلب رقم ${stage.leaveRequestId}`]
+              );
+            }
+            const mgrRes = await client.query(
+              `SELECT ea.id FROM employee_assignments ea
+               WHERE ea."companyId" = $1 AND ea."branchId" = $2
+                 AND ea.role IN ('branch_manager','hr_manager','general_manager','owner') AND ea.status = 'active' AND ea.id != $3
+               ORDER BY CASE ea.role WHEN 'branch_manager' THEN 1 WHEN 'hr_manager' THEN 2 WHEN 'general_manager' THEN 3 ELSE 4 END LIMIT 1`,
+              [asn.companyId, asn.branchId, asn.id]
+            );
+            const managerAId = mgrRes.rows[0] ?? null;
+            managers[asn.id] = managerAId;
+            if (managerAId) {
+              await client.query(
+                `UPDATE project_tasks SET "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1)
+                 WHERE "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $2)
+                   AND status NOT IN ('completed','cancelled')
+                   AND ("dueDate" IS NULL OR "dueDate" BETWEEN $3 AND $4)`,
+                [managerAId.id, asn.id, stage.startDate, stage.endDate]
+              );
+            }
+          }
+          return { allAssignments: assignments, managersByAsn: managers, isFullyApproved: true };
         }
-        createNotification({
-          companyId: asn.companyId, assignmentId: asn.id,
-          type: "leave_approved", title: "تمت الموافقة التلقائية على طلب الإجازة",
-          body: `تمت الموافقة تلقائياً على إجازة ${stage.leaveTypeName} من ${stage.startDate} إلى ${stage.endDate} بسبب تجاوز المهلة`,
-          priority: "high", refType: "leave_request", refId: stage.leaveRequestId,
-        }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
-        if (managerAId) {
+
+        // Stage approved but other stages still pending — don't finalize the leave request
+        return { allAssignments: [] as any[], managersByAsn: {} as Record<string, any>, isFullyApproved: false };
+      });
+
+      // Fire-and-forget notifications and events (outside the transaction)
+      if (isFullyApproved) {
+        for (const asn of allAssignments) {
+          const managerAId = managersByAsn[asn.id];
           createNotification({
-            companyId: asn.companyId, assignmentId: managerAId.id,
-            type: "leave_approved", title: "موظف في إجازة معتمدة تلقائياً",
-            body: `تمت الموافقة تلقائياً على إجازة موظف من ${stage.startDate} إلى ${stage.endDate}. تم إعادة توزيع المهام.`,
-            priority: "normal", refType: "leave_request", refId: stage.leaveRequestId,
+            companyId: asn.companyId, assignmentId: asn.id,
+            type: "leave_approved", title: "تمت الموافقة التلقائية على طلب الإجازة",
+            body: `تمت الموافقة تلقائياً على إجازة ${stage.leaveTypeName} من ${stage.startDate} إلى ${stage.endDate} بسبب تجاوز المهلة`,
+            priority: "high", refType: "leave_request", refId: stage.leaveRequestId,
           }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
+          if (managerAId) {
+            createNotification({
+              companyId: asn.companyId, assignmentId: managerAId.id,
+              type: "leave_approved", title: "موظف في إجازة معتمدة تلقائياً",
+              body: `تمت الموافقة تلقائياً على إجازة موظف من ${stage.startDate} إلى ${stage.endDate}. تم إعادة توزيع المهام.`,
+              priority: "normal", refType: "leave_request", refId: stage.leaveRequestId,
+            }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
+          }
         }
+        // Emit the canonical leave.approved event so downstream listeners
+        // (audit trail, calendar, reporting) see auto-approvals the same way
+        // they see manual approvals. Without this, cron-approved leaves were
+        // invisible to every listener that keyed on leave.approved.
+        emitEvent({
+          companyId: stage.companyId,
+          userId: null,
+          action: "leave.approved",
+          entity: "hr_leave_requests",
+          entityId: stage.leaveRequestId,
+          details: JSON.stringify({
+            autoApproved: true,
+            reason: "timeout",
+            days: stage.days,
+            startDate: stage.startDate,
+            endDate: stage.endDate,
+            leaveTypeId: stage.leaveTypeId,
+          }),
+        }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
       }
-      // Emit the canonical leave.approved event so downstream listeners
-      // (audit trail, calendar, reporting) see auto-approvals the same way
-      // they see manual approvals. Without this, cron-approved leaves were
-      // invisible to every listener that keyed on leave.approved.
-      emitEvent({
-        companyId: stage.companyId,
-        userId: null,
-        action: "leave.approved",
-        entity: "hr_leave_requests",
-        entityId: stage.leaveRequestId,
-        details: JSON.stringify({
-          autoApproved: true,
-          reason: "timeout",
-          days: stage.days,
-          startDate: stage.startDate,
-          endDate: stage.endDate,
-          leaveTypeId: stage.leaveTypeId,
-        }),
-      }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
       autoApprovals++;
     } else if (hoursSinceCreation >= 24 && !stage.escalatedAt) {
       const [hrAssignment] = await rawQuery<any>(

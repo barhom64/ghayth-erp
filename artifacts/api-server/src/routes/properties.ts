@@ -637,8 +637,8 @@ router.get("/units/:id", requirePermission("property:read"), async (req, res) =>
         [id, scope.companyId]
       ),
       rawQuery<any>(
-        `SELECT al.*, u.email AS "userName" FROM audit_logs al LEFT JOIN users u ON u.id=al."userId" WHERE al.entity='property_units' AND al."entityId"=$1 ORDER BY al."createdAt" DESC LIMIT 30`,
-        [id]
+        `SELECT al.*, u.email AS "userName" FROM audit_logs al LEFT JOIN users u ON u.id=al."userId" WHERE al.entity='property_units' AND al."entityId"=$1 AND al."companyId"=$2 ORDER BY al."createdAt" DESC LIMIT 30`,
+        [id, scope.companyId]
       ),
     ]);
 
@@ -1574,7 +1574,7 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
         // Free the unit
         if (contract.unitId) {
           await client.query(
-            `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='occupied'`,
+            `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status IN ('occupied','rented')`,
             [contract.unitId, scope.companyId]
           );
         }
@@ -1878,8 +1878,8 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
          FROM rent_payments rp
          JOIN rental_contracts c ON c.id = rp."contractId"
          LEFT JOIN property_units u ON u.id = c."unitId"
-        WHERE rp.id = $1`,
-      [Number(id)]
+        WHERE rp.id = $1 AND rp."companyId" = $2`,
+      [Number(id), scope.companyId]
     );
     if (!existing) throw new NotFoundError("القسط غير موجود");
 

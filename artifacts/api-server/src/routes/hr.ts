@@ -28,6 +28,7 @@ import {
   generateRef,
   toDateISO,
   roundTo2,
+  reverseAccountBalances,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
@@ -3939,7 +3940,7 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
       toState: "cancelled",
       reason: b.reason,
       setExtras: {
-        rejectedReason: { raw: `COALESCE("rejectedReason",'') || ' | إلغاء: ' || '${b.reason.replace(/'/g, "''")}'` },
+        rejectedReason: b.reason ? `${(request as any).rejectedReason || ""} | إلغاء: ${b.reason}`.trim() : null,
       },
       onApply: async (_row, client) => {
         const year = new Date(request.startDate).getFullYear();
@@ -4192,6 +4193,52 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
       throw new ConflictError("لا يمكن حذف دورة رواتب تم ترحيلها");
     }
     await withTransaction(async (client) => {
+      // ── Reverse financial side effects ──
+
+      // Revert attendance deductions
+      await client.query(
+        `UPDATE attendance_deductions SET status = 'pending_payroll' WHERE "payrollRunId" = $1 AND status = 'deducted_in_payroll'`,
+        [id]
+      );
+
+      // Revert loan installments and restore loan remaining amounts
+      const { rows: paidInstallments } = await client.query(
+        `SELECT id, "loanId", amount FROM hr_loan_installments WHERE "payrollRunId" = $1 AND status = 'paid'`,
+        [id]
+      );
+      if (paidInstallments.length > 0) {
+        await client.query(
+          `UPDATE hr_loan_installments SET status = 'pending' WHERE "payrollRunId" = $1 AND status = 'paid'`,
+          [id]
+        );
+        for (const inst of paidInstallments) {
+          await client.query(
+            `UPDATE loan_accounts SET "remainingAmount" = "remainingAmount" + $1 WHERE id = $2`,
+            [inst.amount, inst.loanId]
+          );
+        }
+      }
+
+      // Revert overtime requests
+      await client.query(
+        `UPDATE hr_overtime_requests SET status = 'approved' WHERE "payrollRunId" = $1 AND status = 'paid'`,
+        [id]
+      );
+
+      // Reverse GL journal entry if one exists
+      const { rows: journalRows } = await client.query(
+        `SELECT id FROM journal_entries WHERE "sourceType" = 'payroll_runs' AND "sourceId" = $1 AND "deletedAt" IS NULL`,
+        [id]
+      );
+      for (const je of journalRows) {
+        await reverseAccountBalances(scope.companyId, Number(je.id));
+        await client.query(
+          `UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1`,
+          [je.id]
+        );
+      }
+
+      // Soft-delete payroll lines and the run itself
       await client.query(`UPDATE payroll_lines SET "deletedAt" = NOW() WHERE "runId" = $1 AND "deletedAt" IS NULL`, [id]);
       await client.query(`UPDATE payroll_runs SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     });
@@ -5919,7 +5966,7 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
         fromStates: ["pending"],
         toState: "pending_receiving_manager",
         reason: notes || undefined,
-        setExtras: { approvedBy: scope.employeeId, approvedAt: { raw: "NOW()" }, notes: { raw: `COALESCE('${(notes || '').replace(/'/g, "''")}', notes)` } },
+        setExtras: { approvedBy: scope.employeeId, approvedAt: { raw: "NOW()" }, notes: notes || null },
         notifications: receivingMgr ? [{
           assignmentId: receivingMgr.id,
           type: "transfer_receiving_approval", title: "طلب استقبال موظف منقول",
@@ -5940,7 +5987,7 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
         fromStates: ["pending"],
         toState: "rejected",
         reason: notes || undefined,
-        setExtras: { approvedBy: scope.employeeId, approvedAt: { raw: "NOW()" }, notes: { raw: `COALESCE('${(notes || '').replace(/'/g, "''")}', notes)` } },
+        setExtras: { approvedBy: scope.employeeId, approvedAt: { raw: "NOW()" }, notes: notes || null },
         notifications: empAssign ? [{
           assignmentId: empAssign.id,
           type: "transfer_decision", title: "تم رفض طلب النقل",
