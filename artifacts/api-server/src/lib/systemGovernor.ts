@@ -105,6 +105,32 @@ const auditViolationsGuard: GuardFn = async (companyId, context) => {
   return { allowed: true, guardName: "audit_violations" };
 };
 
+// ─── Guard: System Stop (Red Button) ─────────────────────────────────────
+// The "red button" mechanism: administrators can insert rows into the
+// `system_stops` table to halt specific operation scopes during audits,
+// investigations, or emergencies.  Every guarded mutation checks this table.
+
+const systemStopGuard: GuardFn = async (companyId, context) => {
+  const scope: string = context?.guardScope ?? "all";
+  const rows = await rawQuery<{ scope: string; reason: string }>(
+    `SELECT scope, reason FROM system_stops
+     WHERE "companyId" = $1
+       AND active = true
+       AND (scope = $2 OR scope = 'all')
+     LIMIT 1`,
+    [companyId, scope]
+  ).catch(() => [] as any[]);
+
+  if (rows.length > 0) {
+    return {
+      allowed: false,
+      guardName: "system_stop",
+      reason: `⛔ إيقاف نظام (${rows[0].scope}): ${rows[0].reason}`,
+    };
+  }
+  return { allowed: true, guardName: "system_stop" };
+};
+
 // ─── Guard Registry ───────────────────────────────────────────────────────
 
 export type GuardScope = "financial" | "hr" | "operational" | "all";
@@ -113,6 +139,7 @@ export type GuardScope = "financial" | "hr" | "operational" | "all";
 const FINANCIAL_SCOPES: ReadonlySet<GuardScope> = new Set(["financial"]);
 
 const GUARD_REGISTRY: Array<{ guard: GuardFn; scope: GuardScope }> = [
+  { guard: systemStopGuard, scope: "all" },
   { guard: companyActiveGuard, scope: "all" },
   { guard: financialPeriodGuard, scope: "financial" },
   { guard: trialLimitsGuard, scope: "all" },

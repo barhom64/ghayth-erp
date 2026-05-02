@@ -1634,4 +1634,56 @@ router.get("/system-health/dependency-graph", requirePermission("admin:read"), a
   } catch (err) { handleRouteError(err, res, "Dependency graph error:"); }
 });
 
+// ============================================================================
+// SYSTEM STOPS — زر الإيقاف الطارئ (Red Button)
+// ============================================================================
+
+router.get("/system-stops", requirePermission("admin:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery(
+      `SELECT ss.*, u."fullName" AS "activatedByName"
+       FROM system_stops ss
+       LEFT JOIN users u ON u.id = ss."activatedBy"
+       WHERE ss."companyId" = $1
+       ORDER BY ss."createdAt" DESC`,
+      [scope.companyId]
+    );
+    res.json({ data: rows });
+  } catch (err) { handleRouteError(err, res, "List system stops"); }
+});
+
+router.post("/system-stops", requirePermission("admin:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { scope: stopScope, reason } = req.body;
+    if (!reason || typeof reason !== "string") throw new ValidationError("سبب الإيقاف مطلوب");
+    const validScopes = ["financial", "hr", "operational", "all"];
+    const s = validScopes.includes(stopScope) ? stopScope : "all";
+    const [row] = await rawQuery<{ id: number }>(
+      `INSERT INTO system_stops ("companyId", scope, reason, "activatedBy")
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [scope.companyId, s, reason, scope.userId]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, after: { scope: s, reason } }).catch(() => {});
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, details: `إيقاف نظام (${s}): ${reason}` }).catch(() => {});
+    res.status(201).json({ id: row.id, message: `تم تفعيل إيقاف النظام — النطاق: ${s}` });
+  } catch (err) { handleRouteError(err, res, "Create system stop"); }
+});
+
+router.patch("/system-stops/:id/deactivate", requirePermission("admin:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    await rawExecute(
+      `UPDATE system_stops SET active=false, "deactivatedBy"=$1, "deactivatedAt"=NOW(), "updatedAt"=NOW()
+       WHERE id=$2 AND "companyId"=$3 AND active=true`,
+      [scope.userId, id, scope.companyId]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, after: {} }).catch(() => {});
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, details: "إلغاء إيقاف النظام" }).catch(() => {});
+    res.json({ message: "تم إلغاء تفعيل الإيقاف" });
+  } catch (err) { handleRouteError(err, res, "Deactivate system stop"); }
+});
+
 export default router;

@@ -451,3 +451,123 @@ describe("E2E: Module boundary enforcement", () => {
     expect(hr).not.toContain("INSERT INTO invoices");
   });
 });
+
+// ─── System Stops (Red Button) ──────────────────────────────────────────
+describe("System Stops (Red Button) infrastructure", () => {
+  const governor = read("lib/systemGovernor.ts");
+  const admin = read("routes/admin.ts");
+  const migration = readFileSync(join(SRC, "migrations/116_system_stops.sql"), "utf8");
+
+  it("systemStopGuard exists and queries system_stops table", () => {
+    expect(governor).toContain("systemStopGuard");
+    expect(governor).toContain("system_stops");
+  });
+
+  it("systemStopGuard is registered first in GUARD_REGISTRY", () => {
+    const registryMatch = governor.match(/GUARD_REGISTRY.*?\[([^\]]+)\]/s);
+    expect(registryMatch).not.toBeNull();
+    const firstGuard = registryMatch![1].trim();
+    expect(firstGuard).toContain("systemStopGuard");
+  });
+
+  it("stop-system checks active flag and scope", () => {
+    expect(governor).toContain("active = true");
+    expect(governor).toContain('scope = $2 OR scope = \'all\'');
+  });
+
+  it("admin has system-stops CRUD endpoints", () => {
+    expect(admin).toContain('"/system-stops"');
+    expect(admin).toContain('"/system-stops/:id/deactivate"');
+    expect(admin).toContain("system.stop.activated");
+    expect(admin).toContain("system.stop.deactivated");
+  });
+
+  it("migration creates system_stops table with correct columns", () => {
+    expect(migration).toContain("CREATE TABLE IF NOT EXISTS system_stops");
+    expect(migration).toContain('"companyId"');
+    expect(migration).toContain("scope");
+    expect(migration).toContain("reason");
+    expect(migration).toContain("active");
+    expect(migration).toContain('"activatedBy"');
+  });
+});
+
+// ─── Journey Engine ──────────────────────────────────────────────────────
+describe("Journey Engine infrastructure", () => {
+  const journey = read("lib/journeyEngine.ts");
+  const engines = read("lib/engines/index.ts");
+
+  it("exports JOURNEY_DEFINITIONS with at least 5 journey types", () => {
+    expect(journey).toContain("JOURNEY_DEFINITIONS");
+    const typeMatches = journey.match(/type:\s*"/g);
+    expect(typeMatches!.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("includes umrah_season journey definition", () => {
+    expect(journey).toContain('"umrah_season"');
+    expect(journey).toContain("umrah.season.opened");
+    expect(journey).toContain("umrah.invoice.generated");
+  });
+
+  it("includes hr_onboarding journey definition", () => {
+    expect(journey).toContain('"hr_onboarding"');
+    expect(journey).toContain("hr.employee.created");
+  });
+
+  it("exports startJourney, advanceJourney, getJourneyProgress", () => {
+    expect(journey).toContain("export async function startJourney");
+    expect(journey).toContain("export async function advanceJourney");
+    expect(journey).toContain("export async function getJourneyProgress");
+  });
+
+  it("is registered in engines barrel", () => {
+    expect(engines).toContain("journeyEngine");
+  });
+});
+
+// ─── Umrah GL Posting via Event Listener ─────────────────────────────────
+describe("Umrah invoice GL posting via event listener", () => {
+  const listeners = read("lib/eventListeners.ts");
+
+  it("listens to umrah.invoice.generated event", () => {
+    expect(listeners).toContain('"umrah.invoice.generated"');
+  });
+
+  it("posts GL journal with AR and Revenue accounts", () => {
+    expect(listeners).toContain("umrah_receivables");
+    expect(listeners).toContain("umrah_revenue");
+    expect(listeners).toContain("createGuardedJournalEntry");
+  });
+
+  it("uses JE-UMR prefix for umrah journal references", () => {
+    expect(listeners).toContain("JE-UMR-");
+  });
+
+  it("umrah routes do NOT directly import GL functions", () => {
+    const umrahEntities = read("routes/umrah-entities.ts");
+    expect(umrahEntities).not.toContain("createGuardedJournalEntry");
+    expect(umrahEntities).not.toContain("getAccountCodeFromMapping");
+  });
+});
+
+// ─── Event Catalog Completeness for Umrah ────────────────────────────────
+describe("Event catalog umrah completeness", () => {
+  const catalog = read("lib/eventCatalog.ts");
+
+  const requiredEvents = [
+    "umrah.pilgrim.created", "umrah.pilgrim.updated", "umrah.pilgrim.deleted",
+    "umrah.pilgrim.arrived", "umrah.pilgrim.departed", "umrah.pilgrim.overstayed",
+    "umrah.pilgrim.status_changed", "umrah.pilgrim.violated",
+    "umrah.transport.created", "umrah.transport.updated", "umrah.transport.deleted",
+    "umrah.invoice.generated", "umrah.invoice.gl_auto_posted",
+    "umrah.payment.received", "umrah.season.opened",
+    "umrah.daily_status.run", "umrah.penalty.waived", "umrah.penalty_engine.run",
+    "umrah.nusk_invoice.created", "umrah.nusk_invoice.updated", "umrah.nusk_invoice.deleted",
+  ];
+
+  for (const evt of requiredEvents) {
+    it(`catalog includes ${evt}`, () => {
+      expect(catalog).toContain(`"${evt}"`);
+    });
+  }
+});

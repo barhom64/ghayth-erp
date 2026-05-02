@@ -1206,13 +1206,37 @@ export function registerEventListeners() {
 
     const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
 
-    // Cross-module: verify GL journal entry was posted
+    // Cross-module: auto-post GL journal for umrah agent invoice (AR ↔ Revenue)
     const [glEntry] = await rawQuery<any>(
       `SELECT id FROM journal_entries WHERE "sourceType"='umrah_sales_invoices' AND "sourceId"=$1 AND "companyId"=$2 LIMIT 1`,
       [payload.entityId, payload.companyId]
     );
     if (!glEntry) {
-      logger.warn(`[EventReaction] Invoice #${payload.entityId} missing GL entry — will be posted on approval`);
+      try {
+        const total = Number((payload as any).after?.total ?? details.total ?? 0);
+        const ref = (payload as any).after?.ref ?? details.ref ?? "";
+        const subAgentId = (payload as any).after?.subAgentId ?? details.subAgentId ?? "";
+        if (total > 0) {
+          const arCode = await getAccountCodeFromMapping(payload.companyId, "umrah_receivables", "debit", "1200");
+          const revenueCode = await getAccountCodeFromMapping(payload.companyId, "umrah_revenue", "credit", "4100");
+          await createGuardedJournalEntry({
+            companyId: payload.companyId,
+            branchId: (payload.branchId as number) || 0,
+            createdBy: (payload.userId as number) || 0,
+            ref: `JE-UMR-${payload.entityId}`,
+            description: `فاتورة عمرة ${ref} — وكيل فرعي #${subAgentId}`,
+            type: "sales",
+            sourceType: "umrah_sales_invoices",
+            sourceId: payload.entityId as number,
+            lines: [
+              { accountCode: arCode, debit: total, credit: 0, description: `ذمم مدينة — فاتورة ${ref}` },
+              { accountCode: revenueCode, debit: 0, credit: total, description: `إيراد عمرة — فاتورة ${ref}` },
+            ],
+          }, { table: "umrah_sales_invoices", id: payload.entityId as number });
+        }
+      } catch (glErr) {
+        logger.error(glErr, `[EventListener] umrah invoice GL posting failed for #${payload.entityId}`);
+      }
     }
 
     // Cross-module: register receivable obligation for payment tracking
