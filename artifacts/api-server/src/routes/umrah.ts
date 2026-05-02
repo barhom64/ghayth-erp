@@ -1,3 +1,16 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// umrah.ts — CORE DOMAIN: lifecycle entities + operational endpoints
+//
+// Owns: seasons, agents, packages, pilgrims (CRUD + lifecycle + encryption),
+//       transport (fleet service consumer), import, daily-status, penalties,
+//       violations, agent-invoices, bulk-assign.
+//
+// Sister file: umrah-entities.ts — COMMERCIAL/FINANCE entities
+//   Owns: sub-agents, pricing, groups, nusk-invoices, sales-invoices,
+//         payments, statements, commissions, import-batches.
+//
+// Both mounted at /umrah with requireModule("operations") + requireGuards("financial").
+// ─────────────────────────────────────────────────────────────────────────────
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -1304,6 +1317,11 @@ router.get("/invoices/:id", requirePermission("umrah:read"), async (req, res): P
   } catch (err) { handleRouteError(err, res, "Get invoice error"); }
 });
 
+// ─── UMRAH TRANSPORT — Internal Service ─────────────────────────────────
+// umrah_transport is a SERVICE CONSUMER of fleet (fleet_vehicles, fleet_drivers).
+// It does NOT duplicate fleet management; it records transport assignments
+// specific to umrah pilgrim groups. Vehicle/driver validation is delegated
+// to fleet tables. Events emitted: umrah.transport.created/status_changed/deleted.
 router.get("/transport", requirePermission("umrah:read"), async (req, res) => {
   try {
     const scope = req.scope!;

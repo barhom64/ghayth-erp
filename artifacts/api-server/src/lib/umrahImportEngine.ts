@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
-import { emitEvent, createAuditLog, createJournalEntry, getAccountCodeFromMapping, toDateISO } from "./businessHelpers.js";
+import { emitEvent, createAuditLog, createGuardedJournalEntry, getAccountCodeFromMapping, toDateISO } from "./businessHelpers.js";
 import { ValidationError } from "./errorHandler.js";
 import type pg from "pg";
 import { logger } from "./logger.js";
@@ -582,7 +582,7 @@ export async function confirmVouchersImport(
             try {
               const expCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "debit", "5201");
               const apCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "credit", "2101");
-              const jeId = await createJournalEntry({
+              const jeId = await createGuardedJournalEntry({
                 companyId: scope.companyId,
                 branchId: scope.branchId || 0,
                 createdBy: scope.userId,
@@ -595,7 +595,7 @@ export async function confirmVouchersImport(
                   { accountCode: expCode, debit: totalAmt, credit: 0, description: "تكلفة خدمات نسك" },
                   { accountCode: apCode, debit: 0, credit: totalAmt, description: "مستحقات نسك" },
                 ],
-              });
+              }, { table: "umrah_nusk_invoices", id: nuskId });
               if (jeId) {
                 await client.query(
                   `UPDATE umrah_nusk_invoices SET "purchaseInvoiceId"=$1 WHERE id=$2 AND "companyId"=$3`,

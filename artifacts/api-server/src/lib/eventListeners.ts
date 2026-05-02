@@ -1,7 +1,7 @@
 import { eventBus, registerCrossDomainHandler, type EventPayload } from "./eventBus.js";
 import { pool, rawQuery, rawExecute } from "./rawdb.js";
 import { logger } from "./logger.js";
-import { createNotification, getManagerAssignmentId, createJournalEntry, getAccountCodeFromMapping, todayISO, toDateISO, currentYear } from "./businessHelpers.js";
+import { createNotification, getManagerAssignmentId, createGuardedJournalEntry, getAccountCodeFromMapping, todayISO, toDateISO, currentYear } from "./businessHelpers.js";
 import { computeDiff } from "./auditDiff.js";
 import { calculateAllForCompany } from "./umrahCommissionEngine.js";
 import { registerObligation, markObligationMet } from "./obligationsEngine.js";
@@ -825,7 +825,7 @@ export function registerEventListeners() {
             lines.push({ accountCode: commPayableCode, debit: comm, credit: 0, description: "تسوية عمولات مستحقة سابقاً" });
             lines.push({ accountCode: salaryPayableCode, debit: 0, credit: comm, description: "عمولات ضمن الرواتب" });
           }
-          await createJournalEntry({
+          await createGuardedJournalEntry({
             companyId: payload.companyId,
             branchId: (payload.branchId as number) || 0,
             createdBy: (payload.userId as number) || 0,
@@ -835,15 +835,11 @@ export function registerEventListeners() {
             sourceType: "payroll_runs",
             sourceId: payload.entityId as number,
             lines,
-          });
+          }, { table: "payroll_runs", id: payload.entityId as number });
         }
       } catch (glErr) {
-        await rawExecute(
-          `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
-           VALUES ($1,$2,$3,$4,false)`,
-          [payload.companyId, "payroll_gl_posting", payload.entityId ?? 0,
-           `فشل ترحيل قيد الرواتب: ${String(glErr)}`]
-        ).catch((e) => logger.error(e, "event listener background task failed"));
+        // createGuardedJournalEntry already records in financial_posting_failures
+        logger.error(glErr, `[EventListener] payroll GL posting failed for run #${payload.entityId}`);
       }
     }
   });
@@ -1278,7 +1274,7 @@ export function registerEventListeners() {
             getAccountCodeFromMapping(payload.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
             getAccountCodeFromMapping(payload.companyId, "invoice_payment_ar", "credit", "1200"),
           ]);
-          await createJournalEntry({
+          await createGuardedJournalEntry({
             companyId: payload.companyId,
             branchId: (payload.branchId as number) || 0,
             createdBy: (payload.userId as number) || 0,
@@ -1291,15 +1287,11 @@ export function registerEventListeners() {
               { accountCode: cashCode, debit: sarAmount, credit: 0 },
               { accountCode: arCode, debit: 0, credit: sarAmount },
             ],
-          });
+          }, { table: "umrah_payments", id: payload.entityId as number });
         }
       } catch (glErr) {
-        await rawExecute(
-          `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
-           VALUES ($1,$2,$3,$4,false)`,
-          [payload.companyId, "payment_gl_recovery", payload.entityId ?? 0,
-           `فشل استعادة قيد الدفعة: ${String(glErr)}`]
-        ).catch((e) => logger.error(e, "event listener background task failed"));
+        // createGuardedJournalEntry already records in financial_posting_failures
+        logger.error(glErr, `[EventListener] payment GL recovery failed for payment #${payload.entityId}`);
       }
     }
 
@@ -1353,7 +1345,7 @@ export function registerEventListeners() {
             getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "6200"),
             getAccountCodeFromMapping(payload.companyId, "commission_payable", "credit", "2150"),
           ]);
-          await createJournalEntry({
+          await createGuardedJournalEntry({
             companyId: payload.companyId,
             branchId: (payload.branchId as number) || 0,
             createdBy: (payload.userId as number) || 0,
@@ -1366,14 +1358,10 @@ export function registerEventListeners() {
               { accountCode: expenseCode, debit: finalAmount, credit: 0, description: `مصروف عمولة` },
               { accountCode: payableCode, debit: 0, credit: finalAmount, description: `عمولة مستحقة` },
             ],
-          });
+          }, { table: "employee_commission_plans", id: planId });
         } catch (glErr) {
-          await rawExecute(
-            `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
-             VALUES ($1,$2,$3,$4,false)`,
-            [payload.companyId, "commission_gl_recovery", planId,
-             `فشل استعادة قيد العمولة: ${String(glErr)}`]
-          ).catch((e) => logger.error(e, "event listener background task failed"));
+          // createGuardedJournalEntry already records in financial_posting_failures
+          logger.error(glErr, `[EventListener] commission GL recovery failed for plan #${planId}`);
         }
       }
     }
