@@ -1198,6 +1198,9 @@ export const EVENT_CATALOG: EventDefinition[] = [
   { name: "umrah.violation.deleted", label: "حذف مخالفة", domain: "umrah", description: "تُصدر عند حذف مخالفة", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "umrah.violation.updated", label: "تحديث مخالفة", domain: "umrah", description: "تُصدر عند تحديث مخالفة", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "umrah.vouchers.imported", label: "استيراد vouchers", domain: "umrah", description: "تُصدر عند استيراد vouchers", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
+  { name: "umrah.nusk_invoice.created", label: "إنشاء فاتورة نسك", domain: "umrah", description: "تُصدر عند إنشاء فاتورة نسك يدوياً", payload: {"id":"number"}, consumers: ["auditTrail","finance"], sideEffects: ["audit"] },
+  { name: "umrah.nusk_invoice.updated", label: "تحديث فاتورة نسك", domain: "umrah", description: "تُصدر عند تحديث فاتورة نسك", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
+  { name: "umrah.nusk_invoice.deleted", label: "حذف فاتورة نسك", domain: "umrah", description: "تُصدر عند حذف فاتورة نسك", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
 
   // ─── AUTH — توسيع (المصادقة) ───
   { name: "auth.password.changed", label: "changed password", domain: "auth", description: "تُصدر عند changed password", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },

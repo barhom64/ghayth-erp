@@ -35,6 +35,17 @@ import { logger } from "../lib/logger.js";
 
 const router = Router();
 
+async function requireOpenSeason(seasonId: number, companyId: number): Promise<void> {
+  const [season] = await rawQuery<{ id: number; status: string }>(
+    `SELECT id, status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+    [seasonId, companyId]
+  );
+  if (!season) throw new ValidationError("الموسم غير موجود", { field: "seasonId" });
+  if (season.status !== "open") {
+    throw new ConflictError(`الموسم مغلق (${season.status}) — لا يمكن إجراء عمليات عليه`);
+  }
+}
+
 // ============================================================================
 // ZOD SCHEMAS
 // ============================================================================
@@ -551,8 +562,7 @@ router.post("/groups", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createGroupSchema.safeParse(req.body));
-    const [season] = await rawQuery(`SELECT id FROM umrah_seasons WHERE id = $1 AND "companyId" = $2`, [b.seasonId, scope.companyId]);
-    if (!season) throw new ValidationError("الموسم غير موجود");
+    await requireOpenSeason(b.seasonId, scope.companyId);
     const rows = await rawQuery(
       `INSERT INTO umrah_groups ("companyId","branchId","nuskGroupNumber",name,"agentId","subAgentId","seasonId","mutamerCount","programDuration","createdBy")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
@@ -641,6 +651,136 @@ router.get("/nusk-invoices", requirePermission("umrah:read"), async (req, res) =
     );
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List nusk invoices"); }
+});
+
+router.get("/nusk-invoices/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery(
+      `SELECT ni.*, a.name AS "agentName", sa.name AS "subAgentName", g."nuskGroupNumber"
+       FROM umrah_nusk_invoices ni
+       LEFT JOIN umrah_agents a ON ni."agentId" = a.id
+       LEFT JOIN umrah_sub_agents sa ON ni."subAgentId" = sa.id
+       LEFT JOIN umrah_groups g ON ni."groupId" = g.id
+       WHERE ni.id = $1 AND ni."companyId" = $2 AND ni."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) { res.status(404).json({ error: "فاتورة نسك غير موجودة" }); return; }
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get nusk invoice"); }
+});
+
+const createNuskInvoiceSchema = z.object({
+  nuskInvoiceNumber: z.string().min(1, "رقم فاتورة نسك مطلوب"),
+  agentId: z.coerce.number({ required_error: "الوكيل مطلوب" }),
+  subAgentId: z.coerce.number().optional(),
+  groupId: z.coerce.number().optional(),
+  mutamerCount: z.coerce.number().int().min(0).default(0),
+  groundServices: z.coerce.number().default(0),
+  visaFees: z.coerce.number().default(0),
+  insuranceFees: z.coerce.number().default(0),
+  transportFees: z.coerce.number().default(0),
+  hotelFees: z.coerce.number().default(0),
+  otherFees: z.coerce.number().default(0),
+  netCost: z.coerce.number().default(0),
+  totalAmount: z.coerce.number().default(0),
+  nuskStatus: z.enum(["pending", "paid", "in_progress", "expired", "refunded", "cancelled"]).default("pending"),
+  issueDate: z.string().optional(),
+  expiryDate: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const updateNuskInvoiceSchema = z.object({
+  mutamerCount: z.coerce.number().int().min(0).optional(),
+  groundServices: z.coerce.number().optional(),
+  visaFees: z.coerce.number().optional(),
+  insuranceFees: z.coerce.number().optional(),
+  transportFees: z.coerce.number().optional(),
+  hotelFees: z.coerce.number().optional(),
+  otherFees: z.coerce.number().optional(),
+  netCost: z.coerce.number().optional(),
+  totalAmount: z.coerce.number().optional(),
+  nuskStatus: z.enum(["pending", "paid", "in_progress", "expired", "refunded", "cancelled"]).optional(),
+  issueDate: z.string().optional(),
+  expiryDate: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+router.post("/nusk-invoices", requirePermission("umrah:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createNuskInvoiceSchema.safeParse(req.body));
+    const [dup] = await rawQuery(
+      `SELECT id FROM umrah_nusk_invoices WHERE "nuskInvoiceNumber" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [b.nuskInvoiceNumber, scope.companyId]
+    );
+    if (dup) throw new ConflictError("رقم فاتورة نسك مكرر");
+    const rows = await rawQuery(
+      `INSERT INTO umrah_nusk_invoices ("companyId","branchId","nuskInvoiceNumber","agentId","subAgentId","groupId","mutamerCount",
+       "groundServices","visaFees","insuranceFees","transportFees","hotelFees","otherFees","netCost","totalAmount","nuskStatus","issueDate","expiryDate",notes,"createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
+      [scope.companyId, scope.branchId || null, b.nuskInvoiceNumber, b.agentId, b.subAgentId || null, b.groupId || null, b.mutamerCount,
+       b.groundServices, b.visaFees, b.insuranceFees, b.transportFees, b.hotelFees, b.otherFees, b.netCost, b.totalAmount, b.nuskStatus,
+       b.issueDate || null, b.expiryDate || null, b.notes || null, scope.userId]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_nusk_invoices", entityId: rows[0]?.id, after: { nuskInvoiceNumber: b.nuskInvoiceNumber } }).catch((e) => logger.error(e, "nusk bg"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.nusk_invoice.created", entity: "umrah_nusk_invoices", entityId: rows[0]?.id }).catch((e) => logger.error(e, "nusk bg"));
+    res.status(201).json(rows[0]);
+  } catch (err) { handleRouteError(err, res, "Create nusk invoice"); }
+});
+
+router.patch("/nusk-invoices/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(updateNuskInvoiceSchema.safeParse(req.body));
+    const [existing] = await rawQuery<any>(
+      `SELECT * FROM umrah_nusk_invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!existing) { res.status(404).json({ error: "فاتورة نسك غير موجودة" }); return; }
+    if (existing.nuskStatus === "paid" && b.nuskStatus !== "refunded") {
+      throw new ConflictError("لا يمكن تعديل فاتورة نسك مدفوعة");
+    }
+    const fields = ["mutamerCount","groundServices","visaFees","insuranceFees","transportFees","hotelFees","otherFees","netCost","totalAmount","nuskStatus","issueDate","expiryDate","notes"] as const;
+    const params: any[] = [];
+    const sets: string[] = [];
+    for (const key of fields) {
+      if ((b as any)[key] !== undefined) { params.push((b as any)[key]); sets.push(`"${key}"=$${params.length}`); }
+    }
+    if (sets.length === 0) { res.json(existing); return; }
+    params.push(scope.userId); sets.push(`"updatedBy"=$${params.length}`);
+    sets.push(`"updatedAt"=NOW()`);
+    params.push(id); params.push(scope.companyId);
+    const [row] = await rawQuery(
+      `UPDATE umrah_nusk_invoices SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
+      params
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_nusk_invoices", entityId: id, after: b }).catch((e) => logger.error(e, "nusk bg"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.nusk_invoice.updated", entity: "umrah_nusk_invoices", entityId: id }).catch((e) => logger.error(e, "nusk bg"));
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Update nusk invoice"); }
+});
+
+router.delete("/nusk-invoices/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [existing] = await rawQuery<any>(
+      `SELECT id, "nuskStatus" FROM umrah_nusk_invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!existing) { res.status(404).json({ error: "فاتورة نسك غير موجودة" }); return; }
+    if (existing.nuskStatus === "paid") throw new ConflictError("لا يمكن حذف فاتورة نسك مدفوعة");
+    await rawExecute(
+      `UPDATE umrah_nusk_invoices SET "deletedAt"=NOW(), "updatedBy"=$1 WHERE id=$2 AND "companyId"=$3`,
+      [scope.userId, id, scope.companyId]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_nusk_invoices", entityId: id }).catch((e) => logger.error(e, "nusk bg"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.nusk_invoice.deleted", entity: "umrah_nusk_invoices", entityId: id }).catch((e) => logger.error(e, "nusk bg"));
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Delete nusk invoice"); }
 });
 
 // ============================================================================
