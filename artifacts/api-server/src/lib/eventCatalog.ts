@@ -1338,6 +1338,10 @@ export function getEventDefinition(name: string): EventDefinition | undefined {
   return _eventIndex.get(name);
 }
 
+export function isKnownEvent(name: string): boolean {
+  return _eventIndex.has(name);
+}
+
 export function listEventsByDomain(domain: EventDomain): EventDefinition[] {
   return EVENT_CATALOG.filter((e) => e.domain === domain);
 }

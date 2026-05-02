@@ -14,6 +14,7 @@ import {
 } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
+import { encryptField, decryptPilgrimRow, blindIndex, SENSITIVE_PILGRIM_FIELDS, logSensitiveAccess } from "../lib/fieldEncryption.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LIFECYCLE STATE MACHINES — Umrah domain
@@ -572,7 +573,14 @@ router.get("/pilgrims", requirePermission("umrah:read"), async (req, res) => {
     if (seasonId) { params.push(seasonId); where += ` AND p."seasonId"=$${params.length}`; }
     if (status) { params.push(status); where += ` AND p.status=$${params.length}`; }
     if (agentId) { params.push(agentId); where += ` AND p."agentId"=$${params.length}`; }
-    if (search) { params.push(`%${search}%`); where += ` AND (p."fullName" ILIKE $${params.length} OR p."passportNumber" ILIKE $${params.length} OR p."visaNumber" ILIKE $${params.length})`; }
+    if (search) {
+      const searchHash = blindIndex(String(search));
+      params.push(`%${search}%`);
+      const likePh = params.length;
+      params.push(searchHash);
+      const hashPh = params.length;
+      where += ` AND (p."fullName" ILIKE $${likePh} OR p."passportNumber_hash" = $${hashPh} OR p."visaNumber_hash" = $${hashPh})`;
+    }
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Number(limit) || 20;
     const offset = (pageNum - 1) * perPage;
@@ -587,7 +595,8 @@ router.get("/pilgrims", requirePermission("umrah:read"), async (req, res) => {
        ORDER BY p."createdAt" DESC LIMIT $${params.length-1} OFFSET $${params.length}`,
       params
     );
-    res.json({ data: rows, total: Number(countQ[0]?.c || 0), page: pageNum, pageSize: perPage });
+    logSensitiveAccess({ companyId: scope.companyId, userId: scope.userId, action: "list", entity: "umrah_pilgrims", ipAddress: req.ip, userAgent: req.headers["user-agent"], details: { count: rows.length, search: search || null } });
+    res.json({ data: rows.map(decryptPilgrimRow), total: Number(countQ[0]?.c || 0), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "List pilgrims error"); }
 });
 
@@ -652,9 +661,11 @@ router.post("/pilgrims", requirePermission("umrah:write"), async (req, res) => {
       }
     }
 
+    const passportPlain = String(b.passportNumber).trim();
+    const visaPlain = b.visaNumber ? String(b.visaNumber).trim() : null;
     const rows = await rawQuery(
-      `INSERT INTO umrah_pilgrims ("companyId","branchId","seasonId","agentId","packageId","fullName","passportNumber","visaNumber",nationality,gender,"dateOfBirth",phone,"arrivalDate","departureDate","hotelName","roomNumber",notes,"createdBy","updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW()) RETURNING *`,
+      `INSERT INTO umrah_pilgrims ("companyId","branchId","seasonId","agentId","packageId","fullName","passportNumber","passportNumber_hash","visaNumber","visaNumber_hash",nationality,gender,"dateOfBirth",phone,"arrivalDate","departureDate","hotelName","roomNumber",notes,"createdBy","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NOW()) RETURNING *`,
       [
         scope.companyId,
         scope.branchId || null,
@@ -662,8 +673,10 @@ router.post("/pilgrims", requirePermission("umrah:write"), async (req, res) => {
         b.agentId ? Number(b.agentId) : null,
         b.packageId ? Number(b.packageId) : null,
         String(b.fullName).trim(),
-        String(b.passportNumber).trim(),
-        b.visaNumber ?? null,
+        encryptField(passportPlain),
+        blindIndex(passportPlain),
+        visaPlain ? encryptField(visaPlain) : null,
+        visaPlain ? blindIndex(visaPlain) : null,
         b.nationality ?? null,
         b.gender ?? null,
         b.dateOfBirth ?? null,
@@ -676,9 +689,9 @@ router.post("/pilgrims", requirePermission("umrah:write"), async (req, res) => {
         scope.userId,
       ]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_pilgrims", entityId: rows[0]?.id, after: { fullName: String(b.fullName).trim(), passportNumber: String(b.passportNumber).trim() } }).catch((e) => logger.error(e, "umrah background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_pilgrims", entityId: rows[0]?.id, after: { fullName: String(b.fullName).trim() } }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.pilgrim.created", entity: "umrah_pilgrims", entityId: rows[0]?.id, after: { fullName: String(b.fullName).trim() } }).catch((e) => logger.error(e, "umrah background task failed"));
-    res.status(201).json(rows[0]);
+    res.status(201).json(decryptPilgrimRow(rows[0]));
   } catch (err) { handleRouteError(err, res, "Create pilgrim error"); }
 });
 
@@ -689,10 +702,22 @@ router.patch("/pilgrims/:id", requirePermission("umrah:write"), async (req, res)
     const pilgrimId = parseId(req.params.id, "id");
     const fieldKeys = ["agentId","packageId","fullName","passportNumber","visaNumber","nationality","gender","dateOfBirth","phone","arrivalDate","departureDate","actualArrival","actualDeparture","hotelName","roomNumber","transportAssigned","notes"] as const;
 
+    const encryptIfSensitive = (key: string, val: any): any => {
+      if (!val) return val;
+      if (key === "passportNumber" || key === "visaNumber" || key === "mofaNumber" || key === "borderNumber") {
+        return encryptField(String(val).trim());
+      }
+      return val;
+    };
+
     if (b.status !== undefined) {
       const setExtras: Record<string, any> = {};
       for (const key of fieldKeys) {
-        if (b[key] !== undefined) setExtras[key] = b[key];
+        if (b[key] !== undefined) {
+          setExtras[key] = encryptIfSensitive(key, b[key]);
+          if (key === "passportNumber") setExtras["passportNumber_hash"] = blindIndex(String(b[key]).trim());
+          if (key === "visaNumber") setExtras["visaNumber_hash"] = blindIndex(String(b[key]).trim());
+        }
       }
       const fromStates = Object.entries(PILGRIM_TRANSITIONS)
         .filter(([, targets]) => targets.includes(b.status!))
@@ -709,17 +734,22 @@ router.patch("/pilgrims/:id", requirePermission("umrah:write"), async (req, res)
         extraWhere: `"deletedAt" IS NULL`,
         after: { newStatus: b.status },
       });
-      res.json(row);
+      res.json(decryptPilgrimRow(row));
     } else {
       const params: any[] = [];
       const sets: string[] = [];
       for (const key of fieldKeys) {
-        if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
+        if (b[key] !== undefined) {
+          params.push(encryptIfSensitive(key, b[key]));
+          sets.push(`"${key}"=$${params.length}`);
+          if (key === "passportNumber") { params.push(blindIndex(String(b[key]).trim())); sets.push(`"passportNumber_hash"=$${params.length}`); }
+          if (key === "visaNumber") { params.push(blindIndex(String(b[key]).trim())); sets.push(`"visaNumber_hash"=$${params.length}`); }
+        }
       }
       if (sets.length === 0) {
         const [row] = await rawQuery(`SELECT * FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [pilgrimId, scope.companyId]);
         if (!row) throw new NotFoundError("المعتمر غير موجود");
-        res.json(row);
+        res.json(decryptPilgrimRow(row));
         return;
       }
       sets.push(`"updatedAt"=NOW()`);
@@ -729,7 +759,7 @@ router.patch("/pilgrims/:id", requirePermission("umrah:write"), async (req, res)
       if (!row) throw new NotFoundError("المعتمر غير موجود");
       createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pilgrims", entityId: pilgrimId }).catch((e) => logger.error(e, "umrah background task failed"));
       emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pilgrim.updated", entity: "umrah_pilgrims", entityId: pilgrimId, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah background task failed"));
-      res.json(row);
+      res.json(decryptPilgrimRow(row));
     }
   } catch (err) {
     const lr = lifecycleErrorResponse(err);
@@ -751,8 +781,9 @@ router.get("/pilgrims/:id", requirePermission("umrah:read"), async (req, res): P
        WHERE p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`, [id, scope.companyId]
     );
     if (!row) { throw new NotFoundError("المعتمر غير موجود"); }
+    logSensitiveAccess({ companyId: scope.companyId, userId: scope.userId, action: "read", entity: "umrah_pilgrims", entityId: id, ipAddress: req.ip, userAgent: req.headers["user-agent"] });
     const penalties = await rawQuery(`SELECT * FROM umrah_penalties WHERE "pilgrimId"=$1 AND "companyId"=$2 ORDER BY "createdAt" DESC LIMIT 500`, [id, scope.companyId]);
-    res.json({ ...row, penalties });
+    res.json({ ...decryptPilgrimRow(row), penalties });
   } catch (err) { handleRouteError(err, res, "Get pilgrim error"); }
 });
 

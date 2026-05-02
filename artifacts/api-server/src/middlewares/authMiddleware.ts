@@ -114,28 +114,17 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
     effectiveBranchId = allowedBranches[0];
   }
   if (effectiveBranchId == null) {
-    // Absolutely nothing to fall back to — new tenant with no branches
-    // yet. Create the implicit "default" branch so the scope is always
-    // non-null. This is a one-time bootstrap per company.
-    const [created] = await rawQuery<any>(
-      `INSERT INTO branches ("companyId", name, "isActive")
-       VALUES ($1, 'الفرع الرئيسي', true)
-       ON CONFLICT DO NOTHING
-       RETURNING id`,
+    const [anyBranch] = await rawQuery<{ id: number }>(
+      `SELECT id FROM branches WHERE "companyId" = $1 AND "isActive" = true ORDER BY id ASC LIMIT 1`,
       [assignment.companyId]
     );
-    if (created?.id) {
-      effectiveBranchId = created.id;
-      allowedBranches.push(created.id);
-    } else {
-      const [anyBranch] = await rawQuery<{ id: number }>(
-        `SELECT id FROM branches WHERE "companyId" = $1 ORDER BY id ASC LIMIT 1`,
-        [assignment.companyId]
-      );
-      effectiveBranchId = anyBranch?.id ?? 0;
-      if (anyBranch?.id && !allowedBranches.includes(anyBranch.id)) {
+    if (anyBranch?.id) {
+      effectiveBranchId = anyBranch.id;
+      if (!allowedBranches.includes(anyBranch.id)) {
         allowedBranches.push(anyBranch.id);
       }
+    } else {
+      effectiveBranchId = 0;
     }
   }
 

@@ -1,6 +1,7 @@
 import { EventEmitter } from "events";
 import { rawExecute } from "./rawdb.js";
 import { logger } from "./logger.js";
+import { isKnownEvent } from "./eventCatalog.js";
 
 export interface EventPayload {
   companyId?: number;
@@ -156,11 +157,14 @@ export function registerCrossDomainHandler(
 
 export function safeEmitEvent(payload: unknown & { companyId?: number }): void {
   const action = (payload as any)?.action;
-  const emitFn = action
-    ? () => eventBus.emit(action as EventName, payload as EventPayload)
-    : () => {};
+  if (!action) return;
+  if (!isKnownEvent(action)) {
+    logger.warn({ action }, "Event not in catalog — skipped");
+    pushToDLQ("event", payload, `Uncatalogued event: ${action}`, (payload as any)?.companyId, action);
+    return;
+  }
   try {
-    emitFn();
+    eventBus.emit(action as EventName, payload as EventPayload);
   } catch (err) {
     pushToDLQ("event", payload, err, (payload as any)?.companyId, action);
   }

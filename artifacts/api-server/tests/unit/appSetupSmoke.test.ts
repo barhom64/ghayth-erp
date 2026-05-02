@@ -80,8 +80,9 @@ describe("app — middleware chain", () => {
     expect(APP).toContain("cookieParser");
   });
 
-  it("parses JSON with 100mb limit", () => {
-    expect(APP).toContain('"100mb"');
+  it("parses JSON with safe default limit and higher for imports", () => {
+    expect(APP).toContain('"2mb"');
+    expect(APP).toContain('"50mb"');
   });
 
   it("uses eventBusMiddleware", () => {

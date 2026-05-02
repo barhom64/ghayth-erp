@@ -4,6 +4,7 @@ import { emitEvent, createAuditLog, createJournalEntry, getAccountCodeFromMappin
 import { ValidationError } from "./errorHandler.js";
 import type pg from "pg";
 import { logger } from "./logger.js";
+import { encryptField, blindIndex } from "./fieldEncryption.js";
 
 // ---------------------------------------------------------------------------
 // Arabic header → DB column mapping
@@ -73,9 +74,9 @@ const VOUCHER_HEADER_MAP: Record<string, string> = {
 };
 
 const STATUS_MAP: Record<string, string> = {
-  "داخل المملكة": "inside_kingdom",
-  "خرج": "exited",
-  "متجاوز": "overstay",
+  "داخل المملكة": "arrived",
+  "خرج": "departed",
+  "متجاوز": "overstayed",
   "تم التبليغ": "absconded",
   "هارب": "absconded",
   "متوفي": "deceased",
@@ -405,25 +406,35 @@ export async function confirmMutamersImport(
 
           const ex = existMap.get(String(row.nuskNumber));
           if (!ex) {
+            const ppEnc = row.passportNumber ? encryptField(String(row.passportNumber)) : null;
+            const ppHash = row.passportNumber ? blindIndex(String(row.passportNumber)) : null;
+            const visaEnc = row.visaNumber ? encryptField(String(row.visaNumber)) : null;
+            const visaHash = row.visaNumber ? blindIndex(String(row.visaNumber)) : null;
+            const mofaEnc = row.mofaNumber ? encryptField(String(row.mofaNumber)) : null;
+            const mofaHash = row.mofaNumber ? blindIndex(String(row.mofaNumber)) : null;
+            const borderEnc = row.borderNumber ? encryptField(String(row.borderNumber)) : null;
+            const borderHash = row.borderNumber ? blindIndex(String(row.borderNumber)) : null;
             const res = await client.query(
               `INSERT INTO umrah_pilgrims
                ("companyId","branchId","seasonId","nuskNumber","fullName",nationality,gender,
-                "passportNumber","passportExpiry","visaNumber","groupId","subAgentId","agentId",
+                "passportNumber","passportNumber_hash","passportExpiry","visaNumber","visaNumber_hash",
+                "groupId","subAgentId","agentId",
                 status,"entryPort","entryFlight","exitPort","exitFlight",
-                "actualStayDays","programDuration","overstayDays","borderNumber","mofaNumber",
+                "actualStayDays","programDuration","overstayDays",
+                "borderNumber","borderNumber_hash","mofaNumber","mofaNumber_hash",
                 "isInsideKingdom","hasUmrahPermit","createdBy","createdAt","updatedAt")
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,NOW(),NOW())
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,NOW(),NOW())
                RETURNING id`,
               [
                 scope.companyId, scope.branchId, scope.seasonId,
                 row.nuskNumber, row.fullName, row.nationality, row.gender,
-                row.passportNumber, row.passportExpiry || null, row.visaNumber || null,
+                ppEnc, ppHash, row.passportExpiry || null, visaEnc, visaHash,
                 groupId, subAgentId, agentId,
                 row.status || "pending",
                 row.entryPort || null, row.entryFlight || null,
                 row.exitPort || null, row.exitFlight || null,
                 row.actualStayDays ?? null, row.programDuration ?? 14, row.overstayDays ?? 0,
-                row.borderNumber || null, row.mofaNumber || null,
+                borderEnc, borderHash, mofaEnc, mofaHash,
                 row.isInsideKingdom ?? false, row.hasUmrahPermit ?? false,
                 scope.userId,
               ]
@@ -431,7 +442,7 @@ export async function confirmMutamersImport(
             await logChange(client, batchId, "mutamer", res.rows[0].id, "created");
             newCount++;
 
-            if (row.status === "overstay" || row.status === "absconded") {
+            if (row.status === "overstayed" || row.status === "absconded") {
               await detectViolation(client, scope, row, res.rows[0].id, groupId, subAgentId, agentId);
             }
           } else {
@@ -469,7 +480,7 @@ export async function confirmMutamersImport(
               updatedCount++;
               if (hasFinancial) financialImpactCount++;
 
-              if ((row.status === "overstay" || row.status === "absconded") && ex.status !== row.status) {
+              if ((row.status === "overstayed" || row.status === "absconded") && ex.status !== row.status) {
                 await detectViolation(client, scope, row, ex.id, groupId, subAgentId, agentId);
               }
             } else {

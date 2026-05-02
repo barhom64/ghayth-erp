@@ -685,7 +685,7 @@ export function getStateMachine(entity: string, statusColumn?: string): StateMac
 
 export function isValidTransition(entity: string, from: string, to: string, statusColumn?: string): boolean {
   const sm = getStateMachine(entity, statusColumn);
-  if (!sm) return true;
+  if (!sm) return false;
   const allowed = sm.transitions[from] ?? sm.transitions["*"];
   if (!allowed) return false;
   return allowed.includes(to);
