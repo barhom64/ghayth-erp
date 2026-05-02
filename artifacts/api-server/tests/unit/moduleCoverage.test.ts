@@ -287,6 +287,21 @@ describe("Module coverage: Umrah", () => {
     expect(umrah).toContain("logSensitiveAccess");
   });
 
+  // Season locking
+  it("enforces season lock on write operations", () => {
+    expect(umrah).toContain("requireOpenSeason");
+    expect(entities).toContain("requireOpenSeason");
+  });
+
+  // Nusk invoice CRUD
+  it("has complete nusk invoice CRUD", () => {
+    expect(entities).toContain('router.get("/nusk-invoices"');
+    expect(entities).toContain('router.get("/nusk-invoices/:id"');
+    expect(entities).toContain('router.post("/nusk-invoices"');
+    expect(entities).toContain('router.patch("/nusk-invoices/:id"');
+    expect(entities).toContain('router.delete("/nusk-invoices/:id"');
+  });
+
   // Tests
   it("has dedicated Umrah test files", () => {
     expect(hasTestFile("umrahGoldenPath")).toBe(true);

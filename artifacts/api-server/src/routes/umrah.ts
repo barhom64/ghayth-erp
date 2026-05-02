@@ -30,6 +30,20 @@ import { logger } from "../lib/logger.js";
 import { encryptField, decryptPilgrimRow, blindIndex, SENSITIVE_PILGRIM_FIELDS, logSensitiveAccess } from "../lib/fieldEncryption.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SEASON LOCK — rejects writes on closed/archived seasons
+// ─────────────────────────────────────────────────────────────────────────────
+async function requireOpenSeason(seasonId: number, companyId: number): Promise<void> {
+  const [season] = await rawQuery<{ id: number; status: string }>(
+    `SELECT id, status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+    [seasonId, companyId]
+  );
+  if (!season) throw new ValidationError("الموسم غير موجود", { field: "seasonId" });
+  if (season.status !== "open") {
+    throw new ConflictError(`الموسم مغلق (${season.status}) — لا يمكن إجراء عمليات عليه`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // LIFECYCLE STATE MACHINES — Umrah domain
 // ─────────────────────────────────────────────────────────────────────────────
 const PILGRIM_STATUSES = ["pending", "arrived", "active", "overstayed", "departed", "violated", "cancelled"] as const;
@@ -504,6 +518,7 @@ router.post("/packages", requirePermission("umrah:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createPackageSchema.safeParse(req.body)) as any;
+    if (b.seasonId) await requireOpenSeason(Number(b.seasonId), scope.companyId);
     const rows = await rawQuery(
       `INSERT INTO umrah_packages ("companyId",name,"seasonId","costPrice","sellPrice","includesTransport","includesHotel","includesMeals","includesZiyarat",duration,description) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
       [scope.companyId, b.name, b.seasonId, b.costPrice, b.sellPrice, b.includesTransport || false, b.includesHotel || false, b.includesMeals || false, b.includesZiyarat || false, b.duration || 7, b.description]
@@ -637,18 +652,7 @@ router.post("/pilgrims", requirePermission("umrah:write"), async (req, res) => {
       });
     }
 
-    // FK pre-check: season must be in caller's company. Prevents opaque
-    // 23503 on FK violation.
-    const [season] = await rawQuery<{ id: number }>(
-      `SELECT id FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
-      [Number(b.seasonId), scope.companyId]
-    );
-    if (!season) {
-      throw new ValidationError(`الموسم رقم ${b.seasonId} غير موجود`, {
-        field: "seasonId",
-        fix: "اختر موسماً مسجلاً",
-      });
-    }
+    await requireOpenSeason(Number(b.seasonId), scope.companyId);
     if (b.agentId) {
       const [agent] = await rawQuery<{ id: number }>(
         `SELECT id FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
@@ -879,6 +883,7 @@ async function doImport(scope: any, body: { seasonId: number; rows: any[]; fileT
   if (!seasonId || !Array.isArray(importRows) || importRows.length === 0) {
     throw new ValidationError("بيانات الاستيراد غير مكتملة");
   }
+  await requireOpenSeason(seasonId, scope.companyId);
 
   const { insertId: logId } = await rawExecute(
     `INSERT INTO umrah_import_logs ("companyId","seasonId","userId","fileName","fileType","totalRows","newRecords","updatedRecords","duplicateRecords","errorRecords",errors,status)
@@ -1379,6 +1384,7 @@ router.post("/transport", requirePermission("umrah:write"), async (req, res) => 
   try {
     const scope = req.scope!;
     const b = zodParse(createTransportSchema.safeParse(req.body)) as any;
+    if (b.seasonId) await requireOpenSeason(Number(b.seasonId), scope.companyId);
     if (b.vehicleId) {
       const [vehicle] = await rawQuery<any>(
         `SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2`,
