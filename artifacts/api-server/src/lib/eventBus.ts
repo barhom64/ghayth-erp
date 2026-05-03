@@ -90,12 +90,19 @@ export interface DLQEntry {
 const MAX_DLQ_BUFFER = 1000;
 const dlqBuffer: DLQEntry[] = [];
 let flushTimer: NodeJS.Timeout | null = null;
+let isFlushing = false;
 
 function scheduleDLQFlush(): void {
-  if (flushTimer) return;
+  if (flushTimer || isFlushing) return;
   flushTimer = setTimeout(async () => {
     flushTimer = null;
-    await flushDLQ();
+    isFlushing = true;
+    try {
+      await flushDLQ();
+    } finally {
+      isFlushing = false;
+      if (dlqBuffer.length > 0) scheduleDLQFlush();
+    }
   }, 5000);
 }
 

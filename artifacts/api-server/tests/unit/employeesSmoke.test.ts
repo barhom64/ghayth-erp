@@ -186,8 +186,9 @@ describe("Employees — validation", () => {
 
   it("POST / rejects salary <= 0 with field-tagged error", () => {
     const s = fullHandler('router.post("/",');
-    expect(s).toContain("Number(salary) <= 0");
+    expect(s).toContain("salaryNum <= 0");
     expect(s).toContain('field: "salary"');
+    expect(s).toContain("salaryNum > 1_000_000");
   });
 
   it("POST / validates department existence and managerId via DB lookups", () => {

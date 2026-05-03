@@ -203,7 +203,7 @@ export async function advanceJourney(
       action: "system.journey.completed",
       entity: "journey_instances", entityId: inst.id,
       details: `رحلة مكتملة: ${journeyType}`,
-    }).catch(() => {});
+    }).catch((err) => { console.error("[JourneyEngine] journey completion event failed:", err); });
   }
 
   return { journeyId: inst.id, completed, progress: steps.length / inst.totalSteps };

@@ -25,7 +25,7 @@ interface ImpactItem {
   detail: string;
 }
 
-router.post("/", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.post("/", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const parsed = zodParse(impactPreviewSchema.safeParse(req.body));

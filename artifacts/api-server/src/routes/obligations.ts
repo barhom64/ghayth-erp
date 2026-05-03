@@ -77,7 +77,7 @@ obligationsRouter.get("/summary", requirePermission("operations:read"), async (r
 });
 
 // Manually create an obligation (useful for ad-hoc reminders)
-obligationsRouter.post("/", async (req, res) => {
+obligationsRouter.post("/", requirePermission("operations:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, obligationType, title, dueAt, assignedTo, escalationSteps, metadata, dedupeKey } = zodParse(createObligationSchema.safeParse(req.body));

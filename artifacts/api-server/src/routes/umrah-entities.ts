@@ -206,7 +206,8 @@ router.get("/sub-agents", requirePermission("umrah:read"), async (req, res) => {
        LEFT JOIN umrah_agents a ON sa."agentId" = a.id
        LEFT JOIN clients c ON sa."clientId" = c.id AND c."deletedAt" IS NULL
        WHERE sa."companyId" = $1 AND sa."deletedAt" IS NULL
-       ORDER BY sa.name`,
+       ORDER BY sa.name
+       LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows });
@@ -293,10 +294,11 @@ router.delete("/sub-agents/:id", requirePermission("umrah:write"), async (req, r
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    await rawExecute(
+    const { affectedRows } = await rawExecute(
       `UPDATE umrah_sub_agents SET "deletedAt"=NOW(), "updatedBy"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
       [scope.userId, id, scope.companyId]
     );
+    if (affectedRows === 0) throw new NotFoundError("الوكيل الفرعي غير موجود");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_sub_agents", entityId: id }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.deleted", entity: "umrah_sub_agents", entityId: id, details: "{}" }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json({ success: true });
@@ -411,7 +413,8 @@ router.get("/pricing", requirePermission("umrah:read"), async (req, res) => {
        LEFT JOIN umrah_sub_agents sa ON p."subAgentId" = sa.id
        LEFT JOIN umrah_seasons s ON p."seasonId" = s.id
        WHERE p."companyId" = $1 AND p."deletedAt" IS NULL
-       ORDER BY p."validFrom" DESC`,
+       ORDER BY p."validFrom" DESC
+       LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows });
@@ -525,7 +528,8 @@ router.get("/groups", requirePermission("umrah:read"), async (req, res) => {
        LEFT JOIN umrah_sub_agents sa ON g."subAgentId" = sa.id
        LEFT JOIN umrah_seasons s ON g."seasonId" = s.id
        WHERE ${where}
-       ORDER BY g."createdAt" DESC`,
+       ORDER BY g."createdAt" DESC
+       LIMIT 500`,
       params
     );
     res.json({ data: rows });
@@ -661,7 +665,8 @@ router.get("/nusk-invoices", requirePermission("umrah:read"), async (req, res) =
        LEFT JOIN umrah_sub_agents sa ON ni."subAgentId" = sa.id
        LEFT JOIN umrah_groups g ON ni."groupId" = g.id
        WHERE ${where}
-       ORDER BY ni."createdAt" DESC`,
+       ORDER BY ni."createdAt" DESC
+       LIMIT 500`,
       params
     );
     res.json({ data: rows });

@@ -88,6 +88,15 @@ const changePasswordLimiter = rateLimit({
   validate: { ip: false, trustProxy: false },
 });
 
+const refreshLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "تم تجاوز الحد الأقصى لطلبات تحديث الرمز. يرجى المحاولة بعد دقيقة" },
+  validate: { ip: false, trustProxy: false },
+});
+
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 5,
@@ -127,20 +136,24 @@ router.post("/login", loginLimiter, async (req, res) => {
     }
 
     if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
-      const remaining = Math.ceil((new Date(user.lockedUntil).getTime() - Date.now()) / 60000);
-      res.status(429).json({ error: `الحساب مقفل مؤقتاً. يرجى المحاولة بعد ${remaining} دقيقة` });
+      res.status(429).json({ error: "الحساب مقفل مؤقتاً بسبب محاولات دخول فاشلة متكررة. يرجى المحاولة لاحقاً" });
       return;
     }
 
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) {
-      const attempts = (user.failedLoginAttempts || 0) + 1;
+      // Atomic increment to prevent race conditions (C10)
+      const [updated] = await rawQuery<any>(
+        `UPDATE users SET "failedLoginAttempts" = "failedLoginAttempts" + 1 WHERE id = $1 RETURNING "failedLoginAttempts"`,
+        [user.id]
+      );
+      const attempts = updated.failedLoginAttempts;
       if (attempts >= MAX_FAILED_ATTEMPTS) {
         const lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000);
         try {
           await rawExecute(
-            `UPDATE users SET "failedLoginAttempts"=$1, "lockedUntil"=$2 WHERE id=$3`,
-            [attempts, lockedUntil.toISOString(), user.id]
+            `UPDATE users SET "lockedUntil"=$1 WHERE id=$2`,
+            [lockedUntil.toISOString(), user.id]
           );
         } catch (lockErr) {
           logger.error({ err: lockErr, userId: user.id }, "Failed to persist account lockout");
@@ -153,14 +166,6 @@ router.post("/login", loginLimiter, async (req, res) => {
         }).catch((e) => logger.error(e, "auth background task failed"));
         res.status(429).json({ error: `تم قفل الحساب لمدة ${LOCKOUT_MINUTES} دقيقة بسبب تكرار محاولات الدخول الفاشلة` });
       } else {
-        try {
-          await rawExecute(
-            `UPDATE users SET "failedLoginAttempts"=$1 WHERE id=$2`,
-            [attempts, user.id]
-          );
-        } catch (attemptsErr) {
-          logger.error({ err: attemptsErr, userId: user.id }, "Failed to increment failed login attempts counter");
-        }
         createAuditLog({
           companyId: 0, userId: user.id,
           action: "login_failed", entity: "users", entityId: user.id,
@@ -229,7 +234,7 @@ router.post("/login", loginLimiter, async (req, res) => {
   }
 });
 
-router.post("/refresh", async (req, res) => {
+router.post("/refresh", refreshLimiter, async (req, res) => {
   try {
     const refreshToken = req.cookies?.erp_refresh || req.body?.refreshToken;
     if (!refreshToken || typeof refreshToken !== "string") {
@@ -328,8 +333,30 @@ router.post("/switch-assignment", authMiddleware, async (req, res) => {
     if (!assignment) {
       throw new NotFoundError("التعيين غير موجود أو غير نشط");
     }
+
+    // Revoke all existing refresh tokens to prevent session fixation (C9)
+    await rawExecute(
+      'UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE "userId"=$1 AND "revokedAt" IS NULL',
+      [scope.userId]
+    );
+
     const token = signToken({ userId: scope.userId, assignmentId: Number(assignmentId), role: assignment.role });
     setAccessTokenCookie(res, token);
+
+    // Issue a new refresh token for the switched assignment
+    const refreshToken = signRefreshToken();
+    const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
+    const userAgent = req.headers["user-agent"] ?? null;
+    const ipAddress = req.ip ?? null;
+
+    await rawExecute(
+      `INSERT INTO refresh_tokens (token, "userId", "expiresAt", "userAgent", "ipAddress")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [refreshToken, scope.userId, expiresAt.toISOString(), userAgent, ipAddress]
+    );
+
+    setRefreshTokenCookie(res, refreshToken);
+
     emitEvent({ companyId: assignment.companyId, userId: scope.userId, action: "auth.switch_assignment", entity: "user_assignments", entityId: Number(assignmentId) }).catch((e) => logger.error(e, "auth background task failed"));
     createAuditLog({ companyId: assignment.companyId, userId: scope.userId, action: "update", entity: "employee_assignments", entityId: Number(assignmentId), after: { switchedTo: assignmentId, role: assignment.role } }).catch((e) => logger.error(e, "auth background task failed"));
     res.json({ success: true });

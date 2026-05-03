@@ -159,17 +159,12 @@ export async function checkSystemGuards(
   const results = await Promise.all(
     applicableGuards.map((g) =>
       g.guard(companyId, context).catch((err): GuardResult => {
-        if (FINANCIAL_SCOPES.has(g.scope)) {
-          // Financial guards fail closed — an error must NOT allow the operation.
-          return {
-            allowed: false,
-            guardName: "error",
-            reason: `فشل التحقق من حارس مالي (${g.scope}) — تم رفض العملية احتياطياً: ${String(err)}`,
-          };
-        }
-        // Non-financial / advisory guards fail open with a warning.
-        console.warn(`[SystemGovernor] non-financial guard error (scope=${g.scope}):`, err);
-        return { allowed: true, guardName: "error" };
+        // All guards fail closed — an error must NOT allow the operation.
+        return {
+          allowed: false,
+          guardName: "error",
+          reason: `فشل التحقق من حارس (${g.scope}) — تم رفض العملية احتياطياً: ${String(err)}`,
+        };
       })
     )
   );

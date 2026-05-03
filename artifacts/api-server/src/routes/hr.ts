@@ -1501,7 +1501,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         [scope.activeAssignmentId, scope.companyId]
       );
       managerAssignmentId = directManagerRow?.managerAssignmentId ?? null;
-    } catch (_e) { logger.error(_e, "silent catch"); }
+    } catch (_e) { logger.error(_e, "manager assignment lookup failed"); }
     if (!managerAssignmentId) {
       managerAssignmentId = await getManagerAssignmentId(scope.companyId, scope.branchId);
     }
@@ -1539,7 +1539,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
-    } catch (_e) { logger.error(_e, "silent catch"); }
+    } catch (_e) { logger.error(_e, "leave approval chain query failed"); }
 
     if (chainSteps.length === 0) {
       chainSteps = [
@@ -1860,7 +1860,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
-    } catch (_e) { logger.error(_e, "silent catch"); }
+    } catch (_e) { logger.error(_e, "leave approval chain query failed"); }
 
     if (chainSteps.length === 0) {
       chainSteps = [
@@ -1983,7 +1983,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
               `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
                VALUES ($1,$2,$3,$4,'on_leave',$5)
                ON CONFLICT DO NOTHING`,
-              [asn.id, asn.companyId, asn.branchId, dateStr, `إجازة معتمدة - طلب رقم ${id}`]
+              [asn.id, asn.companyId, asn.branchId, dateStr, `إجازة معتمدة [leave_request:${id}]`]
             );
           }
         }
@@ -2091,7 +2091,7 @@ router.get("/leave-requests/:id/stages", requirePermission("hr:read"), async (re
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
-    } catch (_e) { logger.error(_e, "silent catch"); }
+    } catch (_e) { logger.error(_e, "leave approval chain query failed"); }
 
     if (chainSteps.length === 0) {
       chainSteps = [
@@ -2997,7 +2997,7 @@ router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
       action: "create", entity: "shifts", entityId: insertId,
       after: { name, startTime: startTime ?? null, endTime: endTime ?? null, days: days ?? "0,1,2,3,4", shiftType: effectiveShiftType, isDefault: !!isDefault },
     }).catch((e) => logger.error(e, "hr background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id = $1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.created", entity: "hr_shifts", entityId: insertId, details: JSON.stringify({ name, shiftType: effectiveShiftType }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create shift error:"); }
@@ -3049,8 +3049,10 @@ router.post("/performance", requirePermission("hr:create"), async (req, res) => 
     let resolvedEmployeeId: number | null = null;
     if (employeeId) {
       const [emp] = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE id = $1 LIMIT 1`,
-        [Number(employeeId)]
+        `SELECT e.id FROM employees e
+         JOIN employee_assignments ea ON ea."employeeId" = e.id
+         WHERE e.id = $1 AND ea."companyId" = $2 AND ea.status = 'active' LIMIT 1`,
+        [Number(employeeId), scope.companyId]
       );
       if (!emp) {
         throw new ValidationError(`الموظف رقم ${employeeId} غير موجود`, {
@@ -3810,7 +3812,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
       });
     }
 
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('letter_number_seq') AS seq`).catch((e) => { logger.error(e, "hr query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('letter_number_seq') AS seq`).catch((e) => { logger.error(e, "letter sequence query failed"); return [{ seq: Date.now() % 1000000 }]; });
     const letterRef = generateRef("LTR", seqRow.seq);
 
     const { insertId } = await rawExecute(
@@ -3996,7 +3998,7 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
             `DELETE FROM attendance
              WHERE "companyId" = $1 AND status = 'on_leave' AND notes LIKE $2
                AND date >= CURRENT_DATE AND date BETWEEN $3 AND $4`,
-            [scope.companyId, `%طلب رقم ${id}%`, request.startDate, request.endDate]
+            [scope.companyId, `%[leave_request:${id}]%`, request.startDate, request.endDate]
           );
         } else {
           await client.query(
@@ -4191,8 +4193,8 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
       }).catch((e) => logger.error(e, "hr background task failed"));
 
       const [row] = await rawQuery<any>(
-        `SELECT * FROM payroll_runs WHERE id = $1`,
-        [id]
+        `SELECT * FROM payroll_runs WHERE id = $1 AND "companyId" = $2`,
+        [id, scope.companyId]
       );
       createAuditLog({
         companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -4275,8 +4277,8 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
       for (const je of journalRows) {
         await reverseAccountBalances(scope.companyId, Number(je.id));
         await client.query(
-          `UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1`,
-          [je.id]
+          `UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
+          [je.id, scope.companyId]
         );
       }
 

@@ -82,13 +82,13 @@ async function acquireCronLock(jobName: string): Promise<boolean> {
   try {
     const upsertResult = await pool.query(
       `INSERT INTO cron_locks (job_name, locked_at, locked_by, expires_at)
-       VALUES ($1, NOW(), $2, NOW() + INTERVAL '${LOCK_TTL_MINUTES} minutes')
+       VALUES ($1, NOW(), $2, NOW() + make_interval(mins => $3))
        ON CONFLICT (job_name) DO UPDATE
          SET locked_at  = EXCLUDED.locked_at,
              locked_by  = EXCLUDED.locked_by,
              expires_at = EXCLUDED.expires_at
          WHERE cron_locks.expires_at < NOW()`,
-      [jobName, LOCK_OWNER]
+      [jobName, LOCK_OWNER, LOCK_TTL_MINUTES]
     );
     return (upsertResult.rowCount ?? 0) > 0;
   } catch {

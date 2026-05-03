@@ -291,11 +291,20 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         fix: "حدد نوع العقد للموظف",
       });
     }
-    if (salary !== undefined && salary !== null && Number(salary) <= 0) {
-      throw new ValidationError("الراتب يجب أن يكون أكبر من صفر", {
-        field: "salary",
-        fix: "أدخل راتباً موجباً أكبر من صفر",
-      });
+    if (salary !== undefined && salary !== null) {
+      const salaryNum = Number(salary);
+      if (salaryNum <= 0) {
+        throw new ValidationError("الراتب يجب أن يكون أكبر من صفر", {
+          field: "salary",
+          fix: "أدخل راتباً موجباً أكبر من صفر",
+        });
+      }
+      if (salaryNum > 1_000_000) {
+        throw new ValidationError("الراتب يتجاوز الحد الأقصى المسموح (1,000,000)", {
+          field: "salary",
+          fix: "تحقق من قيمة الراتب المدخلة",
+        });
+      }
     }
 
     const targetBranchId = branchId ?? scope.branchId;
@@ -887,11 +896,20 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       });
     }
 
-    if (salary !== undefined && salary !== null && Number(salary) <= 0) {
-      throw new ValidationError("الراتب يجب أن يكون أكبر من صفر", {
-        field: "salary",
-        fix: "أدخل راتباً موجباً.",
-      });
+    if (salary !== undefined && salary !== null) {
+      const salaryNum = Number(salary);
+      if (salaryNum <= 0) {
+        throw new ValidationError("الراتب يجب أن يكون أكبر من صفر", {
+          field: "salary",
+          fix: "أدخل راتباً موجباً.",
+        });
+      }
+      if (salaryNum > 1_000_000) {
+        throw new ValidationError("الراتب يتجاوز الحد الأقصى المسموح (1,000,000)", {
+          field: "salary",
+          fix: "تحقق من قيمة الراتب المدخلة",
+        });
+      }
     }
 
     // Pre-check: changing email to one that belongs to a different employee.
