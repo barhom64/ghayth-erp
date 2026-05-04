@@ -214,7 +214,7 @@ export async function cancelObligation(
  *
  * Returns counts for observability.
  */
-export async function scanObligations(): Promise<{
+export async function scanObligations(companyId?: number): Promise<{
   breachedCount: number;
   escalatedL1: number;
   escalatedL2: number;
@@ -223,6 +223,7 @@ export async function scanObligations(): Promise<{
   let breachedCount = 0;
   let escalatedL1 = 0;
   let escalatedL2 = 0;
+  const companyFilter = companyId ? ` AND "companyId" = ${Number(companyId)}` : '';
 
   await withTransaction(async (client: any) => {
     // 1) pending → breached
@@ -233,7 +234,7 @@ export async function scanObligations(): Promise<{
              "escalationLevel"=1,
              "lastScannedAt"=NOW(),
              "updatedAt"=NOW()
-       WHERE status='pending' AND "dueAt" < NOW()
+       WHERE status='pending' AND "dueAt" < NOW()${companyFilter}
        RETURNING id, "companyId", "entityType", "entityId", "obligationType",
                  title, "assignedTo", "escalationSteps", "dueAt"`
     );
@@ -270,7 +271,7 @@ export async function scanObligations(): Promise<{
        WHERE status='breached'
          AND "escalationSteps" IS NOT NULL
          AND jsonb_array_length("escalationSteps") >= 1
-         AND "dueAt" + (("escalationSteps"->0->>'hoursAfterDue')::int || ' hours')::interval <= NOW()
+         AND "dueAt" + (("escalationSteps"->0->>'hoursAfterDue')::int || ' hours')::interval <= NOW()${companyFilter}
        RETURNING id, "companyId", "entityType", "entityId", title`
     );
     escalatedL1 = l1.rowCount ?? 0;
@@ -296,7 +297,7 @@ export async function scanObligations(): Promise<{
        WHERE status='escalated_l1'
          AND "escalationSteps" IS NOT NULL
          AND jsonb_array_length("escalationSteps") >= 2
-         AND "dueAt" + (("escalationSteps"->1->>'hoursAfterDue')::int || ' hours')::interval <= NOW()
+         AND "dueAt" + (("escalationSteps"->1->>'hoursAfterDue')::int || ' hours')::interval <= NOW()${companyFilter}
        RETURNING id, "companyId", "entityType", "entityId", title`
     );
     escalatedL2 = l2.rowCount ?? 0;
@@ -321,7 +322,7 @@ export async function scanObligations(): Promise<{
        WHERE status='pending'
          AND "dueAt" > NOW()
          AND "dueAt" <= NOW() + INTERVAL '24 hours'
-         AND COALESCE((metadata->>'reminder24hSent')::boolean, false) = false
+         AND COALESCE((metadata->>'reminder24hSent')::boolean, false) = false${companyFilter}
        RETURNING id, "companyId", "entityType", "entityId", title, "assignedTo", "dueAt"`
     );
 

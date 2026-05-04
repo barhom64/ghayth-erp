@@ -120,8 +120,8 @@ collectionRouter.post("/collection/:invoiceId/action", requirePermission("financ
     }
 
     const [lastStageRecord] = await rawQuery<any>(
-      `SELECT stage FROM invoice_collection_stages WHERE "invoiceId" = $1 ORDER BY id DESC LIMIT 1`,
-      [invoiceId]
+      `SELECT stage FROM invoice_collection_stages WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY id DESC LIMIT 1`,
+      [invoiceId, scope.companyId]
     );
     const lastStage = lastStageRecord ? Number(lastStageRecord.stage) : 0;
     if (requestedStage <= lastStage || requestedStage > lastStage + 1) {
@@ -189,9 +189,9 @@ collectionRouter.get("/collection/:invoiceId/history", requirePermission("financ
        FROM invoice_collection_stages ics
        LEFT JOIN employee_assignments ea ON ea.id = ics."performedBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       WHERE ics."invoiceId" = $1
+       WHERE ics."invoiceId" = $1 AND ics."companyId" = $2
        ORDER BY ics.id ASC`,
-      [invoiceId]
+      [invoiceId, scope.companyId]
     );
 
     res.json(history);
