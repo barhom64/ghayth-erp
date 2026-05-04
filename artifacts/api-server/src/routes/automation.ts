@@ -10,7 +10,6 @@ const router = Router();
 
 router.get("/cron-jobs", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
-    const scope = req.scope!;
     const rows = await rawQuery<any>(`SELECT * FROM cron_jobs ORDER BY name LIMIT 500`);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Cron jobs error:"); }
@@ -49,7 +48,6 @@ router.post("/cron-jobs/:id/trigger", requirePermission("admin:write"), async (r
 
 router.get("/cron-logs", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
-    const scope = req.scope!;
     const { jobId } = req.query as any;
     const conditions: string[] = [];
     const params: any[] = [];

@@ -115,7 +115,7 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
   }
   if (effectiveBranchId == null) {
     const [anyBranch] = await rawQuery<{ id: number }>(
-      `SELECT id FROM branches WHERE "companyId" = $1 AND "isActive" = true ORDER BY id ASC LIMIT 1`,
+      `SELECT id FROM branches WHERE "companyId" = $1 AND status = 'active' ORDER BY id ASC LIMIT 1`,
       [assignment.companyId]
     );
     if (anyBranch?.id) {

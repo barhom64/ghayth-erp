@@ -320,7 +320,7 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
     }
     if (branchId) {
       const [branchRow] = await rawQuery<any>(
-        `SELECT id FROM branches WHERE id=$1 AND "companyId"=$2 AND "isActive"=true`,
+        `SELECT id FROM branches WHERE id=$1 AND "companyId"=$2 AND status='active'`,
         [branchId, effectiveCompanyId]
       );
       if (!branchRow) {
