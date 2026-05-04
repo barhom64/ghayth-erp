@@ -448,7 +448,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     // ── Step 2: Prevent duplicate check-in (pre-check for user-friendly error) ──
     const [existing] = await rawQuery<any>(
       `SELECT id, "checkOut" FROM attendance
-       WHERE "assignmentId" = $1 AND date = $2`,
+       WHERE "assignmentId" = $1 AND date = $2 AND "deletedAt" IS NULL`,
       [scope.activeAssignmentId, today]
     );
     if (existing) {
@@ -788,7 +788,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
 
     const [existing] = await rawQuery<any>(
       `SELECT id, "checkIn", "checkOut" FROM attendance
-       WHERE "assignmentId" = $1 AND date = $2`,
+       WHERE "assignmentId" = $1 AND date = $2 AND "deletedAt" IS NULL`,
       [scope.activeAssignmentId, today]
     );
     if (!existing) {

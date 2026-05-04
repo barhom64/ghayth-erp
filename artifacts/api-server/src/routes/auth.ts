@@ -288,7 +288,7 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
 
     setAccessTokenCookie(res, newToken);
 
-    await rawQuery(`UPDATE refresh_tokens SET "isActive" = false WHERE id = $1`, [rt.id]);
+    await rawQuery(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE id = $1 AND "revokedAt" IS NULL`, [rt.id]);
 
     emitEvent({ companyId: 0, userId: rt.userId, action: "auth.refresh", entity: "users", entityId: rt.userId }).catch((e) => logger.error(e, "auth background task failed"));
     createAuditLog({ companyId: 0, userId: rt.userId, action: "update", entity: "users", entityId: rt.userId, after: { reason: "token_refresh" } }).catch((e) => logger.error(e, "auth background task failed"));
