@@ -565,9 +565,8 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", requirePermission("f
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
       action: `journal.approved_${newStatus}`,
       statusColumn: "approvalStatus",
-      // Approver can act on a journal that is either pending_review
-      // (pre-approved) or already approved (re-confirm / demote to rejected).
-      fromStates: ["pending_review", "approved"],
+      // Approver can only act on journals that are pending_review.
+      fromStates: ["pending_review"],
       toState: newStatus,
       reason: notes ?? undefined,
       extraWhere: `"isManual"=TRUE AND "deletedAt" IS NULL`,

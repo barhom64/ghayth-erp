@@ -49,9 +49,11 @@ router.post("/cron-jobs/:id/trigger", requirePermission("admin:write"), async (r
 
 router.get("/cron-logs", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
+    const scope = req.scope!;
     const { jobId } = req.query as any;
     const conditions: string[] = [];
     const params: any[] = [];
+    params.push(scope.companyId); conditions.push(`"companyId" = $${params.length}`);
     if (jobId) { params.push(Number(jobId) || 0); conditions.push(`"jobId" = $${params.length}`); }
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : '';
     const rows = await rawQuery<any>(`SELECT * FROM cron_logs ${where} ORDER BY "createdAt" DESC LIMIT 100`, params);

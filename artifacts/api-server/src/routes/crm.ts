@@ -233,8 +233,8 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
     if (b.assignedTo) {
       try {
         const [asgn] = await rawQuery<any>(
-          `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND status='active' LIMIT 1`,
-          [b.assignedTo]
+          `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
+          [b.assignedTo, scope.companyId]
         );
         if (asgn) {
           createNotification({
@@ -487,8 +487,8 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
       if (existing.assignedTo) {
         try {
           const [asgn] = await rawQuery<any>(
-            `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND status='active' LIMIT 1`,
-            [existing.assignedTo]
+            `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
+            [existing.assignedTo, scope.companyId]
           );
           if (asgn) {
             createNotification({
@@ -715,8 +715,8 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
     if (opp.assignedTo) {
       try {
         const [asgn] = await rawQuery<any>(
-          `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND status='active' LIMIT 1`,
-          [opp.assignedTo]
+          `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
+          [opp.assignedTo, scope.companyId]
         );
         if (asgn) {
           createNotification({

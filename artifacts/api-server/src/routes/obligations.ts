@@ -174,10 +174,11 @@ obligationsRouter.post("/cancel-by-entity", requirePermission("operations:write"
 });
 
 // Manual trigger for the scanner (normally runs via cron)
-obligationsRouter.post("/scan", requirePermission("operations:create"), async (_req, res) => {
+obligationsRouter.post("/scan", requirePermission("operations:create"), async (req, res) => {
   try {
-    const result = await scanObligations();
-    emitEvent({ companyId: 0, userId: null, action: "obligation.scan_triggered", entity: "obligations", entityId: 0, details: JSON.stringify(result) }).catch((e) => logger.error(e, "obligations background task failed"));
+    const scope = req.scope!;
+    const result = await scanObligations(scope.companyId);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "obligation.scan_triggered", entity: "obligations", entityId: 0, details: JSON.stringify(result) }).catch((e) => logger.error(e, "obligations background task failed"));
     res.json({ ...result, scannedAt: new Date().toISOString() });
   } catch (err) {
     handleRouteError(err, res, "Obligation scan error:");

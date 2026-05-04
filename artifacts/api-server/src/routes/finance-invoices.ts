@@ -455,12 +455,8 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
         );
       }
 
-      if (clientId) {
-        await client.query(
-          `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) + $1 WHERE id = $2 AND "companyId" = $3`,
-          [total, clientId, effectiveCompanyId]
-        );
-      }
+      // totalRevenue update deferred to approval (POST /invoices/:id/approve)
+      // to prevent unapproved drafts from inflating client revenue.
 
       await client.query(
         `UPDATE budgets SET used = used + $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4`,
@@ -606,6 +602,14 @@ invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"
       guardTable: "invoices",
       guardId: id,
     });
+
+    // Update client totalRevenue upon approval (revenue recognition)
+    if (invoice.clientId) {
+      await rawQuery<any>(
+        `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) + $1 WHERE id = $2 AND "companyId" = $3`,
+        [Number(invoice.total), invoice.clientId, scope.companyId]
+      );
+    }
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.approved", entity: "invoices", entityId: id, details: JSON.stringify({ ref: invoice.ref, total: invoice.total }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
