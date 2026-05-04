@@ -200,7 +200,7 @@ router.use("/projects", requireModule("operations"), projectsRouter);
 router.use("/support", requireModule("support"), supportRouter);
 router.use("/crm", requireModule("crm"), crmRouter);
 router.use("/intelligence", requireModule("bi"), intelligenceRouter);
-router.use("/automation", automationRouter);
+router.use("/automation", requireModule("automation"), automationRouter);
 router.use("/communications", requireModule("comms"), communicationsRouter);
 router.use("/governance", requireModule("governance"), governanceRouter);
 router.use("/bi", requireModule("bi"), biRouter);
@@ -231,7 +231,7 @@ router.use("/umrah", requireModule("operations"), requireGuards("financial"), um
 router.use("/operations-center", requireModule("operations"), requireMinLevel(40), operationsCenterRouter);
 router.use("/export", requireMinLevel(30), exportRouter);
 router.use("/scheduled-reports", requireMinLevel(50), scheduledReportsRouter);
-router.use("/notification-engine", notificationEngineRouter);
+router.use("/notification-engine", requireModule("notifications"), notificationEngineRouter);
 router.use("/gov-integrations", govIntegrationsRouter);
 router.use("/digital-signature", digitalSignatureRouter);
 router.use("/events", eventsRouter);

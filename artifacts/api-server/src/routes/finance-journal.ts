@@ -406,34 +406,38 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
     const sourceAcct = sourceAccountCode || "1100";
 
     if (accountCode && amount) {
-      const [budget] = await rawQuery<any>(`SELECT amount, used FROM budgets WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3 AND "deletedAt" IS NULL`, [effectiveCompanyId, accountCode, targetPeriod]);
-      if (budget) {
+      const budgetRows = await rawQuery<any>(
+        `UPDATE budgets SET used = used + $1
+         WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL
+         RETURNING amount, used`,
+        [Number(amount), effectiveCompanyId, accountCode, targetPeriod]
+      );
+      if (budgetRows.length > 0) {
+        const budget = budgetRows[0];
         const budgetAmount = Number(budget.amount);
-        const newUsed = Number(budget.used) + Number(amount);
+        const newUsed = Number(budget.used);
         const utilization = budgetAmount > 0 ? (newUsed / budgetAmount) * 100 : 0;
-        // Budget guardrails:
-        //   >110%  → hard reject (ConflictError 409)
-        //   100-110% → GM-only (ForbiddenError 403)
-        //   80-99%  → CFO-or-above (ForbiddenError 403)
         if (utilization > 110) {
+          await rawExecute(`UPDATE budgets SET used = used - $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`, [Number(amount), effectiveCompanyId, accountCode, targetPeriod]);
           throw new ConflictError(
             "تجاوز الميزانية أكثر من 110% – رفض نهائي",
             { field: "amount", fix: "أعد تقييم الميزانية أو قلل المبلغ المطلوب", meta: { utilization: Math.round(utilization), status: "rejected" } }
           );
         }
         if (utilization > 99 && !OWNER_GM_ROLES.includes(scope.role)) {
+          await rawExecute(`UPDATE budgets SET used = used - $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`, [Number(amount), effectiveCompanyId, accountCode, targetPeriod]);
           throw new ForbiddenError(
             "تجاوز الميزانية 100-110%. يتطلب موافقة المدير العام فقط",
             { fix: "اطلب موافقة المدير العام قبل المتابعة", meta: { utilization: Math.round(utilization), status: "blocked_gm" } }
           );
         }
         if (utilization > 80 && !FINANCE_ROLES.includes(scope.role)) {
+          await rawExecute(`UPDATE budgets SET used = used - $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`, [Number(amount), effectiveCompanyId, accountCode, targetPeriod]);
           throw new ForbiddenError(
             "استخدام الميزانية 80-99%. يتطلب موافقة المدير المالي",
             { fix: "اطلب موافقة المدير المالي قبل المتابعة", meta: { utilization: Math.round(utilization), status: "warning_cfo" } }
           );
         }
-        await rawExecute(`UPDATE budgets SET used = used + $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4`, [Number(amount), effectiveCompanyId, accountCode, targetPeriod]);
       }
     }
 
@@ -522,7 +526,7 @@ journalRouter.delete("/expenses/:id", requirePermission("finance:delete"), async
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status NOT IN ('posted') RETURNING id`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status = 'draft' RETURNING id`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المصروف غير موجود");
     await reverseAccountBalances(scope.companyId, row.id);
     res.json({ success: true });

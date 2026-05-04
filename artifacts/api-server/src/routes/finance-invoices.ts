@@ -47,7 +47,7 @@ const createInvoiceSchema = z.object({
   vatRate: z.coerce.number().optional(),
   dueDate: z.string().optional(),
   date: z.string().optional(),
-  description: z.string().optional(),
+  description: z.string().max(1000).optional(),
   subtotal: z.coerce.number().optional(),
   total: z.coerce.number().optional(),
   notes: z.string().optional(),
@@ -317,6 +317,15 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
     }
     if (!branchId && !scope.branchId) {
       throw new ValidationError("الفرع مطلوب لإنشاء الفاتورة", { field: "branchId", fix: "حدد الفرع الذي تنتمي إليه الفاتورة" });
+    }
+    if (branchId) {
+      const [branchRow] = await rawQuery<any>(
+        `SELECT id FROM branches WHERE id=$1 AND "companyId"=$2 AND "isActive"=true`,
+        [branchId, effectiveCompanyId]
+      );
+      if (!branchRow) {
+        throw new ValidationError("الفرع غير موجود أو لا ينتمي لهذه الشركة", { field: "branchId" });
+      }
     }
     // FK pre-check on clientId so the frontend can light up the input.
     const [clientRow] = await rawQuery<any>(

@@ -632,10 +632,10 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
   try {
     let clientId = opp.clientId;
 
-    if (!clientId && opp.contactName) {
+    if (!clientId && opp.contactName?.trim()) {
       const existing = await rawQuery<any>(
         `SELECT id FROM clients WHERE "companyId"=$1 AND "deletedAt" IS NULL AND (name=$2 OR phone=$3 OR email=$4) LIMIT 1`,
-        [scope.companyId, opp.contactName || '', opp.contactPhone || '', opp.contactEmail || '']
+        [scope.companyId, opp.contactName.trim(), opp.contactPhone || '', opp.contactEmail || '']
       );
       if (existing.length > 0) {
         clientId = existing[0].id;

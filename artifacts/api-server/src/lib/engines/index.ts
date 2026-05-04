@@ -31,6 +31,7 @@ export * as rulesEngine from "../rulesEngine.js";
 export * as umrahCommissionEngine from "../umrahCommissionEngine.js";
 export * as umrahImportEngine from "../umrahImportEngine.js";
 export * as umrahInvoicingEngine from "../umrahInvoicingEngine.js";
+export * as journeyEngine from "../journeyEngine.js";
 
 export type { GLPostingRequest, DomainEngine } from "./domainEngineBase.js";
 export type { GLPostingResult, AccountMapping } from "./financialEngine.js";

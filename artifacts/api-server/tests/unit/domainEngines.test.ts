@@ -229,6 +229,7 @@ describe("Domain-Engine cross-reference", () => {
     "obligationsEngine", "lifecycleEngine", "workflowEngine",
     "disciplineEngine", "rulesEngine",
     "umrahCommissionEngine", "umrahImportEngine", "umrahInvoicingEngine",
+    "journeyEngine",
   ]);
 
   it("every registry-declared engine has either a class-based or legacy implementation", () => {

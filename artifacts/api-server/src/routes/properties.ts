@@ -637,8 +637,8 @@ router.get("/units/:id", requirePermission("property:read"), async (req, res) =>
         [id, scope.companyId]
       ),
       rawQuery<any>(
-        `SELECT al.*, u.email AS "userName" FROM audit_logs al LEFT JOIN users u ON u.id=al."userId" WHERE al.entity='property_units' AND al."entityId"=$1 ORDER BY al."createdAt" DESC LIMIT 30`,
-        [id]
+        `SELECT al.*, u.email AS "userName" FROM audit_logs al LEFT JOIN users u ON u.id=al."userId" WHERE al.entity='property_units' AND al."entityId"=$1 AND al."companyId"=$2 ORDER BY al."createdAt" DESC LIMIT 30`,
+        [id, scope.companyId]
       ),
     ]);
 
@@ -1574,7 +1574,7 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
         // Free the unit
         if (contract.unitId) {
           await client.query(
-            `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='occupied'`,
+            `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status IN ('occupied','rented')`,
             [contract.unitId, scope.companyId]
           );
         }
@@ -1872,79 +1872,86 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
       throw new ValidationError("مبلغ السداد غير صالح", { field: "paidAmount", fix: "أدخل مبلغاً موجباً" });
     }
 
-    // Fetch payment + contract context BEFORE mutating so we can post GL first.
-    const [existing] = await rawQuery<any>(
-      `SELECT rp.*, c.status AS "contractStatus", c."tenantName", u."unitNumber", u."buildingName", u.id AS "unitId"
-         FROM rent_payments rp
-         JOIN rental_contracts c ON c.id = rp."contractId"
-         LEFT JOIN property_units u ON u.id = c."unitId"
-        WHERE rp.id = $1`,
-      [Number(id)]
-    );
-    if (!existing) throw new NotFoundError("القسط غير موجود");
-
-    // Refuse to record payments against contracts that are no longer in
-    // a payable state. The /renew or /terminate flows are the only paths
-    // that change a contract's lifecycle — a fresh payment on a terminated
-    // contract would create a misleading audit trail.
-    if (!["active", "draft"].includes(existing.contractStatus)) {
-      throw new ConflictError(
-        `لا يمكن تسجيل دفعة على عقد بحالة "${existing.contractStatus}"`,
-        {
-          field: "contractStatus",
-          fix: "أعد تفعيل العقد أو أنشئ عقداً جديداً قبل تسجيل الدفعة.",
-          meta: { paymentId: Number(id), contractStatus: existing.contractStatus },
-        }
+    // C6 fix: wrap entire fetch→GL→update flow in a transaction with
+    // SELECT ... FOR UPDATE to prevent concurrent double-GL posts.
+    const { row, journalEntryId: finalJournalId } = await withTransaction(async (client) => {
+      // Lock the payment row to prevent concurrent pay requests.
+      const lockRes = await client.query(
+        `SELECT rp.*, c.status AS "contractStatus", c."tenantName", u."unitNumber", u."buildingName", u.id AS "unitId"
+           FROM rent_payments rp
+           JOIN rental_contracts c ON c.id = rp."contractId"
+           LEFT JOIN property_units u ON u.id = c."unitId"
+          WHERE rp.id = $1 AND rp."companyId" = $2
+          FOR UPDATE OF rp`,
+        [Number(id), scope.companyId]
       );
-    }
+      const existing = lockRes.rows[0];
+      if (!existing) throw new NotFoundError("القسط غير موجود");
 
-    // 1. Post journal entry FIRST. If this fails, the payment update never happens,
-    //    preserving dual-entry invariants (no cash recorded without a GL post).
-    const tenantLabel = existing.tenantName ? ` / ${existing.tenantName}` : "";
-    const unitLabel = existing.unitNumber ? ` / وحدة ${existing.unitNumber}` : "";
-    const buildingLabel = existing.buildingName ? ` / ${existing.buildingName}` : "";
-    let journalEntryId: number | null = null;
-    try {
-      const { propertiesEngine } = await import("../lib/engines/index.js");
-      const glResult = await propertiesEngine.postRentRevenueGL(
-        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-        { id: Number(id), contractId: existing.contractId, propertyId: existing.unitId, amount: paidAmount, tenantId: existing.tenantId }
+      // Refuse to record payments against contracts that are no longer in
+      // a payable state. The /renew or /terminate flows are the only paths
+      // that change a contract's lifecycle — a fresh payment on a terminated
+      // contract would create a misleading audit trail.
+      if (!["active", "draft"].includes(existing.contractStatus)) {
+        throw new ConflictError(
+          `لا يمكن تسجيل دفعة على عقد بحالة "${existing.contractStatus}"`,
+          {
+            field: "contractStatus",
+            fix: "أعد تفعيل العقد أو أنشئ عقداً جديداً قبل تسجيل الدفعة.",
+            meta: { paymentId: Number(id), contractStatus: existing.contractStatus },
+          }
+        );
+      }
+
+      // 1. Post journal entry FIRST. If this fails, the transaction rolls back,
+      //    preserving dual-entry invariants (no cash recorded without a GL post).
+      const tenantLabel = existing.tenantName ? ` / ${existing.tenantName}` : "";
+      const unitLabel = existing.unitNumber ? ` / وحدة ${existing.unitNumber}` : "";
+      const buildingLabel = existing.buildingName ? ` / ${existing.buildingName}` : "";
+      let journalEntryId: number | null = null;
+      try {
+        const { propertiesEngine } = await import("../lib/engines/index.js");
+        const glResult = await propertiesEngine.postRentRevenueGL(
+          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+          { id: Number(id), contractId: existing.contractId, propertyId: existing.unitId, amount: paidAmount, tenantId: existing.tenantId }
+        );
+        journalEntryId = glResult.journalId;
+      } catch (jErr) {
+        logger.error(jErr, "Rent payment journal entry failed:");
+        throw new IntegrationError(
+          "فشل قيد تحصيل الإيجار — لم يتم تسجيل السداد",
+          { field: "journalEntry", fix: "راجع إعدادات التوجيه المحاسبي (rental_revenue / rental_cash_receipt) ثم أعد المحاولة" }
+        );
+      }
+
+      // 2. Journal succeeded — record the cash receipt on the rent_payments row.
+      await client.query(
+        `UPDATE rent_payments
+            SET "paidAmount" = "paidAmount" + $1,
+                "paidDate"   = $2,
+                method       = $3,
+                status       = CASE WHEN "paidAmount" + $1 >= amount THEN 'paid' ELSE 'partial' END,
+                "journalEntryId" = COALESCE("journalEntryId", $4),
+                "updatedAt"  = NOW()
+          WHERE id = $5`,
+        [paidAmount, b.paidDate || todayISO(), b.method || 'bank_transfer', journalEntryId, Number(id)]
       );
-      journalEntryId = glResult.journalId;
-    } catch (jErr) {
-      logger.error(jErr, "Rent payment journal entry failed:");
-      throw new IntegrationError(
-        "فشل قيد تحصيل الإيجار — لم يتم تسجيل السداد",
-        { field: "journalEntry", fix: "راجع إعدادات التوجيه المحاسبي (rental_revenue / rental_cash_receipt) ثم أعد المحاولة" }
-      );
-    }
 
-    // 2. Journal succeeded — record the cash receipt on the rent_payments row.
-    await rawExecute(
-      `UPDATE rent_payments
-          SET "paidAmount" = "paidAmount" + $1,
-              "paidDate"   = $2,
-              method       = $3,
-              status       = CASE WHEN "paidAmount" + $1 >= amount THEN 'paid' ELSE 'partial' END,
-              "journalEntryId" = COALESCE("journalEntryId", $4),
-              "updatedAt"  = NOW()
-        WHERE id = $5`,
-      [paidAmount, b.paidDate || todayISO(), b.method || 'bank_transfer', journalEntryId, Number(id)]
-    );
-
-    const [row] = await rawQuery<any>(`SELECT * FROM rent_payments WHERE id=$1`, [Number(id)]);
+      const updatedRes = await client.query(`SELECT * FROM rent_payments WHERE id=$1`, [Number(id)]);
+      return { row: updatedRes.rows[0], journalEntryId };
+    });
 
     // 3. Emit lifecycle event so listeners/reports pick up the collection.
     await emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "rent_payment.received", entity: "rent_payments", entityId: Number(id),
-      details: `تحصيل ${paidAmount} — JE ${journalEntryId ?? '-'}`,
+      details: `تحصيل ${paidAmount} — JE ${finalJournalId ?? '-'}`,
     }).catch((e) => logger.error(e, "properties background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "property_payments", entityId: Number(id),
-      after: { paidAmount, method: b.method || 'bank_transfer', journalEntryId, status: row?.status },
+      after: { paidAmount, method: b.method || 'bank_transfer', journalEntryId: finalJournalId, status: row?.status },
     }).catch((e) => logger.error(e, "properties background task failed"));
 
     res.json(row);
@@ -2027,13 +2034,25 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
           logger.error(legalErr, "Failed to create legal case:");
         }
       } else if (targetStage === 'penalty_applied') {
-        const lateFee = Number(payment.amount) * 0.02;
-        action = `تطبيق غرامة تأخير 2% = ${lateFee.toFixed(2)} ريال`;
-        await rawExecute(
-          `UPDATE rent_payments SET amount=amount+$1, notes=CONCAT(COALESCE(notes,''), ' | غرامة تأخير 2%: ',$2::text) WHERE id=$3`,
-          [lateFee, lateFee.toFixed(2), payment.id]
-        );
-        financialMutation = { lateFee, newAmount: Number(payment.amount) + lateFee };
+        // C7 fix: lock the row before reading amount to prevent concurrent
+        // penalty applications from both reading the same base amount.
+        // H11 fix: use proper 2-decimal financial rounding.
+        const penaltyResult = await withTransaction(async (client) => {
+          const lockRes = await client.query(
+            `SELECT id, amount FROM rent_payments WHERE id = $1 FOR UPDATE`,
+            [payment.id]
+          );
+          const locked = lockRes.rows[0];
+          if (!locked) throw new NotFoundError("القسط غير موجود");
+          const lateFee = Math.round(Number(locked.amount) * 0.02 * 100) / 100;
+          await client.query(
+            `UPDATE rent_payments SET amount=amount+$1, notes=CONCAT(COALESCE(notes,''), ' | غرامة تأخير 2%: ',$2::text) WHERE id=$3`,
+            [lateFee, lateFee.toFixed(2), locked.id]
+          );
+          return { lateFee, newAmount: Number(locked.amount) + lateFee };
+        });
+        action = `تطبيق غرامة تأخير 2% = ${penaltyResult.lateFee.toFixed(2)} ريال`;
+        financialMutation = penaltyResult;
       } else if (targetStage === 'escalation') {
         action = 'تصعيد لإدارة الأملاك';
       } else if (targetStage === 'field_visit') {
@@ -3412,6 +3431,13 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
       [installmentId, contractId, scope.companyId]
     );
     if (!existing) throw new NotFoundError("القسط غير موجود");
+    if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+      throw new ValidationError("مبلغ السداد غير صالح");
+    }
+    const remaining = Number(existing.amount) - Number(existing.paidAmount || 0);
+    if (paidAmount > remaining * 1.001) {
+      throw new ValidationError(`مبلغ السداد (${paidAmount}) يتجاوز المستحق المتبقي (${remaining.toFixed(2)})`);
+    }
     const newPaid = Number(existing.paidAmount || 0) + paidAmount;
     const newStatus = newPaid >= Number(existing.amount) ? 'paid' : 'partial';
     const receiptNumber = b.receiptNumber || generateTimeRef("RCP");

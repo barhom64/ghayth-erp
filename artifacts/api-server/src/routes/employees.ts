@@ -291,11 +291,20 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         fix: "حدد نوع العقد للموظف",
       });
     }
-    if (salary !== undefined && salary !== null && Number(salary) <= 0) {
-      throw new ValidationError("الراتب يجب أن يكون أكبر من صفر", {
-        field: "salary",
-        fix: "أدخل راتباً موجباً أكبر من صفر",
-      });
+    if (salary !== undefined && salary !== null) {
+      const salaryNum = Number(salary);
+      if (salaryNum <= 0) {
+        throw new ValidationError("الراتب يجب أن يكون أكبر من صفر", {
+          field: "salary",
+          fix: "أدخل راتباً موجباً أكبر من صفر",
+        });
+      }
+      if (salaryNum > 1_000_000) {
+        throw new ValidationError("الراتب يتجاوز الحد الأقصى المسموح (1,000,000)", {
+          field: "salary",
+          fix: "تحقق من قيمة الراتب المدخلة",
+        });
+      }
     }
 
     const targetBranchId = branchId ?? scope.branchId;
@@ -887,11 +896,20 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       });
     }
 
-    if (salary !== undefined && salary !== null && Number(salary) <= 0) {
-      throw new ValidationError("الراتب يجب أن يكون أكبر من صفر", {
-        field: "salary",
-        fix: "أدخل راتباً موجباً.",
-      });
+    if (salary !== undefined && salary !== null) {
+      const salaryNum = Number(salary);
+      if (salaryNum <= 0) {
+        throw new ValidationError("الراتب يجب أن يكون أكبر من صفر", {
+          field: "salary",
+          fix: "أدخل راتباً موجباً.",
+        });
+      }
+      if (salaryNum > 1_000_000) {
+        throw new ValidationError("الراتب يتجاوز الحد الأقصى المسموح (1,000,000)", {
+          field: "salary",
+          fix: "تحقق من قيمة الراتب المدخلة",
+        });
+      }
     }
 
     // Pre-check: changing email to one that belongs to a different employee.
@@ -1132,8 +1150,9 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
     const id = parseId(req.params.id, "id");
     const { reason } = zodParse(deleteEmployeeSchema.safeParse(req.body ?? {}));
     const [employee] = await rawQuery<any>(
-      `SELECT e.id, ea.id AS "assignmentId" FROM employees e
+      `SELECT e.id, ea.id AS "assignmentId", u.id AS "userId" FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+       LEFT JOIN users u ON u."employeeId" = e.id
        WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1202,6 +1221,15 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
          WHERE "assignedTo" = $1 AND status = 'pending'`,
         [employee.assignmentId]
       );
+
+      // 5. Deactivate the associated user account so the terminated
+      //    employee can no longer log in.
+      if (employee.userId) {
+        await tx.query(
+          `UPDATE users SET "isActive" = false, "updatedAt" = NOW() WHERE id = $1`,
+          [employee.userId]
+        );
+      }
     });
 
     emitEvent({

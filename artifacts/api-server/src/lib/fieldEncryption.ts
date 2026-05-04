@@ -7,14 +7,29 @@ const IV_LEN = 12;
 const TAG_LEN = 16;
 
 function getFieldEncryptionKey(): Buffer {
-  const secret = process.env.FIELD_ENCRYPTION_KEY || process.env.JWT_SECRET;
-  if (!secret) throw new Error("FIELD_ENCRYPTION_KEY or JWT_SECRET required");
+  const secret = process.env.FIELD_ENCRYPTION_KEY;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("FIELD_ENCRYPTION_KEY is required in production — do NOT fall back to JWT_SECRET");
+    }
+    const fallback = process.env.JWT_SECRET;
+    if (!fallback) throw new Error("FIELD_ENCRYPTION_KEY required");
+    logger.warn("[fieldEncryption] FIELD_ENCRYPTION_KEY not set — falling back to JWT_SECRET. Set a dedicated key before production.");
+    return createHash("sha256").update(fallback).digest();
+  }
   return createHash("sha256").update(secret).digest();
 }
 
 function getHmacKey(): Buffer {
-  const secret = process.env.FIELD_ENCRYPTION_KEY || process.env.JWT_SECRET;
-  if (!secret) throw new Error("FIELD_ENCRYPTION_KEY or JWT_SECRET required");
+  const secret = process.env.FIELD_ENCRYPTION_KEY;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("FIELD_ENCRYPTION_KEY is required in production");
+    }
+    const fallback = process.env.JWT_SECRET;
+    if (!fallback) throw new Error("FIELD_ENCRYPTION_KEY required");
+    return createHash("sha256").update("hmac:" + fallback).digest();
+  }
   return createHash("sha256").update("hmac:" + secret).digest();
 }
 
@@ -41,8 +56,8 @@ export function decryptField(ciphertext: string): string {
     const decrypted = Buffer.concat([decipher.update(Buffer.from(dataHex!, "hex")), decipher.final()]);
     return decrypted.toString("utf8");
   } catch (e) {
-    logger.warn(e, "fieldEncryption: decryption failed, returning raw value");
-    return ciphertext;
+    logger.error(e, "fieldEncryption: decryption failed — possible key mismatch or data corruption");
+    return "***DECRYPTION_FAILED***";
   }
 }
 

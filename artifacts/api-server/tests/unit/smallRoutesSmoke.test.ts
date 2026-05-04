@@ -196,9 +196,9 @@ describe("publicData — endpoints", () => {
 // ── Impact Preview ─────────────────────────────────────────────────────────
 
 describe("impactPreview — endpoint", () => {
-  it("POST / requires admin:read", () => {
+  it("POST / requires admin:write", () => {
     const idx = IMPACT.indexOf('router.post("/",');
     const section = IMPACT.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:read")');
+    expect(section).toContain('requirePermission("admin:write")');
   });
 });

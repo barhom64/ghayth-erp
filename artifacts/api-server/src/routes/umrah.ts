@@ -105,13 +105,13 @@ const createSeasonSchema = z.object({
   startDate: z.string().min(1, "تاريخ البداية مطلوب"),
   endDate: z.string().min(1, "تاريخ النهاية مطلوب"),
   notes: z.string().optional(),
-});
+}).refine((d) => d.endDate >= d.startDate, { message: "تاريخ النهاية يجب أن يكون بعد تاريخ البداية", path: ["endDate"] });
 
 const createAgentSchema = z.object({
   name: z.string().min(1, "اسم الوكيل مطلوب"),
   contactPerson: z.string().optional(),
   phone: z.string().optional(),
-  email: z.string().optional(),
+  email: z.string().email("صيغة البريد الإلكتروني غير صحيحة").optional().or(z.literal("")),
   country: z.string().optional(),
   profitMargin: z.coerce.number().optional(),
   contractRef: z.string().optional(),
@@ -176,7 +176,7 @@ const patchAgentSchema = z.object({
   name: z.string().optional(),
   contactPerson: z.string().optional(),
   phone: z.string().optional(),
-  email: z.string().optional(),
+  email: z.string().email("صيغة البريد الإلكتروني غير صحيحة").optional().or(z.literal("")),
   country: z.string().optional(),
   profitMargin: z.coerce.number().optional(),
   contractRef: z.string().optional(),
@@ -610,7 +610,7 @@ router.get("/pilgrims", requirePermission("umrah:read"), async (req, res) => {
       where += ` AND (p."fullName" ILIKE $${likePh} OR p."passportNumber_hash" = $${hashPh} OR p."visaNumber_hash" = $${hashPh})`;
     }
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(limit) || 20;
+    const perPage = Math.min(Math.max(Number(limit) || 20, 1), 100);
     const offset = (pageNum - 1) * perPage;
     const countQ = await rawQuery(`SELECT COUNT(*) as c FROM umrah_pilgrims p WHERE ${where}`, params);
     params.push(perPage); params.push(offset);
@@ -810,8 +810,9 @@ router.delete("/pilgrims/:id", requirePermission("umrah:write"), async (req, res
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id, "fullName", status FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المعتمر غير موجود");
-    if (existing.status === "arrived") {
-      throw new ConflictError("لا يمكن حذف معتمر وصل بالفعل");
+    const nonDeletableStatuses = ["arrived", "active", "overstayed", "violated"];
+    if (nonDeletableStatuses.includes(existing.status)) {
+      throw new ConflictError(`لا يمكن حذف معتمر في حالة "${existing.status}" — يُسمح فقط بحذف المعتمرين في حالة pending أو cancelled`);
     }
     const [invoiced] = await rawQuery<any>(`SELECT COUNT(*)::int AS c FROM umrah_penalties WHERE "pilgrimId"=$1 AND "companyId"=$2 AND status='invoiced'`, [id, scope.companyId]);
     if (Number(invoiced?.c) > 0) {
@@ -828,13 +829,13 @@ router.post("/import/preview", requirePermission("umrah:write"), async (req, res
   try {
     const scope = req.scope!;
     const { seasonId, rows: importRows, fileType } = zodParse(importPreviewSchema.safeParse(req.body));
-    const passportNumbers = importRows.filter((r: any) => r.passportNumber).map((r: any) => r.passportNumber);
-    const existingRows = passportNumbers.length > 0
-      ? await rawQuery<any>(`SELECT "passportNumber" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber" = ANY($3) AND "deletedAt" IS NULL`, [scope.companyId, seasonId, passportNumbers])
+    const passportHashes = importRows.filter((r: any) => r.passportNumber).map((r: any) => blindIndex(String(r.passportNumber)));
+    const existingRows = passportHashes.length > 0
+      ? await rawQuery<any>(`SELECT "passportNumber_hash" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber_hash" = ANY($3) AND "deletedAt" IS NULL`, [scope.companyId, seasonId, passportHashes])
       : [];
-    const existingSet = new Set(existingRows.map((r: any) => r.passportNumber));
-    const newRows = importRows.filter((r: any) => r.passportNumber && !existingSet.has(r.passportNumber));
-    const duplicateRows = importRows.filter((r: any) => r.passportNumber && existingSet.has(r.passportNumber));
+    const existingSet = new Set(existingRows.map((r: any) => r.passportNumber_hash));
+    const newRows = importRows.filter((r: any) => r.passportNumber && !existingSet.has(blindIndex(String(r.passportNumber))));
+    const duplicateRows = importRows.filter((r: any) => r.passportNumber && existingSet.has(blindIndex(String(r.passportNumber))));
     const errorRows = importRows.filter((r: any) => !r.passportNumber || !r.fullName);
     const nuskCodes = [...new Set(importRows.map((r: any) => r.nuskCode).filter(Boolean))];
     const linkedAgents = nuskCodes.length > 0
@@ -897,21 +898,27 @@ async function doImport(scope: any, body: { seasonId: number; rows: any[]; fileT
 
   for (let batchStart = 0; batchStart < importRows.length; batchStart += BATCH_SIZE) {
     const batch = importRows.slice(batchStart, batchStart + BATCH_SIZE);
-    const passportNumbers = batch.filter((r: any) => r.passportNumber).map((r: any) => r.passportNumber as string);
-    const existingRows = passportNumbers.length > 0
-      ? await rawQuery<any>(`SELECT id, "passportNumber" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber" = ANY($3)`, [scope.companyId, seasonId, passportNumbers])
+    const passportHashes = batch.filter((r: any) => r.passportNumber).map((r: any) => blindIndex(String(r.passportNumber)));
+    const existingRows = passportHashes.length > 0
+      ? await rawQuery<any>(`SELECT id, "passportNumber_hash" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber_hash" = ANY($3)`, [scope.companyId, seasonId, passportHashes])
       : [];
-    const existingMap = new Map<string, number>(existingRows.map((r: any) => [r.passportNumber, r.id]));
+    const existingMap = new Map<string, number>(existingRows.map((r: any) => [r.passportNumber_hash, r.id]));
 
     for (let i = 0; i < batch.length; i++) {
       const globalRow = batchStart + i;
       const r = batch[i];
       if (!r.passportNumber || !r.fullName) { errCount++; errors.push({ row: globalRow + 1, error: "بيانات ناقصة" }); continue; }
-      if (existingMap.has(r.passportNumber)) {
-        const existingId = existingMap.get(r.passportNumber)!;
+      const ppHash = blindIndex(String(r.passportNumber));
+      if (existingMap.has(ppHash)) {
+        const existingId = existingMap.get(ppHash)!;
         const sets: string[] = []; const params: any[] = [];
+        const encryptedFields = new Set(["fullName", "visaNumber"]);
         for (const key of ["fullName","visaNumber","nationality","gender","phone","arrivalDate","departureDate","agentId","hotelName","roomNumber"]) {
-          if (r[key] !== undefined && r[key] !== null && r[key] !== "") { params.push(r[key]); sets.push(`"${key}"=$${params.length}`); }
+          if (r[key] !== undefined && r[key] !== null && r[key] !== "") {
+            const val = encryptedFields.has(key) ? encryptField(String(r[key])) : r[key];
+            params.push(val); sets.push(`"${key}"=$${params.length}`);
+            if (key === "visaNumber") { params.push(blindIndex(String(r[key]))); sets.push(`"visaNumber_hash"=$${params.length}`); }
+          }
         }
         if (sets.length > 0) {
           sets.push(`"updatedAt"=NOW()`); params.push(existingId); params.push(scope.companyId);
@@ -920,9 +927,12 @@ async function doImport(scope: any, body: { seasonId: number; rows: any[]; fileT
         } else { dupCount++; }
       } else {
         try {
+          const encPassport = encryptField(String(r.passportNumber));
+          const encVisa = r.visaNumber ? encryptField(String(r.visaNumber)) : null;
+          const visaHash = r.visaNumber ? blindIndex(String(r.visaNumber)) : null;
           await rawExecute(
-            `INSERT INTO umrah_pilgrims ("companyId","seasonId","agentId","fullName","passportNumber","visaNumber",nationality,gender,phone,"arrivalDate","departureDate","hotelName","roomNumber") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-            [scope.companyId, seasonId, r.agentId || null, r.fullName, r.passportNumber, r.visaNumber || null, r.nationality || null, r.gender || null, r.phone || null, r.arrivalDate || null, r.departureDate || null, r.hotelName || null, r.roomNumber || null]
+            `INSERT INTO umrah_pilgrims ("companyId","seasonId","agentId","fullName","passportNumber","passportNumber_hash","visaNumber","visaNumber_hash",nationality,gender,phone,"arrivalDate","departureDate","hotelName","roomNumber") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+            [scope.companyId, seasonId, r.agentId || null, r.fullName, encPassport, ppHash, encVisa, visaHash, r.nationality || null, r.gender || null, r.phone || null, r.arrivalDate || null, r.departureDate || null, r.hotelName || null, r.roomNumber || null]
           );
           newCount++;
         } catch (insertErr: any) { errCount++; errors.push({ row: globalRow + 1, error: insertErr?.message ?? "خطأ في الإدراج" }); }
@@ -995,7 +1005,7 @@ router.get("/dashboard", requirePermission("umrah:read"), async (req, res) => {
       pilgrims: stats[0],
       penalties: penaltyStats[0],
       topAgents: agentStats,
-      recentArrivals
+      recentArrivals: recentArrivals.map(decryptPilgrimRow)
     });
   } catch (err) { handleRouteError(err, res, "Dashboard error"); }
 });
@@ -1127,7 +1137,7 @@ router.get("/penalties", requirePermission("umrah:read"), async (req, res) => {
        LEFT JOIN umrah_agents a ON pen."agentId"=a.id
        WHERE ${where} ORDER BY pen."createdAt" DESC LIMIT 500`, params
     );
-    res.json({ data: rows });
+    res.json({ data: rows.map(decryptPilgrimRow) });
   } catch (err) { handleRouteError(err, res, "List penalties error"); }
 });
 
@@ -1144,7 +1154,7 @@ router.get("/penalties/:id", requirePermission("umrah:read"), async (req, res) =
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("العقوبة غير موجودة");
-    res.json(row);
+    res.json(decryptPilgrimRow(row));
   } catch (err) { handleRouteError(err, res, "Penalty detail error"); }
 });
 
@@ -1192,6 +1202,9 @@ router.post("/agent-invoices/:id/record-payment", requirePermission("umrah:write
     const [invoice] = await rawQuery<any>(`SELECT * FROM umrah_agent_invoices WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
     const paidSoFar = Number(invoice.paidAmount || 0) + Number(amount);
+    if (paidSoFar > Number(invoice.total) * 1.001) {
+      throw new ValidationError(`المبلغ المدفوع (${paidSoFar}) يتجاوز إجمالي الفاتورة (${invoice.total})`);
+    }
     const newStatus = paidSoFar >= Number(invoice.total) ? "paid" : "partially_paid";
     await applyTransition({
       entity: "umrah_agent_invoices",
@@ -1216,6 +1229,17 @@ router.post("/agent-invoices/generate", requirePermission("umrah:write"), async 
   try {
     const scope = req.scope!;
     const { agentId, seasonId } = zodParse(generateInvoiceSchema.safeParse(req.body));
+
+    // Idempotency: return existing invoice if one already exists for this agent+season
+    const [existingInvoice] = await rawQuery<any>(
+      `SELECT * FROM umrah_agent_invoices WHERE "agentId"=$1 AND "seasonId"=$2 AND "companyId"=$3 AND status <> 'cancelled'`,
+      [agentId, seasonId, scope.companyId]
+    );
+    if (existingInvoice) {
+      res.status(200).json(existingInvoice);
+      return;
+    }
+
     const pilgrims = await rawQuery(
       `SELECT COUNT(*) as c FROM umrah_pilgrims WHERE "agentId"=$1 AND "seasonId"=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
       [agentId, seasonId, scope.companyId]
@@ -1301,7 +1325,7 @@ router.get("/agent-invoices", requirePermission("umrah:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "List agent invoices error"); }
 });
 
-router.get("/invoices/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+router.get("/agent-invoices/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1373,7 +1397,7 @@ router.delete("/transport/:id", requirePermission("umrah:write"), async (req, re
     if (existing.status === "in_progress") {
       throw new ConflictError("لا يمكن حذف رحلة قيد التنفيذ");
     }
-    await rawExecute(`DELETE FROM umrah_transport WHERE id=$1 AND "companyId"=$2 AND status != 'in_progress'`, [id, scope.companyId]);
+    await rawExecute(`UPDATE umrah_transport SET "deletedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status != 'in_progress'`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_transport", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.deleted", entity: "umrah_transport", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ success: true });
@@ -1538,7 +1562,7 @@ router.get("/unassigned", requirePermission("umrah:read"), async (req, res) => {
     const params: any[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND "seasonId"=$${params.length}`; }
     const rows = await rawQuery(`SELECT * FROM umrah_pilgrims WHERE ${where} ORDER BY "createdAt" DESC LIMIT 1000`, params);
-    res.json({ data: rows });
+    res.json({ data: rows.map(decryptPilgrimRow) });
   } catch (err) { handleRouteError(err, res, "List unassigned error"); }
 });
 
@@ -1577,7 +1601,7 @@ router.get("/violations", requirePermission("umrah:read"), async (req, res) => {
        ORDER BY v."detectedAt" DESC LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json({ data: rows.map(decryptPilgrimRow), total: rows.length });
   } catch (err) { handleRouteError(err, res, "List violations error"); }
 });
 
@@ -1598,7 +1622,7 @@ router.get("/violations/:id", requirePermission("umrah:read"), async (req, res):
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المخالفة غير موجودة");
-    res.json(row);
+    res.json(decryptPilgrimRow(row));
   } catch (err) { handleRouteError(err, res, "Get violation error"); }
 });
 

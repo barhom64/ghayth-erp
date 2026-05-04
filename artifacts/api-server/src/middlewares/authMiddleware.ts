@@ -68,7 +68,7 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
      JOIN users u ON u."employeeId" = ea."employeeId"
      LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
      LEFT JOIN employees e ON e.id = ea."employeeId"
-     WHERE ea.id = $1 AND ea.status = 'active' AND u.id = $2`,
+     WHERE ea.id = $1 AND ea.status = 'active' AND u.id = $2 AND u."isActive" = true`,
     [activeAssignmentId, payload.userId]
   );
 
