@@ -445,7 +445,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
 
     // ── Step 1: GPS + timestamp received ──
 
-    // ── Step 2: Prevent duplicate check-in ──
+    // ── Step 2: Prevent duplicate check-in (pre-check for user-friendly error) ──
     const [existing] = await rawQuery<any>(
       `SELECT id, "checkOut" FROM attendance
        WHERE "assignmentId" = $1 AND date = $2`,
@@ -613,14 +613,23 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
       deductionAmount = roundTo2(minuteRate * lateMinutes);
     }
 
-    const { insertId: attendanceId } = await rawExecute(
+    const insertResult = await rawQuery<any>(
       `INSERT INTO attendance ("assignmentId","companyId","branchId",date,"checkIn","lateMinutes",status,notes,"checkInLat","checkInLon","workType","contractId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+       SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
+       WHERE NOT EXISTS (SELECT 1 FROM attendance WHERE "assignmentId"=$1 AND date=$4 AND "deletedAt" IS NULL)
+       RETURNING id`,
       [scope.activeAssignmentId, scope.companyId, assignment?.branchId ?? scope.branchId,
         today, now.toISOString(), lateMinutes, checkInStatus, notes ?? null,
         lat !== undefined && lat !== null ? Number(lat) : null, lon !== undefined && lon !== null ? Number(lon) : null,
         isRemoteShift ? 'remote' : (workType || 'office'), activeContract.id]
     );
+    if (!insertResult || insertResult.length === 0) {
+      throw new ConflictError("لقد سجلت الحضور اليوم. استخدم نقطة الانصراف لتسجيل المغادرة", {
+        field: "attendance",
+        fix: "افتح صفحة الحضور واستخدم زر الانصراف لإكمال الدوام.",
+      });
+    }
+    const attendanceId = insertResult[0].id;
 
     // ── Step 11: Auto violation if late > threshold ──
     let violationId: number | null = null;
@@ -798,6 +807,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
         },
       });
     }
+    // NOTE: The actual UPDATE below uses an atomic "checkOut" IS NULL guard to prevent race conditions.
 
     // ── Fetch assignment for salary ──
     const [assignment] = await rawQuery<any>(
@@ -876,14 +886,20 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
       }
     }
 
-    // ── Update attendance record ──
-    await rawExecute(
-      `UPDATE attendance SET "checkOut" = $1, notes = COALESCE($2, notes), "checkOutLat" = $4, "checkOutLon" = $5, "overtimeMinutes" = $6 WHERE id = $3 AND "companyId" = $7`,
+    // ── Update attendance record (atomic: only if checkOut IS NULL to prevent race condition) ──
+    const [checkOutResult] = await rawQuery<any>(
+      `UPDATE attendance SET "checkOut" = $1, notes = COALESCE($2, notes), "checkOutLat" = $4, "checkOutLon" = $5, "overtimeMinutes" = $6 WHERE id = $3 AND "companyId" = $7 AND "checkOut" IS NULL RETURNING id`,
       [now.toISOString(), notes ?? null, existing.id,
         lat !== undefined && lat !== null ? Number(lat) : null,
         lon !== undefined && lon !== null ? Number(lon) : null,
         overtimeMinutes, scope.companyId]
     );
+    if (!checkOutResult) {
+      throw new ConflictError("لقد سجلت الانصراف مسبقاً اليوم", {
+        field: "attendance",
+        fix: "تم تسجيل انصرافك بالفعل. لا يمكن إعادة الانصراف في نفس اليوم.",
+      });
+    }
 
     // ── Update monthly stats ──
     await rawExecute(
