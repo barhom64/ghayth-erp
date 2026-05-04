@@ -249,12 +249,12 @@ custodiesRouter.get("/custodies/summary", requirePermission("finance:read"), asy
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT je.id, je.ref,
+      `SELECT je.id, je.ref, je."dueDate" AS "expectedReturnDate",
               COALESCE(SUM(jl.debit), 0) AS amount
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
-       GROUP BY je.id, je.ref`,
+       GROUP BY je.id, je.ref, je."dueDate"`,
       [scope.companyId]
     );
     const settledAmounts = await rawQuery<any>(
@@ -278,6 +278,7 @@ custodiesRouter.get("/custodies/summary", requirePermission("finance:read"), asy
       totalAmount += amt;
       totalRemaining += remaining;
       if (remaining <= 0) settledCount++;
+      else if (r.expectedReturnDate && new Date(r.expectedReturnDate) < now) overdueCount++;
       else activeCount++;
     }
 

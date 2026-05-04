@@ -4,7 +4,6 @@ import {
   NotFoundError,
   ConflictError,
   ForbiddenError,
-  IntegrationError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
@@ -22,7 +21,6 @@ import {
   checkFinancialPeriodOpen,
   computeVat,
   currentPeriod,
-  currentYear,
   generateRef,
   toDateISO,
 } from "../lib/businessHelpers.js";

@@ -15,7 +15,6 @@ import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   createAuditLog,
   emitEvent,
-  createNotification,
   todayISO,
 } from "../lib/businessHelpers.js";
 
@@ -643,7 +642,6 @@ financeHardeningRouter.patch("/journal-manual/:id/post", requirePermission("fina
 financeHardeningRouter.get("/bank-guarantees", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const today = todayISO();
     const rows = await rawQuery<any>(
       `SELECT bg.*,
               (bg."expiryDate"::date - CURRENT_DATE) AS "daysToExpiry",
@@ -1216,8 +1214,6 @@ financeHardeningRouter.get("/projects/:id/costs", requirePermission("finance:rea
 financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const today = new Date();
-
     const inflow30 = await rawQuery<any>(
       `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
        FROM invoices i

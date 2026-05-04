@@ -512,9 +512,9 @@ export function registerEventListeners() {
       if (letter.employeePhone) {
         try {
           await rawExecute(
-            `INSERT INTO whatsapp_queue ("companyId","toPhone",message,status,"createdAt","refType","refId")
-             VALUES ($1,$2,$3,'pending',NOW(),'official_letter',$4)`,
-            [payload.companyId, letter.employeePhone, `${subject}\n\n${body}`, letterId]
+            `INSERT INTO whatsapp_queue ("companyId",phone,message,status,"scheduledAt")
+             VALUES ($1,$2,$3,'queued',NOW())`,
+            [payload.companyId, letter.employeePhone, `${subject}\n\n${body}`]
           );
         } catch (e) {
           logger.warn(e, "whatsapp_queue table may not exist in this deployment");

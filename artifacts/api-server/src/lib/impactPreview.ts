@@ -157,8 +157,12 @@ export async function computeTerminationImpact(
   }
 
   const [custodies] = await rawQuery<any>(
-    `SELECT COALESCE(SUM(amount),0) AS total FROM custodies
-     WHERE "companyId" = $1 AND "employeeId" = $2 AND status != 'settled'`,
+    `SELECT COALESCE(SUM(jl.debit - jl.credit),0) AS total
+     FROM journal_entries je
+     JOIN journal_lines jl ON jl."journalId" = je.id
+     WHERE je."companyId" = $1 AND je."sourceType" = 'custody'
+       AND je."deletedAt" IS NULL
+       AND EXISTS (SELECT 1 FROM employee_assignments ea WHERE ea.id = je."createdBy" AND ea."employeeId" = $2)`,
     [companyId, employeeId]
   ).catch((e) => { logger.error(e, "impact preview query failed"); return [{ total: 0 }]; });
   const custodyTotal = Number(custodies?.total ?? 0);
@@ -172,8 +176,8 @@ export async function computeTerminationImpact(
   }
 
   const [loans] = await rawQuery<any>(
-    `SELECT COALESCE(SUM("remainingAmount"),0) AS total FROM loans
-     WHERE "companyId" = $1 AND "employeeId" = $2 AND status != 'settled'`,
+    `SELECT COALESCE(SUM("remainingAmount"),0) AS total FROM hr_employee_loans
+     WHERE "companyId" = $1 AND "employeeId" = $2 AND status NOT IN ('completed','paid','rejected')`,
     [companyId, employeeId]
   ).catch((e) => { logger.error(e, "impact preview query failed"); return [{ total: 0 }]; });
   const loanTotal = Number(loans?.total ?? 0);

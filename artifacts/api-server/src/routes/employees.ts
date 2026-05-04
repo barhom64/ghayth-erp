@@ -1228,7 +1228,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       //    employee can no longer log in.
       if (employee.userId) {
         await tx.query(
-          `UPDATE users SET "isActive" = false, "updatedAt" = NOW() WHERE id = $1`,
+          `UPDATE users SET "isActive" = false WHERE id = $1`,
           [employee.userId]
         );
       }
