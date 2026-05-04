@@ -883,6 +883,7 @@ const MAPPING_INTENT: Record<string, { type: string; keywords: string[] }> = {
 };
 
 const _resolvedAccountCache = new Map<string, string>();
+const _RESOLVED_ACCOUNT_CACHE_MAX_SIZE = 5_000;
 
 async function resolveByIntent(companyId: number, operationType: string, fallbackCode: string): Promise<string> {
   const cacheKey = `${companyId}:${operationType}`;
@@ -894,7 +895,11 @@ async function resolveByIntent(companyId: number, operationType: string, fallbac
     `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code=$2 AND "allowPosting"=true AND "deletedAt" IS NULL LIMIT 1`,
     [companyId, fallbackCode]
   );
-  if (fb) { _resolvedAccountCache.set(cacheKey, fb.code); return fb.code; }
+  if (fb) {
+    if (_resolvedAccountCache.size >= _RESOLVED_ACCOUNT_CACHE_MAX_SIZE) _resolvedAccountCache.clear();
+    _resolvedAccountCache.set(cacheKey, fb.code);
+    return fb.code;
+  }
 
   // 2. Otherwise search by intent (type + Arabic name keywords).
   const intent = MAPPING_INTENT[operationType];
@@ -909,6 +914,7 @@ async function resolveByIntent(companyId: number, operationType: string, fallbac
     );
     if (rows.length) {
       logger.warn(`[accounting_mappings] Resolved "${operationType}" → "${rows[0].code}" by intent search (fallback "${fallbackCode}" missing).`);
+      if (_resolvedAccountCache.size >= _RESOLVED_ACCOUNT_CACHE_MAX_SIZE) _resolvedAccountCache.clear();
       _resolvedAccountCache.set(cacheKey, rows[0].code);
       return rows[0].code;
     }

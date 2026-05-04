@@ -529,7 +529,8 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
        FROM budgets b
        LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId"
        WHERE b."companyId" = $1 AND b.period = $4
-       ORDER BY b."accountCode"`,
+       ORDER BY b."accountCode"
+       LIMIT 500`,
       [scope.companyId, periodStart, periodEnd, period]
     );
 
@@ -543,7 +544,7 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
         actualAmount = -actualAmount;
       }
       const variance = roundTo2(budgetAmount - actualAmount);
-      const variancePct = budgetAmount > 0 ? Math.round((variance / budgetAmount) * 10000) / 100 : 0;
+      const variancePct = budgetAmount > 0 ? roundTo2((variance / budgetAmount) * 100) : 0;
       totalBudget += budgetAmount;
       totalActual += actualAmount;
       let status: string;
@@ -559,7 +560,7 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
         actualAmount: roundTo2(actualAmount),
         variance,
         variancePct,
-        utilizationPct: budgetAmount > 0 ? Math.round((actualAmount / budgetAmount) * 10000) / 100 : 0,
+        utilizationPct: budgetAmount > 0 ? roundTo2((actualAmount / budgetAmount) * 100) : 0,
         status,
       };
     });

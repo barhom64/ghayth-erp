@@ -972,9 +972,9 @@ journalRouter.get("/journal/:id", requirePermission("finance:read"), async (req,
        FROM journal_entries je
        LEFT JOIN journal_entries ro ON ro.id = je."reversalOfId"
        LEFT JOIN journal_entries rb ON rb.id = je."reversedById"
-       WHERE je.id = $1 AND je."companyId" = ANY($2) AND je."deletedAt" IS NULL
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        LIMIT 1`,
-      [id, scope.allowedCompanies]
+      [id, scope.companyId]
     );
     if (!je) throw new NotFoundError("القيد غير موجود");
     const lines = await rawQuery<any>(

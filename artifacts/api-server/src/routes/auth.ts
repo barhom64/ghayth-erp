@@ -242,7 +242,7 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
     }
 
     const [rt] = await rawQuery<any>(
-      `SELECT rt.*, u."isActive", u."employeeId"
+      `SELECT rt.*, u."isActive", u."employeeId", u."lockedUntil"
        FROM refresh_tokens rt
        JOIN users u ON u.id = rt."userId"
        WHERE rt.token = $1`,
@@ -265,6 +265,10 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
       throw new ForbiddenError("الحساب موقوف");
     }
 
+    if (rt.lockedUntil && new Date(rt.lockedUntil) > new Date()) {
+      throw new ForbiddenError("الحساب مقفل مؤقتاً");
+    }
+
     const [primaryAssignment] = await rawQuery<any>(
       `SELECT ea.id, ea.role FROM employee_assignments ea
        WHERE ea."employeeId" = $1 AND ea.status = 'active'
@@ -283,6 +287,8 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
     });
 
     setAccessTokenCookie(res, newToken);
+
+    await rawQuery(`UPDATE refresh_tokens SET "isActive" = false WHERE id = $1`, [rt.id]);
 
     emitEvent({ companyId: 0, userId: rt.userId, action: "auth.refresh", entity: "users", entityId: rt.userId }).catch((e) => logger.error(e, "auth background task failed"));
     createAuditLog({ companyId: 0, userId: rt.userId, action: "update", entity: "users", entityId: rt.userId, after: { reason: "token_refresh" } }).catch((e) => logger.error(e, "auth background task failed"));

@@ -9,6 +9,19 @@ interface UserPermissionOverrides {
 
 const permissionCache = new Map<string, { perms: Set<string>; expiresAt: number }>();
 const CACHE_TTL_MS = 60_000;
+const PERMISSION_CACHE_MAX_SIZE = 10_000;
+
+function evictPermissionCacheIfNeeded(): void {
+  if (permissionCache.size <= PERMISSION_CACHE_MAX_SIZE) return;
+  // Delete the oldest half (Map iterates in insertion order)
+  const toDelete = Math.floor(permissionCache.size / 2);
+  let deleted = 0;
+  for (const key of permissionCache.keys()) {
+    if (deleted >= toDelete) break;
+    permissionCache.delete(key);
+    deleted++;
+  }
+}
 
 async function loadRolePermissions(role: string, companyId: number): Promise<Set<string>> {
   const cacheKey = `${role}:${companyId}`;
@@ -22,6 +35,7 @@ async function loadRolePermissions(role: string, companyId: number): Promise<Set
   );
 
   const perms = new Set(rows.map((r) => r.permission));
+  evictPermissionCacheIfNeeded();
   permissionCache.set(cacheKey, { perms, expiresAt: Date.now() + CACHE_TTL_MS });
   return perms;
 }
