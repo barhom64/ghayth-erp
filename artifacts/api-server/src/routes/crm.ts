@@ -10,7 +10,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, currentMonthPadded, generateTimeRef } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, currentMonthPadded, generateTimeRef, roundTo2 } from "../lib/businessHelpers.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -670,8 +670,8 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
     const monthNum = currentMonthPadded();
     const yearShort = String(currentYear()).slice(2);
     const invoiceRef = `INV-CRM-${yearShort}${monthNum}-${opp.id}`;
-    const vatAmount = dealValue * 0.15;
-    const totalAmount = dealValue + vatAmount;
+    const vatAmount = roundTo2(dealValue * 0.15);
+    const totalAmount = roundTo2(dealValue + vatAmount);
 
     // Request invoice creation via CRM Engine (event-based, no direct write to finance table)
     try {
@@ -948,7 +948,7 @@ router.post("/opportunities/:id/activities", requirePermission("crm:create"), as
       `INSERT INTO crm_activities ("opportunityId",type,description,"scheduledAt","createdBy") VALUES ($1,$2,$3,$4,$5)`,
       [oppId, b.type, b.description, b.scheduledAt, scope.userId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM crm_activities WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT ca.* FROM crm_activities ca JOIN crm_opportunities co ON co.id = ca."opportunityId" WHERE ca.id=$1 AND co."companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "crm.activity.created", entity: "crm_activities", entityId: insertId,
@@ -966,11 +966,15 @@ router.post("/opportunities/:id/activities", requirePermission("crm:create"), as
 router.get("/pipeline", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const result: any[] = [];
-    for (const stage of STAGE_ORDER) {
-      const [row] = await rawQuery<any>(`SELECT COUNT(*) as count, COALESCE(SUM(value),0) as value FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage=$2`, [scope.companyId, stage]);
-      result.push({ stage, count: Number(row?.count ?? 0), value: Number(row?.value ?? 0), autoAction: STAGE_AUTO_ACTIONS[stage]?.description });
-    }
+    const stageRows = await rawQuery<any>(
+      `SELECT stage, COUNT(*) as count, COALESCE(SUM(value),0) as value FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL GROUP BY stage`,
+      [scope.companyId]
+    );
+    const stageMap = new Map(stageRows.map((r: any) => [r.stage, r]));
+    const result: any[] = STAGE_ORDER.map((stage) => {
+      const row = stageMap.get(stage);
+      return { stage, count: Number(row?.count ?? 0), value: Number(row?.value ?? 0), autoAction: STAGE_AUTO_ACTIONS[stage]?.description };
+    });
     res.json({ data: result, total: result.length, page: 1, pageSize: result.length });
   } catch (err) { handleRouteError(err, res, "CRM pipeline error:"); }
 });
@@ -990,29 +994,43 @@ router.post("/followup-check", requirePermission("crm:create"), async (req, res)
     );
 
     const escalated: any[] = [];
-    for (const activity of overdueActivities) {
-      const overdueDays = Math.floor((Date.now() - new Date(activity.scheduledAt).getTime()) / (1000 * 60 * 60 * 24));
-      if (overdueDays >= 3 && activity.assignedTo) {
-        try {
-          const [asgn] = await rawQuery<any>(
-            `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND status='active' LIMIT 1`,
-            [activity.assignedTo]
-          );
-          if (asgn) {
-            createNotification({
-              companyId: scope.companyId,
-              assignmentId: asgn.id,
-              type: "crm_overdue",
-              title: `متابعة متأخرة: ${activity.oppTitle}`,
-              body: `نشاط متأخر ${overdueDays} أيام: ${activity.description?.substring(0, 100)}`,
-              priority: "high",
-              refType: "crm_opportunities",
-              refId: activity.opportunityId,
-            }).catch((e) => logger.error(e, "crm background task failed"));
-          }
-        } catch (e) { logger.error(e, "Follow-up escalation error:"); }
-        escalated.push({ activityId: activity.id, oppTitle: activity.oppTitle, overdueDays });
+    const escalationCandidates = overdueActivities
+      .map((activity: any) => ({
+        ...activity,
+        overdueDays: Math.floor((Date.now() - new Date(activity.scheduledAt).getTime()) / (1000 * 60 * 60 * 24)),
+      }))
+      .filter((a: any) => a.overdueDays >= 3 && a.assignedTo);
+
+    // Batch-fetch active assignments for all relevant employeeIds
+    const uniqueEmployeeIds = [...new Set(escalationCandidates.map((a: any) => a.assignedTo))];
+    const assignmentMap = new Map<number, number>();
+    if (uniqueEmployeeIds.length > 0) {
+      try {
+        const asgnRows = await rawQuery<any>(
+          `SELECT DISTINCT ON ("employeeId") id, "employeeId" FROM employee_assignments WHERE "employeeId" = ANY($1) AND status='active'`,
+          [uniqueEmployeeIds]
+        );
+        for (const row of asgnRows) {
+          assignmentMap.set(row.employeeId, row.id);
+        }
+      } catch (e) { logger.error(e, "Follow-up batch assignment lookup error:"); }
+    }
+
+    for (const activity of escalationCandidates) {
+      const assignmentId = assignmentMap.get(activity.assignedTo);
+      if (assignmentId) {
+        createNotification({
+          companyId: scope.companyId,
+          assignmentId,
+          type: "crm_overdue",
+          title: `متابعة متأخرة: ${activity.oppTitle}`,
+          body: `نشاط متأخر ${activity.overdueDays} أيام: ${activity.description?.substring(0, 100)}`,
+          priority: "high",
+          refType: "crm_opportunities",
+          refId: activity.opportunityId,
+        }).catch((e) => logger.error(e, "crm background task failed"));
       }
+      escalated.push({ activityId: activity.id, oppTitle: activity.oppTitle, overdueDays: activity.overdueDays });
     }
 
     emitEvent({

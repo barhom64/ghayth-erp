@@ -789,18 +789,18 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
                 lt.name AS "leaveTypeName"
          FROM hr_leave_requests lr
          JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-         WHERE lr."employeeId" = $1
+         WHERE lr."employeeId" = $1 AND lr."companyId" = $2
          ORDER BY lr."createdAt" DESC LIMIT 20`,
-        [id]
+        [id, scope.companyId]
       ),
       rawQuery<any>(
         `SELECT te.id, te.status, te."completedAt",
                 tp.title AS "courseTitle", tp.type AS "courseType"
          FROM training_enrollments te
          JOIN training_programs tp ON tp.id = te."programId"
-         WHERE te."employeeId" = $1
+         WHERE te."employeeId" = $1 AND tp."companyId" = $2
          ORDER BY tp."startDate" DESC LIMIT 20`,
-        [id]
+        [id, scope.companyId]
       ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
       rawQuery<any>(
         `SELECT pl.id, pl.basic, pl."grossSalary", pl.gosi, pl."lateDeduction", pl."netSalary",
@@ -1047,8 +1047,8 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       if (role) { vals.push(role); fields.push(`role = $${vals.length}`); }
       if (salary !== undefined) {
         const [currentAsgn] = await rawQuery<{ salary: number }>(
-          `SELECT salary FROM employee_assignments WHERE id = $1`,
-          [employee.assignmentId]
+          `SELECT salary FROM employee_assignments WHERE id = $1 AND "companyId" = $2`,
+          [employee.assignmentId, scope.companyId]
         );
         const oldSalary = Number(currentAsgn?.salary ?? 0);
         const newSalary = Number(salary);

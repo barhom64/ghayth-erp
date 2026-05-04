@@ -2044,7 +2044,7 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
           );
           const locked = lockRes.rows[0];
           if (!locked) throw new NotFoundError("القسط غير موجود");
-          const lateFee = Math.round(Number(locked.amount) * 0.02 * 100) / 100;
+          const lateFee = roundTo2(Number(locked.amount) * 0.02);
           await client.query(
             `UPDATE rent_payments SET amount=amount+$1, notes=CONCAT(COALESCE(notes,''), ' | غرامة تأخير 2%: ',$2::text) WHERE id=$3`,
             [lateFee, lateFee.toFixed(2), locked.id]

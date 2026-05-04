@@ -5736,7 +5736,7 @@ router.post("/public-holidays", requirePermission("hr:create"), async (req, res)
       [scope.companyId, b.name, b.startDate, b.endDate || b.startDate, year,
        b.type || 'national', b.description || null, b.isRecurring || false]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "public_holidays", entityId: insertId,
@@ -5922,7 +5922,7 @@ router.post("/transfers", requirePermission("hr:create"), async (req, res) => {
        scope.employeeId, b.reason || null, b.effectiveDate || null, b.notes || null]
     );
 
-    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     // Notify HR
     const hrAssign = await rawQuery<any>(
@@ -6218,7 +6218,7 @@ router.post("/idp", requirePermission("hr:create"), async (req, res) => {
       [scope.companyId, b.employeeId, scope.employeeId, b.title || 'خطة التطوير الفردي',
        goals, skills, trainingIds, b.targetDate || null, b.notes || null, b.reviewDate || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "employee_development_plans", entityId: insertId,

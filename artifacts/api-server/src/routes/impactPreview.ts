@@ -134,11 +134,15 @@ router.post("/", requirePermission("admin:write"), async (req, res): Promise<voi
     }
 
     if (entityType === "purchase_request" || entityType === "purchase_order") {
-      const tableName = entityType === "purchase_request" ? "purchase_requests" : "purchase_orders";
-      const [item] = await rawQuery<any>(
-        `SELECT * FROM ${tableName} WHERE id = $1 AND "companyId" = $2`,
-        [entityId, scope.companyId]
-      );
+      const [item] = entityType === "purchase_request"
+        ? await rawQuery<any>(
+            `SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`,
+            [entityId, scope.companyId]
+          )
+        : await rawQuery<any>(
+            `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`,
+            [entityId, scope.companyId]
+          );
       if (item) {
         const amount = item.totalAmount || item.total || item.estimatedCost;
         if (amount) {

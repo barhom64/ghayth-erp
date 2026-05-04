@@ -102,7 +102,7 @@ obligationsRouter.post("/", requirePermission("operations:write"), async (req, r
 });
 
 // Mark as met (called when underlying event happens)
-obligationsRouter.post("/:id/met", async (req, res) => {
+obligationsRouter.post("/:id/met", requirePermission("operations:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -121,7 +121,7 @@ obligationsRouter.post("/:id/met", async (req, res) => {
 });
 
 // Mark as met by entity (used internally by event handlers)
-obligationsRouter.post("/met-by-entity", async (req, res) => {
+obligationsRouter.post("/met-by-entity", requirePermission("operations:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, obligationType } = zodParse(entityActionSchema.safeParse(req.body));
@@ -138,7 +138,7 @@ obligationsRouter.post("/met-by-entity", async (req, res) => {
   }
 });
 
-obligationsRouter.post("/:id/cancel", async (req, res) => {
+obligationsRouter.post("/:id/cancel", requirePermission("operations:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -156,7 +156,7 @@ obligationsRouter.post("/:id/cancel", async (req, res) => {
   }
 });
 
-obligationsRouter.post("/cancel-by-entity", async (req, res) => {
+obligationsRouter.post("/cancel-by-entity", requirePermission("operations:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, obligationType } = zodParse(entityActionSchema.safeParse(req.body));

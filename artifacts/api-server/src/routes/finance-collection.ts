@@ -48,7 +48,7 @@ collectionRouter.get("/collection", requirePermission("finance:read"), async (re
        LEFT JOIN LATERAL (
          SELECT stage, "stageName"
          FROM invoice_collection_stages
-         WHERE "invoiceId" = i.id
+         WHERE "invoiceId" = i.id AND "companyId" = i."companyId"
          ORDER BY id DESC LIMIT 1
        ) ics ON true
        WHERE ${where} AND i."deletedAt" IS NULL

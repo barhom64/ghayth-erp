@@ -153,7 +153,7 @@ export async function applyTransition<TRow = any>(
 
   const { updated, existingStatus } = await withTransaction(async (client) => {
     // 1. Lock the row and validate state.
-    if (extraWhere && !/^[\w\s"'.=(),$<>!]+$/.test(extraWhere)) {
+    if (extraWhere && !/^[\w\s"'.=()]+$/.test(extraWhere)) {
       throw new LifecycleError("extraWhere contains disallowed characters", 400);
     }
     const lockSql =
