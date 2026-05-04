@@ -254,7 +254,7 @@ router.patch("/users/:id", requirePermission("admin:write"), async (req, res) =>
     await rawExecute(`UPDATE users SET ${sets.join(",")} WHERE id=$${params.length}`, params);
     // Revoke all refresh tokens when user is deactivated
     if (isActive === false) {
-      await rawExecute(`UPDATE refresh_tokens SET "isActive" = false WHERE "userId" = $1`, [id]);
+      await rawExecute(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`, [id]);
     }
     if (role !== undefined) {
       const roleDef = PREDEFINED_ROLES.find(r => r.roleKey === role) || { roleKey: role, label: role, modules: [], level: 10 };
@@ -373,8 +373,7 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
 router.get("/roles", requirePermission("admin:read"), async (req, res) => {
   try {
     await assertAdmin(req);
-    const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM roles WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM roles ORDER BY name LIMIT 500`);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (e: any) { logger.error(e, "Get roles error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
