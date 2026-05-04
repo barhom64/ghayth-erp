@@ -791,7 +791,7 @@ journalRouter.delete("/vouchers/:id", requirePermission("finance:delete"), async
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status = 'draft' RETURNING id`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("السند غير موجود");
     await reverseAccountBalances(scope.companyId, row.id);
     res.json({ success: true });

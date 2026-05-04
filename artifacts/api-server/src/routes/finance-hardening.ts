@@ -9,7 +9,7 @@ import {
 } from "../lib/errorHandler.js";
 import { z } from "zod";
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
@@ -967,46 +967,66 @@ financeHardeningRouter.post("/intercompany", requirePermission("finance:create")
     const ref = `IC-${Date.now()}`;
     const txDate = transactionDate ?? todayISO();
 
-    // Journal entry for the FROM company (debit AR, credit Revenue)
     const { financialEngine } = await import("../lib/engines/index.js");
-    const { journalId: fromJournalId } = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref,
-      description: description ?? `معاملة بين الشركات ${ref}`,
-      type: "intercompany",
-      sourceType: "intercompany",
-      sourceId: 0,
-      sourceKey: `finance:intercompany:from:${Date.now()}`,
-      lines: [
-        { accountCode: arAccountCode, debit: Number(amount), credit: 0, description: "ذمم مدينة شركة شقيقة" },
-        { accountCode: revenueAccountCode, debit: 0, credit: Number(amount), description: "إيراد شركة شقيقة" },
-      ],
-    });
 
-    // Journal entry for the TO company (debit Expense, credit AP)
-    const { journalId: toJournalId } = await financialEngine.postJournalEntry({
-      companyId: Number(toCompanyId),
-      branchId: scope.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref,
-      description: description ?? `معاملة بين الشركات ${ref}`,
-      type: "intercompany",
-      sourceType: "intercompany",
-      sourceId: 0,
-      sourceKey: `finance:intercompany:to:${Date.now()}`,
-      lines: [
-        { accountCode: expenseAccountCode, debit: Number(amount), credit: 0, description: "مصروف شركة شقيقة" },
-        { accountCode: apAccountCode, debit: 0, credit: Number(amount), description: "ذمم دائنة شركة شقيقة" },
-      ],
-    });
+    // Both journal posts and the metadata INSERT must succeed atomically.
+    // postJournalEntry does not accept a transaction client, so we use a
+    // compensating-reversal pattern: if the second post fails we reverse the first.
+    const { fromJournalId, toJournalId } = await withTransaction(async (client) => {
+      // Journal entry for the FROM company (debit AR, credit Revenue)
+      const fromTimestamp = Date.now();
+      const fromResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref,
+        description: description ?? `معاملة بين الشركات ${ref}`,
+        type: "intercompany",
+        sourceType: "intercompany",
+        sourceId: 0,
+        sourceKey: `finance:intercompany:from:${fromTimestamp}`,
+        lines: [
+          { accountCode: arAccountCode, debit: Number(amount), credit: 0, description: "ذمم مدينة شركة شقيقة" },
+          { accountCode: revenueAccountCode, debit: 0, credit: Number(amount), description: "إيراد شركة شقيقة" },
+        ],
+      });
 
-    await rawExecute(
-      `INSERT INTO intercompany_transactions (ref,"fromCompanyId","toCompanyId",amount,description,"transactionDate",status,"fromJournalId","toJournalId","createdBy")
-       VALUES ($1,$2,$3,$4,$5,$6,'posted',$7,$8,$9)`,
-      [ref, scope.companyId, Number(toCompanyId), Number(amount), description ?? null, txDate, fromJournalId, toJournalId, scope.activeAssignmentId]
-    );
+      // Journal entry for the TO company (debit Expense, credit AP)
+      // If this fails, reverse (soft-delete) the FROM entry so we don't leave orphaned data.
+      let toResult: { journalId: number };
+      try {
+        toResult = await financialEngine.postJournalEntry({
+          companyId: Number(toCompanyId),
+          branchId: scope.branchId,
+          createdBy: scope.activeAssignmentId,
+          ref,
+          description: description ?? `معاملة بين الشركات ${ref}`,
+          type: "intercompany",
+          sourceType: "intercompany",
+          sourceId: 0,
+          sourceKey: `finance:intercompany:to:${fromTimestamp}`,
+          lines: [
+            { accountCode: expenseAccountCode, debit: Number(amount), credit: 0, description: "مصروف شركة شقيقة" },
+            { accountCode: apAccountCode, debit: 0, credit: Number(amount), description: "ذمم دائنة شركة شقيقة" },
+          ],
+        });
+      } catch (err) {
+        // Compensating reversal: soft-delete the FROM journal entry
+        await client.query(
+          `UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
+          [fromResult.journalId, scope.companyId]
+        );
+        throw err;
+      }
+
+      await client.query(
+        `INSERT INTO intercompany_transactions (ref,"fromCompanyId","toCompanyId",amount,description,"transactionDate",status,"fromJournalId","toJournalId","createdBy")
+         VALUES ($1,$2,$3,$4,$5,$6,'posted',$7,$8,$9)`,
+        [ref, scope.companyId, Number(toCompanyId), Number(amount), description ?? null, txDate, fromResult.journalId, toResult.journalId, scope.activeAssignmentId]
+      );
+
+      return { fromJournalId: fromResult.journalId, toJournalId: toResult.journalId };
+    });
 
     emitEvent({
       companyId: scope.companyId,

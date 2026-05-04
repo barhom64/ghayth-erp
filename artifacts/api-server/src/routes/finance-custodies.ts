@@ -8,7 +8,7 @@ import {
 } from "../lib/errorHandler.js";
 import { z } from "zod";
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -533,80 +533,88 @@ custodiesRouter.post("/custodies/settle", requirePermission("finance:create"), a
       });
     }
 
-    const [custodyHeader] = await rawQuery<any>(
-      `SELECT je.id, je.status AS "approvalStatus"
-       FROM journal_entries je
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref = $2 AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'`,
-      [scope.companyId, custodyRef]
-    );
-
-    if (!custodyHeader) throw new NotFoundError("العهدة غير موجودة");
-
-    const blockedStatuses = ["pending_approval", "draft", "rejected", "returned"];
-    if (blockedStatuses.includes(custodyHeader.approvalStatus)) {
-      throw new ConflictError(
-        "لا يمكن تسوية عهدة في حالة انتظار الموافقة أو مرفوضة أو مُرجعة",
-        {
-          field: "approvalStatus",
-          fix: "اعتمد العهدة أولاً قبل تسويتها",
-          meta: { currentStatus: custodyHeader.approvalStatus, blockedStatuses },
-        },
+    const { journalId, settleRef, remaining } = await withTransaction(async (client) => {
+      // Lock the custody header row to prevent concurrent settlements
+      const lockResult = await client.query(
+        `SELECT je.id, je.status AS "approvalStatus"
+         FROM journal_entries je
+         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref = $2 AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
+         FOR UPDATE`,
+        [scope.companyId, custodyRef]
       );
-    }
+      const custodyHeader = lockResult.rows[0];
 
-    const custodyEntries = await rawQuery<any>(
-      `SELECT je.id, jl.debit, jl.credit, jl."accountCode"
-       FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref = $2 AND jl.debit > 0`,
-      [scope.companyId, custodyRef]
-    );
+      if (!custodyHeader) throw new NotFoundError("العهدة غير موجودة");
 
-    const originalAmount = custodyEntries.reduce(
-      (sum: number, e: any) => sum + Number(e.debit || 0), 0
-    );
-    const custodyAccountCode = custodyEntries[0]?.accountCode || "1400";
+      const blockedStatuses = ["pending_approval", "draft", "rejected", "returned"];
+      if (blockedStatuses.includes(custodyHeader.approvalStatus)) {
+        throw new ConflictError(
+          "لا يمكن تسوية عهدة في حالة انتظار الموافقة أو مرفوضة أو مُرجعة",
+          {
+            field: "approvalStatus",
+            fix: "اعتمد العهدة أولاً قبل تسويتها",
+            meta: { currentStatus: custodyHeader.approvalStatus, blockedStatuses },
+          },
+        );
+      }
 
-    const settlements = await rawQuery<any>(
-      `SELECT jl.credit
-       FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' AND je.ref LIKE 'CUSTODY-SETTLE-%'
-         AND je.description = $2 AND jl."accountCode" = $3`,
-      [scope.companyId, custodyRef, custodyAccountCode]
-    );
-    const settledSoFar = settlements.reduce(
-      (sum: number, e: any) => sum + Number(e.credit || 0), 0
-    );
-
-    const remaining = originalAmount - settledSoFar;
-    if (settleAmount > remaining + 0.01) {
-      throw new ConflictError(
-        `مبلغ التسوية (${settleAmount}) يتجاوز المبلغ المتبقي (${remaining.toFixed(2)})`,
-        {
-          field: "amount",
-          fix: `أدخل مبلغاً لا يتجاوز ${remaining.toFixed(2)}`,
-          meta: { settleAmount, remaining: Number(remaining.toFixed(2)) },
-        },
+      const custodyEntriesResult = await client.query(
+        `SELECT je.id, jl.debit, jl.credit, jl."accountCode"
+         FROM journal_entries je
+         JOIN journal_lines jl ON jl."journalId" = je.id
+         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref = $2 AND jl.debit > 0`,
+        [scope.companyId, custodyRef]
       );
-    }
+      const custodyEntries = custodyEntriesResult.rows;
 
-    const sourceAcct = sourceAccountCode || "1100";
-    const settleRef = `CUSTODY-SETTLE-${Date.now()}`;
-    const { financialEngine } = await import("../lib/engines/index.js");
-    const { journalId } = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref: settleRef,
-      description: custodyRef,
-      sourceType: "custody_settlement",
-      sourceId: 0,
-      sourceKey: `finance:custody_settle:${settleRef}`,
-      lines: [
-        { accountCode: sourceAcct, debit: Number(amount), credit: 0 },
-        { accountCode: custodyAccountCode, debit: 0, credit: Number(amount) },
-      ],
+      const originalAmount = custodyEntries.reduce(
+        (sum: number, e: any) => sum + Number(e.debit || 0), 0
+      );
+      const custodyAccountCode = custodyEntries[0]?.accountCode || "1400";
+
+      const settlementsResult = await client.query(
+        `SELECT jl.credit
+         FROM journal_entries je
+         JOIN journal_lines jl ON jl."journalId" = je.id
+         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' AND je.ref LIKE 'CUSTODY-SETTLE-%'
+           AND je.description = $2 AND jl."accountCode" = $3`,
+        [scope.companyId, custodyRef, custodyAccountCode]
+      );
+      const settledSoFar = settlementsResult.rows.reduce(
+        (sum: number, e: any) => sum + Number(e.credit || 0), 0
+      );
+
+      const remaining = originalAmount - settledSoFar;
+      if (settleAmount > remaining + 0.01) {
+        throw new ConflictError(
+          `مبلغ التسوية (${settleAmount}) يتجاوز المبلغ المتبقي (${remaining.toFixed(2)})`,
+          {
+            field: "amount",
+            fix: `أدخل مبلغاً لا يتجاوز ${remaining.toFixed(2)}`,
+            meta: { settleAmount, remaining: Number(remaining.toFixed(2)) },
+          },
+        );
+      }
+
+      const sourceAcct = sourceAccountCode || "1100";
+      const settleRef = `CUSTODY-SETTLE-${Date.now()}`;
+      const { financialEngine } = await import("../lib/engines/index.js");
+      const { journalId } = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: settleRef,
+        description: custodyRef,
+        sourceType: "custody_settlement",
+        sourceId: 0,
+        sourceKey: `finance:custody_settle:${settleRef}`,
+        lines: [
+          { accountCode: sourceAcct, debit: Number(amount), credit: 0 },
+          { accountCode: custodyAccountCode, debit: 0, credit: Number(amount) },
+        ],
+      });
+
+      return { journalId, settleRef, remaining };
     });
 
     emitEvent({
@@ -675,58 +683,73 @@ custodiesRouter.post("/custodies/:id/settle", requirePermission("finance:create"
       });
     }
 
-    const custodyLines = await rawQuery<any>(
-      `SELECT jl.debit, jl.credit
-       FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref = $2 AND jl."accountCode" = '1400'`,
-      [scope.companyId, custody.ref]
-    );
-    const originalAmount = custodyLines.reduce(
-      (sum: number, e: any) => sum + Number(e.debit || 0) - Number(e.credit || 0), 0
-    );
-
-    const priorSettlements = await rawQuery<any>(
-      `SELECT jl.credit
-       FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' AND je.ref LIKE 'CUSTODY-SETTLE-%'
-         AND je.description = $2 AND jl."accountCode" = '1400'`,
-      [scope.companyId, custody.ref]
-    );
-    const settledSoFar = priorSettlements.reduce(
-      (sum: number, e: any) => sum + Number(e.credit || 0), 0
-    );
-
-    const remaining = originalAmount - settledSoFar;
-    if (settleAmount > remaining + 0.01) {
-      throw new ConflictError(
-        `مبلغ التسوية (${settleAmount}) يتجاوز المبلغ المتبقي (${remaining.toFixed(2)})`,
-        {
-          field: "amount",
-          fix: `أدخل مبلغاً لا يتجاوز ${remaining.toFixed(2)}`,
-          meta: { settleAmount, remaining: Number(remaining.toFixed(2)) },
-        },
+    const { journalId, settleRef, remaining } = await withTransaction(async (client) => {
+      // Lock the custody header row to prevent concurrent settlements
+      const lockResult = await client.query(
+        `SELECT je.id, je.ref FROM journal_entries je
+         WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
+         FOR UPDATE`,
+        [custodyId, scope.companyId]
       );
-    }
+      if (!lockResult.rows[0]) throw new NotFoundError("العهدة غير موجودة (lock)");
 
-    const sourceAcct = sourceAccountCode || "1100";
-    const { financialEngine } = await import("../lib/engines/index.js");
-    const custodyAcctCode = await financialEngine.resolveAccountCode(scope.companyId, "custody_account", "debit", "1400");
-    const settleRef = `CUSTODY-SETTLE-${Date.now()}`;
-    const { journalId } = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref: settleRef,
-      description: custody.ref,
-      sourceType: "custody_settlement",
-      sourceId: 0,
-      sourceKey: `finance:custody_settle:${settleRef}`,
-      lines: [
-        { accountCode: sourceAcct, debit: Number(amount), credit: 0 },
-        { accountCode: custodyAcctCode, debit: 0, credit: Number(amount) },
-      ],
+      // Resolve the custody account code from the original journal entry (not hardcoded)
+      const custodyLinesResult = await client.query(
+        `SELECT jl.debit, jl.credit, jl."accountCode"
+         FROM journal_entries je
+         JOIN journal_lines jl ON jl."journalId" = je.id
+         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref = $2 AND jl.debit > 0`,
+        [scope.companyId, custody.ref]
+      );
+      const custodyLines = custodyLinesResult.rows;
+      const originalAmount = custodyLines.reduce(
+        (sum: number, e: any) => sum + Number(e.debit || 0) - Number(e.credit || 0), 0
+      );
+      const custodyAccountCode = custodyLines[0]?.accountCode || "1400";
+
+      const priorSettlementsResult = await client.query(
+        `SELECT jl.credit
+         FROM journal_entries je
+         JOIN journal_lines jl ON jl."journalId" = je.id
+         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' AND je.ref LIKE 'CUSTODY-SETTLE-%'
+           AND je.description = $2 AND jl."accountCode" = $3`,
+        [scope.companyId, custody.ref, custodyAccountCode]
+      );
+      const settledSoFar = priorSettlementsResult.rows.reduce(
+        (sum: number, e: any) => sum + Number(e.credit || 0), 0
+      );
+
+      const remaining = originalAmount - settledSoFar;
+      if (settleAmount > remaining + 0.01) {
+        throw new ConflictError(
+          `مبلغ التسوية (${settleAmount}) يتجاوز المبلغ المتبقي (${remaining.toFixed(2)})`,
+          {
+            field: "amount",
+            fix: `أدخل مبلغاً لا يتجاوز ${remaining.toFixed(2)}`,
+            meta: { settleAmount, remaining: Number(remaining.toFixed(2)) },
+          },
+        );
+      }
+
+      const sourceAcct = sourceAccountCode || "1100";
+      const { financialEngine } = await import("../lib/engines/index.js");
+      const settleRef = `CUSTODY-SETTLE-${Date.now()}`;
+      const { journalId } = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: settleRef,
+        description: custody.ref,
+        sourceType: "custody_settlement",
+        sourceId: 0,
+        sourceKey: `finance:custody_settle:${settleRef}`,
+        lines: [
+          { accountCode: sourceAcct, debit: Number(amount), credit: 0 },
+          { accountCode: custodyAccountCode, debit: 0, credit: Number(amount) },
+        ],
+      });
+
+      return { journalId, settleRef, remaining };
     });
 
     emitEvent({
