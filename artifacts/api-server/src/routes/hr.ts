@@ -475,8 +475,8 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
               b.lat AS "branchLat", b.lon AS "branchLon"
        FROM employee_assignments ea
        LEFT JOIN branches b ON b.id = ea."branchId"
-       WHERE ea.id = $1`,
-      [scope.activeAssignmentId]
+       WHERE ea.id = $1 AND ea."companyId" = $2`,
+      [scope.activeAssignmentId, scope.companyId]
     );
 
     // ── Step 4: Check if today is a work day ──
@@ -804,8 +804,8 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
       `SELECT ea.salary, ea."branchId", ea."employeeId", b.lat AS "branchLat", b.lon AS "branchLon"
        FROM employee_assignments ea
        LEFT JOIN branches b ON b.id = ea."branchId"
-       WHERE ea.id = $1`,
-      [scope.activeAssignmentId]
+       WHERE ea.id = $1 AND ea."companyId" = $2`,
+      [scope.activeAssignmentId, scope.companyId]
     );
 
     // ── Fetch shift for end time ──
@@ -6041,7 +6041,7 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
       });
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -6166,7 +6166,7 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
       });
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,

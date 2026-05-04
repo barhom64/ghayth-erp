@@ -195,7 +195,7 @@ describe("Employees — validation", () => {
     const s = fullHandler('router.post("/",');
     expect(s).toContain("SELECT id FROM departments WHERE name = $1");
     expect(s).toContain('field: "department"');
-    expect(s).toContain('SELECT id FROM employees WHERE id = $1 AND "deletedAt" IS NULL');
+    expect(s).toContain('SELECT id FROM employees WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL');
     expect(s).toContain('field: "managerId"');
   });
 

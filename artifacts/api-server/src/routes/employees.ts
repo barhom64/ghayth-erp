@@ -336,8 +336,8 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
     // early we give the caller a clean field-tagged error.
     if (managerId) {
       const mgrRows = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE id = $1 AND "deletedAt" IS NULL LIMIT 1`,
-        [Number(managerId)]
+        `SELECT id FROM employees WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+        [Number(managerId), scope.companyId]
       );
       if (mgrRows.length === 0) {
         throw new ValidationError(`المدير رقم ${managerId} غير موجود`, {
@@ -977,98 +977,100 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
 
     const employee = { id: before.id, assignmentId: before.assignmentId };
 
-    const empFields: string[] = [];
-    const empVals: any[] = [];
-    if (name !== undefined) { empVals.push(name); empFields.push(`name = $${empVals.length}`); }
-    if (phone !== undefined) { empVals.push(phone); empFields.push(`phone = $${empVals.length}`); }
-    if (email !== undefined) { empVals.push(email); empFields.push(`email = $${empVals.length}`); }
-    if (status !== undefined) { empVals.push(status); empFields.push(`status = $${empVals.length}`); }
-    if (nationalId !== undefined) { empVals.push(nationalId); empFields.push(`"nationalId" = $${empVals.length}`); }
-    if (iqamaNumber !== undefined) { empVals.push(iqamaNumber); empFields.push(`"iqamaNumber" = $${empVals.length}`); }
-    if (iqamaExpiry !== undefined) { empVals.push(iqamaExpiry || null); empFields.push(`"iqamaExpiry" = $${empVals.length}`); }
-    if (passportNumber !== undefined) { empVals.push(passportNumber); empFields.push(`"passportNumber" = $${empVals.length}`); }
-    if (passportExpiry !== undefined) { empVals.push(passportExpiry || null); empFields.push(`"passportExpiry" = $${empVals.length}`); }
-    if (borderNumber !== undefined) { empVals.push(borderNumber); empFields.push(`"borderNumber" = $${empVals.length}`); }
-    if (visaNumber !== undefined) { empVals.push(visaNumber); empFields.push(`"visaNumber" = $${empVals.length}`); }
-    if (visaType !== undefined) { empVals.push(visaType); empFields.push(`"visaType" = $${empVals.length}`); }
-    if (visaExpiry !== undefined) { empVals.push(visaExpiry || null); empFields.push(`"visaExpiry" = $${empVals.length}`); }
-    if (sponsorNumber !== undefined) { empVals.push(sponsorNumber); empFields.push(`"sponsorNumber" = $${empVals.length}`); }
-    if (workPermitNumber !== undefined) { empVals.push(workPermitNumber); empFields.push(`"workPermitNumber" = $${empVals.length}`); }
-    if (workPermitExpiry !== undefined) { empVals.push(workPermitExpiry || null); empFields.push(`"workPermitExpiry" = $${empVals.length}`); }
-    if (iqamaStatus !== undefined) { empVals.push(iqamaStatus); empFields.push(`"iqamaStatus" = $${empVals.length}`); }
-    if (empFields.length) {
-      empVals.push(id, scope.companyId);
-      await rawExecute(`UPDATE employees SET ${empFields.join(",")} WHERE id = $${empVals.length - 1} AND "companyId" = $${empVals.length}`, empVals);
-    }
+    await withTransaction(async (client) => {
+      const empFields: string[] = [];
+      const empVals: any[] = [];
+      if (name !== undefined) { empVals.push(name); empFields.push(`name = $${empVals.length}`); }
+      if (phone !== undefined) { empVals.push(phone); empFields.push(`phone = $${empVals.length}`); }
+      if (email !== undefined) { empVals.push(email); empFields.push(`email = $${empVals.length}`); }
+      if (status !== undefined) { empVals.push(status); empFields.push(`status = $${empVals.length}`); }
+      if (nationalId !== undefined) { empVals.push(nationalId); empFields.push(`"nationalId" = $${empVals.length}`); }
+      if (iqamaNumber !== undefined) { empVals.push(iqamaNumber); empFields.push(`"iqamaNumber" = $${empVals.length}`); }
+      if (iqamaExpiry !== undefined) { empVals.push(iqamaExpiry || null); empFields.push(`"iqamaExpiry" = $${empVals.length}`); }
+      if (passportNumber !== undefined) { empVals.push(passportNumber); empFields.push(`"passportNumber" = $${empVals.length}`); }
+      if (passportExpiry !== undefined) { empVals.push(passportExpiry || null); empFields.push(`"passportExpiry" = $${empVals.length}`); }
+      if (borderNumber !== undefined) { empVals.push(borderNumber); empFields.push(`"borderNumber" = $${empVals.length}`); }
+      if (visaNumber !== undefined) { empVals.push(visaNumber); empFields.push(`"visaNumber" = $${empVals.length}`); }
+      if (visaType !== undefined) { empVals.push(visaType); empFields.push(`"visaType" = $${empVals.length}`); }
+      if (visaExpiry !== undefined) { empVals.push(visaExpiry || null); empFields.push(`"visaExpiry" = $${empVals.length}`); }
+      if (sponsorNumber !== undefined) { empVals.push(sponsorNumber); empFields.push(`"sponsorNumber" = $${empVals.length}`); }
+      if (workPermitNumber !== undefined) { empVals.push(workPermitNumber); empFields.push(`"workPermitNumber" = $${empVals.length}`); }
+      if (workPermitExpiry !== undefined) { empVals.push(workPermitExpiry || null); empFields.push(`"workPermitExpiry" = $${empVals.length}`); }
+      if (iqamaStatus !== undefined) { empVals.push(iqamaStatus); empFields.push(`"iqamaStatus" = $${empVals.length}`); }
+      if (empFields.length) {
+        empVals.push(id, scope.companyId);
+        await client.query(`UPDATE employees SET ${empFields.join(",")} WHERE id = $${empVals.length - 1} AND "companyId" = $${empVals.length}`, empVals);
+      }
 
-    if (status === "active" && before.status !== "active") {
-      await rawExecute(
-        `UPDATE employee_assignments SET status = 'active' WHERE id = $1 AND "companyId" = $2 AND status = $3`,
-        [employee.assignmentId, scope.companyId, before.status]
-      );
-    } else if (status === "suspended" && before.status !== "suspended") {
-      await rawExecute(
-        `UPDATE employee_assignments SET status = 'suspended' WHERE id = $1 AND "companyId" = $2 AND status = $3`,
-        [employee.assignmentId, scope.companyId, before.status]
-      );
-    }
-
-    // If any expiry field was changed, refresh obligations. Old obligations with
-    // different dedupeKey remain until scanner marks them met/breached; the new
-    // dedupeKey (which includes the date) ensures no duplicates.
-    if ([iqamaExpiry, passportExpiry, workPermitExpiry, visaExpiry].some((v) => v !== undefined)) {
-      const [empRow] = await rawQuery<any>(
-        `SELECT name, "iqamaExpiry", "passportExpiry", "workPermitExpiry", "visaExpiry" FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
-        [id]
-      );
-      if (empRow) {
-        await registerEmployeeExpiryObligations(
-          scope.companyId, scope.branchId ?? null, id, empRow.name,
-          {
-            iqamaExpiry: empRow.iqamaExpiry,
-            passportExpiry: empRow.passportExpiry,
-            workPermitExpiry: empRow.workPermitExpiry,
-            visaExpiry: empRow.visaExpiry,
-          }
+      if (status === "active" && before.status !== "active") {
+        await client.query(
+          `UPDATE employee_assignments SET status = 'active' WHERE id = $1 AND "companyId" = $2 AND status = $3`,
+          [employee.assignmentId, scope.companyId, before.status]
+        );
+      } else if (status === "suspended" && before.status !== "suspended") {
+        await client.query(
+          `UPDATE employee_assignments SET status = 'suspended' WHERE id = $1 AND "companyId" = $2 AND status = $3`,
+          [employee.assignmentId, scope.companyId, before.status]
         );
       }
-    }
 
-    if (jobTitle || role || salary !== undefined || branchId || departmentId || bodyJobTitleId !== undefined || bodyManagerId !== undefined) {
-      const fields: string[] = [];
-      const vals: any[] = [];
-      if (jobTitle) { vals.push(jobTitle); fields.push(`"jobTitle" = $${vals.length}`); }
-      if (bodyJobTitleId !== undefined) { vals.push(bodyJobTitleId || null); fields.push(`"jobTitleId" = $${vals.length}`); }
-      else if (jobTitle) {
-        const [jtRow] = await rawQuery<any>(`SELECT id FROM job_titles WHERE name = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`, [jobTitle, scope.companyId]);
-        if (jtRow) { vals.push(jtRow.id); fields.push(`"jobTitleId" = $${vals.length}`); }
-      }
-      if (bodyManagerId !== undefined) { vals.push(bodyManagerId ? Number(bodyManagerId) : null); fields.push(`"managerId" = $${vals.length}`); }
-      if (role) { vals.push(role); fields.push(`role = $${vals.length}`); }
-      if (salary !== undefined) {
-        const [currentAsgn] = await rawQuery<{ salary: number }>(
-          `SELECT salary FROM employee_assignments WHERE id = $1 AND "companyId" = $2`,
-          [employee.assignmentId, scope.companyId]
+      // If any expiry field was changed, refresh obligations. Old obligations with
+      // different dedupeKey remain until scanner marks them met/breached; the new
+      // dedupeKey (which includes the date) ensures no duplicates.
+      if ([iqamaExpiry, passportExpiry, workPermitExpiry, visaExpiry].some((v) => v !== undefined)) {
+        const { rows: [empRow] } = await client.query(
+          `SELECT name, "iqamaExpiry", "passportExpiry", "workPermitExpiry", "visaExpiry" FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
+          [id]
         );
-        const oldSalary = Number(currentAsgn?.salary ?? 0);
-        const newSalary = Number(salary);
-        vals.push(newSalary); fields.push(`salary = $${vals.length}`);
-        if (oldSalary !== newSalary) {
-          rawExecute(
-            `INSERT INTO salary_history ("employeeId","assignmentId","companyId","oldSalary","newSalary","effectiveDate","changedBy","createdAt")
-             VALUES ($1,$2,$3,$4,$5,CURRENT_DATE,$6,NOW())`,
-            [id, employee.assignmentId, scope.companyId, oldSalary, newSalary, scope.activeAssignmentId]
-          ).catch((e) => logger.error(e, "employees background task failed"));
+        if (empRow) {
+          await registerEmployeeExpiryObligations(
+            scope.companyId, scope.branchId ?? null, id, empRow.name,
+            {
+              iqamaExpiry: empRow.iqamaExpiry,
+              passportExpiry: empRow.passportExpiry,
+              workPermitExpiry: empRow.workPermitExpiry,
+              visaExpiry: empRow.visaExpiry,
+            }
+          );
         }
       }
-      if (branchId) { vals.push(branchId); fields.push(`"branchId" = $${vals.length}`); }
-      if (departmentId) { vals.push(departmentId); fields.push(`"departmentId" = $${vals.length}`); }
-      if (fields.length) {
-        vals.push(employee.assignmentId);
-        vals.push(scope.companyId);
-        await rawExecute(`UPDATE employee_assignments SET ${fields.join(",")} WHERE id = $${vals.length - 1} AND "companyId" = $${vals.length}`, vals);
+
+      if (jobTitle || role || salary !== undefined || branchId || departmentId || bodyJobTitleId !== undefined || bodyManagerId !== undefined) {
+        const fields: string[] = [];
+        const vals: any[] = [];
+        if (jobTitle) { vals.push(jobTitle); fields.push(`"jobTitle" = $${vals.length}`); }
+        if (bodyJobTitleId !== undefined) { vals.push(bodyJobTitleId || null); fields.push(`"jobTitleId" = $${vals.length}`); }
+        else if (jobTitle) {
+          const { rows: [jtRow] } = await client.query(`SELECT id FROM job_titles WHERE name = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`, [jobTitle, scope.companyId]);
+          if (jtRow) { vals.push(jtRow.id); fields.push(`"jobTitleId" = $${vals.length}`); }
+        }
+        if (bodyManagerId !== undefined) { vals.push(bodyManagerId ? Number(bodyManagerId) : null); fields.push(`"managerId" = $${vals.length}`); }
+        if (role) { vals.push(role); fields.push(`role = $${vals.length}`); }
+        if (salary !== undefined) {
+          const { rows: [currentAsgn] } = await client.query(
+            `SELECT salary FROM employee_assignments WHERE id = $1 AND "companyId" = $2`,
+            [employee.assignmentId, scope.companyId]
+          );
+          const oldSalary = Number(currentAsgn?.salary ?? 0);
+          const newSalary = Number(salary);
+          vals.push(newSalary); fields.push(`salary = $${vals.length}`);
+          if (oldSalary !== newSalary) {
+            await client.query(
+              `INSERT INTO salary_history ("employeeId","assignmentId","companyId","oldSalary","newSalary","effectiveDate","changedBy","createdAt")
+               VALUES ($1,$2,$3,$4,$5,CURRENT_DATE,$6,NOW())`,
+              [id, employee.assignmentId, scope.companyId, oldSalary, newSalary, scope.activeAssignmentId]
+            );
+          }
+        }
+        if (branchId) { vals.push(branchId); fields.push(`"branchId" = $${vals.length}`); }
+        if (departmentId) { vals.push(departmentId); fields.push(`"departmentId" = $${vals.length}`); }
+        if (fields.length) {
+          vals.push(employee.assignmentId);
+          vals.push(scope.companyId);
+          await client.query(`UPDATE employee_assignments SET ${fields.join(",")} WHERE id = $${vals.length - 1} AND "companyId" = $${vals.length}`, vals);
+        }
       }
-    }
+    });
 
     // Re-read the full row so the audit log + event get a reliable "after"
     // snapshot rather than the raw body (which may contain partial updates,

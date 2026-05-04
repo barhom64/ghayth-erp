@@ -11,7 +11,7 @@ import {
 import { z } from "zod";
 import { FINANCE_ROLES, OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
@@ -406,39 +406,48 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
     const sourceAcct = sourceAccountCode || "1100";
 
     if (accountCode && amount) {
-      const budgetRows = await rawQuery<any>(
-        `UPDATE budgets SET used = used + $1
-         WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL
-         RETURNING amount, used`,
-        [Number(amount), effectiveCompanyId, accountCode, targetPeriod]
-      );
-      if (budgetRows.length > 0) {
-        const budget = budgetRows[0];
-        const budgetAmount = Number(budget.amount);
-        const newUsed = Number(budget.used);
-        const utilization = budgetAmount > 0 ? (newUsed / budgetAmount) * 100 : 0;
-        if (utilization > 110) {
-          await rawExecute(`UPDATE budgets SET used = used - $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`, [Number(amount), effectiveCompanyId, accountCode, targetPeriod]);
-          throw new ConflictError(
-            "تجاوز الميزانية أكثر من 110% – رفض نهائي",
-            { field: "amount", fix: "أعد تقييم الميزانية أو قلل المبلغ المطلوب", meta: { utilization: Math.round(utilization), status: "rejected" } }
+      await withTransaction(async (client) => {
+        // Lock the budget row to prevent concurrent race conditions
+        const lockResult = await client.query(
+          `SELECT id, amount, used FROM budgets
+           WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3 AND "deletedAt" IS NULL
+           FOR UPDATE`,
+          [effectiveCompanyId, accountCode, targetPeriod]
+        );
+        if (lockResult.rows.length > 0) {
+          const budget = lockResult.rows[0];
+          const budgetAmount = Number(budget.amount);
+          const currentUsed = Number(budget.used);
+          const newUsed = currentUsed + Number(amount);
+          const utilization = budgetAmount > 0 ? (newUsed / budgetAmount) * 100 : 0;
+
+          if (utilization > 110) {
+            throw new ConflictError(
+              "تجاوز الميزانية أكثر من 110% – رفض نهائي",
+              { field: "amount", fix: "أعد تقييم الميزانية أو قلل المبلغ المطلوب", meta: { utilization: Math.round(utilization), status: "rejected" } }
+            );
+          }
+          if (utilization > 99 && !OWNER_GM_ROLES.includes(scope.role)) {
+            throw new ForbiddenError(
+              "تجاوز الميزانية 100-110%. يتطلب موافقة المدير العام فقط",
+              { fix: "اطلب موافقة المدير العام قبل المتابعة", meta: { utilization: Math.round(utilization), status: "blocked_gm" } }
+            );
+          }
+          if (utilization > 80 && !FINANCE_ROLES.includes(scope.role)) {
+            throw new ForbiddenError(
+              "استخدام الميزانية 80-99%. يتطلب موافقة المدير المالي",
+              { fix: "اطلب موافقة المدير المالي قبل المتابعة", meta: { utilization: Math.round(utilization), status: "warning_cfo" } }
+            );
+          }
+
+          // Only increment if all checks pass
+          await client.query(
+            `UPDATE budgets SET used = $1
+             WHERE id = $2`,
+            [newUsed, budget.id]
           );
         }
-        if (utilization > 99 && !OWNER_GM_ROLES.includes(scope.role)) {
-          await rawExecute(`UPDATE budgets SET used = used - $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`, [Number(amount), effectiveCompanyId, accountCode, targetPeriod]);
-          throw new ForbiddenError(
-            "تجاوز الميزانية 100-110%. يتطلب موافقة المدير العام فقط",
-            { fix: "اطلب موافقة المدير العام قبل المتابعة", meta: { utilization: Math.round(utilization), status: "blocked_gm" } }
-          );
-        }
-        if (utilization > 80 && !FINANCE_ROLES.includes(scope.role)) {
-          await rawExecute(`UPDATE budgets SET used = used - $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`, [Number(amount), effectiveCompanyId, accountCode, targetPeriod]);
-          throw new ForbiddenError(
-            "استخدام الميزانية 80-99%. يتطلب موافقة المدير المالي",
-            { fix: "اطلب موافقة المدير المالي قبل المتابعة", meta: { utilization: Math.round(utilization), status: "warning_cfo" } }
-          );
-        }
-      }
+      });
     }
 
     const baseAmount = Number(amount);
@@ -942,18 +951,26 @@ journalRouter.post("/journal", requirePermission("finance:create"), async (req, 
     const totalCredit = lines.reduce((s: number, l: any) => s + (Number(l.credit) || 0), 0);
     if (Math.abs(totalDebit - totalCredit) > 0.01) throw new ValidationError(`القيد غير متوازن: مدين ${totalDebit.toFixed(2)} ≠ دائن ${totalCredit.toFixed(2)}`, { field: "lines", fix: "تأكد من تساوي المدين والدائن" });
 
+    await checkFinancialPeriodOpen(scope.companyId, date || new Date().toISOString());
+
     const [seqRow] = await rawQuery<any>(`SELECT nextval('journal_number_seq') AS seq`).catch((e) => { logger.error(e, "finance journal query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const ref = generateRef("JE", seqRow.seq, 5);
-    const { insertId } = await rawExecute(
-      `INSERT INTO journal_entries ("companyId","branchId",ref,description,status,"createdAt") VALUES ($1,$2,$3,$4,'posted',$5)`,
-      [scope.companyId, scope.branchId, ref, description, date || new Date().toISOString()]
-    );
-    for (const l of lines) {
-      await rawExecute(
-        `INSERT INTO journal_lines ("journalId","accountCode",description,debit,credit,"costCenter","departmentId","projectId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [insertId, l.accountCode, l.description || null, Number(l.debit) || 0, Number(l.credit) || 0, l.costCenter || null, l.departmentId || null, l.projectId || null]
+
+    const insertId = await withTransaction(async (client) => {
+      const headerResult = await client.query(
+        `INSERT INTO journal_entries ("companyId","branchId",ref,description,status,"createdAt") VALUES ($1,$2,$3,$4,'posted',$5) RETURNING id`,
+        [scope.companyId, scope.branchId, ref, description, date || new Date().toISOString()]
       );
-    }
+      const jId = headerResult.rows[0].id as number;
+      for (const l of lines) {
+        await client.query(
+          `INSERT INTO journal_lines ("journalId","accountCode",description,debit,credit,"costCenter","departmentId","projectId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [jId, l.accountCode, l.description || null, Number(l.debit) || 0, Number(l.credit) || 0, l.costCenter || null, l.departmentId || null, l.projectId || null]
+        );
+      }
+      return jId;
+    });
+
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "journal_entries", entityId: insertId, after: { ref, description, totalDebit } }).catch((e) => logger.error(e, "finance-journal background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "finance.journal.created", entity: "journal_entries", entityId: insertId, details: JSON.stringify({ ref }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
     res.status(201).json({ id: insertId, ref });
