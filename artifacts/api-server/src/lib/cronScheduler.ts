@@ -2624,7 +2624,7 @@ async function hourlyObligationsScan(): Promise<string> {
 // ─────────────────────────────────────────────────────────────────────────────
 async function dailyDunningAutoSend(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(
-    `SELECT id FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
+    `SELECT id FROM companies WHERE status = 'active'`
   );
   let totalSent = 0;
   let totalSkipped = 0;
@@ -2707,7 +2707,7 @@ async function dailyDunningAutoSend(): Promise<string> {
 // ─────────────────────────────────────────────────────────────────────────────
 async function monthlyBadDebtReminder(): Promise<string> {
   const companies = await rawQuery<{ id: number; name: string }>(
-    `SELECT id, name FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
+    `SELECT id, name FROM companies WHERE status = 'active'`
   );
   let notified = 0;
   for (const c of companies) {
@@ -2742,7 +2742,7 @@ async function monthlyBadDebtReminder(): Promise<string> {
 // ─────────────────────────────────────────────────────────────────────────────
 async function monthlyFxRevaluationReminder(): Promise<string> {
   const companies = await rawQuery<{ id: number; name: string }>(
-    `SELECT id, name FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
+    `SELECT id, name FROM companies WHERE status = 'active'`
   );
   let notified = 0;
   for (const c of companies) {
@@ -2785,7 +2785,7 @@ async function monthlyFxRevaluationReminder(): Promise<string> {
 // ─────────────────────────────────────────────────────────────────────────────
 async function dailyBudgetVarianceAlert(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(
-    `SELECT id FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
+    `SELECT id FROM companies WHERE status = 'active'`
   );
   const period = currentPeriod();
   let alerted = 0;
@@ -2860,7 +2860,7 @@ async function dailyAutoViolationDetection(): Promise<string> {
 // ── Umrah cron handlers (C29-C32) ──
 
 async function umrahDailyAbsconderCheck(): Promise<string> {
-  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE "isActive"=true AND "deletedAt" IS NULL`);
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   let detected = 0;
   for (const c of companies) {
     const absconders = await rawQuery<any>(
@@ -2899,7 +2899,7 @@ async function umrahDailyAbsconderCheck(): Promise<string> {
 }
 
 async function umrahOverdueInvoiceEscalation(): Promise<string> {
-  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE "isActive"=true AND "deletedAt" IS NULL`);
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   let escalated = 0;
   for (const c of companies) {
     const overdue = await rawQuery<any>(
@@ -2933,7 +2933,7 @@ async function umrahOverdueInvoiceEscalation(): Promise<string> {
 }
 
 async function umrahWeeklyAgentPerformance(): Promise<string> {
-  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE "isActive"=true AND "deletedAt" IS NULL`);
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   let reports = 0;
   for (const c of companies) {
     const stats = await rawQuery<any>(
@@ -2968,7 +2968,7 @@ async function umrahWeeklyAgentPerformance(): Promise<string> {
 }
 
 async function umrahVisaExpiryAlerts(): Promise<string> {
-  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE "isActive"=true AND "deletedAt" IS NULL`);
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   let alerted = 0;
   for (const c of companies) {
     const expiring = await rawQuery<any>(
@@ -2997,7 +2997,7 @@ async function umrahVisaExpiryAlerts(): Promise<string> {
 }
 
 async function umrahMonthlyFinancialSummary(): Promise<string> {
-  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE "isActive"=true AND "deletedAt" IS NULL`);
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   let sent = 0;
   for (const c of companies) {
     const summary = await rawQuery<any>(

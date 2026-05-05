@@ -311,7 +311,7 @@ export async function exportVoucherPdf(companyId: number, voucherId: number): Pr
 
 export async function exportPayrollSlipPdf(companyId: number, payrollId: number): Promise<Buffer> {
   const [record] = await rawQuery<any>(
-    `SELECT pr.*, e.name AS "employeeName", ea.position, ea."baseSalary",
+    `SELECT pr.*, e.name AS "employeeName", ea."jobTitle" AS position, ea.salary AS "baseSalary",
             b.name AS "branchName"
      FROM payroll_records pr
      JOIN employee_assignments ea ON ea.id = pr."employeeAssignmentId"
