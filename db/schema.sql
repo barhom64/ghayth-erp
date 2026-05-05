@@ -1974,7 +1974,8 @@ CREATE TABLE public.attendance (
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
     "deviceId" character varying(100),
     "workType" character varying(20) DEFAULT 'office'::character varying,
-    "contractId" integer
+    "contractId" integer,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -4032,7 +4033,12 @@ CREATE TABLE public.employee_contracts (
     "deletedAt" timestamp without time zone,
     "approvedBy" integer,
     "approvedAt" timestamp without time zone,
-    "renewalDate" date
+    "renewalDate" date,
+    "signedByEmployee" boolean DEFAULT false,
+    "employeeSignedAt" timestamp with time zone,
+    "signedByCompany" boolean DEFAULT false,
+    "companySignedAt" timestamp with time zone,
+    "companySignedBy" integer
 );
 
 
@@ -4844,7 +4850,8 @@ CREATE TABLE public.fleet_drivers (
     longitude numeric(10,7),
     "lastLocationUpdate" timestamp without time zone,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "updatedAt" timestamp with time zone DEFAULT now()
 );
 
 
@@ -5836,7 +5843,8 @@ CREATE TABLE public.hr_leave_requests (
     "rejectedReason" text,
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT hr_leave_requests_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('cancelled'::character varying)::text, ('returned'::character varying)::text])))
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    CONSTRAINT hr_leave_requests_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('cancelled'::character varying)::text, ('returned'::character varying)::text, ('completed'::character varying)::text])))
 );
 
 
@@ -6290,6 +6298,7 @@ CREATE TABLE public.invoices (
     "approvedAt" timestamp with time zone,
     "postedBy" integer,
     "postedAt" timestamp with time zone,
+    "updatedAt" timestamp with time zone DEFAULT now(),
     CONSTRAINT invoices_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending_approval'::character varying)::text, ('sent'::character varying)::text, ('partial'::character varying)::text, ('paid'::character varying)::text, ('overdue'::character varying)::text, ('cancelled'::character varying)::text, ('returned'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('delivered'::character varying)::text, ('ordered'::character varying)::text, ('posted'::character varying)::text, ('closed'::character varying)::text])))
 );
 
@@ -7128,7 +7137,8 @@ CREATE TABLE public.maintenance_requests (
     "costResponsibility" character varying(20) DEFAULT 'owner'::character varying,
     "closureReport" text,
     "materialsUsed" jsonb DEFAULT '[]'::jsonb,
-    "slaDeadline" timestamp with time zone
+    "slaDeadline" timestamp with time zone,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10574,6 +10584,36 @@ ALTER SEQUENCE public.system_settings_id_seq OWNED BY public.system_settings.id;
 
 
 --
+-- Name: system_stops; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.system_stops (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    scope character varying(20) DEFAULT 'company'::character varying,
+    reason text,
+    active boolean DEFAULT true,
+    "activatedBy" integer,
+    "deactivatedBy" integer,
+    "deactivatedAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now()
+);
+
+CREATE SEQUENCE public.system_stops_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+ALTER SEQUENCE public.system_stops_id_seq OWNED BY public.system_stops.id;
+ALTER TABLE ONLY public.system_stops ALTER COLUMN id SET DEFAULT nextval('public.system_stops_id_seq'::regclass);
+ALTER TABLE ONLY public.system_stops ADD CONSTRAINT system_stops_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: tasks; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -11081,7 +11121,8 @@ CREATE TABLE public.umrah_packages (
     description text,
     status character varying(20) DEFAULT 'active'::character varying,
     "createdAt" timestamp with time zone DEFAULT now(),
-    "updatedAt" timestamp with time zone
+    "updatedAt" timestamp with time zone,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -11260,6 +11301,8 @@ CREATE TABLE public.umrah_transport (
     cost numeric(12,2) DEFAULT 0,
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
+    "updatedAt" timestamp with time zone DEFAULT now(),
     CONSTRAINT umrah_transport_status_check CHECK (((status)::text = ANY (ARRAY[('scheduled'::character varying)::text, ('in_progress'::character varying)::text, ('completed'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
@@ -12015,7 +12058,8 @@ CREATE TABLE public.workflow_instances (
     "completedAt" timestamp with time zone,
     data jsonb DEFAULT '{}'::jsonb,
     "createdAt" timestamp with time zone DEFAULT now(),
-    "updatedAt" timestamp with time zone DEFAULT now()
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
