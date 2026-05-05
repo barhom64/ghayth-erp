@@ -660,7 +660,7 @@ reportsRouter.get("/reports/entity-statement", requirePermission("finance:read")
         if (endDate) { qParams.push(endDate); dateFilter += ` AND pr."createdAt" <= $${qParams.length}`; }
         rows = await rawQuery<any>(
           `SELECT pr.period AS ref, CONCAT('راتب ', pr.period) AS description,
-                  pr."grossSalary" AS debit, pr."totalDeductions" AS credit,
+                  pr."grossSalary" AS debit, pr.deductions AS credit,
                   pr."netSalary" AS net, pr."createdAt" AS date, 'payroll' AS type
            FROM payroll_records pr
            WHERE pr."employeeAssignmentId" = $1 AND pr."companyId" = $2 ${dateFilter}

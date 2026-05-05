@@ -155,10 +155,9 @@ export async function exportPayrollExcel(companyId: number, period?: string): Pr
   if (period) { params.push(period); filter = ` AND pr.period = $${params.length}`; }
 
   const records = await rawQuery<any>(
-    `SELECT pr.period, e.name AS "employeeName", ea.position, ea."baseSalary",
-            pr."housingAllowance", pr."transportAllowance", pr."otherAllowances",
-            pr."overtimePay", pr."grossSalary", pr."deductions", pr."netSalary",
-            pr.status, pr."paidAt"
+    `SELECT pr.period, e.name AS "employeeName", ea."jobTitle" AS position, ea.salary AS "baseSalary",
+            pr."grossSalary", pr.deductions, pr."netSalary",
+            pr.status, pr."createdAt" AS "paidAt"
      FROM payroll_records pr
      JOIN employee_assignments ea ON ea.id = pr."employeeAssignmentId"
      JOIN employees e ON e.id = ea."employeeId"
@@ -211,8 +210,12 @@ export async function exportAttendanceExcel(companyId: number, startDate?: strin
   if (endDate) { params.push(endDate); dateFilter += ` AND a.date <= $${params.length}`; }
 
   const records = await rawQuery<any>(
-    `SELECT e.name AS "employeeName", ea.position, a.date, a.status,
-            a."checkIn", a."checkOut", a."workHours", a.notes
+    `SELECT e.name AS "employeeName", ea."jobTitle" AS position, a.date, a.status,
+            a."checkIn", a."checkOut",
+            CASE WHEN a."checkIn" IS NOT NULL AND a."checkOut" IS NOT NULL
+              THEN ROUND(EXTRACT(EPOCH FROM (a."checkOut" - a."checkIn"))/3600.0, 2)
+              ELSE NULL END AS "workHours",
+            a.notes
      FROM attendance a
      JOIN employee_assignments ea ON ea.id = a."assignmentId"
      JOIN employees e ON e.id = ea."employeeId"

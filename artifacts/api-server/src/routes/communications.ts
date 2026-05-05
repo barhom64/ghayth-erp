@@ -178,7 +178,7 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
       if (metaPhoneId) {
         const byPhoneId = await rawQuery<{ id: number }>(
           `SELECT "companyId" AS id FROM integrations
-           WHERE type='whatsapp' AND (settings->>'phoneNumberId')=$1 AND "isActive"=true LIMIT 1`,
+           WHERE type='whatsapp' AND (config->>'phoneNumberId')=$1 AND status='active' LIMIT 1`,
           [metaPhoneId]
         );
         if (byPhoneId.length > 0) companyId = byPhoneId[0]!.id;
@@ -273,7 +273,7 @@ router.post("/pbx/incoming", async (req, res): Promise<void> => {
     if (normalizedCalledNumber) {
       const byDid = await rawQuery<{ id: number }>(
         `SELECT "companyId" AS id FROM integrations
-         WHERE type='pbx' AND (settings->>'did') LIKE $1 AND "isActive"=true LIMIT 1`,
+         WHERE (config->>'did') LIKE $1 AND status='active' LIMIT 1`,
         [`%${normalizedCalledNumber}`]
       );
       if (byDid.length > 0) pbxCompanyId = byDid[0]!.id;

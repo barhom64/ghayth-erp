@@ -114,13 +114,15 @@ async function checkOverdueInvoicesNoCollection(companyId: number): Promise<Audi
 
 async function checkUnsettledCustody(companyId: number): Promise<AuditViolation[]> {
   const rows = await rawQuery<any>(
-    `SELECT c.id, c.description, e.name AS "employeeName",
-            (CURRENT_DATE - c."createdAt"::date) AS "daysSince"
-     FROM custody c
-     JOIN employees e ON e.id = c."employeeId"
-     WHERE c."companyId" = $1 AND c.status = 'active'
-       AND c."createdAt" < CURRENT_DATE - INTERVAL '30 days'
-       AND c."settledAt" IS NULL`,
+    `SELECT je.id, je.description, e.name AS "employeeName",
+            (CURRENT_DATE - je."createdAt"::date) AS "daysSince"
+     FROM journal_entries je
+     JOIN employee_assignments ea ON ea.id = je."createdBy"
+     JOIN employees e ON e.id = ea."employeeId"
+     WHERE je."companyId" = $1 AND je."sourceType" = 'custody'
+       AND je."deletedAt" IS NULL
+       AND je."createdAt" < CURRENT_DATE - INTERVAL '30 days'
+       AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'`,
     [companyId]
   );
   return rows.map((r: any) => ({
