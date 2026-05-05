@@ -763,8 +763,8 @@ async function reconcileAttendance(): Promise<string> {
     }
 
     const { affectedRows } = await rawExecute(
-      `INSERT INTO attendance ("assignmentId", date, status, "createdAt")
-       SELECT ea.id, CURRENT_DATE, 'absent', NOW()
+      `INSERT INTO attendance ("assignmentId", "companyId", "branchId", date, status, "createdAt")
+       SELECT ea.id, ea."companyId", ea."branchId", CURRENT_DATE, 'absent', NOW()
        FROM employee_assignments ea
        WHERE ea."companyId"=$1 AND ea.status='active'
          AND NOT EXISTS (
