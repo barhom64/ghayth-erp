@@ -39,6 +39,7 @@ A comprehensive, full-stack Arabic enterprise resource planning system centraliz
 -   **Health Check Script**: `scripts/health-check.sh`
 -   **Full Verification Report**: `GHAITH_FULL_SYSTEM_VERIFICATION_REPORT.md` (15 sections, regenerated 2026-05-06)
 -   **Services Index**: `SERVICES_INDEX.md` (369 FE pages × 48 modules × 928 API endpoints, with Playwright e2e results)
+-   **Latest API Smoke (2026-05-06)**: 56/56 endpoints PASS (100%) with admin auth — see `/tmp/api_final_results.txt`. Previous "failures" were path mismatches in the test script, not real bugs (recruitment/postings not /jobs; discipline/memos not /cases; fleet/fuel-logs not /fuel).
 -   **Audit Artifacts**: `audit/report/{auth_coverage,boundary_writes,db_tables,db_audit_cols,db_rowcounts,code_tables_not_in_db,db_tables_not_in_code}` and `audit/api-smoke-results.json`, `audit/inventory.json`
 
 ## Architecture decisions
