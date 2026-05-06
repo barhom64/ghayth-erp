@@ -81,7 +81,7 @@ const pushUnsubscribeSchema = z.object({
 
 const router = Router();
 
-const WA_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? "ghayth_erp_verify";
+const WA_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? "";
 const WA_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN ?? "";
 const WA_PHONE_ID = process.env.WHATSAPP_PHONE_ID ?? "";
 
@@ -145,7 +145,7 @@ router.get("/whatsapp/webhook", (req, res) => {
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
 
-    if (mode === "subscribe" && token === WA_VERIFY_TOKEN) {
+    if (mode === "subscribe" && WA_VERIFY_TOKEN && token === WA_VERIFY_TOKEN) {
       res.status(200).send(challenge);
     } else {
       throw new ForbiddenError("Verification failed");

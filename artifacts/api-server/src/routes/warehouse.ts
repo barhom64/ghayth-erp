@@ -752,7 +752,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
       logger.error(glOuterErr, `[warehouse-gl] unexpected error posting GL for movement ${insertId}:`);
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     if (row) (row as any).journalEntryId = journalEntryId;
 
     // Bus emission — closes the dead listener in eventListeners.ts:261 so the
@@ -954,7 +954,7 @@ router.post("/categories", requirePermission("warehouse:create"), async (req, re
       `INSERT INTO warehouse_categories ("companyId",name,"parentId") VALUES ($1,$2,$3)`,
       [scope.companyId, b.name.trim(), b.parentId || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_categories WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,

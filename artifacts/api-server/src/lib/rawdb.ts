@@ -1,4 +1,5 @@
 import pg from "pg";
+import { logger } from "./logger.js";
 
 const { Pool } = pg;
 
@@ -9,11 +10,16 @@ function getPool(): pg.Pool {
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL must be set");
     }
+    const poolMax = Math.min(Math.max(Number(process.env.PG_POOL_MAX) || 20, 1), 100);
     _pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      max: Number(process.env.PG_POOL_MAX) || 20,
+      max: poolMax,
       idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 5_000,
+      connectionTimeoutMillis: 10_000,
+      statement_timeout: 30_000,
+    });
+    _pool.on("error", (err) => {
+      logger.error({ err }, "Unexpected PG pool error");
     });
   }
   return _pool;

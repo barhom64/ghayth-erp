@@ -1937,7 +1937,7 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
         [paidAmount, b.paidDate || todayISO(), b.method || 'bank_transfer', journalEntryId, Number(id)]
       );
 
-      const updatedRes = await client.query(`SELECT * FROM rent_payments WHERE id=$1`, [Number(id)]);
+      const updatedRes = await client.query(`SELECT * FROM rent_payments WHERE id=$1 AND "deletedAt" IS NULL`, [Number(id)]);
       return { row: updatedRes.rows[0], journalEntryId };
     });
 
