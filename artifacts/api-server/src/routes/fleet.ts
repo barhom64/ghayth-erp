@@ -2678,7 +2678,6 @@ router.get("/traffic-violations/:id", requirePermission("fleet:read"), async (re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (req.path.includes("/pay")) return;
     const [row] = await rawQuery<any>(
       `SELECT tv.*, v."plateNumber", d.name AS "driverName"
        FROM fleet_traffic_violations tv
