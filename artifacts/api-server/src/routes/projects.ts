@@ -1638,7 +1638,7 @@ router.patch("/risks/:riskId", requirePermission("projects:update"), async (req,
         params.push(lvl); sets.push(`"riskLevel"=$${params.length}`);
       }
     }
-    if (sets.length === 0) { res.json({ ok: true }); return; }
+    if (sets.length === 0) { res.json({ success: true }); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(
       `UPDATE project_risks SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,

@@ -45,7 +45,7 @@ function evaluateCondition(fieldValue: any, operator: string, conditionValue: st
 }
 
 function interpolateTemplate(template: string, data: Record<string, any>): string {
-  return template.replace(/\{(\w+)\}/g, (_, key) => {
+  return template.replace(/\{\{?(\w+)\}?\}/g, (_, key) => {
     return data[key] !== undefined ? String(data[key]) : `{${key}}`;
   });
 }

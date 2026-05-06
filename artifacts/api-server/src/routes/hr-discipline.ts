@@ -346,7 +346,7 @@ router.patch("/regulation/:id", requirePermission("hr:update"), async (req, res)
       entityId: id,
       details: JSON.stringify(body),
     }).catch((e) => logger.error(e, "hr-discipline background task failed"));
-    res.json({ ok: true });
+    res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Update regulation article error:");
   }
@@ -373,7 +373,7 @@ router.post("/regulation/reseed", requirePermission("hr:create"), async (req, re
       action: "discipline_regulations.reseeded", entity: "discipline_regulations", entityId: 0,
     }).catch((e) => logger.error(e, "hr-discipline background task failed"));
 
-    res.json({ ok: true, inserted });
+    res.json({ success: true, inserted });
   } catch (err) {
     handleRouteError(err, res, "Reseed regulation error:");
   }
@@ -403,7 +403,7 @@ router.delete("/regulation/:id", requirePermission("hr:delete"), async (req, res
       entityId: id,
       details: JSON.stringify({ id }),
     }).catch((e) => logger.error(e, "hr-discipline background task failed"));
-    res.json({ ok: true });
+    res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete regulation article error:");
   }
@@ -640,7 +640,7 @@ router.post("/memos/:id/justify", requirePermission("hr:read"), async (req, res)
         : [],
     });
 
-    res.json({ ok: true, status: "pending_manager" });
+    res.json({ success: true, status: "pending_manager" });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
     if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
@@ -681,7 +681,7 @@ router.post("/memos/:id/manager-recommendation", requirePermission("hr:update"),
       },
     });
 
-    res.json({ ok: true, status: "pending_gm" });
+    res.json({ success: true, status: "pending_gm" });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
     if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
@@ -829,7 +829,7 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
       ],
     });
 
-    res.json({ ok: true, status: newStatus });
+    res.json({ success: true, status: newStatus });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
     if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
@@ -871,7 +871,7 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
         });
       },
     });
-    res.json({ ok: true });
+    res.json({ success: true });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
     if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
@@ -923,7 +923,7 @@ router.post("/memos/:id/appeal", requirePermission("hr:read"), async (req, res) 
           ]
         : [],
     });
-    res.json({ ok: true, status: "appeal_pending" });
+    res.json({ success: true, status: "appeal_pending" });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
     if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
@@ -978,7 +978,7 @@ router.post("/memos/:id/appeal-decision", requirePermission("hr:discipline:appro
         },
       ],
     });
-    res.json({ ok: true, status: newStatus });
+    res.json({ success: true, status: newStatus });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
     if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
@@ -1020,7 +1020,7 @@ router.post("/memos/:id/close", requirePermission("hr:update"), async (req, res)
         });
       },
     });
-    res.json({ ok: true, status: "closed" });
+    res.json({ success: true, status: "closed" });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
     if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }

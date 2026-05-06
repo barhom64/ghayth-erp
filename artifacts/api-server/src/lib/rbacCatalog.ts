@@ -87,6 +87,7 @@ export const PERMISSIONS = [
   "projects:update",
   "projects:delete",
   "operations:read",
+  "operations:write",
   "operations:create",
   "operations:update",
   "operations:delete",
@@ -196,7 +197,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
 
   projects_manager: [
     "projects:read", "projects:create", "projects:update", "projects:delete",
-    "operations:read", "operations:create", "operations:update", "operations:delete",
+    "operations:read", "operations:write", "operations:create", "operations:update", "operations:delete",
   ],
 
   legal_manager: [

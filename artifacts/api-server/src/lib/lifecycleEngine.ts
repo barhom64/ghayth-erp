@@ -112,12 +112,14 @@ export interface ApplyTransitionOptions {
 }
 
 export class LifecycleError extends Error {
+  public readonly statusCode: number;
   constructor(
     message: string,
     public readonly status: number = 422,
     public readonly field?: string
   ) {
     super(message);
+    this.statusCode = status;
   }
 }
 
