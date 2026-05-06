@@ -6301,7 +6301,7 @@ router.get("/gratuity/:employeeId", requirePermission("hr:read"), async (req, re
     const { terminationType, terminationDate } = req.query as any;
 
     const [assignment] = await rawQuery<any>(
-      `SELECT ea.salary, ea."startDate", ea."jobTitle",
+      `SELECT ea.salary, ea."hireDate" AS "startDate", ea."jobTitle",
               ec."startDate" AS "contractStart", ec."endDate" AS "contractEnd",
               e.name AS "employeeName"
        FROM employee_assignments ea
@@ -6515,8 +6515,8 @@ router.get("/accruals/preview", requirePermission("hr:read"), async (req, res) =
     );
 
     const employees = await rawQuery<any>(
-      `SELECT ea."employeeId", e.name AS "employeeName", ea.salary, ea."startDate",
-              COALESCE(ec."startDate", ea."startDate") AS "contractStart"
+      `SELECT ea."employeeId", e.name AS "employeeName", ea.salary, ea."hireDate" AS "startDate",
+              COALESCE(ec."startDate", ea."hireDate") AS "contractStart"
        FROM employee_assignments ea
        JOIN employees e ON e.id=ea."employeeId"
        LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId"
