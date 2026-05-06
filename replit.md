@@ -38,6 +38,7 @@ A comprehensive, full-stack Arabic enterprise resource planning system centraliz
 -   **Screenshot Generation Scripts**: `artifacts/ghayth-erp-deck/scripts/`
 -   **Health Check Script**: `scripts/health-check.sh`
 -   **Full Verification Report**: `GHAITH_FULL_SYSTEM_VERIFICATION_REPORT.md` (15 sections, regenerated 2026-05-06)
+-   **Services Index**: `SERVICES_INDEX.md` (369 FE pages × 48 modules × 928 API endpoints, with Playwright e2e results)
 -   **Audit Artifacts**: `audit/report/{auth_coverage,boundary_writes,db_tables,db_audit_cols,db_rowcounts,code_tables_not_in_db,db_tables_not_in_code}` and `audit/api-smoke-results.json`, `audit/inventory.json`
 
 ## Architecture decisions
