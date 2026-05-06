@@ -11220,6 +11220,25 @@ CREATE TABLE public.umrah_pilgrims (
     "deletedAt" timestamp with time zone,
     "branchId" integer,
     "createdBy" integer,
+    "nuskNumber" character varying(50),
+    "passportExpiry" date,
+    "groupId" integer,
+    "subAgentId" integer,
+    "entryPort" character varying(100),
+    "entryFlight" character varying(50),
+    "exitPort" character varying(100),
+    "exitFlight" character varying(50),
+    "actualStayDays" integer,
+    "programDuration" integer,
+    "overstayDays" integer,
+    "borderNumber" character varying(50),
+    "mofaNumber" character varying(50),
+    "isInsideKingdom" boolean DEFAULT false,
+    "hasUmrahPermit" boolean DEFAULT false,
+    "passportNumber_hash" character varying(16),
+    "visaNumber_hash" character varying(16),
+    "mofaNumber_hash" character varying(16),
+    "borderNumber_hash" character varying(16),
     CONSTRAINT umrah_pilgrims_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('arrived'::character varying)::text, ('active'::character varying)::text, ('overstayed'::character varying)::text, ('departed'::character varying)::text, ('violated'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
@@ -11421,6 +11440,19 @@ CREATE TABLE public.umrah_nusk_invoices (
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
     "deletedAt" timestamp with time zone
+);
+
+CREATE TABLE public.audit_umrah_access (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "userId" integer NOT NULL,
+    action text NOT NULL,
+    entity text NOT NULL,
+    "entityId" integer,
+    "ipAddress" text,
+    "userAgent" text,
+    details jsonb,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
 CREATE TABLE public.umrah_violations (

@@ -278,8 +278,6 @@ export async function evaluateRulesForEvent(eventName: string, payload: EventPay
 }
 
 export function registerRulesEngineListener() {
-  eventBus.on("*" as any, async (payload: EventPayload) => {});
-
   const trackedEvents = [
     "attendance.checkin",
     "attendance.checkout",

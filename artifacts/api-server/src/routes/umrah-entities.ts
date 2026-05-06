@@ -700,9 +700,9 @@ const createNuskInvoiceSchema = z.object({
   groundServices: z.coerce.number().default(0),
   visaFees: z.coerce.number().default(0),
   insuranceFees: z.coerce.number().default(0),
-  transportFees: z.coerce.number().default(0),
-  hotelFees: z.coerce.number().default(0),
-  otherFees: z.coerce.number().default(0),
+  transportTotal: z.coerce.number().default(0),
+  hotelTotal: z.coerce.number().default(0),
+  additionalServices: z.coerce.number().default(0),
   netCost: z.coerce.number().default(0),
   totalAmount: z.coerce.number().default(0),
   nuskStatus: z.enum(["pending", "paid", "in_progress", "expired", "refunded", "cancelled"]).default("pending"),
@@ -716,9 +716,9 @@ const updateNuskInvoiceSchema = z.object({
   groundServices: z.coerce.number().optional(),
   visaFees: z.coerce.number().optional(),
   insuranceFees: z.coerce.number().optional(),
-  transportFees: z.coerce.number().optional(),
-  hotelFees: z.coerce.number().optional(),
-  otherFees: z.coerce.number().optional(),
+  transportTotal: z.coerce.number().optional(),
+  hotelTotal: z.coerce.number().optional(),
+  additionalServices: z.coerce.number().optional(),
   netCost: z.coerce.number().optional(),
   totalAmount: z.coerce.number().optional(),
   nuskStatus: z.enum(["pending", "paid", "in_progress", "expired", "refunded", "cancelled"]).optional(),
@@ -738,10 +738,10 @@ router.post("/nusk-invoices", requirePermission("umrah:write"), async (req, res)
     if (dup) throw new ConflictError("رقم فاتورة نسك مكرر");
     const rows = await rawQuery(
       `INSERT INTO umrah_nusk_invoices ("companyId","branchId","nuskInvoiceNumber","agentId","subAgentId","groupId","mutamerCount",
-       "groundServices","visaFees","insuranceFees","transportFees","hotelFees","otherFees","netCost","totalAmount","nuskStatus","issueDate","expiryDate",notes,"createdBy")
+       "groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate",notes,"createdBy")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
       [scope.companyId, scope.branchId || null, b.nuskInvoiceNumber, b.agentId, b.subAgentId || null, b.groupId || null, b.mutamerCount,
-       b.groundServices, b.visaFees, b.insuranceFees, b.transportFees, b.hotelFees, b.otherFees, b.netCost, b.totalAmount, b.nuskStatus,
+       b.groundServices, b.visaFees, b.insuranceFees, b.transportTotal, b.hotelTotal, b.additionalServices, b.netCost, b.totalAmount, b.nuskStatus,
        b.issueDate || null, b.expiryDate || null, b.notes || null, scope.userId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_nusk_invoices", entityId: rows[0]?.id, after: { nuskInvoiceNumber: b.nuskInvoiceNumber } }).catch((e) => logger.error(e, "nusk bg"));
@@ -763,7 +763,7 @@ router.patch("/nusk-invoices/:id", requirePermission("umrah:write"), async (req,
     if (existing.nuskStatus === "paid" && b.nuskStatus !== "refunded") {
       throw new ConflictError("لا يمكن تعديل فاتورة نسك مدفوعة");
     }
-    const fields = ["mutamerCount","groundServices","visaFees","insuranceFees","transportFees","hotelFees","otherFees","netCost","totalAmount","nuskStatus","issueDate","expiryDate","notes"] as const;
+    const fields = ["mutamerCount","groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate","notes"] as const;
     const params: any[] = [];
     const sets: string[] = [];
     for (const key of fields) {

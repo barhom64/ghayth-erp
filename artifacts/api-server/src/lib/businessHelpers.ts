@@ -484,6 +484,17 @@ export async function reverseAccountBalances(
   }
 }
 
+export async function softDeleteJournalEntry(
+  companyId: number,
+  journalId: number
+): Promise<void> {
+  await reverseAccountBalances(companyId, journalId);
+  await rawExecute(
+    `UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
+    [journalId, companyId]
+  );
+}
+
 type ApprovalChainType = "leaves" | "purchases" | "expenses" | "advances" | "letters" | "procurement" | "loans" | "overtime" | "exit";
 
 interface ApprovalChainResult {

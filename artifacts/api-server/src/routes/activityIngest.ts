@@ -39,7 +39,7 @@ router.post("/intelligence/activity", activityLimiter, authMiddleware, async (re
       action: "create", entity: "user_activity", entityId: 0,
     }).catch((e) => logger.error(e, "activity ingest background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "activity.ingested", entity: "activity_logs", entityId: 0, details: JSON.stringify({ page, sessionId }) }).catch((e) => logger.error(e, "activity ingest background task failed"));
-    res.json({ ok: true });
+    res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Activity ingest error:");
   }

@@ -28,7 +28,7 @@ import {
   generateRef,
   toDateISO,
   roundTo2,
-  reverseAccountBalances,
+  softDeleteJournalEntry,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
@@ -4285,17 +4285,13 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
         [id]
       );
 
-      // Reverse GL journal entry if one exists
+      // Reverse GL journal entry if one exists (via finance helper to respect domain boundaries)
       const { rows: journalRows } = await client.query(
         `SELECT id FROM journal_entries WHERE "sourceType" = 'payroll_runs' AND "sourceId" = $1 AND "deletedAt" IS NULL`,
         [id]
       );
       for (const je of journalRows) {
-        await reverseAccountBalances(scope.companyId, Number(je.id));
-        await client.query(
-          `UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
-          [je.id, scope.companyId]
-        );
+        await softDeleteJournalEntry(scope.companyId, Number(je.id));
       }
 
       // Soft-delete payroll lines and the run itself
