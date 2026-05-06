@@ -98,7 +98,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
 
     const [assignments, attendanceSummary, leaveRequests] = await Promise.all([
       rawQuery<any>(
-        `SELECT ea.id, ea.role, ea."jobTitle", ea.salary, ea.status, ea."startDate", ea."endDate",
+        `SELECT ea.id, ea.role, ea."jobTitle", ea.salary, ea.status, ea."hireDate" AS "startDate", ea."endDate",
                 c.name AS "companyName", b.name AS "branchName"
          FROM employee_assignments ea
          JOIN companies c ON c.id = ea."companyId"
