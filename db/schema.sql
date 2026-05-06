@@ -6299,7 +6299,7 @@ CREATE TABLE public.invoices (
     "postedBy" integer,
     "postedAt" timestamp with time zone,
     "updatedAt" timestamp with time zone DEFAULT now(),
-    CONSTRAINT invoices_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending_approval'::character varying)::text, ('sent'::character varying)::text, ('partial'::character varying)::text, ('paid'::character varying)::text, ('overdue'::character varying)::text, ('cancelled'::character varying)::text, ('returned'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('delivered'::character varying)::text, ('ordered'::character varying)::text, ('posted'::character varying)::text, ('closed'::character varying)::text])))
+    CONSTRAINT chk_invoices_status CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('sent'::character varying)::text, ('partial'::character varying)::text, ('partially_paid'::character varying)::text, ('paid'::character varying)::text, ('overdue'::character varying)::text, ('void'::character varying)::text, ('rejected'::character varying)::text, ('cancelled'::character varying)::text, ('returned'::character varying)::text, ('delivered'::character varying)::text, ('ordered'::character varying)::text, ('posted'::character varying)::text, ('closed'::character varying)::text, ('invoiced'::character varying)::text])))
 );
 
 
@@ -9189,7 +9189,7 @@ CREATE TABLE public.purchase_orders (
     "glStatus" character varying(20) DEFAULT 'pending',
     "paidAt" timestamp with time zone,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT purchase_orders_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('received'::character varying)::text, ('cancelled'::character varying)::text, ('completed'::character varying)::text, ('paid'::character varying)::text, ('confirmed'::character varying)::text, ('ordered'::character varying)::text, ('delivered'::character varying)::text])))
+    CONSTRAINT chk_purchase_orders_status CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('returned'::character varying)::text, ('received'::character varying)::text, ('partially_received'::character varying)::text, ('partial_received'::character varying)::text, ('cancelled'::character varying)::text, ('completed'::character varying)::text, ('paid'::character varying)::text, ('confirmed'::character varying)::text, ('ordered'::character varying)::text, ('delivered'::character varying)::text, ('sent'::character varying)::text, ('invoice_matched'::character varying)::text])))
 );
 
 
