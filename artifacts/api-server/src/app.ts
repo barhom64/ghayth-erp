@@ -68,9 +68,15 @@ if (process.env.CORS_ORIGINS) {
 if (process.env.CORS_ORIGIN) {
   process.env.CORS_ORIGIN.split(",").forEach(s => allowedOrigins.add(s.trim().replace(/\/$/, "")));
 }
-if (allowedOrigins.size === 0 && process.env.NODE_ENV === "development") {
+if (process.env.NODE_ENV !== "production") {
+  // In dev, the Replit proxy serves apps on http(s)://localhost (port 80/443),
+  // so the browser sends Origin: http://localhost for same-origin XHRs.
+  // Allow common dev origins so internal calls (e.g. activity tracking) don't 500.
+  allowedOrigins.add("http://localhost");
+  allowedOrigins.add("https://localhost");
   allowedOrigins.add("http://localhost:3000");
   allowedOrigins.add("http://localhost:5173");
+  allowedOrigins.add("http://localhost:80");
 }
 
 const isProduction = process.env.NODE_ENV === "production";
