@@ -196,7 +196,7 @@ reportsRouter.get("/reports/cash-flow", requirePermission("finance:read"), async
                 coa.type, coa.code, coa.name
            FROM journal_lines jl
            LEFT JOIN chart_of_accounts coa
-                  ON coa.code = jl."accountCode" AND coa."companyId" = $1
+                  ON coa.code = jl."accountCode" AND coa."companyId" = $1 AND coa."deletedAt" IS NULL
           WHERE jl."journalId" = ANY($2)
             AND NOT (jl."accountCode" = ANY($3))`,
         [scope.companyId, jeIds, cashCodes]
@@ -877,7 +877,7 @@ reportsRouter.get("/reports/budget-variance", requirePermission("finance:read"),
               b.amount - COALESCE(b.used, 0) AS variance,
               CASE WHEN b.amount > 0 THEN ROUND(COALESCE(b.used, 0)::numeric / b.amount * 100, 1) ELSE 0 END AS "usagePct"
        FROM budgets b
-       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = $1
+       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = $1 AND coa."deletedAt" IS NULL
        WHERE b."companyId" = $1 AND b."deletedAt" IS NULL AND b.period = $2 ${branchFilter}
        ORDER BY b."accountCode"
        LIMIT 500`,
