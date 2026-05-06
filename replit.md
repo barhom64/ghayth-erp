@@ -40,6 +40,7 @@ A comprehensive, full-stack Arabic enterprise resource planning system centraliz
 -   **Full Verification Report**: `GHAITH_FULL_SYSTEM_VERIFICATION_REPORT.md` (15 sections, regenerated 2026-05-06)
 -   **Services Index**: `SERVICES_INDEX.md` (369 FE pages × 48 modules × 928 API endpoints, with Playwright e2e results)
 -   **Latest API Smoke (2026-05-06)**: 56/56 endpoints PASS (100%) with admin auth — see `/tmp/api_final_results.txt`. Previous "failures" were path mismatches in the test script, not real bugs (recruitment/postings not /jobs; discipline/memos not /cases; fleet/fuel-logs not /fuel).
+-   **Frontend Test Matrix (2026-05-06)**: 1107/1107 applicable PASS, 0 FAIL, 738 SKIP across 369 routes × 5 axes (1845 checks). 1 Critical bug fixed: CORS allowlist missing `http://localhost` caused POST `/api/intelligence/activity` to 500 on every navigation. See `FRONTEND_TEST_MATRIX.md` and `FRONTEND_BUGS.md`.
 -   **Audit Artifacts**: `audit/report/{auth_coverage,boundary_writes,db_tables,db_audit_cols,db_rowcounts,code_tables_not_in_db,db_tables_not_in_code}` and `audit/api-smoke-results.json`, `audit/inventory.json`
 
 ## Architecture decisions
