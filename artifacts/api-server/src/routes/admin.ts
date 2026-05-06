@@ -1646,9 +1646,10 @@ router.get("/system-stops", requirePermission("admin:read"), async (req, res) =>
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
-      `SELECT ss.*, u."fullName" AS "activatedByName"
+      `SELECT ss.*, COALESCE(emp.name, u.email) AS "activatedByName"
        FROM system_stops ss
        LEFT JOIN users u ON u.id = ss."activatedBy"
+       LEFT JOIN employees emp ON emp.id = u."employeeId"
        WHERE ss."companyId" = $1
        ORDER BY ss."createdAt" DESC`,
       [scope.companyId]
