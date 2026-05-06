@@ -526,7 +526,7 @@ router.get("/:id", requirePermission("projects:read"), async (req, res) => {
     const [project] = await rawQuery<any>(`SELECT p.*, cl.name AS "clientName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."deletedAt" IS NULL WHERE ${detailWhere}`, detailParams);
     if (!project) throw new NotFoundError("المشروع غير موجود");
     const phases = await rawQuery<any>(`SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`, [project.id]);
-    const tasks = await rawQuery<any>(`SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" WHERE pt."projectId"=$1 AND pt."deletedAt" IS NULL ORDER BY pt."dueDate" LIMIT 500`, [project.id]);
+    const tasks = await rawQuery<any>(`SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" WHERE pt."projectId"=$1 ORDER BY pt."dueDate" LIMIT 500`, [project.id]);
 
     let taskDeps: any[] = [];
     if (tasks.length > 0) {
@@ -2024,7 +2024,7 @@ router.get("/:id/gantt", requirePermission("projects:read"), async (req, res) =>
       [projectId]
     );
     const tasks = await rawQuery<any>(
-      `SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" WHERE pt."projectId"=$1 AND pt."deletedAt" IS NULL ORDER BY pt."startDate","phaseId" LIMIT 500`,
+      `SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" WHERE pt."projectId"=$1 ORDER BY pt."startDate","phaseId" LIMIT 500`,
       [projectId]
     );
     const milestones = await rawQuery<any>(
@@ -2082,8 +2082,8 @@ router.get("/:id/letters", requirePermission("projects:read"), async (req, res) 
               l."senderName" AS "fromEntity", l."recipientName" AS "toEntity", l."createdAt"
        FROM correspondence l
        WHERE l."companyId" = $1
-         AND l."relatedEntity" = 'project'
-         AND l."relatedEntityId" = $2
+         AND l."entityType" = 'project'
+         AND l."entityId" = $2
          AND l."deletedAt" IS NULL
        ORDER BY l."sentAt" DESC NULLS LAST, l."createdAt" DESC
        LIMIT 50`,
