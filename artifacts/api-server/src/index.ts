@@ -8,6 +8,7 @@ import "./lib/engines/hrEngine.js";
 import { seedDemoData } from "./lib/seedDemoData.js";
 import { bootstrapAdminUser } from "./lib/bootstrapAdmin.js";
 import { pool } from "./lib/rawdb.js";
+import { flushAndClearDLQ } from "./lib/eventBus.js";
 import http from "http";
 
 const rawPort = process.env["PORT"];
@@ -103,6 +104,13 @@ async function start() {
         logger.error({ err }, "Error closing HTTP server");
       } else {
         logger.info("HTTP server closed");
+      }
+
+      try {
+        await flushAndClearDLQ();
+        logger.info("DLQ flushed");
+      } catch (dlqErr) {
+        logger.error({ err: dlqErr }, "Error flushing DLQ");
       }
 
       try {

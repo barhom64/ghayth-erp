@@ -200,8 +200,8 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
 
     if (assigneeId) {
       const [assigneeAssignment] = await rawQuery<any>(
-        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND status = 'active' LIMIT 1`,
-        [assigneeId]
+        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+        [assigneeId, scope.companyId]
       );
       if (assigneeAssignment) {
         createNotification({

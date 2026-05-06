@@ -173,8 +173,7 @@ describe("intelligence — smart operations", () => {
     const idx = SRC.indexOf('"/suggestions"');
     const section = SRC.slice(Math.max(0, idx - 100), idx + 200);
     expect(section).toContain("requireRole");
-    expect(section).toContain("branch_manager");
-    expect(section).toContain("general_manager");
+    expect(section).toContain("ACTION_CENTER_ROLES");
   });
 });
 

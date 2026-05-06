@@ -4,6 +4,7 @@ import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { requireRole } from "../middlewares/roleGuard.js";
+import { ACTION_CENTER_ROLES, OWNER_GM_ROLES, EXEC_ROLES } from "../lib/rbacCatalog.js";
 import { aiEngine } from "../lib/aiEngine.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { calculateEmployeeKPIs, getCompanyKPIs } from "../lib/kpiEngine.js";
@@ -200,7 +201,7 @@ router.get("/overview", requirePermission("admin:read"), async (req, res): Promi
   } catch (err) { handleRouteError(err, res, "Intelligence overview error:"); }
 });
 
-router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_manager", "finance_manager", "owner"), async (req, res): Promise<void> => {
+router.get("/suggestions", requireRole(...ACTION_CENTER_ROLES), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -584,7 +585,7 @@ router.post("/algorithms/load-balance", requirePermission("admin:write"), async 
 });
 
 
-router.get("/activity/stats", requireRole("branch_manager", "general_manager", "owner", "admin"), async (req, res): Promise<void> => {
+router.get("/activity/stats", requireRole(...OWNER_GM_ROLES, "branch_manager"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 30;
@@ -595,7 +596,7 @@ router.get("/activity/stats", requireRole("branch_manager", "general_manager", "
 
 // ── Client Analytics ─────────────────────────────────────────────────────────
 
-router.get("/clients/analytics", requireRole("branch_manager", "general_manager", "owner", "finance_manager"), async (req, res): Promise<void> => {
+router.get("/clients/analytics", requireRole(...EXEC_ROLES, "branch_manager"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const summary = await getClientAnalyticsSummary(scope.companyId);
@@ -603,7 +604,7 @@ router.get("/clients/analytics", requireRole("branch_manager", "general_manager"
   } catch (err) { handleRouteError(err, res, "Client analytics error:"); }
 });
 
-router.get("/clients/analytics/recalculate", requireRole("branch_manager", "general_manager", "owner"), async (req, res): Promise<void> => {
+router.get("/clients/analytics/recalculate", requireRole(...OWNER_GM_ROLES, "branch_manager"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const count = await calculateAllClientsRFM(scope.companyId);
@@ -611,7 +612,7 @@ router.get("/clients/analytics/recalculate", requireRole("branch_manager", "gene
   } catch (err) { handleRouteError(err, res, "RFM recalculate error:"); }
 });
 
-router.get("/clients/:clientId/rfm", requireRole("branch_manager", "general_manager", "owner", "finance_manager"), async (req, res): Promise<void> => {
+router.get("/clients/:clientId/rfm", requireRole(...EXEC_ROLES, "branch_manager"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const clientId = parseId(req.params.clientId, "clientId");
@@ -622,7 +623,7 @@ router.get("/clients/:clientId/rfm", requireRole("branch_manager", "general_mana
   } catch (err) { handleRouteError(err, res, "Client RFM error:"); }
 });
 
-router.get("/seasonal-patterns", requireRole("branch_manager", "general_manager", "owner", "finance_manager"), async (req, res): Promise<void> => {
+router.get("/seasonal-patterns", requireRole(...EXEC_ROLES, "branch_manager"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const patterns = await detectSeasonalPatterns(scope.companyId);
@@ -644,7 +645,7 @@ router.get("/recommendations", requirePermission("admin:read"), async (req, res)
 
 // ── Company KPIs ──────────────────────────────────────────────────────────────
 
-router.get("/company-kpis", requireRole("branch_manager", "general_manager", "owner", "finance_manager"), async (req, res): Promise<void> => {
+router.get("/company-kpis", requireRole(...EXEC_ROLES, "branch_manager"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const kpis = await getCompanyKPIs(scope.companyId);
@@ -654,7 +655,7 @@ router.get("/company-kpis", requireRole("branch_manager", "general_manager", "ow
 
 // ── Smart Task Assignment ──────────────────────────────────────────────────────
 
-router.post("/smart-assign", requireRole("branch_manager", "general_manager", "owner", "hr_manager"), async (req, res): Promise<void> => {
+router.post("/smart-assign", requireRole(...ACTION_CENTER_ROLES), async (req, res): Promise<void> => {
   try {
     const body = zodParse(smartAssignSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -704,7 +705,7 @@ router.post("/smart-assign", requireRole("branch_manager", "general_manager", "o
 
 // ── Insights Dashboard ────────────────────────────────────────────────────────
 
-router.get("/insights-summary", requireRole("branch_manager", "general_manager", "owner"), async (req, res): Promise<void> => {
+router.get("/insights-summary", requireRole(...OWNER_GM_ROLES, "branch_manager"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;

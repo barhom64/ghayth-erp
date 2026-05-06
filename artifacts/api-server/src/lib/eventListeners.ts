@@ -60,7 +60,12 @@ async function logAudit(event: string, payload: EventPayload) {
   }
 }
 
+let _listenersRegistered = false;
+
 export function registerEventListeners() {
+  if (_listenersRegistered) return;
+  _listenersRegistered = true;
+
   eventBus.on("employee.created", async (payload) => {
     await logEvent("employee.created", payload);
     await logAudit("employee.created", { ...payload, action: "create" });
