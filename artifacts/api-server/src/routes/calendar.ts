@@ -60,12 +60,13 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
         [cid, now, cutoff]
       ), []),
       safe(() => rawQuery<any>(
-        `SELECT t.id, t.title, t."dueDate" as "date", t.status, t.priority, p.name as "projectName"
+        `SELECT t.id, t.title, t."scheduledDate" as "date", t.status, t.priority,
+                p.name as "projectName"
          FROM tasks t
-         LEFT JOIN projects p ON p.id = t."projectId"
+         LEFT JOIN projects p ON t."linkedEntityType" = 'project' AND p.id = t."linkedEntityId"
          WHERE t."companyId" = $1 AND t."deletedAt" IS NULL AND t.status NOT IN ('completed','cancelled')
-           AND t."dueDate" BETWEEN $2 AND $3
-         ORDER BY t."dueDate" LIMIT 50`,
+           AND t."scheduledDate" BETWEEN $2 AND $3
+         ORDER BY t."scheduledDate" LIMIT 50`,
         [cid, now, cutoff]
       ), []),
       safe(() => rawQuery<any>(
