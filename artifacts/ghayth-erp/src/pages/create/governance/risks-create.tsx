@@ -140,7 +140,7 @@ export default function RisksCreate() {
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/governance/risks")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={createMut.isPending}>{createMut.isPending ? "جاري التسجيل..." : "تسجيل"}</Button>
+          <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>{createMut.isPending ? "جاري التسجيل..." : "تسجيل"}</Button>
         </div>
       </div>
     </CreatePageLayout>
