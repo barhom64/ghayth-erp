@@ -45,11 +45,33 @@ run_step() {
   local step_start=$(date +%s)
   echo
   echo -e "${INFO} [$name] running: $*"
-  if "$@"; then
+  # Capture exit + tail of output for diagnostics on CI failure.
+  local step_log
+  step_log="$(mktemp)"
+  if "$@" 2>&1 | tee "$step_log"; then
     local step_end=$(date +%s)
     echo -e "${PASS} [$name] ok (${name} took $((step_end - step_start))s)"
+    rm -f "$step_log"
   else
-    echo -e "${FAIL} [$name] FAILED"
+    local rc=${PIPESTATUS[0]}
+    echo -e "${FAIL} [$name] FAILED (exit=$rc)"
+    # In GitHub Actions, post the failing step name + last 80 lines of its
+    # output as a commit comment so we can read the real cause without
+    # the actions:read scope.
+    if [ -n "${GITHUB_ACTIONS:-}" ] && [ -n "${GITHUB_TOKEN:-}" ] && [ -n "${GITHUB_SHA:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then
+      local tail80
+      tail80="$(tail -n 80 "$step_log" | sed 's/\x1b\[[0-9;]*m//g')"
+      local body
+      body="$(printf '### CI guard failed at step \`%s\` (exit=%s)\n\n<details><summary>Last 80 lines</summary>\n\n```\n%s\n```\n\n</details>' "$name" "$rc" "$tail80")"
+      local payload
+      payload="$(node -e 'process.stdout.write(JSON.stringify({body: process.argv[1]}))' "$body")"
+      curl -sS -X POST \
+        -H "Authorization: token ${GITHUB_TOKEN}" \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
+        -d "$payload" >/dev/null || true
+    fi
+    rm -f "$step_log"
     exit 1
   fi
 }
