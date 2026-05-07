@@ -97,3 +97,8 @@ xdg-open audit/screenshots/finance_invoices_create.png   # or scp to look at it
   Follow-up Task #186 hardens this.
 - 71 routes SKIP because their list API returns 404 or empty. Follow-up
   Task #187 adds seed data / hand-coded ID resolvers.
+
+## v2 update (2026-05-07)
+
+- **Periodic re-login** every 25 routes (`RELOGIN_EVERY` constant). The 2026-05-07 v1 run had 85 routes bouncing to `/login` near the tail because the JWT in the HttpOnly cookie expired during the ~40-minute walk. With re-login in place the v2 run shows 0 A1 FAIL and 0 A5 FAIL — the only failure mode is A4 navigation, which is a real SPA bug.
+- Run with `ALL=1 pnpm run audit:runtime` to walk all 373 routes in one pass; results are written to `/tmp/runtime-audit/all.json` and copied to `audit/runtime-audit-results.json`. Screenshots land in `audit/screenshots/`, one PNG per A4 FAIL.
