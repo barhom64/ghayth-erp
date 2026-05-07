@@ -5,6 +5,8 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { signToken, signRefreshToken, verifyPassword, hashPassword } from "../lib/auth.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import rateLimit from "express-rate-limit";
+import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
+import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { logger } from "../lib/logger.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
@@ -55,16 +57,16 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(8, "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل"),
 });
 
-const authRouteLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: process.env.NODE_ENV === "production" ? 20 : 500,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة بعد دقيقة" },
-  validate: { ip: false, trustProxy: false },
-});
-
-router.use(authRouteLimiter);
+// NOTE: A router-wide per-IP authRouteLimiter previously sat here. It has
+// been removed because it threw IP-based caps on authenticated endpoints
+// (/auth/me, /auth/logout, /auth/switch-assignment, /auth/change-password),
+// which violates the per-user rate-limit policy (admins on a shared proxy
+// IP could be unfairly throttled). Anonymous endpoints below
+// (/register, /login, /refresh) keep their own dedicated per-IP limiters,
+// and /change-password gets a per-user limiter (changePasswordLimiter).
+// The truly authenticated endpoints (/me, /logout, /switch-assignment) are
+// covered by the global per-user limiter mounted in routes/index.ts after
+// authMiddleware.
 
 const REFRESH_TOKEN_TTL_DAYS = 7;
 const MAX_FAILED_ATTEMPTS = 5;
@@ -77,15 +79,30 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "تم تجاوز الحد الأقصى لمحاولات الدخول. يرجى المحاولة بعد دقيقة" },
   validate: { ip: false, trustProxy: false },
+  store: makeRateLimitStore("auth:login"),
 });
 
-const changePasswordLimiter = rateLimit({
+// Per-user limiter for the authenticated /auth/* endpoints (/me, /logout,
+// /switch-assignment). The /auth router is mounted in routes/index.ts
+// BEFORE the global authMiddleware mount, so the per-route authMiddleware
+// must run first inside each route chain to set req.scope. Owner/admin
+// exempt — these are routine session management calls.
+const authedUserLimiter = createPerUserLimiter({
+  prefix: "auth:authed",
+  windowMs: 60 * 1000,
+  max: process.env.NODE_ENV === "production" ? 120 : 1200,
+  message: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة بعد دقيقة",
+});
+
+// Per-user change-password limiter. Mounted after authMiddleware on the
+// /change-password route, so req.scope is set. Owner/admin NOT exempt — the
+// cap is a per-actor safety net against credential-stuffing-style abuse.
+const changePasswordLimiter = createPerUserLimiter({
+  prefix: "auth:change-pw",
   windowMs: 60 * 1000,
   max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "تم تجاوز الحد الأقصى لطلبات تغيير كلمة المرور. يرجى المحاولة بعد دقيقة" },
-  validate: { ip: false, trustProxy: false },
+  message: "تم تجاوز الحد الأقصى لطلبات تغيير كلمة المرور. يرجى المحاولة بعد دقيقة",
+  skip: () => false,
 });
 
 const refreshLimiter = rateLimit({
@@ -95,6 +112,7 @@ const refreshLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "تم تجاوز الحد الأقصى لطلبات تحديث الرمز. يرجى المحاولة بعد دقيقة" },
   validate: { ip: false, trustProxy: false },
+  store: makeRateLimitStore("auth:refresh"),
 });
 
 const registerLimiter = rateLimit({
@@ -104,6 +122,7 @@ const registerLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "تم تجاوز الحد الأقصى لطلبات إنشاء الحسابات. يرجى المحاولة لاحقاً" },
   validate: { ip: false, trustProxy: false },
+  store: makeRateLimitStore("auth:register"),
 });
 
 router.post("/register", registerLimiter, async (_req, res) => {
@@ -298,7 +317,7 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
   }
 });
 
-router.post("/logout", authMiddleware, async (req, res) => {
+router.post("/logout", authMiddleware, authedUserLimiter, async (req, res) => {
   try {
     const scope = req.scope!;
     const refreshToken = req.cookies?.erp_refresh || req.body?.refreshToken;
@@ -321,7 +340,7 @@ router.post("/logout", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/switch-assignment", authMiddleware, async (req, res) => {
+router.post("/switch-assignment", authMiddleware, authedUserLimiter, async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = switchAssignmentSchema.safeParse(req.body);
@@ -371,7 +390,7 @@ router.post("/switch-assignment", authMiddleware, async (req, res) => {
   }
 });
 
-router.get("/me", authMiddleware, async (req, res) => {
+router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
   try {
     const scope = req.scope!;
 
