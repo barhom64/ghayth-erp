@@ -100,7 +100,7 @@ router.get("/tickets", requirePermission("support:read"), async (req, res) => {
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
     if (priority) { where += ` AND t.priority = $${paramIdx}`; params.push(priority); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT t.*, cl.name AS "clientName", e.name AS "assigneeName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=t."assigneeId" WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC LIMIT 500`,
+      `SELECT t.*, cl.name AS "clientName", e.name AS "assigneeName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=t."assigneeId" AND e."deletedAt" IS NULL WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -169,7 +169,7 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
          FROM employees e
          JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
          LEFT JOIN support_tickets st ON st."assigneeId"=e.id AND st.status NOT IN ('resolved','closed') AND st."deletedAt" IS NULL
-         WHERE e.status='active'
+         WHERE e.status='active' AND e."deletedAt" IS NULL
          GROUP BY e.id, e.name
          ORDER BY "openTickets" ASC, "avgResolution" ASC
          LIMIT 5`,
@@ -200,8 +200,8 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
 
     if (assigneeId) {
       const [assigneeAssignment] = await rawQuery<any>(
-        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
-        [assigneeId, scope.companyId]
+        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND status = 'active' LIMIT 1`,
+        [assigneeId]
       );
       if (assigneeAssignment) {
         createNotification({
@@ -683,14 +683,14 @@ router.get("/csat", requirePermission("support:read"), async (req, res) => {
       `SELECT cr.*, t.ref AS "ticketRef", t.title AS "ticketTitle", e.name AS "assigneeName"
        FROM ticket_csat_ratings cr
        LEFT JOIN support_tickets t ON t.id=cr."ticketId" AND t."deletedAt" IS NULL
-       LEFT JOIN employees e ON e.id=cr."assigneeId"
+       LEFT JOIN employees e ON e.id=cr."assigneeId" AND e."deletedAt" IS NULL
        WHERE cr."companyId"=$1 ORDER BY cr."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
     const [avg] = await rawQuery<any>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [scope.companyId]);
     const agentStats = await rawQuery<any>(
       `SELECT cr."assigneeId", e.name AS "assigneeName", AVG(cr.score) AS avg, COUNT(*) AS total
-       FROM ticket_csat_ratings cr LEFT JOIN employees e ON e.id=cr."assigneeId"
+       FROM ticket_csat_ratings cr LEFT JOIN employees e ON e.id=cr."assigneeId" AND e."deletedAt" IS NULL
        WHERE cr."companyId"=$1 AND cr."assigneeId" IS NOT NULL
        GROUP BY cr."assigneeId", e.name ORDER BY avg DESC`,
       [scope.companyId]
@@ -797,7 +797,7 @@ router.post("/kb/:id/feedback", requirePermission("support:read"), async (req, r
     const id = parseId(req.params.id, "id");
     const { helpful } = zodParse(kbFeedbackSchema.safeParse(req.body ?? {}));
     const [row] = await rawQuery<any>(
-      `SELECT id FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      `SELECT id FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المقالة غير موجودة");
