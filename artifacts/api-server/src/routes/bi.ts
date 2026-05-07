@@ -242,7 +242,7 @@ router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, r
     );
 
     const approvalParams: any[] = [cid];
-    const approvalConds = [`lr."companyId" = $1`, `lr.status = 'pending'`];
+    const approvalConds = [`lr."companyId" = $1`, `lr.status = 'pending'`, `lr."deletedAt" IS NULL`];
     if (from) { approvalParams.push(from); approvalConds.push(`lr."createdAt" >= $${approvalParams.length}::date`); }
     if (to) { approvalParams.push(to); approvalConds.push(`lr."createdAt" <= $${approvalParams.length}::date`); }
     if (departmentId) {
@@ -255,7 +255,7 @@ router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, r
          COUNT(*) AS "pendingApprovals",
          ROUND(AVG(EXTRACT(EPOCH FROM (NOW() - lr."createdAt")) / 3600), 1) AS "avgWaitHours"
        FROM hr_leave_requests lr
-       LEFT JOIN employees e ON e.id = lr."employeeId"
+       LEFT JOIN employees e ON e.id = lr."employeeId" AND e."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
        LEFT JOIN departments d ON d.id = ea."departmentId"
        WHERE ${approvalConds.join(" AND ")}
@@ -297,7 +297,7 @@ router.get("/operations/employee-productivity", requirePermission("bi:read"), as
            THEN ROUND(COUNT(*) FILTER (WHERE t.status = 'completed')::numeric / att.worked_hours, 2)
            ELSE 0 END AS "productivityRate"
        FROM tasks t
-       JOIN employees e ON e.id = t."assignedTo"
+       JOIN employees e ON e.id = t."assignedTo" AND e."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
        LEFT JOIN departments d ON d.id = ea."departmentId"
        LEFT JOIN LATERAL (
@@ -323,7 +323,7 @@ router.get("/operations/approval-timeliness", requirePermission("bi:read"), asyn
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
-    const conditions = [`lr."companyId" = $1`];
+    const conditions = [`lr."companyId" = $1`, `lr."deletedAt" IS NULL`];
     const params: any[] = [cid];
     if (from) { params.push(from); conditions.push(`lr."createdAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`lr."createdAt" <= $${params.length}::date`); }
@@ -342,7 +342,7 @@ router.get("/operations/approval-timeliness", requirePermission("bi:read"), asyn
          ROUND(AVG(CASE WHEN lr.status = 'approved' AND lr."approvedAt" IS NOT NULL
            THEN EXTRACT(EPOCH FROM (lr."approvedAt" - lr."createdAt")) / 3600 END), 1) AS "avgApprovalHours"
        FROM hr_leave_requests lr
-       LEFT JOIN employees e ON e.id = lr."employeeId"
+       LEFT JOIN employees e ON e.id = lr."employeeId" AND e."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
        WHERE ${conditions.join(" AND ")}`,
       params
@@ -427,7 +427,7 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
          COUNT(*) FILTER (WHERE status = 'absent') AS absent,
          COUNT(*) FILTER (WHERE status = 'late') AS late
        FROM attendance
-       WHERE "companyId" = $1 AND date = $2::date`,
+       WHERE "companyId" = $1 AND date = $2::date AND "deletedAt" IS NULL`,
       [cid, date]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, present: 0, absent: 0, late: 0 }]; });
 
@@ -453,7 +453,7 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
 
     const [leaves] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM hr_leave_requests
-       WHERE "companyId" = $1 AND DATE("createdAt") = $2::date`,
+       WHERE "companyId" = $1 AND DATE("createdAt") = $2::date AND "deletedAt" IS NULL`,
       [cid, date]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0 }]; });
 
@@ -516,7 +516,7 @@ router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, re
            COUNT(*) FILTER (WHERE status = 'present') AS present,
            ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'present') / NULLIF(COUNT(*), 0), 0) AS "presentRate"
          FROM attendance
-         WHERE "companyId" = $1 AND date BETWEEN $2::date AND $3::date`,
+         WHERE "companyId" = $1 AND date BETWEEN $2::date AND $3::date AND "deletedAt" IS NULL`,
         [cid, startDate, endDate]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, present: 0, presentRate: 0 }]; });
 
@@ -615,7 +615,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
            COUNT(*) FILTER (WHERE status = 'absent') AS absent,
            COUNT(*) FILTER (WHERE status = 'late') AS late,
            ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'present') / NULLIF(COUNT(*), 0), 0) AS "presentRate"
-         FROM attendance WHERE "companyId" = $1 AND date BETWEEN $2::date AND $3::date`,
+         FROM attendance WHERE "companyId" = $1 AND date BETWEEN $2::date AND $3::date AND "deletedAt" IS NULL`,
         [cid, startDate, endDate]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, present: 0, absent: 0, late: 0, presentRate: 0 }]; });
 
@@ -644,7 +644,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
            COUNT(*) FILTER (WHERE status = 'rejected') AS rejected,
            SUM(CASE WHEN status = 'approved' THEN days ELSE 0 END) AS "totalDays"
          FROM hr_leave_requests
-         WHERE "companyId" = $1 AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
+         WHERE "companyId" = $1 AND DATE("createdAt") BETWEEN $2::date AND $3::date AND "deletedAt" IS NULL`,
         [cid, startDate, endDate]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, approved: 0, rejected: 0, totalDays: 0 }]; });
 
@@ -757,12 +757,12 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
       `SELECT
          COUNT(*) FILTER (WHERE status = 'present') AS "presentToday",
          COUNT(*) AS "totalToday"
-       FROM attendance WHERE "companyId" = $1 AND date = CURRENT_DATE`,
+       FROM attendance WHERE "companyId" = $1 AND date = CURRENT_DATE AND "deletedAt" IS NULL`,
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [pendingLeave] = await rawQuery<any>(
-      `SELECT COUNT(*) AS cnt FROM hr_leave_requests WHERE "companyId" = $1 AND status = 'pending'`,
+      `SELECT COUNT(*) AS cnt FROM hr_leave_requests WHERE "companyId" = $1 AND status = 'pending' AND "deletedAt" IS NULL`,
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{ cnt: 0 }]; });
 
@@ -780,7 +780,7 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
     ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [maintenance] = await rawQuery<any>(
-      `SELECT COUNT(*) FILTER (WHERE status = 'pending') AS "pendingMaintenance" FROM maintenance_requests WHERE "companyId" = $1`,
+      `SELECT COUNT(*) FILTER (WHERE status = 'pending') AS "pendingMaintenance" FROM maintenance_requests WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
@@ -884,7 +884,7 @@ router.get("/reports/branch-performance", requirePermission("bi:read"), async (r
            COUNT(*) AS total
          FROM attendance
          WHERE "companyId" = $1 AND "branchId" = $2
-           AND date BETWEEN $3::date AND $4::date`,
+           AND date BETWEEN $3::date AND $4::date AND "deletedAt" IS NULL`,
         [cid, branch.id, dateFrom, dateTo]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
@@ -949,7 +949,7 @@ router.get("/reports/vendor-performance", requirePermission("bi:read"), async (r
        FROM suppliers v
        LEFT JOIN purchase_orders po ON po."supplierId" = v.id AND po."companyId" = $1
          AND DATE(po."createdAt") BETWEEN $2::date AND $3::date
-       WHERE v."companyId" = $1
+       WHERE v."companyId" = $1 AND v."deletedAt" IS NULL
        GROUP BY v.id, v.name
        HAVING COUNT(po.id) > 0
        ORDER BY "totalSpend" DESC`,
@@ -1061,6 +1061,7 @@ router.get("/reports/department-leave-balance", requirePermission("bi:read"), as
              SELECT 1 FROM hr_leave_requests lr
              WHERE lr."employeeId" = ea."employeeId"
                AND lr.status = 'approved'
+               AND lr."deletedAt" IS NULL
                AND CURRENT_DATE BETWEEN lr."startDate" AND lr."endDate"
            )
          ) AS "onLeaveNow",
@@ -1160,7 +1161,7 @@ router.get("/reports/training-roi", requirePermission("bi:read"), async (req, re
          COALESCE(SUM(t.cost), 0) AS "totalCost",
          ROUND(AVG(tp.score), 1) AS "avgScore"
        FROM training_participants tp
-       JOIN training_programs t ON t.id = tp."trainingId"
+       JOIN training_programs t ON t.id = tp."trainingId" AND t."deletedAt" IS NULL
        WHERE t."companyId" = $1
          AND DATE(t."startDate") BETWEEN $2::date AND $3::date`,
       [cid, dateFrom, dateTo]
@@ -1177,7 +1178,7 @@ router.get("/reports/training-roi", requirePermission("bi:read"), async (req, re
          ROUND(COALESCE(t.cost, 0) / NULLIF(COUNT(tp."employeeId"), 0), 0) AS "costPerParticipant"
        FROM training_programs t
        LEFT JOIN training_participants tp ON tp."trainingId" = t.id
-       WHERE t."companyId" = $1 AND DATE(t."startDate") BETWEEN $2::date AND $3::date
+       WHERE t."companyId" = $1 AND DATE(t."startDate") BETWEEN $2::date AND $3::date AND t."deletedAt" IS NULL
        GROUP BY t.id, t.title, t.type, t.cost
        ORDER BY cost DESC
        LIMIT 20`,
