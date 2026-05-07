@@ -267,7 +267,10 @@ async function probe(page, routePath, resolvedUrl, cls) {
   }, SAVE_RE.source);
 
   const redirectedToLogin = /\/login(\?|$)/.test(landedUrl);
-  const stableUrl = landedUrl.replace(/^https?:\/\/[^/]+/, "").replace(/\?.*$/, "") === resolvedUrl;
+  const landedPath = (() => { try { return new URL(landedUrl).pathname.replace(/\/+$/, "") || "/"; } catch { return landedUrl; } })();
+  const expectedPath = resolvedUrl.replace(/\?.*$/, "").replace(/\/+$/, "") || "/";
+  // Match if exact, or expected is a prefix of landed (some pages append a tab/slug)
+  const pathMatches = landedPath === expectedPath || landedPath.startsWith(expectedPath + "/");
 
   // ── A1 render
   let a1 = "PASS";
@@ -277,11 +280,11 @@ async function probe(page, routePath, resolvedUrl, cls) {
   else if (dom.has404Page) { a1 = "FAIL"; a1note = "rendered 404 page"; }
   else if (dom.mainEmpty) { a1 = "FAIL"; a1note = "main is empty"; }
 
-  // ── A4 navigation (direct URL must land here without /login bounce)
-  let a4 = redirectedToLogin ? "FAIL" : (stableUrl || landedUrl.includes(resolvedUrl) ? "PASS" : "PASS");
-  // PASS even if there's a trailing slash diff; FAIL only on /login bounce
-  if (redirectedToLogin) a4 = "FAIL";
-  else a4 = "PASS";
+  // ── A4 navigation (direct URL must land on the requested path family)
+  let a4 = "PASS";
+  let a4note = "";
+  if (redirectedToLogin) { a4 = "FAIL"; a4note = "bounced to /login"; }
+  else if (!pathMatches) { a4 = "FAIL"; a4note = `landed=${landedPath} expected=${expectedPath}`; }
 
   // ── A2 data fetch (list pages only)
   let a2;
@@ -303,14 +306,71 @@ async function probe(page, routePath, resolvedUrl, cls) {
     a3 = "SKIP";
   }
 
-  // ── A5 page smoke
-  let a5;
+  // ── A5 runtime smoke (create/edit: fill + submit; list: search/pagination/rows present)
+  let a5 = "SKIP";
+  let a5note = "";
   if (cls.isCreate || cls.isEdit) {
-    a5 = dom.hasInputs > 0 ? "PASS" : "FAIL";
+    if (!dom.saveLabel) { a5 = "FAIL"; a5note = "no save button"; }
+    else {
+      try {
+        // Fill all visible, writable fields with type-appropriate test data
+        const filled = await page.evaluate(() => {
+          const setVal = (el, v) => {
+            const proto = Object.getPrototypeOf(el);
+            const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+            setter ? setter.call(el, v) : (el.value = v);
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+            el.dispatchEvent(new Event("change", { bubbles: true }));
+          };
+          let n = 0;
+          document.querySelectorAll("input, textarea").forEach((el) => {
+            if (el.disabled || el.readOnly || el.type === "hidden" || el.type === "file") return;
+            if (el.type === "checkbox" || el.type === "radio") { if (!el.checked) { el.click(); n++; } return; }
+            if (el.type === "number") setVal(el, "1");
+            else if (el.type === "email") setVal(el, "audit@test.local");
+            else if (el.type === "date") setVal(el, "2026-01-01");
+            else if (el.type === "tel") setVal(el, "0500000000");
+            else if (el.type === "url") setVal(el, "https://example.com");
+            else if (el.tagName === "TEXTAREA" || el.type === "text" || !el.type) setVal(el, "تجربة الفحص الآلي");
+            n++;
+          });
+          document.querySelectorAll("select").forEach((el) => {
+            if (el.disabled) return;
+            const opts = Array.from(el.options).filter((o) => o.value);
+            if (opts.length) { el.value = opts[0].value; el.dispatchEvent(new Event("change", { bubbles: true })); n++; }
+          });
+          return n;
+        });
+        // Watch for the write request triggered by the click
+        let writeStatus = 0; let writeMethod = ""; let writePath = "";
+        const respPromise = page
+          .waitForResponse((r) => /\/api\//.test(r.url()) && /^(POST|PATCH|PUT|DELETE)$/.test(r.request().method()), { timeout: 6000 })
+          .catch(() => null);
+        const clicked = await page.evaluate((reSrc) => {
+          const re = new RegExp(reSrc, "i");
+          const buttons = Array.from(document.querySelectorAll("button,[role=button],input[type=submit]"));
+          const btn = buttons.find((b) => {
+            if (b.disabled) return false;
+            const t = (b.innerText || b.textContent || b.value || "").trim();
+            const a = b.getAttribute("aria-label") || "";
+            return re.test(t) || re.test(a);
+          });
+          if (btn) { btn.scrollIntoView(); btn.click(); return true; }
+          return false;
+        }, SAVE_RE.source);
+        if (!clicked) { a5 = "FAIL"; a5note = `fields=${filled}; save button not clickable`; }
+        else {
+          const r = await respPromise;
+          if (r) { writeStatus = r.status(); writeMethod = r.request().method(); writePath = r.url().replace(/^https?:\/\/[^/]+/, ""); }
+          if (writeStatus >= 500) { a5 = "FAIL"; a5note = `write ${writeMethod} ${writePath} → ${writeStatus} (server crash)`; }
+          else if (writeStatus >= 200 && writeStatus < 500) { a5 = "PASS"; a5note = `write ${writeMethod} ${writePath} → ${writeStatus}`; }
+          else { a5 = "FAIL"; a5note = `fields=${filled}; click did not trigger any /api/ POST/PATCH/PUT/DELETE within 6s`; }
+        }
+      } catch (e) { a5 = "FAIL"; a5note = `smoke-throw: ${String(e.message).slice(0, 100)}`; }
+    }
   } else if (cls.isList) {
-    a5 = (dom.search || dom.pag || dom.tableRows > 0) ? "PASS" : "SKIP";
-  } else {
-    a5 = "SKIP";
+    a5 = (dom.search || dom.pag || dom.tableRows > 0 || dom.emptyHints) ? "PASS" : "FAIL";
+    if (a5 === "FAIL") a5note = "no search/pag/rows/empty-state";
   }
 
   const failed = [a1, a2, a3, a4, a5].includes("FAIL");
@@ -323,10 +383,11 @@ async function probe(page, routePath, resolvedUrl, cls) {
 
   const note = [
     a1note,
+    a4note,
+    a5note,
     network.status5xx ? `5xx:${network.paths5xx.join("|")}` : "",
     !cls.isCreate && !cls.isEdit && network.get2xx === 0 && cls.isList ? "no api gets" : "",
     consoleErrs.length ? `consoleErr=${consoleErrs.length}` : "",
-    cls.isCreate || cls.isEdit ? `form=${dom.hasInputs}/save=${dom.saveLabel ? "Y" : "N"}` : "",
   ].filter(Boolean).join("; ");
 
   return { a1, a2, a3, a4, a5, note, shot, landedUrl };
