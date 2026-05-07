@@ -2828,7 +2828,9 @@ router.patch("/buildings/:id", requirePermission("property:update"), async (req,
     }
     if (Object.keys(after).length === 0) { res.json(existing); return; }
     params.push(id);
-    await rawExecute(`UPDATE property_buildings SET ${sets.join(",")}, "updatedAt"=NOW() WHERE id=$${params.length}`, params);
+    // sets already starts with `"updatedAt"=NOW()` — do not append a second
+    // assignment or PostgreSQL raises 42601 "multiple assignments to same column".
+    await rawExecute(`UPDATE property_buildings SET ${sets.join(",")} WHERE id=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
 
     createAuditLog({
