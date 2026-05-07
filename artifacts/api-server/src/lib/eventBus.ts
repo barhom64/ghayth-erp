@@ -75,7 +75,7 @@ class EventBus extends EventEmitter {
 }
 
 export const eventBus = new EventBus();
-eventBus.setMaxListeners(300);
+eventBus.setMaxListeners(200);
 
 export interface DLQEntry {
   type: "event" | "notification" | "audit" | "workflow";
@@ -129,14 +129,6 @@ async function flushDLQ(): Promise<void> {
       logger.error(dbErr, "[DLQ] Failed to persist DLQ entry:");
     }
   }
-}
-
-export async function flushAndClearDLQ(): Promise<void> {
-  if (flushTimer) {
-    clearTimeout(flushTimer);
-    flushTimer = null;
-  }
-  await flushDLQ();
 }
 
 export function pushToDLQ(
