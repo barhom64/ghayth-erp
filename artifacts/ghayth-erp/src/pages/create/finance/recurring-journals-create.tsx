@@ -219,7 +219,7 @@ export default function RecurringJournalsCreatePage() {
         <Button variant="outline" onClick={() => setLocation("/finance/recurring-journals")}>
           إلغاء
         </Button>
-        <Button onClick={handleSubmit} disabled={!isBalanced || !name || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!isBalanced || !name || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>
