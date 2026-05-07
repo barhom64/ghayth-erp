@@ -50,9 +50,9 @@ vendorsRouter.get("/vendors", requirePermission("finance:read"), async (req, res
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters);
+    const { where, params } = buildScopedWhere(scope, filters, { softDeleteColumn: '"deletedAt"' });
     const rows = await rawQuery<any>(
-      `SELECT * FROM suppliers WHERE ${where} AND "deletedAt" IS NULL ORDER BY name`,
+      `SELECT * FROM suppliers WHERE ${where} ORDER BY name`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
