@@ -65,12 +65,12 @@ budgetRouter.get("/budget", requirePermission("finance:read"), async (req, res) 
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'b."companyId"', branchColumn: 'b."branchId"', enforceBranchScope: true });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'b."companyId"', branchColumn: 'b."branchId"', enforceBranchScope: true, softDeleteColumn: 'b."deletedAt"' });
     const rows = await rawQuery<any>(
       `SELECT b.*, coa.name AS "accountName"
        FROM budgets b
-       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId"
-       WHERE ${where} AND b."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId" AND coa."deletedAt" IS NULL
+       WHERE ${where}
        ORDER BY b.period DESC, b."accountCode"`,
       params
     );
@@ -103,8 +103,8 @@ budgetRouter.get("/budget-vs-actual", requirePermission("finance:read"), async (
               SUM(b.amount) AS budget,
               COALESCE(SUM(b.used), 0) AS actual
        FROM budgets b
-       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId"
-       WHERE b."companyId" = $1 AND b.period >= $2 AND b.period <= $3
+       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId" AND coa."deletedAt" IS NULL
+       WHERE b."companyId" = $1 AND b."deletedAt" IS NULL AND b.period >= $2 AND b.period <= $3
        GROUP BY b."accountCode", coa.name
        ORDER BY b."accountCode"`,
       [scope.companyId, startDate.slice(0, 7), endDate.slice(0, 7)]
@@ -416,7 +416,7 @@ budgetRouter.get("/budget/approval-requests", requirePermission("finance:read"),
     const rows = await rawQuery<any>(
       `SELECT ar.*, coa.name AS "accountName"
        FROM budget_approval_requests ar
-       LEFT JOIN chart_of_accounts coa ON coa.code = ar."accountCode" AND coa."companyId" = ar."companyId"
+       LEFT JOIN chart_of_accounts coa ON coa.code = ar."accountCode" AND coa."companyId" = ar."companyId" AND coa."deletedAt" IS NULL
        WHERE ar."companyId"=$1 AND ar.status=$2 AND ar."deletedAt" IS NULL
        ORDER BY ar."requestedAt" DESC LIMIT 200`,
       [scope.companyId, status]
@@ -527,8 +527,8 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
                   AND je."createdAt"::date BETWEEN $2::date AND $3::date
               ), 0) AS "actualAmount"
        FROM budgets b
-       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId"
-       WHERE b."companyId" = $1 AND b.period = $4
+       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId" AND coa."deletedAt" IS NULL
+       WHERE b."companyId" = $1 AND b."deletedAt" IS NULL AND b.period = $4
        ORDER BY b."accountCode"
        LIMIT 500`,
       [scope.companyId, periodStart, periodEnd, period]
@@ -584,8 +584,8 @@ budgetRouter.get("/budget/:id", requirePermission("finance:read"), async (req, r
     const [item] = await rawQuery<any>(
       `SELECT b.*, coa.name AS "accountName"
        FROM budgets b
-       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId"
-       WHERE b.id = $1 AND b."companyId" = $2`,
+       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId" AND coa."deletedAt" IS NULL
+       WHERE b.id = $1 AND b."companyId" = $2 AND b."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("الميزانية غير موجودة");
