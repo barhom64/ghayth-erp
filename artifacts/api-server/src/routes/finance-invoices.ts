@@ -259,10 +259,11 @@ invoicesRouter.get("/invoices", requirePermission("finance:read"), async (req, r
       companyColumn: 'i."companyId"',
       branchColumn: 'i."branchId"',
       enforceBranchScope: true,
+      softDeleteColumn: 'i."deletedAt"',
     });
 
     let paramIdx = nextParamIndex;
-    let where = baseWhere + ` AND i."deletedAt" IS NULL`;
+    let where = baseWhere;
     if (status) {
       where += ` AND i.status = $${paramIdx}`;
       params.push(status);
