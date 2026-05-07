@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
@@ -188,9 +193,21 @@ export default function PerformanceDetail() {
     return sections;
   }, [review, id]);
 
-  const handleEdit = () => {
-    setLocation(`/hr/performance/${id}/edit`);
-  };
+  const editDelete = useDetailEditDelete({
+    entityLabel: "تقييم الأداء",
+    patchPath: `/hr/performance/${id}`,
+    deletePath: `/hr/performance/${id}`,
+    listPath: "/hr/performance",
+    initialValues: review,
+    fields: [
+      { key: "overallRating", label: "التقييم العام", type: "number" },
+      { key: "strengths", label: "نقاط القوة" },
+      { key: "areasForImprovement", label: "مجالات التحسين" },
+      { key: "comments", label: "ملاحظات" },
+    ],
+    invalidateKeys: [["performance-review", String(id)], ["performance-reviews"]],
+    onSaved: () => refetch(),
+  });
 
   const ratingLabel = review?.overallRating
     ? RATING_LABELS[review.overallRating] || review.overallRating
@@ -198,6 +215,9 @@ export default function PerformanceDetail() {
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
+      <div className="md:col-span-3">
+        <InlineEditCard hook={editDelete} />
+      </div>
       {/* Primary info — hero rating + scores + narrative sections */}
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
@@ -418,16 +438,7 @@ export default function PerformanceDetail() {
               sections={printSections}
             />
           )}
-          <GuardedButton
-            perm="hr:update"
-            variant="outline"
-            size="sm"
-            onClick={handleEdit}
-            disabled={!review || ["archived"].includes(review.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
+          <DetailActionButtons hook={editDelete} />
         </>
       }
     />
