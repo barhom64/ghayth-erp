@@ -395,10 +395,14 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
   try {
     const { callId, status, answeredBy } = zodParse(pbxStatusSchema.safeParse(req.body ?? {}));
 
-    await rawExecute(
-      `UPDATE pbx_calls SET status=$1, "answeredBy"=$2 WHERE "callId"=$3 AND status != 'completed'`,
+    const updateRes = await rawExecute(
+      `UPDATE pbx_calls SET status=$1, "answeredBy"=$2, "updatedAt"=NOW() WHERE "callId"=$3 AND status != 'completed'`,
       [status ?? "in_progress", answeredBy ?? null, callId]
     );
+    if (!updateRes.affectedRows) {
+      res.status(404).json({ error: "Call not found or already completed" });
+      return;
+    }
 
     emitEvent({ companyId: 0, userId: 0, action: "communication.pbx.status", entity: "communication_logs", entityId: 0, details: JSON.stringify({ callId, status: status ?? "in_progress", answeredBy }) }).catch((e) => logger.error(e, "communications background task failed"));
     createAuditLog({ companyId: 0, userId: 0, action: "create", entity: "communication_logs", entityId: 0, after: { channel: "pbx", callId, status: status ?? "in_progress", answeredBy } }).catch((e) => logger.error(e, "communications background task failed"));

@@ -63,7 +63,7 @@ accountsRouter.get("/chart-of-accounts", requirePermission("finance:read"), asyn
     const accounts = await rawQuery<any>(
       `SELECT id, code, name, type, "parentCode", status
        FROM chart_of_accounts
-       WHERE ${where}
+       WHERE ${where} AND "deletedAt" IS NULL
        ORDER BY code ASC`,
       params
     );
@@ -94,7 +94,7 @@ accountsRouter.get("/accounts", requirePermission("finance:read"), async (req, r
     }
 
     const rows = await rawQuery(
-      `SELECT * FROM chart_of_accounts WHERE ${where}${extraWhere} ORDER BY code`,
+      `SELECT * FROM chart_of_accounts WHERE ${where} AND "deletedAt" IS NULL${extraWhere} ORDER BY code`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -160,7 +160,7 @@ accountsRouter.patch("/accounts/:id", requirePermission("finance:update"), async
       });
     }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE chart_of_accounts SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE chart_of_accounts SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("الحساب غير موجود");
 
     emitEvent({

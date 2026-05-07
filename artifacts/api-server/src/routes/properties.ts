@@ -1877,11 +1877,11 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
     const { row, journalEntryId: finalJournalId } = await withTransaction(async (client) => {
       // Lock the payment row to prevent concurrent pay requests.
       const lockRes = await client.query(
-        `SELECT rp.*, c.status AS "contractStatus", c."tenantName", u."unitNumber", u."buildingName", u.id AS "unitId"
+        `SELECT rp.*, c.status AS "contractStatus", c."tenantName", c."companyId" AS "contractCompanyId", u."unitNumber", u."buildingName", u.id AS "unitId"
            FROM rent_payments rp
            JOIN rental_contracts c ON c.id = rp."contractId"
            LEFT JOIN property_units u ON u.id = c."unitId"
-          WHERE rp.id = $1 AND rp."companyId" = $2
+          WHERE rp.id = $1 AND c."companyId" = $2
           FOR UPDATE OF rp`,
         [Number(id), scope.companyId]
       );
@@ -1931,7 +1931,7 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
                 "paidDate"   = $2,
                 method       = $3,
                 status       = CASE WHEN "paidAmount" + $1 >= amount THEN 'paid' ELSE 'partial' END,
-                "journalEntryId" = COALESCE("journalEntryId", $4),
+                notes        = COALESCE(notes || E'\n', '') || 'JE#' || COALESCE($4::text, '-'),
                 "updatedAt"  = NOW()
           WHERE id = $5`,
         [paidAmount, b.paidDate || todayISO(), b.method || 'bank_transfer', journalEntryId, Number(id)]

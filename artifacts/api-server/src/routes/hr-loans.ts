@@ -425,8 +425,8 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
     const { affectedRows } = await rawExecute(
       `UPDATE hr_employee_loans
        SET status = 'active', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW()
-       WHERE id = $2 AND status = 'pending'`,
-      [scope.userId, loan.id]
+       WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
+      [scope.userId, loan.id, scope.companyId]
     );
     if (!affectedRows) throw new ConflictError("تم تحديث السلفة مسبقاً — أعد التحميل");
 

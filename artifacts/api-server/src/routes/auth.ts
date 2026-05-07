@@ -290,6 +290,14 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
 
     await rawQuery(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE id = $1 AND "revokedAt" IS NULL`, [rt.id]);
 
+    const newRefreshToken = signRefreshToken();
+    const newExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
+    await rawExecute(
+      `INSERT INTO refresh_tokens (token, "userId", "expiresAt", "userAgent", "ipAddress") VALUES ($1, $2, $3, $4, $5)`,
+      [newRefreshToken, rt.userId, newExpiresAt.toISOString(), req.headers["user-agent"] ?? null, req.ip ?? null]
+    );
+    setRefreshTokenCookie(res, newRefreshToken);
+
     emitEvent({ companyId: 0, userId: rt.userId, action: "auth.refresh", entity: "users", entityId: rt.userId }).catch((e) => logger.error(e, "auth background task failed"));
     createAuditLog({ companyId: 0, userId: rt.userId, action: "update", entity: "users", entityId: rt.userId, after: { reason: "token_refresh" } }).catch((e) => logger.error(e, "auth background task failed"));
     res.json({ success: true });

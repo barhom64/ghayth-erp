@@ -249,8 +249,8 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
 
     // رصيد الإجازات
     const [lb] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(balance), 0) AS balance FROM leave_balances
-       WHERE "assignmentId" = $1 AND "companyId" = $2`,
+      `SELECT COALESCE(SUM(entitled - used - pending + carried), 0) AS balance FROM leave_balances
+       WHERE "employeeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1 LIMIT 1) AND "companyId" = $2`,
       [b.assignmentId, scope.companyId]
     ).catch((e) => { logger.error(e, "hr exit query failed"); return [{ balance: 0 }]; });
     const leaveBalance = Number(lb?.balance ?? 0);

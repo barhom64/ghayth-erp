@@ -89,7 +89,7 @@ vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, 
       after: { name },
     }).catch((err) => logger.error(err, "[audit] vendor.created:"));
 
-    res.status(201).json({ id: insertId, ...req.body });
+    res.status(201).json({ id: insertId, name, contactPerson, phone, email, taxNumber, category });
   } catch (err) {
     handleRouteError(err, res, "Create vendor error:");
   }

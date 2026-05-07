@@ -396,7 +396,7 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
     if (!isFullAccess(scope) && scope.role !== "projects_manager") {
       throw new ForbiddenError("لا تملك صلاحية إنشاء مشاريع", { fix: "راجع مدير الحساب للحصول على صلاحية projects_manager" });
     }
-    const b = req.body;
+    const b = parsed;
     if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
       throw new ValidationError("اسم المشروع مطلوب", { field: "name", fix: "أدخل اسماً واضحاً للمشروع" });
     }
@@ -748,7 +748,7 @@ router.post("/:id/phases", requirePermission("projects:create"), async (req, res
     const parsed = zodParse(createPhaseSchema.safeParse(req.body));
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = parsed;
     if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
       throw new ValidationError("اسم المرحلة مطلوب", { field: "name", fix: "أدخل اسم المرحلة" });
     }
@@ -869,7 +869,7 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
   try {
     const parsed = zodParse(createTaskSchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const projectId = parseId(req.params.id, "id");
 
     if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
@@ -993,7 +993,7 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
     const parsed = zodParse(updateTaskSchema.safeParse(req.body));
     const scope = req.scope!;
     const taskId = parseId(req.params.taskId, "taskId");
-    const b = req.body;
+    const b = parsed;
 
     const [existingTask] = await rawQuery<any>(
       `SELECT pt.* FROM project_tasks pt
@@ -1006,7 +1006,7 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
 
     // State machine for task status transitions
     if (b.status !== undefined && b.status !== existingTask.status) {
-      if (!TASK_STATUSES.includes(b.status)) {
+      if (!(TASK_STATUSES as readonly string[]).includes(b.status)) {
         throw new ValidationError(
           `حالة مهمة غير صالحة: ${b.status}`,
           { field: "status", fix: `اختر من: ${TASK_STATUSES.join(", ")}` }
@@ -1372,7 +1372,7 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
   try {
     const parsed = zodParse(createMilestoneSchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
@@ -1539,7 +1539,7 @@ router.post("/:id/risks", requirePermission("projects:create"), async (req, res)
   try {
     const parsed = zodParse(createRiskSchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
@@ -1696,7 +1696,7 @@ router.post("/:id/resources", requirePermission("projects:create"), async (req, 
   try {
     const parsed = zodParse(createResourceSchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     assertProjectMutable(project);
@@ -1767,7 +1767,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
   try {
     const parsed = zodParse(createCostSchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     assertProjectMutable(project);

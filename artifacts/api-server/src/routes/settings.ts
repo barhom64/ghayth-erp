@@ -458,7 +458,7 @@ router.put("/departments/:id", requirePermission("settings:write"), async (req, 
     const id = parseId(req.params.id, "id");
     const { name, manager } = body;
     const scope = req.scope!;
-    await rawExecute(`UPDATE departments SET name=$1, "managerId"=$2 WHERE id=$3 RETURNING id`, [name, manager || null, id]);
+    await rawExecute(`UPDATE departments SET name=$1, "managerId"=$2 WHERE id=$3 AND "companyId"=$4 RETURNING id`, [name, manager || null, id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_department",
       entity: "departments", entityId: id,
@@ -560,6 +560,9 @@ router.put("/companies/:id", requirePermission("settings:write"), async (req, re
     const id = parseId(req.params.id, "id");
     const { name, nameEn, taxNumber, crNumber } = body;
     const scope = req.scope!;
+    if (!scope.allowedCompanies?.includes(id) && scope.companyId !== id) {
+      throw new ForbiddenError("لا يمكنك تعديل شركة لا تملك صلاحية عليها");
+    }
     await rawExecute(`UPDATE companies SET name=$1, "nameEn"=$2, "vatNumber"=$3, "crNumber"=$4 WHERE id=$5 RETURNING id`, [name, nameEn || null, taxNumber || null, crNumber || null, id]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_company",
@@ -575,6 +578,12 @@ router.delete("/companies/:id", requirePermission("settings:write"), async (req,
   try {
     const id = parseId(req.params.id, "id");
     const scope = req.scope!;
+    if (!scope.allowedCompanies?.includes(id) && scope.companyId !== id) {
+      throw new ForbiddenError("لا يمكنك حذف شركة لا تملك صلاحية عليها");
+    }
+    if (id === scope.companyId) {
+      throw new ValidationError("لا يمكنك حذف الشركة الحالية");
+    }
     const [beforeCompany] = await rawQuery(`SELECT * FROM companies WHERE id=$1`, [id]);
     await rawExecute(`DELETE FROM companies WHERE id=$1 RETURNING id`, [id]);
     createAuditLog({

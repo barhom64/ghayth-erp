@@ -318,6 +318,10 @@ router.delete("/users/:id", requirePermission("admin:write"), async (req, res) =
            AND ea."companyId"=$2`,
         [id, scope.companyId]
       );
+      await tx.query(
+        `UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`,
+        [id]
+      );
     });
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
@@ -355,6 +359,7 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
     const hashed = await hashPassword(newPassword);
     const result = await rawExecute(`UPDATE users SET "passwordHash"=$1 WHERE id=$2`, [hashed, id]);
     if (result.affectedRows === 0) { throw new NotFoundError("المستخدم غير موجود"); }
+    await rawExecute(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`, [id]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "password_reset", entity: "users", entityId: id,
@@ -1175,7 +1180,7 @@ router.get("/governance/domain-registry", requirePermission("admin:read"), async
 
 router.get("/governance/gl-reconciliation", requirePermission("admin:read"), async (req, res) => {
   try {
-    const companyId = (req as any).companyId;
+    const companyId = req.scope!.companyId;
     const mismatches = await rawQuery<any>(
       `SELECT
          coa.code,
