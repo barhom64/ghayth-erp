@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
+import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
@@ -9,6 +10,20 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       <span className="text-sm text-gray-500">{label}</span>
       <span className="text-sm font-medium text-gray-900">{value || "-"}</span>
     </div>
+  );
+}
+
+function ProfileSaveSubmit({ loading }: { loading: boolean }) {
+  const { isCoolingDown, label } = useRateLimitCooldown();
+  const busy = loading || isCoolingDown;
+  return (
+    <button
+      type="submit"
+      disabled={busy}
+      className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2 rounded-lg transition-colors text-sm"
+    >
+      {isCoolingDown ? label : loading ? "جارٍ الحفظ..." : "حفظ"}
+    </button>
   );
 }
 
@@ -140,13 +155,7 @@ export default function Profile() {
               />
             </div>
             <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2 rounded-lg transition-colors text-sm"
-              >
-                {loading ? "جارٍ الحفظ..." : "حفظ"}
-              </button>
+              <ProfileSaveSubmit loading={loading} />
               <button
                 type="button"
                 onClick={() => { setShowPasswordForm(false); setError(""); setForm({ current: "", newPass: "", confirm: "" }); }}
