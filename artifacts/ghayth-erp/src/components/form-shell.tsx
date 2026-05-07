@@ -175,6 +175,7 @@ export function FormShell<TSchema extends FieldValues>({
             variant={submitVariant}
             disabled={disabled || submitting}
             className="min-w-[7rem]"
+            rateLimitAware
           >
             {submitting ? "جارٍ الحفظ..." : submitLabel}
           </Button>
