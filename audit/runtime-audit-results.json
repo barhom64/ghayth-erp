@@ -1,0 +1,6277 @@
+{
+  "batch": 0,
+  "start": 0,
+  "end": 373,
+  "results": [
+    {
+      "route": "/action-center",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/activity-log",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/domain-registry",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/event-monitor",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/gl-reconciliation",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/integrations",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/lifecycle-monitor",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/logs",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/monitoring",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/policy-engine",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/posting-failures",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/rbac-matrix",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/roles",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/system-governor",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/system-registry",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/users",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/violations-report",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/automation",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/bi",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/bi/admin-reports",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/bi/dashboards",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/bi/dashboards/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/bi_dashboards_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/bi/kpis",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/bi/kpis/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/bi_kpis_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/bi/operations",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/bi/reports",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/bi/reports/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/bi_reports_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/calendar",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/clients",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/clients/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/clients/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/clients_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/communications",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/communications/letters/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/communications_letters_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/communications/notification-engine",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/correspondence",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/correspondence/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/correspondence",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/correspondence/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/correspondence_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/crm",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/crm/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/crm/leads → 404",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/crm/activities",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/crm/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/crm_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/crm/leads/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/crm/leads → 404",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/crm/pipeline",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/daily-close",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/dashboard",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/documents",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/documents/:docId/versions",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/documents/archive",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/documents/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/documents_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/documents/folders",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/documents/templates",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/documents/upload",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/employees",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/employees/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/employees/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/employees_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/exec-dashboard",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/accounts",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/accounts/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/accounts/:id/edit",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/finance_accounts_id_edit.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": true,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/accounts/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/finance_accounts_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/ap-aging",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/ar-aging",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/bank-guarantees",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/bank-reconciliation",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/bank-reconciliation/manual-match/:batchId/:rowId",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /finance/bank-reconciliation/manual-match/:batchId/:rowId",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/budget",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/budget/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/budget",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/budget/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/finance_budget_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/cash-flow-forecast",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/cashflow",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/commitments",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/commitments/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/commitments",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/custodies",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/custodies/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/custodies",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/custodies/report",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/expenses",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/expenses/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/expenses",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/expenses/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/finance_expenses_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/financial-requests",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/financial-requests/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/financial-requests",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/fiscal-periods",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/fixed-assets",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/fixed-assets/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/fixed-assets",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/fixed-assets/batch-depreciate",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/intercompany",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/intercompany/consolidation/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/finance_intercompany_consolidation_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/inventory-costing",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/invoices",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/invoices/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/invoices/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/finance_invoices_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/journal",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/journal-manual",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/journal-manual/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/journal-manual",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/journal-manual/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/finance_journal_manual_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/journal/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/finance_journal_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/ledger/:code",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /finance/ledger/:code",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/opening-balances",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/opening-balances/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/finance_opening_balances_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/payments",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/project-costing",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/project-costing/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /finance/project-costing/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/purchase-orders",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/purchase-orders/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/purchase-orders",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/purchase-orders/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/finance_purchase_orders_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/receivables",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/receivables/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/recurring-journals",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/recurring-journals/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/recurring-journals",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/recurring-journals/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/finance_recurring_journals_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/reports",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/salary-advances",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/salary-advances/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/salary-advances",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/tax",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/treasury",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/vendors",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/vendors/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/vendors/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/finance_vendors_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/vouchers",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/vouchers/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/vouchers",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/vouchers/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/finance_vouchers_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/year-end-close",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/:id/status",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/alerts",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/alerts/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/fleet_alerts_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/drivers",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/drivers/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/fleet/drivers",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/drivers/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/fleet_drivers_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/fuel",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/fuel/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/fleet/fuel-logs",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/fuel/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/fleet_fuel_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/insurance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/insurance/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/fleet/insurance",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/insurance/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/fleet_insurance_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/maintenance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/maintenance/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/fleet/maintenance",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/maintenance/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/fleet_maintenance_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/preventive-plans",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/reports",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/tco",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/traffic-violations",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/traffic-violations/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/fleet/traffic-violations",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/trips",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/trips/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/fleet/trips",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/trips/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/fleet_trips_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/vehicles/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/fleet_vehicles_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/governance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/governance/audits",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/governance/audits/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/governance/audits",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/governance/audits/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/governance_audits_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/governance/capa",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/governance/compliance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/governance/compliance/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/governance/compliance",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/governance/compliance/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/governance_compliance_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/governance/policies",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/governance/policies/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/governance/policies",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/governance/policies/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/governance_policies_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/governance/risks",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/governance/risks/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/governance/risks/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/governance_risks_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/guide/properties",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/attendance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/attendance/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/attendance/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/hr_attendance_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/attendance/field-tracking",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/attendance/qr-scanner",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/attendance/reports",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/contracts",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/contracts/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/contracts/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/hr_contracts_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/development-plans",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/discipline/memos",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/discipline/memos/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /hr/discipline/memos/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/discipline/regulation",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/employee-activation",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/employee-profile/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /hr/employee-profile/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/evaluation-360",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/evaluation-360/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/evaluation-360 → 404",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/evaluation-360/:id/peer",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/evaluation-360 → 404",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/evaluation-360/:id/upward",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/evaluation-360 → 404",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/evaluation-360/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/hr_evaluation_360_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/evaluation-360/history/:employeeId",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/evaluation-360 → 404",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/excuse-requests",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/excuse-requests/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/hr/excuse-requests",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/excuse-requests/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/hr_excuse_requests_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/exit",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/exit/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/hr/exit",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/exit/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/hr_exit_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/expiring-documents",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/gratuity",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/idp",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/leaves",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/leaves/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/leaves → 404",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/leaves/approval-chains",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/leaves/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/hr_leaves_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/leaves/management",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/loans",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/loans/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/hr/loans",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/loans/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/hr_loans_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/official-letters",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/onboarding-review",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/organization",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/organization/structure",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/overtime",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/overtime/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/hr/overtime",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/overtime/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/hr_overtime_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/payroll",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/payroll/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/hr/payroll",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/payroll/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/hr_payroll_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/payroll/salary-components",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/performance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/performance/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/hr/performance",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/performance/advanced",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/performance/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/hr_performance_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/public-holidays",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/recruitment",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/recruitment/advanced",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/recruitment/applicants/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/hr_recruitment_applicants_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/recruitment/applications",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/recruitment/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/hr_recruitment_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/recruitment/jobs/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/recruitment → 404",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/shifts",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/shifts/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /hr/shifts/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/shifts/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/hr_shifts_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/shifts/management",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/training",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/training/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/training → 404",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/training/advanced",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/training/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/hr_training_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/transfers",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/transfers/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/hr/transfers",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/turnover-report",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/violations",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/violations/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/violations/auto-detection",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/violations/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/hr_violations_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/violations/management",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/violations/penalty-escalation",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/insights",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/intelligence",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/legal",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/legal/cases",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/legal/cases/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/legal/cases",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/legal/cases/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/legal_cases_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/legal/contracts",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/legal/contracts/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/legal/correspondence",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/legal/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/legal_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/legal/documents",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/legal/judgments",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/legal/judgments/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/legal/judgments → 404",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/legal/sessions",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/legal/sessions/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/legal/sessions → 404",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/manager-board",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/marketing",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/marketing/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/marketing_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/module-dashboards",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-attendance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-documents",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-leave-request",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-loans",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-overtime",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-payslip",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-performance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-requests",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-space",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/notifications",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/obligations",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/operations-center",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/projects",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/projects/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /projects/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/projects/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/projects_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/projects/gantt",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/projects/risks",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/projects/tasks",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/properties/units",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/:id/status",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/properties/units",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/buildings",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/buildings/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/properties/buildings",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/buildings/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/properties_buildings_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/contracts",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/contracts/:contractId/pay/:installmentId",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/properties/contracts",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/contracts/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/properties/contracts",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/contracts/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/properties_contracts_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/properties_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/dashboard",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/deposits",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/guide",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/inspections",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/maintenance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/maintenance/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/properties/units",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/maintenance/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/properties_maintenance_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/occupancy-report",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/owners",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/owners/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/properties/owners",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/owners/:id/edit",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/properties/owners",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": true,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/owners/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/properties_owners_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/payments",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/payments/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/properties/units",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/payments/:paymentId/pay",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/properties/units",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/tenants",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/tenants/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/properties/tenants",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/tenants/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/properties_tenants_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/reports/scheduled",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/requests",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/requests/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /requests/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/requests/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/requests_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/requests/types",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/requests/types/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/requests_types_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/requests/workflows",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/settings",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/settings/audit-log",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/settings/branches",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/settings/companies",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/settings/departments",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/settings/rules",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/store",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/store/orders",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/store/orders/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /store/orders/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/store/orders/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/store_orders_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/store/products/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /store/products/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/store/products/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/store_products_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/support",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/support/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /support/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/support/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/support_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/support/kb",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/support/replies",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/tasks",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/tasks/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /tasks/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/tasks/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/tasks_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/agents",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/agents/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/commission-plans",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/commission-plans/:id/edit",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/umrah/commission-plans",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": true,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/commission-plans/new",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/import",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/import/legacy",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/invoices",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/invoices/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /umrah/invoices/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/packages",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/packages/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/umrah/packages",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/penalties",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/penalties/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /umrah/penalties/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/pilgrims",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/pilgrims/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /umrah/pilgrims/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/pilgrims/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/umrah_pilgrims_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/pricing",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/seasons",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/seasons/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/sub-agents",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/transport",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/transport/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/umrah/transport",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/violations",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/violations/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/umrah/violations",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/warehouse",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/warehouse/categories",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/warehouse/categories/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/warehouse/categories/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/warehouse_categories_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/warehouse/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/warehouse_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/warehouse/inventory-count",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/warehouse/movements",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/warehouse/movements/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/warehouse/movements",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/warehouse/movements/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/warehouse_movements_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/warehouse/products/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/warehouse/suppliers",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/warehouse/suppliers/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "SKIP",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/warehouse/suppliers/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "PASS",
+      "a5": "FAIL",
+      "note": "form=0/save=Y",
+      "shot": "audit/screenshots/warehouse_suppliers_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    }
+  ]
+}
