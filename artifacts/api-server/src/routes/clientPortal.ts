@@ -3,6 +3,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
+import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, isTypedError,
   parseId,
   zodParse,
@@ -62,6 +63,7 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "تم تجاوز الحد الأقصى لمحاولات الدخول. يرجى المحاولة بعد دقيقة" },
   validate: { ip: false, trustProxy: false },
+  store: makeRateLimitStore("portal:login"),
 });
 
 export interface PortalScope {
@@ -323,7 +325,7 @@ protectedRouter.get("/invoices", withPortalScope(async (req, res) => {
     const offsetParam = params.length;
 
     const invoices = await portalScopedQuery<any>(scope,
-      `SELECT id, ref, status, total, "paidAmount", "dueDate", "issueDate", notes, "createdAt"
+      `SELECT id, ref, status, total, "paidAmount", "dueDate", "createdAt" AS "issueDate", notes, "createdAt"
        FROM invoices
        WHERE ${where}
        ORDER BY "createdAt" DESC
