@@ -303,6 +303,7 @@ function CreateAdvanceForm({ onDone }: { onDone: () => void }) {
           <Button
             onClick={handleSubmit}
             disabled={!form.employeeName || !form.amount || createMut.isPending}
+            rateLimitAware
           >
             {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
           </Button>
