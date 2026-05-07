@@ -176,7 +176,7 @@ export default function JournalManualCreatePage() {
 
             <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="outline" onClick={() => navigate("/finance/journal-manual")}>إلغاء</Button>
-              <Button type="submit" disabled={createMutation.isPending || !isBalanced}>
+              <Button type="submit" disabled={createMutation.isPending || !isBalanced} rateLimitAware>
                 {createMutation.isPending ? "جاري الإنشاء..." : "إنشاء القيد"}
               </Button>
             </div>
