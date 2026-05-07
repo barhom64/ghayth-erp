@@ -385,11 +385,11 @@ financeHardeningRouter.get("/journal-manual", requirePermission("finance:read"),
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl."journalId"=je.id
        LEFT JOIN employee_assignments ea_rev ON ea_rev.id=je."reviewedBy"
-       LEFT JOIN employees e_rev ON e_rev.id=ea_rev."employeeId"
+       LEFT JOIN employees e_rev ON e_rev.id=ea_rev."employeeId" AND e_rev."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea_apr ON ea_apr.id=je."approvedBy"
-       LEFT JOIN employees e_apr ON e_apr.id=ea_apr."employeeId"
+       LEFT JOIN employees e_apr ON e_apr.id=ea_apr."employeeId" AND e_apr."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea_cre ON ea_cre.id=je."createdBy"
-       LEFT JOIN employees e_cre ON e_cre.id=ea_cre."employeeId"
+       LEFT JOIN employees e_cre ON e_cre.id=ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE ${conditions.join(" AND ")}
        GROUP BY je.id, e_rev.name, e_apr.name, e_cre.name
        ORDER BY je."createdAt" DESC LIMIT 100`,
@@ -411,7 +411,7 @@ financeHardeningRouter.get("/journal-manual/:id", requirePermission("finance:rea
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl."journalId"=je.id
        LEFT JOIN employee_assignments ea_cre ON ea_cre.id=je."createdBy"
-       LEFT JOIN employees e_cre ON e_cre.id=ea_cre."employeeId"
+       LEFT JOIN employees e_cre ON e_cre.id=ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id, e_cre.name`,
       [id, scope.companyId]
@@ -1317,7 +1317,7 @@ financeHardeningRouter.get("/cost-center-report", requirePermission("finance:rea
          COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit ELSE 0 END),0) AS "totalRevenue"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId"=je.id
-       LEFT JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId"
+       LEFT JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId" AND coa."deletedAt" IS NULL
        WHERE ${conditions.join(" AND ")}
        GROUP BY je."costCenter"
        ORDER BY "totalExpenses" DESC`,
