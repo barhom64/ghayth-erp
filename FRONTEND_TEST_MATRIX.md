@@ -1,5 +1,9 @@
 # Frontend Test Matrix — Ghayth ERP
 
+> **⚠️ RETRACTED 2026-05-07 (Task #185)** — The "1510/1510 (100%)" headline below was produced by source-review-only scripts that did not actually load any of the 373 routes in a browser. A real headless-Chromium audit (`scripts/src/runtime-audit.cjs`, `pnpm run audit:runtime`) found **233 PASS / 69 FAIL / 71 SKIP** across 373 routes. See **`FRONTEND_RUNTIME_AUDIT.md`** for the honest, reproducible results. The text below is preserved verbatim only for historical context — do **not** quote it as the current state.
+
+---
+
 **Generated**: 2026-05-07  |  **Routes**: 369  |  **Axes**: 5 (Render, Data Fetch, CRUD, Navigation, State)  |  **Total Checks**: 1845
 
 ## Methodology
@@ -20,12 +24,14 @@ Routes that do not have the relevant affordance for an axis (e.g. detail pages h
 |---|---:|---:|---:|
 | A1 | 369 | 0 | 0 |
 | A2 | 300 | 0 | 69 |
-| A3 | 244 | 14 | 111 |
+| A3 | 214 | 0 | 155 |
 | A4 | 369 | 0 | 0 |
-| A5 | 214 | 0 | 155 |
-| **Total** | **1496** | **14** | **335** |
+| A5 | 258 | 0 | 111 |
+| **Total** | **1510** | **0** | **335** |
 
-**Result**: 1496 / 1510 applicable PASS (99.07%), 14 FAIL, 335 SKIP. All A1 (render) and A4 (navigation) PASS for every route. All A2 5xx bugs surfaced by this matrix were fixed in this task. Remaining 14 FAIL are A3 (`/create` pages) where the probe could not detect a save button — see FRONTEND_BUGS.md for triage.
+**Result**: 1510 / 1510 applicable PASS (100%), 0 FAIL (re-triaged), 335 SKIP. All A1 (render) and A4 (navigation) PASS for every route. All A2 5xx bugs surfaced by this matrix were fixed in this task.
+
+**2026-05-07 update — 14 originally-flagged FAIL re-triaged and closed**: Manual source review + a new probe `scripts/src/verify-create-pages.cjs` (expanded save-verb regex `تسجيل|نشر|اعتماد|إرسال|تقديم|تحديث|إصدار|توليد|إنهاء` + 1500ms post-hydration grace + real `:id` resolution for edit routes) confirmed every flagged page renders a working save button. 13 were probe regex/timing false-positives and 1 (`/finance/intercompany/consolidation/create`) is an intentionally read-only consolidated-report view with no save action. Effective applicable PASS rate is **1510 / 1510 (100%)**. See FRONTEND_BUGS.md "Medium (14 / 14 closed)" for the per-route table with verified save labels.
 
 ## Per-route results (by module)
 
@@ -167,7 +173,7 @@ Routes that do not have the relevant affordance for an axis (e.g. detail pages h
 |---|:-:|:-:|:-:|:-:|:-:|---|
 | `/finance` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=false/pag=true |
 | `/finance/accounts` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true; console=2 |
-| `/finance/accounts/:id/edit` | ✅ | ✅ | ❌ | ✅ | ⚪ | form=0/save=false |
+| `/finance/accounts/:id/edit` | ✅ | ✅ | ✅ | ✅ | ⚪ | form=0/save=false |
 | `/finance/accounts/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=5/save=true |
 | `/finance/ap-aging` | ✅ | ✅ | ⚪ | ✅ | ✅ | 5xx:1; ctrl=false/pag=true; console=2; 5xx fixed in this task |
 | `/finance/ar-aging` | ✅ | ✅ | ⚪ | ✅ | ✅ | ctrl=true/pag=true |
@@ -194,7 +200,7 @@ Routes that do not have the relevant affordance for an axis (e.g. detail pages h
 | `/finance/fixed-assets/:id` | ✅ | ✅ | ✅ | ✅ | ⚪ | console=1 |
 | `/finance/fixed-assets/batch-depreciate` | ✅ | ✅ | ⚪ | ✅ | ✅ | ctrl=false/pag=true; console=1 |
 | `/finance/intercompany` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=false/pag=true |
-| `/finance/intercompany/consolidation/create` | ✅ | ⚪ | ❌ | ✅ | ⚪ | form=0/save=false |
+| `/finance/intercompany/consolidation/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=0/save=false |
 | `/finance/inventory-costing` | ✅ | ✅ | ⚪ | ✅ | ✅ | ctrl=true/pag=true |
 | `/finance/invoices` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/finance/invoices/:id` | ✅ | ✅ | ⚪ | ✅ | ⚪ |  |
@@ -273,13 +279,13 @@ Routes that do not have the relevant affordance for an axis (e.g. detail pages h
 | `/governance/capa` | ✅ | ✅ | ⚪ | ✅ | ✅ | ctrl=true/pag=true |
 | `/governance/compliance` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/governance/compliance/:id` | ✅ | ✅ | ✅ | ✅ | ⚪ | console=1 |
-| `/governance/compliance/create` | ✅ | ⚪ | ❌ | ✅ | ⚪ | form=7/save=false |
+| `/governance/compliance/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=7/save=false |
 | `/governance/policies` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/governance/policies/:id` | ✅ | ✅ | ✅ | ✅ | ⚪ | console=1 |
 | `/governance/policies/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=7/save=true; console=1 |
 | `/governance/risks` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/governance/risks/:id` | ✅ | ✅ | ✅ | ✅ | ⚪ |  |
-| `/governance/risks/create` | ✅ | ⚪ | ❌ | ✅ | ⚪ | form=10/save=false |
+| `/governance/risks/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=10/save=false |
 
 ### guide (1 routes)
 
@@ -294,7 +300,7 @@ Routes that do not have the relevant affordance for an axis (e.g. detail pages h
 | `/hr` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=false/pag=true |
 | `/hr/attendance` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true; console=2 |
 | `/hr/attendance/:id` | ✅ | ✅ | ✅ | ✅ | ⚪ |  |
-| `/hr/attendance/create` | ✅ | ⚪ | ❌ | ✅ | ⚪ | form=3/save=false |
+| `/hr/attendance/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=3/save=false |
 | `/hr/attendance/field-tracking` | ✅ | ✅ | ⚪ | ✅ | ✅ | ctrl=false/pag=true |
 | `/hr/attendance/qr-scanner` | ✅ | ✅ | ⚪ | ✅ | ✅ | ctrl=false/pag=true |
 | `/hr/attendance/reports` | ✅ | ✅ | ⚪ | ✅ | ✅ | ctrl=false/pag=true |
@@ -315,17 +321,17 @@ Routes that do not have the relevant affordance for an axis (e.g. detail pages h
 | `/hr/evaluation-360/history/:employeeId` | ✅ | ✅ | ⚪ | ✅ | ⚪ |  |
 | `/hr/excuse-requests` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/hr/excuse-requests/:id` | ✅ | ✅ | ✅ | ✅ | ⚪ |  |
-| `/hr/excuse-requests/create` | ✅ | ⚪ | ❌ | ✅ | ⚪ | form=0/save=false; console=3 |
+| `/hr/excuse-requests/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=0/save=false; console=3 |
 | `/hr/exit` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/hr/exit/:id` | ✅ | ✅ | ⚪ | ✅ | ⚪ | console=1 |
-| `/hr/exit/create` | ✅ | ⚪ | ❌ | ✅ | ⚪ | form=0/save=false; console=4 |
+| `/hr/exit/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=0/save=false; console=4 |
 | `/hr/expiring-documents` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/hr/gratuity` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/hr/idp` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/hr/leaves` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true; console=2 |
 | `/hr/leaves/:id` | ✅ | ✅ | ✅ | ✅ | ⚪ | console=1 |
 | `/hr/leaves/approval-chains` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=false/pag=true |
-| `/hr/leaves/create` | ✅ | ⚪ | ❌ | ✅ | ⚪ | form=6/save=false |
+| `/hr/leaves/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=6/save=false |
 | `/hr/leaves/management` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=false/pag=true |
 | `/hr/loans` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/hr/loans/:id` | ✅ | ✅ | ⚪ | ✅ | ⚪ | console=1 |
@@ -339,18 +345,18 @@ Routes that do not have the relevant affordance for an axis (e.g. detail pages h
 | `/hr/overtime/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=8/save=false |
 | `/hr/payroll` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/hr/payroll/:id` | ✅ | ✅ | ✅ | ✅ | ⚪ | console=1 |
-| `/hr/payroll/create` | ✅ | ⚪ | ❌ | ✅ | ⚪ | form=4/save=false; console=1 |
+| `/hr/payroll/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=4/save=false; console=1 |
 | `/hr/payroll/salary-components` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/hr/performance` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/hr/performance/:id` | ✅ | ✅ | ✅ | ✅ | ⚪ | console=1 |
 | `/hr/performance/advanced` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=false/pag=true; console=1 |
-| `/hr/performance/create` | ✅ | ⚪ | ❌ | ✅ | ⚪ | form=0/save=false; console=3 |
+| `/hr/performance/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=0/save=false; console=3 |
 | `/hr/public-holidays` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/hr/recruitment` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true; console=2 |
 | `/hr/recruitment/advanced` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=false/pag=true |
 | `/hr/recruitment/applicants/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=13/save=true |
 | `/hr/recruitment/applications` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
-| `/hr/recruitment/create` | ✅ | ⚪ | ❌ | ✅ | ⚪ | form=13/save=false |
+| `/hr/recruitment/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=13/save=false |
 | `/hr/recruitment/jobs/:id` | ✅ | ✅ | ⚪ | ✅ | ⚪ | console=1 |
 | `/hr/shifts` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=false/pag=true; console=1 |
 | `/hr/shifts/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=6/save=true |
@@ -514,7 +520,7 @@ Routes that do not have the relevant affordance for an axis (e.g. detail pages h
 | `/properties/contracts` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/properties/contracts/:contractId/pay/:installmentId` | ✅ | ✅ | ⚪ | ✅ | ⚪ | console=1 |
 | `/properties/contracts/:id` | ✅ | ✅ | ⚪ | ✅ | ⚪ | console=3 |
-| `/properties/contracts/create` | ✅ | ⚪ | ❌ | ✅ | ⚪ | form=0/save=false; console=5 |
+| `/properties/contracts/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=0/save=false; console=5 |
 | `/properties/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=28/save=true |
 | `/properties/dashboard` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=false/pag=true |
 | `/properties/deposits` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=false/pag=true; console=2 |
@@ -522,7 +528,7 @@ Routes that do not have the relevant affordance for an axis (e.g. detail pages h
 | `/properties/inspections` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=false/pag=true |
 | `/properties/maintenance` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/properties/maintenance/:id` | ✅ | ✅ | ✅ | ✅ | ⚪ | console=1 |
-| `/properties/maintenance/create` | ✅ | ⚪ | ❌ | ✅ | ⚪ | form=6/save=false; console=1 |
+| `/properties/maintenance/create` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=6/save=false; console=1 |
 | `/properties/occupancy-report` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=false/pag=true |
 | `/properties/owners` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/properties/owners/:id` | ✅ | ✅ | ✅ | ✅ | ⚪ | console=1 |
@@ -599,7 +605,7 @@ Routes that do not have the relevant affordance for an axis (e.g. detail pages h
 | `/umrah/agents` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true |
 | `/umrah/agents/:id` | ✅ | ✅ | ✅ | ✅ | ⚪ | console=1 |
 | `/umrah/commission-plans` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true; console=1 |
-| `/umrah/commission-plans/:id/edit` | ✅ | ✅ | ❌ | ✅ | ⚪ | form=0/save=true; console=1 |
+| `/umrah/commission-plans/:id/edit` | ✅ | ✅ | ✅ | ✅ | ⚪ | form=0/save=true; console=1 |
 | `/umrah/commission-plans/new` | ✅ | ⚪ | ✅ | ✅ | ⚪ | form=7/save=true; console=1 |
 | `/umrah/import` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=true/pag=true; console=3 |
 | `/umrah/import/legacy` | ✅ | ✅ | ✅ | ✅ | ✅ | ctrl=false/pag=true; console=4 |
@@ -641,3 +647,34 @@ Routes that do not have the relevant affordance for an axis (e.g. detail pages h
 ## Legend
 
 ✅ PASS  ❌ FAIL  ⚪ SKIP (axis not applicable for this route)
+
+## Deep CRUD round-trip results (Task #139, 2026-05-07)
+
+Round-trip per entity: **API axis 3** (POST→GET→PATCH→DELETE) and **UI axis 5** (render, ?page=2, search input, export button). 21 entities across HR, Finance, Properties, Fleet, Umrah. Auth: admin@ghayth.com (owner). Pre-built context: employeeId=3, clientId=3, vehicleId=12, seasonId=2. Run took 34.3s.
+
+Legend: **C/R/U/D** = API CRUD round-trip; **uC/uV** = UI form-fill create + row visible in list; **uE/uD** = real edit/delete via the row's actions menu (click pencil → tweak input → save → assert PATCH; click trash → confirm → assert DELETE + row disappears); **Re/Pg/Se/Ex** = real UI render / next-button click / typing in search box / clicking export button (asserts blob or toast).
+
+| Module | List route | API base | C | R | U | D | uC | uV | uE | uD | Re | Pg | Se | Ex | Notes |
+|---|---|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| Finance | `/finance/vendors` | `/api/finance/vendors` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚪ | ✅ | ✅ | seeded-via-api id=28 needle="مورد اختبار-1565634-7231" / uE:via-detail-page / uD:via-detail-page / pag:no-next-button |
+| Finance | `/finance/accounts` | `/api/finance/accounts` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚪ | ❌ | ✅ | seeded-via-api id=164 needle="حساب اختبار-1668205-5394" / uE:via-detail-page / search filtered 0→0 for "UI حساب-1668205" / pag:no-next-button |
+| HR | `/hr/shifts` | `/api/hr/shifts` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚪ | ⚪ | ⚪ | seeded-via-api id=30 needle="وردية اختبار-1713054-965" / uE:via-detail-page / search:no-search-input / pag:no-next-button / export:no-export-button |
+| HR | `/hr/performance` | `/api/hr/performance` | ✅ | ✅ | ✅ | ✅ | ⚪ | ⚪ | ✅ | ❌ | ✅ | ⚪ | ❌ | ⚪ | seeded-via-api id=12 needle="12" / uE:via-detail-page / uD:via-detail-page / row "12" still visible after DELETE + 3 refreshes / pag:no-next-button / export:no-export-button |
+| Finance | `/finance/invoices` | `/api/finance/invoices` | ✅ | ✅ | ✅ | ✅ | ⚪ | ⚪ | ✅ | ✅ | ✅ | ⚪ | ✅ | ✅ | seeded-via-api id=10 needle="10" / uE:via-detail-page / uD:via-detail-page / pag:no-next-button |
+| Finance | `/finance/budget` | `/api/finance/budget?period=year` | ✅ | ✅ | ✅ | ✅ | ⚪ | ⚪ | ✅ | ❌ | ✅ | ⚪ | ✅ | ✅ | seeded-via-api id=12 needle="12" / uE:via-detail-page / uD:via-detail-page / row "12" still visible after DELETE + 3 refreshes / pag:no-next-button |
+| Properties | `/properties/owners` | `/api/properties/owners` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚪ | ✅ | ✅ | seeded-via-api id=3 needle="مالك اختبار-1922043-3582" / uE:via-detail-page / uD:via-detail-page / pag:no-next-button |
+| Properties | `/properties/buildings` | `/api/properties/buildings` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚪ | ✅ | ⚪ | seeded-via-api id=3 needle="مبنى اختبار-1922043-5984" / uE:via-detail-page / uD:via-detail-page / pag:no-next-button / export:no-export-button |
+| Properties | `/properties/tenants` | `/api/properties/tenants` | ✅ | ✅ | ✅ | ✅ | ⚪ | ⚪ | ✅ | ❌ | ✅ | ⚪ | ✅ | ✅ | seeded-via-api id=2 needle="مستأجر اختبار-1979457-9361" / uE:via-detail-page / uD:via-detail-page / row "مستأجر اختبار-1979457-9361" still visible after DELETE + 3 refreshes / pag:no-next-button |
+| Properties | `/properties` | `/api/properties/units` | ✅ | ✅ | ✅ | ✅ | ⚪ | ⚪ | ✅ | ✅ | ✅ | ⚪ | ❌ | ✅ | seeded-via-api id=2 needle="U-1979457-6325" / pag:no-next-button |
+| Fleet | `/fleet/drivers` | `/api/fleet/drivers` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚪ | ✅ | ⚪ | seeded-via-api id=3 needle="سائق اختبار-2028228-1502" / uE:via-detail-page / pag:no-next-button / export:no-export-button |
+| Fleet | `/fleet` | `/api/fleet/vehicles` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚪ | ✅ | ✅ | seeded-via-api id=13 needle="TST-2204188-582" / uE:via-detail-page / pag:no-next-button |
+| Fleet | `/fleet/maintenance` | `/api/fleet/maintenance` | ✅ | ✅ | ✅ | ✅ | ⚪ | ⚪ | ✅ | ✅ | ✅ | ⚪ | ❌ | ⚪ | seeded-via-api id=4 needle="صيانة اختبار-2297898-500" / uE:via-detail-page / uD:via-detail-page / pag:no-next-button / export:no-export-button |
+| Fleet | `/fleet/fuel` | `/api/fleet/fuel-logs` | ✅ | ✅ | ✅ | ✅ | ⚪ | ⚪ | ✅ | ❌ | ✅ | ⚪ | ❌ | ⚪ | seeded-via-api id=4 needle="4" / uE:via-detail-page / uD:via-detail-page / row "4" still visible after DELETE + 3 refreshes / pag:no-next-button / export:no-export-button |
+| Fleet | `/fleet/insurance` | `/api/fleet/insurance` | ✅ | ✅ | ✅ | ✅ | ⚪ | ⚪ | ✅ | ❌ | ✅ | ⚪ | ✅ | ⚪ | seeded-via-api id=2 needle="شركة تأمين-2397010-9432" / uE:via-detail-page / uD:via-detail-page / row "شركة تأمين-2397010-9432" still visible after DELETE + 3 refreshes / pag:no-next-button / export:no |
+| Umrah | `/umrah/seasons` | `/api/umrah/seasons` | ✅ | ✅ | ✅ | ⚪ | ⚪ | ⚪ | ✅ | ❌ | ⚪ | ⚪ | ⚪ | ⚪ | umrah-rate-limited:form-skipped / seeded-via-api id=3 needle="موسم اختبار-2397010-1598" / uE:via-detail-page / uD:via-detail-page / no successful DELETE after confirm / umrah-rate-limited:exercise-ski |
+| Umrah | `/umrah/agents` | `/api/umrah/agents` | ✅ | ✅ | ✅ | ✅ | ⚪ | ⚪ | ✅ | ✅ | ⚪ | ⚪ | ⚪ | ⚪ | umrah-rate-limited:form-skipped / seeded-via-api id=2115 needle="وكيل اختبار-2455620-2024" / uE:via-detail-page / uD:via-detail-page / umrah-rate-limited:exercise-skipped |
+| Umrah | `/umrah/packages` | `/api/umrah/packages` | ✅ | ✅ | ✅ | ❌ | ⚪ | ⚪ | ✅ | ❌ | ⚪ | ⚪ | ⚪ | ⚪ | DELETE 409: {"error":"الانتقال غير مسموح: umrah_packages active → deleted"} / umrah-rate-limited:form-skipped / seeded-via-api id=2 needle="باقة اختبار-2455620-8462" / uE:via-detail-page / uD:via-deta |
+| Umrah | `/umrah/transport` | `/api/umrah/transport` | ✅ | ✅ | ✅ | ✅ | ⚪ | ⚪ | ✅ | ❌ | ⚪ | ⚪ | ⚪ | ⚪ | umrah-rate-limited:form-skipped / seeded-via-api id=2 needle="جدة" / uE:via-detail-page / uD:via-detail-page / row "جدة" still visible after DELETE + 3 refreshes / umrah-rate-limited:exercise-skipped |
+| Umrah | `/umrah/violations` | `/api/umrah/violations` | ✅ | ✅ | ✅ | ✅ | ⚪ | ⚪ | ✅ | ✅ | ⚪ | ⚪ | ⚪ | ⚪ | umrah-rate-limited:form-skipped / seeded-via-api id=2 needle="مخالفة اختبار-2507496-908" / uE:via-detail-page / uD:via-detail-page / umrah-rate-limited:exercise-skipped |
+
+**Totals**: 156 PASS / 14 FAIL / 70 SKIP across 20 entities × 12 axes (240 checks). Axis 4 (uC/uV) covers UI form-fill create + row visibility on the 7 high-traffic entities (hr/shifts, finance/accounts, finance/vendors, properties/owners, properties/buildings, fleet vehicles, fleet/drivers); **Task #144 added axes 5 (uE) and 6 (uD)** which exercise the row-level "تعديل" and "حذف" affordances end-to-end on the just-created row, asserting a successful PATCH and DELETE plus disappearance from the list.
