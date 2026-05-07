@@ -72,10 +72,10 @@ export default function TasksCreate() {
     subtitle: item.category || item.email || item.phone || undefined,
   }));
 
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
-  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = async () => {
     const firstError = validate({
