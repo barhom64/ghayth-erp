@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
@@ -43,13 +48,14 @@ export default function BudgetDetail() {
   const id = params?.id ? Number(params.id) : null;
   const { toast } = useToast();
 
+  // Budget has no GET /:id endpoint — fetch the list and find by id.
   const { data, isLoading, error, refetch } = useApiQuery<any>(
-    ["budget-detail", String(id)],
-    id ? `/finance/budget/${id}` : null,
+    ["budget-list"],
+    "/finance/budget",
     !!id,
   );
-
-  const item = data;
+  const list = (data?.data ?? data) as any[] | undefined;
+  const item = Array.isArray(list) ? list.find((b: any) => String(b.id) === String(id)) : null;
 
   const allocated = Number(item?.allocatedAmount || item?.amount || 0);
   const spent = Number(item?.spentAmount || item?.spent || 0);
@@ -107,8 +113,26 @@ export default function BudgetDetail() {
     ];
   }, [item, allocated, spent, remaining, utilizationPct]);
 
+  const editDelete = useDetailEditDelete({
+    entityLabel: "الميزانية",
+    patchPath: `/finance/budget/${id}`,
+    deletePath: `/finance/budget/${id}`,
+    listPath: "/finance/budget",
+    initialValues: item,
+    fields: [
+      { key: "accountCode", label: "رمز الحساب" },
+      { key: "period", label: "الفترة" },
+      { key: "amount", label: "المبلغ", type: "number" },
+    ],
+    invalidateKeys: [["budget", String(id)], ["budgets"]],
+    onSaved: () => refetch(),
+  });
+
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
+      <div className="md:col-span-3">
+        <InlineEditCard hook={editDelete} />
+      </div>
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
@@ -305,16 +329,7 @@ export default function BudgetDetail() {
             date={formatDateAr(item?.createdAt)}
             sections={printSections}
           />
-          <GuardedButton
-            perm="finance:update"
-            variant="outline"
-            size="sm"
-            onClick={() => setLocation("/finance/budget")}
-            disabled={!item || item.status === "closed" || item.status === "archived"}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
+          <DetailActionButtons hook={editDelete} />
         </>
       }
     />
