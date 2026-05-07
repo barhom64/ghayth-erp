@@ -199,8 +199,10 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
   ], [navigate]);
 
   const pageItems: CommandItem[] = useMemo(() => {
+    const seen = new Set<string>();
     return navPages
       .filter(p => !p.path.startsWith("#"))
+      .filter(p => { if (seen.has(p.path)) return false; seen.add(p.path); return true; })
       .map(p => ({
         id: `page-${p.path}`,
         label: p.label,
