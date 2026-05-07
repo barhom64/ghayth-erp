@@ -47,7 +47,8 @@ export async function rawExecute(
 ): Promise<{ insertId: number; affectedRows: number }> {
   const cleanSQL = sql.trimEnd().replace(/;$/, "");
   const hasReturning = /RETURNING/i.test(cleanSQL);
-  const finalSQL = hasReturning ? cleanSQL : `${cleanSQL} RETURNING id`;
+  const isDDL = /^\s*(CREATE|ALTER|DROP|TRUNCATE|COMMENT|GRANT|REVOKE|SET|DO|VACUUM|ANALYZE|REINDEX)\b/i.test(cleanSQL);
+  const finalSQL = hasReturning || isDDL ? cleanSQL : `${cleanSQL} RETURNING id`;
 
   const result = await pool.query(finalSQL, cleanParams(params));
   const insertId = result.rows[0]?.id ?? 0;
