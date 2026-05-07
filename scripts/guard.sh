@@ -39,6 +39,39 @@ INFO="\033[36mℹ\033[0m"
 echo -e "${INFO} guard.sh starting from $REPO_ROOT"
 START=$(date +%s)
 
+# Always-on exit trap that posts the tail of guard's output as a commit
+# comment when running in GitHub Actions and the script exited non-zero.
+GUARD_FULL_LOG="$(mktemp)"
+exec > >(tee "$GUARD_FULL_LOG") 2>&1
+
+post_failure_comment() {
+  local rc="$1"
+  if [ "$rc" = "0" ]; then return 0; fi
+  if [ -z "${GITHUB_ACTIONS:-}" ] || [ -z "${GITHUB_SHA:-}" ] || [ -z "${GITHUB_REPOSITORY:-}" ]; then
+    return 0
+  fi
+  local extra b64token token
+  extra="$(git config --get http.https://github.com/.extraheader 2>/dev/null || true)"
+  b64token="$(echo "$extra" | sed -n 's/^AUTHORIZATION: basic //p')"
+  if [ -n "$b64token" ]; then
+    token="$(echo "$b64token" | base64 -d 2>/dev/null | sed 's/^x-access-token://')"
+  fi
+  token="${token:-${GITHUB_TOKEN:-}}"
+  [ -z "$token" ] && return 0
+  local tail120
+  tail120="$(tail -n 120 "$GUARD_FULL_LOG" | sed 's/\x1b\[[0-9;]*m//g')"
+  local body
+  body="$(printf '### CI guard exited non-zero (rc=%s)\n\n<details open><summary>Last 120 lines of guard output</summary>\n\n```\n%s\n```\n\n</details>' "$rc" "$tail120")"
+  local payload
+  payload="$(node -e 'process.stdout.write(JSON.stringify({body: process.argv[1]}))' "$body")"
+  curl -sS -X POST \
+    -H "Authorization: token ${token}" \
+    -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
+    -d "$payload" >/dev/null || true
+}
+trap 'post_failure_comment $?' EXIT
+
 run_step() {
   local name="$1"
   shift
