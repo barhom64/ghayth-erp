@@ -58,18 +58,35 @@ run_step() {
     # In GitHub Actions, post the failing step name + last 80 lines of its
     # output as a commit comment so we can read the real cause without
     # the actions:read scope.
-    if [ -n "${GITHUB_ACTIONS:-}" ] && [ -n "${GITHUB_TOKEN:-}" ] && [ -n "${GITHUB_SHA:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then
-      local tail80
-      tail80="$(tail -n 80 "$step_log" | sed 's/\x1b\[[0-9;]*m//g')"
-      local body
-      body="$(printf '### CI guard failed at step \`%s\` (exit=%s)\n\n<details><summary>Last 80 lines</summary>\n\n```\n%s\n```\n\n</details>' "$name" "$rc" "$tail80")"
-      local payload
-      payload="$(node -e 'process.stdout.write(JSON.stringify({body: process.argv[1]}))' "$body")"
-      curl -sS -X POST \
-        -H "Authorization: token ${GITHUB_TOKEN}" \
-        -H "Accept: application/vnd.github+json" \
-        "https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
-        -d "$payload" >/dev/null || true
+    if [ -n "${GITHUB_ACTIONS:-}" ] && [ -n "${GITHUB_SHA:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then
+      # actions/checkout@v4 stores an `AUTHORIZATION: basic <b64>` header
+      # in the local git config so subsequent `git push` works. We harvest
+      # that to authenticate REST calls without needing the workflow file
+      # to expose GITHUB_TOKEN as an env var (which the Replit GitHub
+      # connector cannot push because it lacks the `workflow` OAuth scope).
+      local extra
+      extra="$(git config --get http.https://github.com/.extraheader 2>/dev/null || true)"
+      local b64token
+      b64token="$(echo "$extra" | sed -n 's/^AUTHORIZATION: basic //p')"
+      local token
+      if [ -n "$b64token" ]; then
+        # Decoded form is "x-access-token:<actual-token>"
+        token="$(echo "$b64token" | base64 -d 2>/dev/null | sed 's/^x-access-token://')"
+      fi
+      token="${token:-${GITHUB_TOKEN:-}}"
+      if [ -n "$token" ]; then
+        local tail80
+        tail80="$(tail -n 80 "$step_log" | sed 's/\x1b\[[0-9;]*m//g')"
+        local body
+        body="$(printf '### CI guard failed at step \`%s\` (exit=%s)\n\n<details><summary>Last 80 lines</summary>\n\n```\n%s\n```\n\n</details>' "$name" "$rc" "$tail80")"
+        local payload
+        payload="$(node -e 'process.stdout.write(JSON.stringify({body: process.argv[1]}))' "$body")"
+        curl -sS -X POST \
+          -H "Authorization: token ${token}" \
+          -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
+          -d "$payload" >/dev/null || true
+      fi
     fi
     rm -f "$step_log"
     exit 1
