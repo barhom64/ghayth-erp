@@ -196,7 +196,7 @@ reportsRouter.get("/reports/cash-flow", requirePermission("finance:read"), async
                 coa.type, coa.code, coa.name
            FROM journal_lines jl
            LEFT JOIN chart_of_accounts coa
-                  ON coa.code = jl."accountCode" AND coa."companyId" = $1 AND coa."deletedAt" IS NULL
+                  ON coa.code = jl."accountCode" AND coa."companyId" = $1
           WHERE jl."journalId" = ANY($2)
             AND NOT (jl."accountCode" = ANY($3))`,
         [scope.companyId, jeIds, cashCodes]
@@ -357,7 +357,7 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", requirePermission(
 
     } else if (entityType === "supplier") {
       const { filter: dateFilter, extraParams: dateDates } = buildDateFilter(2, startDate, endDate);
-      const poRows = await rawQuery<any>(`SELECT po.id, po.ref, po."totalAmount" AS debit, 0 AS credit, po."createdAt" AS date, CONCAT('أمر شراء ', po.ref) AS description, 'purchase_order' AS "movementType", po.status FROM purchase_orders po WHERE po."companyId" = $1 AND po."supplierId" = $2 ${dateFilter.replace(/"createdAt"/g, 'po."createdAt"')} ORDER BY po."createdAt" ASC LIMIT 500`, [scope.companyId, id, ...dateDates]);
+      const poRows = await rawQuery<any>(`SELECT po.id, po.ref, po."totalAmount" AS debit, 0 AS credit, po."createdAt" AS date, CONCAT('أمر شراء ', po.ref) AS description, 'purchase_order' AS "movementType", po.status FROM purchase_orders po WHERE po."companyId" = $1 AND po."supplierId" = $2 AND po."deletedAt" IS NULL ${dateFilter.replace(/"createdAt"/g, 'po."createdAt"')} ORDER BY po."createdAt" ASC LIMIT 500`, [scope.companyId, id, ...dateDates]);
       let runningBalance = 0;
       movements = poRows.map((m: any) => { runningBalance += Number(m.debit) - Number(m.credit); return { ...m, runningBalance }; });
       const totalOrdered = poRows.reduce((s: number, r: any) => s + Number(r.debit), 0);
@@ -543,7 +543,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", requirePermission("fi
     const from = startDate || "1900-01-01";
 
     const [supplier] = await rawQuery<any>(
-      `SELECT id, name, phone, email, "taxNumber" FROM suppliers WHERE id = $1 AND "companyId" = $2`,
+      `SELECT id, name, phone, email, "taxNumber" FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [supplierId, scope.companyId]
     );
     if (!supplier) { throw new NotFoundError("المورد غير موجود"); return; }
@@ -555,6 +555,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", requirePermission("fi
       `SELECT COALESCE(
          (SELECT SUM("totalAmount") FROM purchase_orders
            WHERE "supplierId"=$1 AND "companyId"=$2
+             AND "deletedAt" IS NULL
              AND status IN ('received','partially_received','invoice_matched','payment_scheduled','paid','completed')
              AND "createdAt" < $3), 0
        ) AS opening`,
@@ -568,6 +569,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", requirePermission("fi
               CONCAT('أمر شراء ', ref) AS description
          FROM purchase_orders
         WHERE "supplierId"=$1 AND "companyId"=$2
+          AND "deletedAt" IS NULL
           AND "createdAt" >= $3 AND "createdAt" <= $4
         ORDER BY "createdAt"`,
       [supplierId, scope.companyId, from, asOf]
@@ -584,6 +586,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", requirePermission("fi
       `SELECT id, ref, "createdAt", "expectedDelivery", "totalAmount"
          FROM purchase_orders
         WHERE "supplierId"=$1 AND "companyId"=$2
+          AND "deletedAt" IS NULL
           AND status NOT IN ('paid','completed','cancelled','rejected')
           AND "createdAt" <= $3`,
       [supplierId, scope.companyId, asOf]
@@ -685,7 +688,7 @@ reportsRouter.get("/reports/entity-statement", requirePermission("finance:read")
         qParams
       );
     } else if (entityType === "supplier" && entityId) {
-      const [sup] = await rawQuery<any>(`SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2`, [(Number(entityId) || 0), scope.companyId]);
+      const [sup] = await rawQuery<any>(`SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [(Number(entityId) || 0), scope.companyId]);
       entityName = sup?.name || "";
       const qParams: any[] = [(Number(entityId) || 0), scope.companyId];
       let dateFilter = "";
@@ -696,7 +699,7 @@ reportsRouter.get("/reports/entity-statement", requirePermission("finance:read")
                 po."totalAmount" AS debit, 0 AS credit,
                 po."totalAmount" AS net,
                 po."createdAt" AS date, po.status AS type
-         FROM purchase_orders po WHERE po."supplierId" = $1 AND po."companyId" = $2 ${dateFilter}
+         FROM purchase_orders po WHERE po."supplierId" = $1 AND po."companyId" = $2 AND po."deletedAt" IS NULL ${dateFilter}
          ORDER BY po."createdAt" DESC LIMIT 100`,
         qParams
       );
@@ -877,7 +880,7 @@ reportsRouter.get("/reports/budget-variance", requirePermission("finance:read"),
               b.amount - COALESCE(b.used, 0) AS variance,
               CASE WHEN b.amount > 0 THEN ROUND(COALESCE(b.used, 0)::numeric / b.amount * 100, 1) ELSE 0 END AS "usagePct"
        FROM budgets b
-       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = $1 AND coa."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = $1
        WHERE b."companyId" = $1 AND b."deletedAt" IS NULL AND b.period = $2 ${branchFilter}
        ORDER BY b."accountCode"
        LIMIT 500`,
