@@ -20,6 +20,15 @@ const router = Router();
 
 const STAGE_ORDER = ['lead', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost'];
 
+const CRM_TRANSITIONS: Record<string, readonly string[]> = {
+  lead:        ["qualified", "closed_lost"],
+  qualified:   ["proposal", "negotiation", "closed_lost"],
+  proposal:    ["negotiation", "closed_won", "closed_lost"],
+  negotiation: ["proposal", "closed_won", "closed_lost"],
+  closed_won:  [],
+  closed_lost: ["qualified"],
+};
+
 // ── Zod validation schemas ──────────────────────────────────────────
 const createOpportunitySchema = z.object({
   title: z.string({ required_error: "عنوان الفرصة مطلوب" }).min(1, "عنوان الفرصة مطلوب"),
@@ -340,14 +349,6 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
         });
       }
 
-      const CRM_TRANSITIONS: Record<string, readonly string[]> = {
-        lead:        ["qualified", "closed_lost"],
-        qualified:   ["proposal", "negotiation", "closed_lost"],
-        proposal:    ["negotiation", "closed_won", "closed_lost"],
-        negotiation: ["proposal", "closed_won", "closed_lost"],
-        closed_won:  [],
-        closed_lost: ["qualified"],
-      };
       const allowed = CRM_TRANSITIONS[existing.stage] ?? [];
       if (!allowed.includes(b.stage)) {
         throw new ConflictError(
@@ -753,7 +754,7 @@ router.get("/opportunities/:id", requirePermission("crm:read"), async (req, res)
     res.json({
       ...row, activities, overdueActivities,
       stageConfig: STAGE_AUTO_ACTIONS[row.stage],
-      nextStages: row.stage === 'closed_won' || row.stage === 'closed_lost' ? [] : STAGE_ORDER.slice(STAGE_ORDER.indexOf(row.stage) + 1),
+      nextStages: CRM_TRANSITIONS[row.stage] ?? [],
     });
   } catch (err) { handleRouteError(err, res, "Get opportunity error:"); }
 });

@@ -458,10 +458,8 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
       // totalRevenue update deferred to approval (POST /invoices/:id/approve)
       // to prevent unapproved drafts from inflating client revenue.
 
-      await client.query(
-        `UPDATE budgets SET used = used + $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4`,
-        [baseAmount, effectiveCompanyId, invRevenueCode, currentPeriod()]
-      ).catch((e) => logger.error(e, "finance-invoices background task failed"));
+      // Budget consumption deferred to approval (POST /invoices/:id/approve)
+      // to prevent unapproved drafts from inflating budget usage.
 
       if (finalDueDate) {
         const collectionDate = new Date(finalDueDate);
@@ -525,7 +523,7 @@ invoicesRouter.post("/invoices/:id/send", requirePermission("finance:create"), a
           userId: scope.userId,
         },
         action: "invoice.sent",
-        fromStates: ["draft"],
+        fromStates: ["draft", "approved"],
         toState: "sent",
         setExtras: { sentAt: { raw: "NOW()" } },
         extraWhere: `"deletedAt" IS NULL`,
@@ -607,9 +605,16 @@ invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"
     if (invoice.clientId) {
       await rawQuery<any>(
         `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) + $1 WHERE id = $2 AND "companyId" = $3`,
-        [Number(invoice.total), invoice.clientId, scope.companyId]
+        [Number(invoice.total) - Number(invoice.vatAmount || 0), invoice.clientId, scope.companyId]
       );
     }
+
+    // Budget consumption at approval (not at draft creation)
+    const baseAmount = Number(invoice.total) - Number(invoice.vatAmount || 0);
+    await rawExecute(
+      `UPDATE budgets SET used = used + $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4`,
+      [baseAmount, scope.companyId, invRevenueCode, currentPeriod()]
+    ).catch((e) => logger.error(e, "Budget update on approval failed"));
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.approved", entity: "invoices", entityId: id, details: JSON.stringify({ ref: invoice.ref, total: invoice.total }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
@@ -689,7 +694,7 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
       const invoice = invRes.rows[0];
       if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
 
-      const lockedStatuses = ["paid", "closed", "posted", "cancelled"];
+      const lockedStatuses = ["paid", "closed", "cancelled"];
       if (lockedStatuses.includes(invoice.status)) {
         throw new ConflictError(
           `لا يمكن تسجيل دفعة على فاتورة بحالة "${invoice.status}" — الفاتورة مُقفلة`,
@@ -1024,7 +1029,7 @@ invoicesRouter.get("/tax/summary", requirePermission("finance:read"), async (req
     const { period } = req.query as any;
     const targetPeriod = period ?? currentPeriod();
     const [outputVat] = await rawQuery<any>(`SELECT COALESCE(SUM("vatAmount"), 0) AS total FROM invoices WHERE "companyId" = $1 AND to_char("createdAt", 'YYYY-MM') = $2 AND "deletedAt" IS NULL`, [scope.companyId, targetPeriod]);
-    const [inputVat] = await rawQuery<any>(`SELECT COALESCE(SUM(jl.debit), 0) AS total FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je.status = 'posted' WHERE je."companyId" = $1 AND jl."accountCode" = '2310' AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, targetPeriod]);
+    const [inputVat] = await rawQuery<any>(`SELECT COALESCE(SUM(jl.debit), 0) AS total FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je.status = 'posted' WHERE je."companyId" = $1 AND jl."accountCode" = '1400' AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, targetPeriod]);
     const outputTotal = Number(outputVat?.total ?? 0);
     const inputTotal = Number(inputVat?.total ?? 0);
     res.json({ period: targetPeriod, outputVat: outputTotal, inputVat: inputTotal, netVat: outputTotal - inputTotal, vatRate: 15, status: outputTotal - inputTotal > 0 ? "payable" : "refundable" });
@@ -1297,7 +1302,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
       guardId: memoId ?? 0,
     }));
     if (journalId && memoId) {
-      await rawExecute(`UPDATE debit_memos SET "journalId" = $1 WHERE id = $2`, [journalId, memoId]);
+      await rawExecute(`UPDATE debit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
     }
 
     emitEvent({

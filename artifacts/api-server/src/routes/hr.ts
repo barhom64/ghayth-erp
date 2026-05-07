@@ -1226,7 +1226,8 @@ router.get("/leaves/:id", requirePermission("hr:read"), async (req, res) => {
        FROM hr_leave_requests lr
        JOIN employees e ON e.id = lr."employeeId"
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-       LEFT JOIN employees approver ON approver.id = lr."approvedBy"
+       LEFT JOIN employee_assignments aa ON aa.id = lr."approvedBy"
+       LEFT JOIN employees approver ON approver.id = aa."employeeId"
        WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -3141,15 +3142,15 @@ router.get("/attendance-stats", requirePermission("hr:read"), async (req, res) =
     const scope = req.scope!;
     const month = (req.query.month as string) ?? currentPeriod();
     const [present] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='present'`,
+      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='present' AND "deletedAt" IS NULL`,
       [scope.companyId, month]
     );
     const [absent] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='absent'`,
+      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='absent' AND "deletedAt" IS NULL`,
       [scope.companyId, month]
     );
     const [late] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND "lateMinutes">0`,
+      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND "lateMinutes">0 AND "deletedAt" IS NULL`,
       [scope.companyId, month]
     );
     const [totalEmp] = await rawQuery<any>(

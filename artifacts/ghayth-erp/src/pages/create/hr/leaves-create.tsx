@@ -68,7 +68,7 @@ export default function LeavesCreate() {
   const selectedType = leaveTypes.find((lt: any) => String(lt.id) === form.leaveTypeId);
 
   const selectedBalance = balances.find((b: any) =>
-    String(b.leaveTypeId) === form.leaveTypeId || b.type === selectedType?.name
+    String(b.leaveTypeId) === form.leaveTypeId || b.name === selectedType?.name
   );
 
   const handleSubmit = () => {
@@ -127,9 +127,9 @@ export default function LeavesCreate() {
             {balances.slice(0, 4).map((b: any) => (
               <Card key={b.id || b.type} className={`border ${String(b.leaveTypeId) === form.leaveTypeId ? "border-blue-300 bg-blue-50/50 ring-1 ring-blue-200" : "border-gray-100"}`}>
                 <CardContent className="p-3 text-center">
-                  <p className="text-xs text-muted-foreground">{b.typeName || b.type || "إجازة"}</p>
+                  <p className="text-xs text-muted-foreground">{b.name || b.typeName || b.type || "إجازة"}</p>
                   <p className="text-xl font-bold mt-1">{b.remaining ?? b.balance ?? 0}</p>
-                  <p className="text-[10px] text-muted-foreground">من {b.total ?? b.entitled ?? 0} يوم</p>
+                  <p className="text-[10px] text-muted-foreground">من {b.annualDays ?? b.total ?? b.entitled ?? 0} يوم</p>
                 </CardContent>
               </Card>
             ))}

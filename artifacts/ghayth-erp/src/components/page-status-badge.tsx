@@ -137,6 +137,7 @@ export const STATUS_MAP = {
     excused:              { label: "مستأذن",          tone: "info"     },
     weekend:              { label: "عطلة أسبوعية",    tone: "muted"    },
     holiday:              { label: "عطلة رسمية",      tone: "muted"    },
+    present_holiday:      { label: "حضور عطلة رسمية", tone: "info"     },
   },
   memo: {
     pending_employee:     { label: "بانتظار الموظف",  tone: "warning"  },

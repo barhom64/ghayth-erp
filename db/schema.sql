@@ -1322,6 +1322,7 @@ DROP SEQUENCE IF EXISTS public.invoices_id_seq;
 DROP TABLE IF EXISTS public.invoices;
 DROP SEQUENCE IF EXISTS public.invoice_payments_id_seq;
 DROP TABLE IF EXISTS public.invoice_payments;
+DROP SEQUENCE IF EXISTS public.journal_number_seq;
 DROP SEQUENCE IF EXISTS public.invoice_number_seq;
 DROP SEQUENCE IF EXISTS public.invoice_lines_id_seq;
 DROP TABLE IF EXISTS public.invoice_lines;
@@ -6208,6 +6209,18 @@ ALTER SEQUENCE public.invoice_lines_id_seq OWNED BY public.invoice_lines.id;
 --
 
 CREATE SEQUENCE public.invoice_number_seq
+    START WITH 1000
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: journal_number_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.journal_number_seq
     START WITH 1000
     INCREMENT BY 1
     NO MINVALUE

@@ -1086,7 +1086,8 @@ journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), 
       `UPDATE journal_entries
          SET "reversedById" = $1,
              "reversedAt" = NOW(),
-             "reversalReason" = $2
+             "reversalReason" = $2,
+             status = 'reversed'
        WHERE id = $3`,
       [newJournalId, reason, id]
     );

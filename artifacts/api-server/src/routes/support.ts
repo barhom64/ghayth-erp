@@ -24,7 +24,7 @@ const createTicketSchema = z.object({
   description: z.string().min(1, "وصف المشكلة مطلوب"),
   clientId: z.coerce.number().optional(),
   category: z.string().optional(),
-  priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+  priority: z.enum(["low", "medium", "high", "urgent", "critical"]).optional(),
   slaDeadline: z.string().optional(),
   assigneeId: z.coerce.number().optional(),
 });
@@ -272,7 +272,7 @@ router.post("/tickets/check-sla", requirePermission("support:read"), async (req,
         );
         await createNotification({
           companyId: scope.companyId,
-          assignmentId: scope.activeAssignmentId,
+          assignmentId: ticket.assigneeId || scope.activeAssignmentId,
           type: "alert",
           title: `SLA خرق: ${ticket.ref}`,
           body: `التذكرة "${ticket.title}" تجاوزت SLA — تم تصعيد الأولوية إلى حرجة`,

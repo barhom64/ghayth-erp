@@ -60,10 +60,10 @@ async function createDefaultLeaveTypes(client: pg.PoolClient, companyId: number)
   for (const t of types) {
     await exec(
       client,
-      `INSERT INTO hr_leave_types (name, "nameEn", "defaultDays", "isPaid", "companyId", code)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO hr_leave_types (name, "annualDays", "isPaid", "companyId")
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT DO NOTHING`,
-      [t.name, t.nameEn, t.days, t.isPaid, companyId, t.code]
+      [t.name, t.days, t.isPaid, companyId]
     );
   }
 }

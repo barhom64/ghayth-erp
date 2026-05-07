@@ -152,7 +152,7 @@ router.delete("/products/:id", requirePermission("store:write"), async (req, res
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المنتج غير موجود");
     await rawExecute(`UPDATE store_products SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "store_products", entityId: id, before: existing }).catch((e) => logger.error(e, "store background task failed"));
@@ -301,6 +301,13 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
       }
     }
 
+    if (b.status === "cancelled" && row.previousStatus !== "cancelled") {
+      const orderItems = await rawQuery<any>(`SELECT "productId", quantity FROM store_order_items WHERE "orderId" = $1`, [id]);
+      for (const item of orderItems) {
+        await rawExecute(`UPDATE store_products SET quantity = quantity + $1 WHERE id = $2 AND "companyId" = $3`, [item.quantity, item.productId, scope.companyId]);
+      }
+    }
+
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "store_orders", entityId: id, after: b }).catch((e) => logger.error(e, "store background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.order.updated", entity: "store_orders", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "store background task failed"));
     res.json(row.updated ?? row);
@@ -313,6 +320,12 @@ router.delete("/orders/:id", requirePermission("store:write"), async (req, res) 
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الطلب غير موجود");
+    if (existing.status !== "cancelled") {
+      const orderItems = await rawQuery<any>(`SELECT "productId", quantity FROM store_order_items WHERE "orderId" = $1`, [id]);
+      for (const item of orderItems) {
+        await rawExecute(`UPDATE store_products SET quantity = quantity + $1 WHERE id = $2 AND "companyId" = $3`, [item.quantity, item.productId, scope.companyId]);
+      }
+    }
     await rawExecute(`UPDATE store_orders SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "store_orders", entityId: id, before: existing }).catch((e) => logger.error(e, "store background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.order.deleted", entity: "store_orders", entityId: id, details: JSON.stringify({ orderNumber: existing.orderNumber }) }).catch((e) => logger.error(e, "store background task failed"));

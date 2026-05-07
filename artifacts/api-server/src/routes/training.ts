@@ -11,6 +11,7 @@ import { z } from "zod";
 import { logger } from "../lib/logger.js";
 
 const VALID_PROGRAM_TRANSITIONS: Record<string, string[]> = {
+  upcoming: ["draft", "active", "cancelled"],
   draft: ["pending", "cancelled"],
   pending: ["approved", "rejected"],
   approved: ["active", "cancelled"],

@@ -93,10 +93,12 @@ budgetRouter.get("/budget-vs-actual", requirePermission("finance:read"), async (
       const q = Math.floor(now.getMonth() / 3);
       startDate = `${now.getFullYear()}-${String(q * 3 + 1).padStart(2, "0")}-01`;
       const em = q * 3 + 3;
-      endDate = `${now.getFullYear()}-${String(em).padStart(2, "0")}-${em === 2 ? 28 : [4, 6, 9, 11].includes(em) ? 30 : 31}`;
+      const qLastDay = new Date(now.getFullYear(), em, 0).getDate();
+      endDate = `${now.getFullYear()}-${String(em).padStart(2, "0")}-${String(qLastDay).padStart(2, "0")}`;
     } else {
       startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-      endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-31`;
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
     }
     const rows = await rawQuery<any>(
       `SELECT b."accountCode", coa.name AS "accountName",
@@ -211,7 +213,7 @@ budgetRouter.patch("/budget/:id", requirePermission("finance:update"), async (re
       });
     }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE budgets SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE budgets SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("الميزانية غير موجودة");
 
     emitEvent({
@@ -585,7 +587,7 @@ budgetRouter.get("/budget/:id", requirePermission("finance:read"), async (req, r
       `SELECT b.*, coa.name AS "accountName"
        FROM budgets b
        LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId"
-       WHERE b.id = $1 AND b."companyId" = $2`,
+       WHERE b.id = $1 AND b."companyId" = $2 AND b."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("الميزانية غير موجودة");

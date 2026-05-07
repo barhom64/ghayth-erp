@@ -17,10 +17,13 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   present: { label: "حاضر", color: "text-green-600 bg-green-50" },
   present_out_of_range: { label: "خارج النطاق", color: "text-orange-600 bg-orange-50" },
   present_off_day: { label: "حضور يوم عطلة", color: "text-purple-600 bg-purple-50" },
+  present_holiday: { label: "حضور عطلة رسمية", color: "text-purple-600 bg-purple-50" },
   absent: { label: "غائب", color: "text-red-600 bg-red-50" },
   late: { label: "متأخر", color: "text-orange-600 bg-orange-50" },
   leave: { label: "إجازة", color: "text-blue-600 bg-blue-50" },
+  on_leave: { label: "في إجازة", color: "text-blue-600 bg-blue-50" },
   holiday: { label: "عطلة", color: "text-purple-600 bg-purple-50" },
+  remote: { label: "عن بُعد", color: "text-cyan-600 bg-cyan-50" },
 };
 
 const severityConfig: Record<string, { label: string; color: string }> = {
