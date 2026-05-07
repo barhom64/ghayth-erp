@@ -227,7 +227,7 @@ export default function PreventivePlansPage() {
               <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
             <div className="col-span-3 flex gap-2">
-              <Button onClick={handleSave}>حفظ</Button>
+              <Button onClick={handleSave} rateLimitAware>حفظ</Button>
               <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
             </div>
           </CardContent>
