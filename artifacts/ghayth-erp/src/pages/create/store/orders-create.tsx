@@ -190,7 +190,7 @@ export default function OrdersCreate() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/store")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending}>{createMut.isPending ? "جاري الإنشاء..." : "إنشاء الطلب"}</Button>
+        <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>{createMut.isPending ? "جاري الإنشاء..." : "إنشاء الطلب"}</Button>
       </div>
     </CreatePageLayout>
   );
