@@ -170,6 +170,7 @@ export default function VehicleStatusChangePage() {
         <Button
           disabled={!selectedNewStatus || !impactData || !impactData.canProceed || confirming}
           onClick={applyStatusChange}
+          rateLimitAware
         >
           {confirming ? "جاري التطبيق..." : "تطبيق التغيير"}
         </Button>
