@@ -63,7 +63,7 @@ accountsRouter.get("/chart-of-accounts", requirePermission("finance:read"), asyn
     const accounts = await rawQuery<any>(
       `SELECT id, code, name, type, "parentCode", status
        FROM chart_of_accounts
-       WHERE ${where}
+       WHERE ${where} AND "deletedAt" IS NULL
        ORDER BY code ASC`,
       params
     );
@@ -94,7 +94,7 @@ accountsRouter.get("/accounts", requirePermission("finance:read"), async (req, r
     }
 
     const rows = await rawQuery(
-      `SELECT * FROM chart_of_accounts WHERE ${where}${extraWhere} ORDER BY code`,
+      `SELECT * FROM chart_of_accounts WHERE ${where} AND "deletedAt" IS NULL${extraWhere} ORDER BY code`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
