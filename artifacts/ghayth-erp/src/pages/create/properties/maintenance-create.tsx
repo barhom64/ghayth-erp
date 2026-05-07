@@ -112,7 +112,7 @@ export default function PropertyMaintenanceCreate() {
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/properties")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الإرسال..." : "إرسال الطلب"}
         </Button>
       </div>
