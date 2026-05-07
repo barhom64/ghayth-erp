@@ -44,7 +44,7 @@ run_step() {
   fi
 }
 
-run_step "typecheck"          pnpm -s run typecheck
+run_step "typecheck"          pnpm run typecheck
 run_step "lint:patterns"      pnpm -s run lint:patterns
 run_step "audit:routes"       node scripts/src/audit-routes.mjs
 run_step "audit:schema"       node scripts/src/audit-schema-drift.mjs
@@ -67,7 +67,7 @@ else
 fi
 run_step "audit:boundaries"   node scripts/src/audit-domain-boundaries.mjs
 run_step "audit:domain-routes" node scripts/src/audit-domain-routes.mjs
-run_step "test"               pnpm -s --filter @workspace/api-server run test
+run_step "test"               pnpm --filter @workspace/api-server run test
 
 END=$(date +%s)
 echo
