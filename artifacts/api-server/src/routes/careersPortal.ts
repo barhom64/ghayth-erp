@@ -9,6 +9,7 @@ import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
+import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "../lib/logger.js";
@@ -55,6 +56,7 @@ const portalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   validate: { ip: false, trustProxy: false },
+  store: makeRateLimitStore("careers:portal"),
 });
 
 function signApplicantToken(accountId: number): string {
