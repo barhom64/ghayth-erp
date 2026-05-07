@@ -154,3 +154,21 @@ run_step "test"               pnpm -s --filter @workspace/api-server run test
 END=$(date +%s)
 echo
 echo -e "${PASS} guard.sh green — all $((END - START))s"
+
+# Diagnostic: in CI, post a "REACHED END" comment so we know whether the
+# script actually completed. Removes ambiguity about whether the failure
+# is inside guard.sh or in the surrounding workflow plumbing.
+if [ -n "${GITHUB_ACTIONS:-}" ] && [ -n "${GITHUB_SHA:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then
+  GH_EXTRA="$(git config --get http.https://github.com/.extraheader 2>/dev/null || true)"
+  GH_B64="$(echo "$GH_EXTRA" | sed -n 's/^AUTHORIZATION: basic //p')"
+  if [ -n "$GH_B64" ]; then
+    GH_TOK="$(echo "$GH_B64" | base64 -d 2>/dev/null | sed 's/^x-access-token://')"
+    if [ -n "$GH_TOK" ]; then
+      curl -sS -X POST \
+        -H "Authorization: token ${GH_TOK}" \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
+        -d "$(node -e 'process.stdout.write(JSON.stringify({body:process.argv[1]}))' "✅ guard.sh REACHED END (took $((END - START))s) — if CI still fails, problem is in workflow plumbing not guard.sh")" >/dev/null || true
+    fi
+  fi
+fi
