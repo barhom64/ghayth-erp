@@ -473,7 +473,7 @@ export default function EmployeesCreate() {
       <FileDropZone files={attachments} onFilesChange={setAttachments} label="المرفقات (صور، وثائق)" />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/employees")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ الموظف"}
         </Button>
       </div>
