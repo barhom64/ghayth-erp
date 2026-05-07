@@ -32,6 +32,7 @@ import { apiFetch, useApiQuery } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { NotificationDropdown } from "@/components/notification-dropdown";
 import { PolicyBanner } from "@/components/policy-banner";
+import { RateLimitFallbackBanner } from "@/components/rate-limit-fallback-banner";
 import { useKeyboardShortcuts, usePropertyKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 // CommandPalette is only mounted when the user opens it (Cmd+K or the
 // header button). Lazy-load it so its ~345 lines + icons don't ship in
@@ -1309,6 +1310,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {buildBreadcrumbs()}
+        <RateLimitFallbackBanner />
         <PolicyBanner currentPath={location} />
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
