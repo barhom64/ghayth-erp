@@ -119,7 +119,7 @@ export default function TicketDetail() {
             <div className="border-t pt-4 space-y-3">
               <Textarea placeholder="اكتب رداً..." value={newReply} onChange={(e) => setNewReply(e.target.value)} className="min-h-[80px]" />
               <div className="flex justify-end">
-                <Button className="gap-2" disabled={!newReply.trim() || sending} onClick={handleSendReply}><Send className="w-4 h-4" /> إرسال الرد</Button>
+                <Button className="gap-2" disabled={!newReply.trim() || sending} onClick={handleSendReply} rateLimitAware><Send className="w-4 h-4" /> إرسال الرد</Button>
               </div>
             </div>
           </CardContent>
