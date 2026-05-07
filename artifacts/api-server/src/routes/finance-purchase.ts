@@ -127,7 +127,7 @@ purchaseRouter.post("/purchase-requests/impact-preview", requirePermission("fina
     let outstanding = 0;
     if (supplierId) {
       const [supplier] = await rawQuery<any>(
-        `SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2`,
+        `SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [Number(supplierId), scope.companyId]
       );
       supplierName = supplier?.name || "";
@@ -229,7 +229,7 @@ purchaseRouter.get("/purchase-requests", requirePermission("finance:read"), asyn
        FROM purchase_requests pr
        LEFT JOIN suppliers s ON s.id = pr."supplierId" AND s."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea.id = pr."requestedBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
        LEFT JOIN purchase_request_items pri ON pri."requestId" = pr.id
        WHERE ${where}${extraWhere}
        GROUP BY pr.id, pr.ref, pr.status, pr."totalAmount", pr."createdAt", pr.notes, pr."requestedBy", pr."supplierId", s.name, e.name
@@ -486,7 +486,7 @@ purchaseRouter.get("/purchase-orders", requirePermission("finance:read"), async 
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'po."companyId"', branchColumn: 'po."branchId"', enforceBranchScope: true });
+    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'po."companyId"', branchColumn: 'po."branchId"', enforceBranchScope: true, softDeleteColumn: 'po."deletedAt"' });
     const { status: filterStatus, page = "1", limit: lim = "20" } = req.query as any;
     const safeLim = Number(lim) || 50;
 
@@ -507,14 +507,14 @@ purchaseRouter.get("/purchase-orders", requirePermission("finance:read"), async 
               po."expectedDelivery", po.notes, s.name AS "supplierName"
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
-       WHERE ${where}${extraWhere} AND po."deletedAt" IS NULL
+       WHERE ${where}${extraWhere}
        ORDER BY po."createdAt" DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
       params
     );
 
     const countParams = params.slice(0, params.length - 2);
-    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM purchase_orders po WHERE ${where}${extraWhere} AND po."deletedAt" IS NULL`, countParams);
+    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM purchase_orders po WHERE ${where}${extraWhere}`, countParams);
     res.json({ data: rows, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
   } catch (err) {
     handleRouteError(err, res, "List purchase orders error:");
@@ -1213,7 +1213,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
 
     if (pr.supplierId) {
       const [supplier] = await rawQuery<any>(
-        `SELECT name, email, phone FROM suppliers WHERE id = $1 AND "companyId" = $2`,
+        `SELECT name, email, phone FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [pr.supplierId, scope.companyId]
       );
       if (supplier?.email) {
