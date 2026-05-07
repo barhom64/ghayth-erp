@@ -465,7 +465,7 @@ export default function VouchersCreate() {
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-4">
         <Button variant="outline" onClick={() => setLocation("/finance/vouchers")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.amount || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!form.amount || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : `حفظ سند ${form.type === "receipt" ? "القبض" : "الصرف"}`}
         </Button>
       </div>
