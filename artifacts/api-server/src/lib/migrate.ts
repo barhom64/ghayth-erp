@@ -73,13 +73,9 @@ async function detectAndApplyBaselineIfNeeded(client: any): Promise<void> {
   logger.info("Baseline schema loaded");
 }
 
-const MIGRATION_LOCK_ID = 839271;
-
 export async function runMigrations(): Promise<void> {
   const client = await pool.connect();
   try {
-    await client.query(`SELECT pg_advisory_lock(${MIGRATION_LOCK_ID})`);
-
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         id        SERIAL PRIMARY KEY,
@@ -145,7 +141,6 @@ export async function runMigrations(): Promise<void> {
     // so index.ts can log the warning — but all subsequent migrations have run
     if (firstError) throw firstError;
   } finally {
-    await client.query(`SELECT pg_advisory_unlock(${MIGRATION_LOCK_ID})`).catch(() => {});
     client.release();
   }
 }
