@@ -237,8 +237,11 @@ describe("cronScheduler — security", () => {
     expect(matches.length).toBeGreaterThan(50);
   });
 
-  it("has exactly 61 job functions", () => {
+  it("has at least 61 job functions", () => {
+    // Lower bound only — new background jobs are added regularly and we
+    // don't want every cron addition to need a parallel test bump. The
+    // intent of this guard is to catch accidental DELETIONS of jobs.
     const funcs = [...SRC.matchAll(/^async function /gm)];
-    expect(funcs.length).toBe(61);
+    expect(funcs.length).toBeGreaterThanOrEqual(61);
   });
 });
