@@ -440,6 +440,7 @@ function CreateCustodyForm({ onDone }: { onDone: () => void }) {
           <Button
             onClick={handleSubmit}
             disabled={!form.assignmentId || !form.amount || createMut.isPending}
+            rateLimitAware
           >
             {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
           </Button>
@@ -538,7 +539,7 @@ function SettleCustodyForm({ custody, onDone }: { custody: any; onDone: () => vo
           <Button variant="outline" onClick={onDone}>
             إلغاء
           </Button>
-          <Button onClick={handleSubmit} disabled={!amount || settleMut.isPending}>
+          <Button onClick={handleSubmit} disabled={!amount || settleMut.isPending} rateLimitAware>
             {settleMut.isPending ? "جاري التسوية..." : "تسوية"}
           </Button>
         </div>
