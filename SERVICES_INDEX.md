@@ -31,6 +31,21 @@ _تم التوليد: 2026-05-06T19:52:45.652Z_
 | /admin/system-stops | ✅ PASS — 500 سابق مُصلح |
 | /thispagedoesnotexist (404) | ⚠️ FAIL — يُعيد توجيه إلى /dashboard بدل صفحة 404 (catch-all مفقود) |
 
+### Frontend Test Matrix الكاملة (2026-05-07)
+
+تم تشغيل مصفوفة اختبار شاملة على **369 مسار × 5 محاور = 1845 فحص**. النتائج:
+
+| المحور | PASS | FAIL | SKIP |
+|---|---:|---:|---:|
+| A1 Render | 369 | 0 | 0 |
+| A2 Data fetch | 300 | 0 | 69 |
+| A3 CRUD | 244 | 14 | 111 |
+| A4 Navigation | 369 | 0 | 0 |
+| A5 State (?page=2) | 214 | 0 | 155 |
+| **الإجمالي** | **1496** | **14** | **335** |
+
+**معدل النجاح**: 1496/1510 من الفحوصات القابلة للتطبيق (99.07%). جميع أعطال الـ5xx التي رصدتها المصفوفة تم إصلاحها في هذه المهمة (4 endpoints + جدول `financial_posting_failures` جديد). تفاصيل كاملة في `FRONTEND_TEST_MATRIX.md` و`FRONTEND_BUGS.md`.
+
 ---
 
 ## فهرس بالوحدة (Module → Frontend Pages + API Endpoints)
