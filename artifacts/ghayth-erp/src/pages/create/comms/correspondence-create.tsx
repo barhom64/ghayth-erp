@@ -197,7 +197,7 @@ export default function CorrespondenceCreate() {
           <Button type="button" variant="outline" onClick={() => setLocation("/correspondence")}>
             إلغاء
           </Button>
-          <Button onClick={handleSubmit} disabled={createMut.isPending}>
+          <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
             {createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}
           </Button>
         </div>
