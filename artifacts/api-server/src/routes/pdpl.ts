@@ -10,7 +10,30 @@ import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent, toDateISO } from "../lib/businessHelpers.js";
 import { z } from "zod";
+import rateLimit from "express-rate-limit";
+import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
+import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { logger } from "../lib/logger.js";
+
+// /pdpl mixes one anonymous endpoint (/privacy-notice) with several
+// authenticated ones. Per-IP cap goes only on the anonymous endpoint;
+// authenticated routes get a per-user cap (owner/admin exempt) so admins
+// on a shared proxy IP aren't lumped together.
+const privacyNoticeIpLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: process.env.NODE_ENV === "production" ? 100 : 2000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة لاحقاً" },
+  validate: { ip: false, trustProxy: false },
+  store: makeRateLimitStore("pdpl:privacy-notice"),
+});
+const pdplUserLimiter = createPerUserLimiter({
+  prefix: "pdpl",
+  windowMs: 60 * 1000,
+  max: 120,
+  message: "تم تجاوز الحد الأقصى لطلبات حماية البيانات. يرجى المحاولة لاحقاً",
+});
 
 const dataRequestSchema = z.object({
   requestType: z.enum(["access", "rectification", "erasure", "portability", "objection"]),
@@ -21,7 +44,7 @@ const dataRequestSchema = z.object({
 
 const router = Router();
 
-router.get("/privacy-notice", async (req, res) => {
+router.get("/privacy-notice", privacyNoticeIpLimiter, async (req, res) => {
   try {
     res.json({
       version: "1.0",
@@ -56,7 +79,7 @@ router.get("/privacy-notice", async (req, res) => {
   }
 });
 
-router.get("/retention-policies", authMiddleware, async (req, res) => {
+router.get("/retention-policies", authMiddleware, pdplUserLimiter, async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -71,7 +94,7 @@ router.get("/retention-policies", authMiddleware, async (req, res) => {
   }
 });
 
-router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res) => {
+router.get("/employee-data-export/:employeeId", authMiddleware, pdplUserLimiter, async (req, res) => {
   try {
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");
@@ -153,7 +176,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
   }
 });
 
-router.post("/data-request", authMiddleware, requirePermission("admin:write"), async (req, res) => {
+router.post("/data-request", authMiddleware, pdplUserLimiter, requirePermission("admin:write"), async (req, res) => {
   try {
     const body = zodParse(dataRequestSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -199,7 +222,7 @@ router.post("/data-request", authMiddleware, requirePermission("admin:write"), a
   }
 });
 
-router.get("/processing-log", authMiddleware, requireMinLevel(90), async (req, res) => {
+router.get("/processing-log", authMiddleware, pdplUserLimiter, requireMinLevel(90), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
