@@ -74,7 +74,7 @@ export default function SuppliersCreate() {
         </div>
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/warehouse")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={addSupplier.isPending}>{addSupplier.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
+          <Button onClick={handleSubmit} disabled={addSupplier.isPending} rateLimitAware>{addSupplier.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
         </div>
       </div>
     </CreatePageLayout>
