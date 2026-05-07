@@ -429,20 +429,31 @@ async function probe(page, routePath, resolvedUrl, cls) {
   await page.setViewport({ width: 1280, height: 900 });
   await page.setExtraHTTPHeaders({ "Accept-Language": "ar" });
   // seed cookie via in-page fetch (HttpOnly cookies don't round-trip via setCookie)
-  await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded", timeout: 30000 });
-  await page.evaluate(async ({ email, password }) => {
-    const r = await fetch("/api/auth/login", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      credentials: "include", body: JSON.stringify({ email, password }),
-    });
-    const d = await r.json();
-    localStorage.setItem("erp_assignments", JSON.stringify(d.assignments || []));
-  }, { email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded", timeout: 30000 });
-  await new Promise((r) => setTimeout(r, 1500));
+  async function inPageLogin() {
+    await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.evaluate(async ({ email, password }) => {
+      const r = await fetch("/api/auth/login", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        credentials: "include", body: JSON.stringify({ email, password }),
+      });
+      const d = await r.json();
+      localStorage.setItem("erp_assignments", JSON.stringify(d.assignments || []));
+    }, { email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+    await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await new Promise((r) => setTimeout(r, 800));
+  }
+  await inPageLogin();
 
   const results = [];
+  let routesSinceReLogin = 0;
+  const RELOGIN_EVERY = 25;
   for (const routePath of routes) {
+    if (routesSinceReLogin >= RELOGIN_EVERY) {
+      console.log(`[audit] re-login (${routesSinceReLogin} routes since last)`);
+      try { await inPageLogin(); } catch (e) { console.error("[relogin failed]", e.message); }
+      routesSinceReLogin = 0;
+    }
+    routesSinceReLogin++;
     const cls = classifyRoute(routePath);
     const res = await resolveParams(routePath, cookieHeader);
     if (!res.ok) {
