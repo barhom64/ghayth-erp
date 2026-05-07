@@ -343,7 +343,7 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
           </div>
         </div>
 
-        <Button onClick={handleSubmit} disabled={saving} className="w-full">
+        <Button onClick={handleSubmit} disabled={saving} className="w-full" rateLimitAware>
           {saving ? "جاري الحفظ..." : "إنشاء القاعدة"}
         </Button>
       </CardContent>

@@ -102,7 +102,7 @@ function GeneralSettings() {
         <div><Label>العملة</Label><select className="w-full border rounded-md p-2" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}><option value="SAR">ريال سعودي</option><option value="USD">دولار أمريكي</option><option value="AED">درهم إماراتي</option></select></div>
         <div><Label>المنطقة الزمنية</Label><select className="w-full border rounded-md p-2" value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })}><option value="Asia/Riyadh">الرياض (توقيت غرينتش+3)</option><option value="Asia/Dubai">دبي (توقيت غرينتش+4)</option></select></div>
         <div><Label>التقويم الافتراضي</Label><select className="w-full border rounded-md p-2" value={form.calendarMode} onChange={(e) => setForm({ ...form, calendarMode: e.target.value })}><option value="hijri">هجري</option><option value="gregorian">ميلادي</option><option value="both">كلاهما (هجري وميلادي)</option></select></div>
-        <div className="md:col-span-2 pt-2"><Button onClick={handleSave} disabled={saving}><Save className="h-4 w-4 me-1" />{saving ? "جاري الحفظ..." : "حفظ الإعدادات"}</Button></div>
+        <div className="md:col-span-2 pt-2"><Button onClick={handleSave} disabled={saving} rateLimitAware><Save className="h-4 w-4 me-1" />{saving ? "جاري الحفظ..." : "حفظ الإعدادات"}</Button></div>
       </CardContent></Card>
     </div>
   );
@@ -185,7 +185,7 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
           {fields.map((f) => (
             <div key={f.name}><Label>{f.label}</Label><Input value={form[f.name]} onChange={(e) => setForm({ ...form, [f.name]: e.target.value })} /></div>
           ))}
-          <div className="md:col-span-2"><Button onClick={handleSave} disabled={createMut.isPending}>{editingId ? "تحديث" : "حفظ"}</Button></div>
+          <div className="md:col-span-2"><Button onClick={handleSave} disabled={createMut.isPending} rateLimitAware>{editingId ? "تحديث" : "حفظ"}</Button></div>
         </CardContent></Card>
       )}
       <Card><CardContent className="p-0">

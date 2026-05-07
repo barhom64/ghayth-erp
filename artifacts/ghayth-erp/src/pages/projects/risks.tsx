@@ -213,7 +213,7 @@ export default function RisksPage() {
               <Textarea value={form.mitigationPlan} onChange={(e) => setForm({ ...form, mitigationPlan: e.target.value })} rows={2} placeholder="الإجراءات للحد من هذه المخاطرة" />
             </div>
             <div className="col-span-2 flex gap-2">
-              <Button onClick={handleSave}>حفظ</Button>
+              <Button onClick={handleSave} rateLimitAware>حفظ</Button>
               <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
             </div>
           </CardContent>

@@ -157,7 +157,7 @@ function AddSessionForm({ caseId, onSuccess }: { caseId: number; onSuccess: () =
             <strong>الأثر المتوقع:</strong> إضافة جلسة ستحدث حالة القضية تلقائياً (مفتوح → جاري) وستُرسل إشعار للمحامي.
           </div>
         </div>
-        <Button size="sm" className="mt-3" onClick={handleSave} disabled={saving}>
+        <Button size="sm" className="mt-3" onClick={handleSave} disabled={saving} rateLimitAware>
           {saving ? "جاري الحفظ..." : "حفظ الجلسة"}
         </Button>
       </CardContent>

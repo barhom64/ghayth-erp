@@ -98,7 +98,7 @@ export function ApprovalWorkflowsTab() {
             <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="مثال: موافقة المدير" />
           </div>
           <div className="md:col-span-2">
-            <Button onClick={handleSubmit}>حفظ</Button>
+            <Button onClick={handleSubmit} rateLimitAware>حفظ</Button>
           </div>
         </CardContent></Card>
       )}

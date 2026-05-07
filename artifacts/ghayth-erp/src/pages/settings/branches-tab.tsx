@@ -189,7 +189,7 @@ export function BranchesTab() {
               <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+966 11 xxx xxxx" />
             </div>
             <div className="md:col-span-2">
-              <Button onClick={handleSave}>{editingId ? "تحديث الفرع" : "إضافة الفرع"}</Button>
+              <Button onClick={handleSave} rateLimitAware>{editingId ? "تحديث الفرع" : "إضافة الفرع"}</Button>
             </div>
           </CardContent>
         </Card>

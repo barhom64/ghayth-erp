@@ -10,9 +10,11 @@
 #   2. Banned legacy patterns                   → lint:patterns
 #   3. Pages built but never wired to a route   → audit:routes
 #   4. Raw SQL referencing dropped/typo columns → audit:schema
-#   5. Cross-domain SQL writes (boundary leak)  → audit:domain-boundaries
-#   6. Domain → routeFile mounting              → audit:domain-routes
-#   7. Unit/smoke tests                         → test
+#   5. Route identifiers vs live DB columns     → check:schema-drift
+#   6. Soft-delete tables read w/o IS NULL      → check:ghost-rows
+#   7. Cross-domain SQL writes (boundary leak)  → audit:domain-boundaries
+#   8. Domain → routeFile mounting              → audit:domain-routes
+#   9. Unit/smoke tests                         → test
 #
 # Run directly:
 #
@@ -56,6 +58,19 @@ run_step "typecheck"          pnpm -s run typecheck
 run_step "lint:patterns"      pnpm -s run lint:patterns
 run_step "audit:routes"       node scripts/src/audit-routes.mjs
 run_step "audit:schema"       node scripts/src/audit-schema-drift.mjs
+# Pure-logic fixtures for the ghost-row predicates — no DB needed, so
+# this runs in every environment to guard the guard itself.
+run_step "check:ghost-rows:tests" node scripts/src/check-ghost-rows.test.mjs
+if [ -n "${DATABASE_URL:-}" ]; then
+  run_step "check:schema-drift" node scripts/src/check-schema-drift.mjs
+  run_step "check:ghost-rows"   node scripts/src/check-ghost-rows.mjs
+elif [ -n "${CI:-}" ]; then
+  echo -e "${FAIL} [check:schema-drift] DATABASE_URL is required in CI"
+  exit 1
+else
+  echo -e "${INFO} [check:schema-drift] skipped (DATABASE_URL not set; allowed outside CI)"
+  echo -e "${INFO} [check:ghost-rows] skipped (DATABASE_URL not set; allowed outside CI)"
+fi
 run_step "audit:boundaries"   node scripts/src/audit-domain-boundaries.mjs
 run_step "audit:domain-routes" node scripts/src/audit-domain-routes.mjs
 run_step "test"               pnpm -s --filter @workspace/api-server run test

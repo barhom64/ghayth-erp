@@ -249,6 +249,7 @@ export default function ExitDetail() {
             className="bg-green-600 hover:bg-green-700"
             onClick={handleApprove}
             disabled={approveMut.isPending}
+            rateLimitAware
           >
             <CheckCircle className="h-4 w-4 ml-1" />
             اعتماد

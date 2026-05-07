@@ -10,6 +10,8 @@
     "lint:patterns": "node scripts/src/lint-patterns.mjs",
     "audit:routes": "node scripts/src/audit-routes.mjs",
     "audit:schema": "node scripts/src/audit-schema-drift.mjs",
+    "check:schema-drift": "node scripts/src/check-schema-drift.mjs",
+    "check:ghost-rows": "node scripts/src/check-ghost-rows.mjs",
     "audit:boundaries": "node scripts/src/audit-domain-boundaries.mjs",
     "audit:domain-routes": "node scripts/src/audit-domain-routes.mjs",
     "guard": "bash scripts/guard.sh",

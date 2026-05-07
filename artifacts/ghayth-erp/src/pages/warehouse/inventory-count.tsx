@@ -367,7 +367,7 @@ export default function InventoryCountPage() {
               <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
             <div className="col-span-3 flex gap-2">
-              <Button onClick={handleCreate}>بدء الجرد</Button>
+              <Button onClick={handleCreate} rateLimitAware>بدء الجرد</Button>
               <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
             </div>
           </CardContent>

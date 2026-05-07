@@ -1,0 +1,6778 @@
+{
+  "generatedAt": "2026-05-06T18:48:09.787Z",
+  "frontend": {
+    "totalRoutes": 369,
+    "byModule": {
+      "admin": [
+        "/admin",
+        "/admin/domain-registry",
+        "/admin/event-monitor",
+        "/admin/gl-reconciliation",
+        "/admin/integrations",
+        "/admin/lifecycle-monitor",
+        "/admin/logs",
+        "/admin/monitoring",
+        "/admin/policy-engine",
+        "/admin/posting-failures",
+        "/admin/rbac-matrix",
+        "/admin/roles",
+        "/admin/system-governor",
+        "/admin/system-registry",
+        "/admin/users",
+        "/admin/violations-report"
+      ],
+      "bi": [
+        "/bi",
+        "/bi/admin-reports",
+        "/bi/dashboards",
+        "/bi/dashboards/create",
+        "/bi/kpis",
+        "/bi/kpis/create",
+        "/bi/operations",
+        "/bi/reports",
+        "/bi/reports/create"
+      ],
+      "communications": [
+        "/communications",
+        "/communications/letters/create",
+        "/communications/notification-engine"
+      ],
+      "correspondence": [
+        "/correspondence",
+        "/correspondence/:id",
+        "/correspondence/create"
+      ],
+      "documents": [
+        "/documents",
+        "/documents/:docId/versions",
+        "/documents/archive",
+        "/documents/create",
+        "/documents/folders",
+        "/documents/templates",
+        "/documents/upload"
+      ],
+      "finance": [
+        "/finance",
+        "/finance/accounts",
+        "/finance/accounts/:id/edit",
+        "/finance/accounts/create",
+        "/finance/ap-aging",
+        "/finance/ar-aging",
+        "/finance/bank-guarantees",
+        "/finance/bank-reconciliation",
+        "/finance/bank-reconciliation/manual-match/:batchId/:rowId",
+        "/finance/budget",
+        "/finance/budget/:id",
+        "/finance/budget/create",
+        "/finance/cash-flow-forecast",
+        "/finance/cashflow",
+        "/finance/commitments",
+        "/finance/commitments/:id",
+        "/finance/custodies",
+        "/finance/custodies/:id",
+        "/finance/custodies/report",
+        "/finance/expenses",
+        "/finance/expenses/:id",
+        "/finance/expenses/create",
+        "/finance/financial-requests",
+        "/finance/financial-requests/:id",
+        "/finance/fiscal-periods",
+        "/finance/fixed-assets",
+        "/finance/fixed-assets/:id",
+        "/finance/fixed-assets/batch-depreciate",
+        "/finance/intercompany",
+        "/finance/intercompany/consolidation/create",
+        "/finance/inventory-costing",
+        "/finance/invoices",
+        "/finance/invoices/:id",
+        "/finance/invoices/create",
+        "/finance/journal",
+        "/finance/journal-manual",
+        "/finance/journal-manual/:id",
+        "/finance/journal-manual/create",
+        "/finance/journal/create",
+        "/finance/ledger/:code",
+        "/finance/opening-balances",
+        "/finance/opening-balances/create",
+        "/finance/payments",
+        "/finance/project-costing",
+        "/finance/project-costing/:id",
+        "/finance/purchase-orders",
+        "/finance/purchase-orders/:id",
+        "/finance/purchase-orders/create",
+        "/finance/receivables",
+        "/finance/receivables/:id",
+        "/finance/recurring-journals",
+        "/finance/recurring-journals/:id",
+        "/finance/recurring-journals/create",
+        "/finance/reports",
+        "/finance/salary-advances",
+        "/finance/salary-advances/:id",
+        "/finance/tax",
+        "/finance/treasury",
+        "/finance/vendors",
+        "/finance/vendors/:id",
+        "/finance/vendors/create",
+        "/finance/vouchers",
+        "/finance/vouchers/:id",
+        "/finance/vouchers/create",
+        "/finance/year-end-close"
+      ],
+      "fleet": [
+        "/fleet",
+        "/fleet/:id",
+        "/fleet/:id/status",
+        "/fleet/alerts",
+        "/fleet/alerts/create",
+        "/fleet/drivers",
+        "/fleet/drivers/:id",
+        "/fleet/drivers/create",
+        "/fleet/fuel",
+        "/fleet/fuel/:id",
+        "/fleet/fuel/create",
+        "/fleet/insurance",
+        "/fleet/insurance/:id",
+        "/fleet/insurance/create",
+        "/fleet/maintenance",
+        "/fleet/maintenance/:id",
+        "/fleet/maintenance/create",
+        "/fleet/preventive-plans",
+        "/fleet/reports",
+        "/fleet/tco",
+        "/fleet/traffic-violations",
+        "/fleet/traffic-violations/:id",
+        "/fleet/trips",
+        "/fleet/trips/:id",
+        "/fleet/trips/create",
+        "/fleet/vehicles/create"
+      ],
+      "governance": [
+        "/governance",
+        "/governance/audits",
+        "/governance/audits/:id",
+        "/governance/audits/create",
+        "/governance/capa",
+        "/governance/compliance",
+        "/governance/compliance/:id",
+        "/governance/compliance/create",
+        "/governance/policies",
+        "/governance/policies/:id",
+        "/governance/policies/create",
+        "/governance/risks",
+        "/governance/risks/:id",
+        "/governance/risks/create"
+      ],
+      "hr": [
+        "/hr",
+        "/hr/attendance",
+        "/hr/attendance/:id",
+        "/hr/attendance/create",
+        "/hr/attendance/field-tracking",
+        "/hr/attendance/qr-scanner",
+        "/hr/attendance/reports",
+        "/hr/contracts",
+        "/hr/contracts/:id",
+        "/hr/contracts/create",
+        "/hr/development-plans",
+        "/hr/discipline/memos",
+        "/hr/discipline/memos/:id",
+        "/hr/discipline/regulation",
+        "/hr/employee-activation",
+        "/hr/employee-profile/:id",
+        "/hr/evaluation-360",
+        "/hr/evaluation-360/:id",
+        "/hr/evaluation-360/:id/peer",
+        "/hr/evaluation-360/:id/upward",
+        "/hr/evaluation-360/create",
+        "/hr/evaluation-360/history/:employeeId",
+        "/hr/excuse-requests",
+        "/hr/excuse-requests/:id",
+        "/hr/excuse-requests/create",
+        "/hr/exit",
+        "/hr/exit/:id",
+        "/hr/exit/create",
+        "/hr/expiring-documents",
+        "/hr/gratuity",
+        "/hr/idp",
+        "/hr/leaves",
+        "/hr/leaves/:id",
+        "/hr/leaves/approval-chains",
+        "/hr/leaves/create",
+        "/hr/leaves/management",
+        "/hr/loans",
+        "/hr/loans/:id",
+        "/hr/loans/create",
+        "/hr/official-letters",
+        "/hr/onboarding-review",
+        "/hr/organization",
+        "/hr/organization/structure",
+        "/hr/overtime",
+        "/hr/overtime/:id",
+        "/hr/overtime/create",
+        "/hr/payroll",
+        "/hr/payroll/:id",
+        "/hr/payroll/create",
+        "/hr/payroll/salary-components",
+        "/hr/performance",
+        "/hr/performance/:id",
+        "/hr/performance/advanced",
+        "/hr/performance/create",
+        "/hr/public-holidays",
+        "/hr/recruitment",
+        "/hr/recruitment/advanced",
+        "/hr/recruitment/applicants/create",
+        "/hr/recruitment/applications",
+        "/hr/recruitment/create",
+        "/hr/recruitment/jobs/:id",
+        "/hr/shifts",
+        "/hr/shifts/create",
+        "/hr/shifts/management",
+        "/hr/training",
+        "/hr/training/:id",
+        "/hr/training/advanced",
+        "/hr/training/create",
+        "/hr/transfers",
+        "/hr/transfers/:id",
+        "/hr/turnover-report",
+        "/hr/violations",
+        "/hr/violations/:id",
+        "/hr/violations/auto-detection",
+        "/hr/violations/create",
+        "/hr/violations/management",
+        "/hr/violations/penalty-escalation"
+      ],
+      "employees": [
+        "/employees",
+        "/employees/:id",
+        "/employees/create"
+      ],
+      "legal": [
+        "/legal",
+        "/legal/cases",
+        "/legal/cases/:id",
+        "/legal/cases/create",
+        "/legal/contracts",
+        "/legal/contracts/:id",
+        "/legal/correspondence",
+        "/legal/create",
+        "/legal/documents",
+        "/legal/judgments",
+        "/legal/judgments/:id",
+        "/legal/sessions",
+        "/legal/sessions/:id"
+      ],
+      "dashboard": [
+        "/dashboard"
+      ],
+      "my-space": [
+        "/my-space"
+      ],
+      "my-requests": [
+        "/my-requests"
+      ],
+      "my-leave-request": [
+        "/my-leave-request"
+      ],
+      "my-attendance": [
+        "/my-attendance"
+      ],
+      "my-payslip": [
+        "/my-payslip"
+      ],
+      "my-performance": [
+        "/my-performance"
+      ],
+      "my-documents": [
+        "/my-documents"
+      ],
+      "my-loans": [
+        "/my-loans"
+      ],
+      "my-overtime": [
+        "/my-overtime"
+      ],
+      "action-center": [
+        "/action-center"
+      ],
+      "obligations": [
+        "/obligations"
+      ],
+      "calendar": [
+        "/calendar"
+      ],
+      "exec-dashboard": [
+        "/exec-dashboard"
+      ],
+      "manager-board": [
+        "/manager-board"
+      ],
+      "operations-center": [
+        "/operations-center"
+      ],
+      "daily-close": [
+        "/daily-close"
+      ],
+      "clients": [
+        "/clients",
+        "/clients/:id",
+        "/clients/create"
+      ],
+      "crm": [
+        "/crm",
+        "/crm/:id",
+        "/crm/activities",
+        "/crm/create",
+        "/crm/leads/:id",
+        "/crm/pipeline"
+      ],
+      "projects": [
+        "/projects",
+        "/projects/:id",
+        "/projects/create",
+        "/projects/gantt",
+        "/projects/risks",
+        "/projects/tasks"
+      ],
+      "warehouse": [
+        "/warehouse",
+        "/warehouse/categories",
+        "/warehouse/categories/:id",
+        "/warehouse/categories/create",
+        "/warehouse/create",
+        "/warehouse/inventory-count",
+        "/warehouse/movements",
+        "/warehouse/movements/:id",
+        "/warehouse/movements/create",
+        "/warehouse/products/:id",
+        "/warehouse/suppliers",
+        "/warehouse/suppliers/:id",
+        "/warehouse/suppliers/create"
+      ],
+      "support": [
+        "/support",
+        "/support/:id",
+        "/support/create",
+        "/support/kb",
+        "/support/replies"
+      ],
+      "marketing": [
+        "/marketing",
+        "/marketing/create"
+      ],
+      "tasks": [
+        "/tasks",
+        "/tasks/:id",
+        "/tasks/create"
+      ],
+      "notifications": [
+        "/notifications"
+      ],
+      "intelligence": [
+        "/intelligence"
+      ],
+      "insights": [
+        "/insights"
+      ],
+      "automation": [
+        "/automation"
+      ],
+      "activity-log": [
+        "/activity-log"
+      ],
+      "module-dashboards": [
+        "/module-dashboards"
+      ],
+      "reports": [
+        "/reports/scheduled"
+      ],
+      "properties": [
+        "/properties",
+        "/properties/:id",
+        "/properties/:id/status",
+        "/properties/buildings",
+        "/properties/buildings/:id",
+        "/properties/buildings/create",
+        "/properties/contracts",
+        "/properties/contracts/:contractId/pay/:installmentId",
+        "/properties/contracts/:id",
+        "/properties/contracts/create",
+        "/properties/create",
+        "/properties/dashboard",
+        "/properties/deposits",
+        "/properties/guide",
+        "/properties/inspections",
+        "/properties/maintenance",
+        "/properties/maintenance/:id",
+        "/properties/maintenance/create",
+        "/properties/occupancy-report",
+        "/properties/owners",
+        "/properties/owners/:id",
+        "/properties/owners/create",
+        "/properties/payments",
+        "/properties/payments/:id",
+        "/properties/payments/:paymentId/pay",
+        "/properties/tenants",
+        "/properties/tenants/:id",
+        "/properties/tenants/create"
+      ],
+      "guide": [
+        "/guide/properties"
+      ],
+      "requests": [
+        "/requests",
+        "/requests/:id",
+        "/requests/create",
+        "/requests/types",
+        "/requests/types/create",
+        "/requests/workflows"
+      ],
+      "settings": [
+        "/settings",
+        "/settings/audit-log",
+        "/settings/branches",
+        "/settings/companies",
+        "/settings/departments",
+        "/settings/rules"
+      ],
+      "store": [
+        "/store",
+        "/store/orders",
+        "/store/orders/:id",
+        "/store/orders/create",
+        "/store/products/:id",
+        "/store/products/create"
+      ],
+      "umrah": [
+        "/umrah",
+        "/umrah/agents",
+        "/umrah/agents/:id",
+        "/umrah/commission-plans",
+        "/umrah/commission-plans/:id/edit",
+        "/umrah/commission-plans/new",
+        "/umrah/import",
+        "/umrah/import/legacy",
+        "/umrah/invoices",
+        "/umrah/invoices/:id",
+        "/umrah/packages",
+        "/umrah/packages/:id",
+        "/umrah/penalties",
+        "/umrah/penalties/:id",
+        "/umrah/pilgrims",
+        "/umrah/pilgrims/:id",
+        "/umrah/pilgrims/create",
+        "/umrah/pricing",
+        "/umrah/seasons",
+        "/umrah/seasons/:id",
+        "/umrah/sub-agents",
+        "/umrah/transport",
+        "/umrah/transport/:id",
+        "/umrah/violations"
+      ]
+    },
+    "moduleCount": 48,
+    "allPaths": [
+      "/action-center",
+      "/activity-log",
+      "/admin",
+      "/admin/domain-registry",
+      "/admin/event-monitor",
+      "/admin/gl-reconciliation",
+      "/admin/integrations",
+      "/admin/lifecycle-monitor",
+      "/admin/logs",
+      "/admin/monitoring",
+      "/admin/policy-engine",
+      "/admin/posting-failures",
+      "/admin/rbac-matrix",
+      "/admin/roles",
+      "/admin/system-governor",
+      "/admin/system-registry",
+      "/admin/users",
+      "/admin/violations-report",
+      "/automation",
+      "/bi",
+      "/bi/admin-reports",
+      "/bi/dashboards",
+      "/bi/dashboards/create",
+      "/bi/kpis",
+      "/bi/kpis/create",
+      "/bi/operations",
+      "/bi/reports",
+      "/bi/reports/create",
+      "/calendar",
+      "/clients",
+      "/clients/:id",
+      "/clients/create",
+      "/communications",
+      "/communications/letters/create",
+      "/communications/notification-engine",
+      "/correspondence",
+      "/correspondence/:id",
+      "/correspondence/create",
+      "/crm",
+      "/crm/:id",
+      "/crm/activities",
+      "/crm/create",
+      "/crm/leads/:id",
+      "/crm/pipeline",
+      "/daily-close",
+      "/dashboard",
+      "/documents",
+      "/documents/:docId/versions",
+      "/documents/archive",
+      "/documents/create",
+      "/documents/folders",
+      "/documents/templates",
+      "/documents/upload",
+      "/employees",
+      "/employees/:id",
+      "/employees/create",
+      "/exec-dashboard",
+      "/finance",
+      "/finance/accounts",
+      "/finance/accounts/:id/edit",
+      "/finance/accounts/create",
+      "/finance/ap-aging",
+      "/finance/ar-aging",
+      "/finance/bank-guarantees",
+      "/finance/bank-reconciliation",
+      "/finance/bank-reconciliation/manual-match/:batchId/:rowId",
+      "/finance/budget",
+      "/finance/budget/:id",
+      "/finance/budget/create",
+      "/finance/cash-flow-forecast",
+      "/finance/cashflow",
+      "/finance/commitments",
+      "/finance/commitments/:id",
+      "/finance/custodies",
+      "/finance/custodies/:id",
+      "/finance/custodies/report",
+      "/finance/expenses",
+      "/finance/expenses/:id",
+      "/finance/expenses/create",
+      "/finance/financial-requests",
+      "/finance/financial-requests/:id",
+      "/finance/fiscal-periods",
+      "/finance/fixed-assets",
+      "/finance/fixed-assets/:id",
+      "/finance/fixed-assets/batch-depreciate",
+      "/finance/intercompany",
+      "/finance/intercompany/consolidation/create",
+      "/finance/inventory-costing",
+      "/finance/invoices",
+      "/finance/invoices/:id",
+      "/finance/invoices/create",
+      "/finance/journal",
+      "/finance/journal-manual",
+      "/finance/journal-manual/:id",
+      "/finance/journal-manual/create",
+      "/finance/journal/create",
+      "/finance/ledger/:code",
+      "/finance/opening-balances",
+      "/finance/opening-balances/create",
+      "/finance/payments",
+      "/finance/project-costing",
+      "/finance/project-costing/:id",
+      "/finance/purchase-orders",
+      "/finance/purchase-orders/:id",
+      "/finance/purchase-orders/create",
+      "/finance/receivables",
+      "/finance/receivables/:id",
+      "/finance/recurring-journals",
+      "/finance/recurring-journals/:id",
+      "/finance/recurring-journals/create",
+      "/finance/reports",
+      "/finance/salary-advances",
+      "/finance/salary-advances/:id",
+      "/finance/tax",
+      "/finance/treasury",
+      "/finance/vendors",
+      "/finance/vendors/:id",
+      "/finance/vendors/create",
+      "/finance/vouchers",
+      "/finance/vouchers/:id",
+      "/finance/vouchers/create",
+      "/finance/year-end-close",
+      "/fleet",
+      "/fleet/:id",
+      "/fleet/:id/status",
+      "/fleet/alerts",
+      "/fleet/alerts/create",
+      "/fleet/drivers",
+      "/fleet/drivers/:id",
+      "/fleet/drivers/create",
+      "/fleet/fuel",
+      "/fleet/fuel/:id",
+      "/fleet/fuel/create",
+      "/fleet/insurance",
+      "/fleet/insurance/:id",
+      "/fleet/insurance/create",
+      "/fleet/maintenance",
+      "/fleet/maintenance/:id",
+      "/fleet/maintenance/create",
+      "/fleet/preventive-plans",
+      "/fleet/reports",
+      "/fleet/tco",
+      "/fleet/traffic-violations",
+      "/fleet/traffic-violations/:id",
+      "/fleet/trips",
+      "/fleet/trips/:id",
+      "/fleet/trips/create",
+      "/fleet/vehicles/create",
+      "/governance",
+      "/governance/audits",
+      "/governance/audits/:id",
+      "/governance/audits/create",
+      "/governance/capa",
+      "/governance/compliance",
+      "/governance/compliance/:id",
+      "/governance/compliance/create",
+      "/governance/policies",
+      "/governance/policies/:id",
+      "/governance/policies/create",
+      "/governance/risks",
+      "/governance/risks/:id",
+      "/governance/risks/create",
+      "/guide/properties",
+      "/hr",
+      "/hr/attendance",
+      "/hr/attendance/:id",
+      "/hr/attendance/create",
+      "/hr/attendance/field-tracking",
+      "/hr/attendance/qr-scanner",
+      "/hr/attendance/reports",
+      "/hr/contracts",
+      "/hr/contracts/:id",
+      "/hr/contracts/create",
+      "/hr/development-plans",
+      "/hr/discipline/memos",
+      "/hr/discipline/memos/:id",
+      "/hr/discipline/regulation",
+      "/hr/employee-activation",
+      "/hr/employee-profile/:id",
+      "/hr/evaluation-360",
+      "/hr/evaluation-360/:id",
+      "/hr/evaluation-360/:id/peer",
+      "/hr/evaluation-360/:id/upward",
+      "/hr/evaluation-360/create",
+      "/hr/evaluation-360/history/:employeeId",
+      "/hr/excuse-requests",
+      "/hr/excuse-requests/:id",
+      "/hr/excuse-requests/create",
+      "/hr/exit",
+      "/hr/exit/:id",
+      "/hr/exit/create",
+      "/hr/expiring-documents",
+      "/hr/gratuity",
+      "/hr/idp",
+      "/hr/leaves",
+      "/hr/leaves/:id",
+      "/hr/leaves/approval-chains",
+      "/hr/leaves/create",
+      "/hr/leaves/management",
+      "/hr/loans",
+      "/hr/loans/:id",
+      "/hr/loans/create",
+      "/hr/official-letters",
+      "/hr/onboarding-review",
+      "/hr/organization",
+      "/hr/organization/structure",
+      "/hr/overtime",
+      "/hr/overtime/:id",
+      "/hr/overtime/create",
+      "/hr/payroll",
+      "/hr/payroll/:id",
+      "/hr/payroll/create",
+      "/hr/payroll/salary-components",
+      "/hr/performance",
+      "/hr/performance/:id",
+      "/hr/performance/advanced",
+      "/hr/performance/create",
+      "/hr/public-holidays",
+      "/hr/recruitment",
+      "/hr/recruitment/advanced",
+      "/hr/recruitment/applicants/create",
+      "/hr/recruitment/applications",
+      "/hr/recruitment/create",
+      "/hr/recruitment/jobs/:id",
+      "/hr/shifts",
+      "/hr/shifts/create",
+      "/hr/shifts/management",
+      "/hr/training",
+      "/hr/training/:id",
+      "/hr/training/advanced",
+      "/hr/training/create",
+      "/hr/transfers",
+      "/hr/transfers/:id",
+      "/hr/turnover-report",
+      "/hr/violations",
+      "/hr/violations/:id",
+      "/hr/violations/auto-detection",
+      "/hr/violations/create",
+      "/hr/violations/management",
+      "/hr/violations/penalty-escalation",
+      "/insights",
+      "/intelligence",
+      "/legal",
+      "/legal/cases",
+      "/legal/cases/:id",
+      "/legal/cases/create",
+      "/legal/contracts",
+      "/legal/contracts/:id",
+      "/legal/correspondence",
+      "/legal/create",
+      "/legal/documents",
+      "/legal/judgments",
+      "/legal/judgments/:id",
+      "/legal/sessions",
+      "/legal/sessions/:id",
+      "/manager-board",
+      "/marketing",
+      "/marketing/create",
+      "/module-dashboards",
+      "/my-attendance",
+      "/my-documents",
+      "/my-leave-request",
+      "/my-loans",
+      "/my-overtime",
+      "/my-payslip",
+      "/my-performance",
+      "/my-requests",
+      "/my-space",
+      "/notifications",
+      "/obligations",
+      "/operations-center",
+      "/projects",
+      "/projects/:id",
+      "/projects/create",
+      "/projects/gantt",
+      "/projects/risks",
+      "/projects/tasks",
+      "/properties",
+      "/properties/:id",
+      "/properties/:id/status",
+      "/properties/buildings",
+      "/properties/buildings/:id",
+      "/properties/buildings/create",
+      "/properties/contracts",
+      "/properties/contracts/:contractId/pay/:installmentId",
+      "/properties/contracts/:id",
+      "/properties/contracts/create",
+      "/properties/create",
+      "/properties/dashboard",
+      "/properties/deposits",
+      "/properties/guide",
+      "/properties/inspections",
+      "/properties/maintenance",
+      "/properties/maintenance/:id",
+      "/properties/maintenance/create",
+      "/properties/occupancy-report",
+      "/properties/owners",
+      "/properties/owners/:id",
+      "/properties/owners/create",
+      "/properties/payments",
+      "/properties/payments/:id",
+      "/properties/payments/:paymentId/pay",
+      "/properties/tenants",
+      "/properties/tenants/:id",
+      "/properties/tenants/create",
+      "/reports/scheduled",
+      "/requests",
+      "/requests/:id",
+      "/requests/create",
+      "/requests/types",
+      "/requests/types/create",
+      "/requests/workflows",
+      "/settings",
+      "/settings/audit-log",
+      "/settings/branches",
+      "/settings/companies",
+      "/settings/departments",
+      "/settings/rules",
+      "/store",
+      "/store/orders",
+      "/store/orders/:id",
+      "/store/orders/create",
+      "/store/products/:id",
+      "/store/products/create",
+      "/support",
+      "/support/:id",
+      "/support/create",
+      "/support/kb",
+      "/support/replies",
+      "/tasks",
+      "/tasks/:id",
+      "/tasks/create",
+      "/umrah",
+      "/umrah/agents",
+      "/umrah/agents/:id",
+      "/umrah/commission-plans",
+      "/umrah/commission-plans/:id/edit",
+      "/umrah/commission-plans/new",
+      "/umrah/import",
+      "/umrah/import/legacy",
+      "/umrah/invoices",
+      "/umrah/invoices/:id",
+      "/umrah/packages",
+      "/umrah/packages/:id",
+      "/umrah/penalties",
+      "/umrah/penalties/:id",
+      "/umrah/pilgrims",
+      "/umrah/pilgrims/:id",
+      "/umrah/pilgrims/create",
+      "/umrah/pricing",
+      "/umrah/seasons",
+      "/umrah/seasons/:id",
+      "/umrah/sub-agents",
+      "/umrah/transport",
+      "/umrah/transport/:id",
+      "/umrah/violations",
+      "/warehouse",
+      "/warehouse/categories",
+      "/warehouse/categories/:id",
+      "/warehouse/categories/create",
+      "/warehouse/create",
+      "/warehouse/inventory-count",
+      "/warehouse/movements",
+      "/warehouse/movements/:id",
+      "/warehouse/movements/create",
+      "/warehouse/products/:id",
+      "/warehouse/suppliers",
+      "/warehouse/suppliers/:id",
+      "/warehouse/suppliers/create"
+    ]
+  },
+  "api": {
+    "totalEndpoints": 928,
+    "mountedEndpoints": 922,
+    "byFile": {
+      "accounting-engine.ts": [
+        {
+          "method": "GET",
+          "path": "/accounting-mappings",
+          "fullPath": "/api/finance/accounting-mappings",
+          "mount": "/finance"
+        },
+        {
+          "method": "POST",
+          "path": "/accounting-mappings/batch",
+          "fullPath": "/api/finance/accounting-mappings/batch",
+          "mount": "/finance"
+        },
+        {
+          "method": "GET",
+          "path": "/accounting-mappings/:operationType",
+          "fullPath": "/api/finance/accounting-mappings/:operationType",
+          "mount": "/finance"
+        },
+        {
+          "method": "PUT",
+          "path": "/accounting-mappings/:operationType",
+          "fullPath": "/api/finance/accounting-mappings/:operationType",
+          "mount": "/finance"
+        },
+        {
+          "method": "GET",
+          "path": "/accounting-mappings/:operationType/validate",
+          "fullPath": "/api/finance/accounting-mappings/:operationType/validate",
+          "mount": "/finance"
+        },
+        {
+          "method": "GET",
+          "path": "/journal-templates",
+          "fullPath": "/api/finance/journal-templates",
+          "mount": "/finance"
+        },
+        {
+          "method": "POST",
+          "path": "/journal-templates",
+          "fullPath": "/api/finance/journal-templates",
+          "mount": "/finance"
+        },
+        {
+          "method": "PUT",
+          "path": "/journal-templates/:id",
+          "fullPath": "/api/finance/journal-templates/:id",
+          "mount": "/finance"
+        },
+        {
+          "method": "DELETE",
+          "path": "/journal-templates/:id",
+          "fullPath": "/api/finance/journal-templates/:id",
+          "mount": "/finance"
+        },
+        {
+          "method": "GET",
+          "path": "/subsidiary-accounts",
+          "fullPath": "/api/finance/subsidiary-accounts",
+          "mount": "/finance"
+        },
+        {
+          "method": "GET",
+          "path": "/subsidiary-accounts/entity/:entityType/:entityId",
+          "fullPath": "/api/finance/subsidiary-accounts/entity/:entityType/:entityId",
+          "mount": "/finance"
+        },
+        {
+          "method": "POST",
+          "path": "/subsidiary-accounts",
+          "fullPath": "/api/finance/subsidiary-accounts",
+          "mount": "/finance"
+        },
+        {
+          "method": "DELETE",
+          "path": "/subsidiary-accounts/:id",
+          "fullPath": "/api/finance/subsidiary-accounts/:id",
+          "mount": "/finance"
+        }
+      ],
+      "actionCenter.ts": [
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/action-center/",
+          "mount": "/action-center"
+        }
+      ],
+      "activityIngest.ts": [
+        {
+          "method": "POST",
+          "path": "/intelligence/activity",
+          "fullPath": null,
+          "mount": null
+        }
+      ],
+      "activityLog.ts": [
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/activity-log/",
+          "mount": "/activity-log"
+        },
+        {
+          "method": "GET",
+          "path": "/summary",
+          "fullPath": "/api/activity-log/summary",
+          "mount": "/activity-log"
+        }
+      ],
+      "admin.ts": [
+        {
+          "method": "GET",
+          "path": "/users",
+          "fullPath": "/api/admin/users",
+          "mount": "/admin"
+        },
+        {
+          "method": "POST",
+          "path": "/users",
+          "fullPath": "/api/admin/users",
+          "mount": "/admin"
+        },
+        {
+          "method": "PATCH",
+          "path": "/users/:id",
+          "fullPath": "/api/admin/users/:id",
+          "mount": "/admin"
+        },
+        {
+          "method": "DELETE",
+          "path": "/users/:id",
+          "fullPath": "/api/admin/users/:id",
+          "mount": "/admin"
+        },
+        {
+          "method": "POST",
+          "path": "/users/:id/reset-password",
+          "fullPath": "/api/admin/users/:id/reset-password",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/roles",
+          "fullPath": "/api/admin/roles",
+          "mount": "/admin"
+        },
+        {
+          "method": "POST",
+          "path": "/roles",
+          "fullPath": "/api/admin/roles",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/predefined-roles",
+          "fullPath": "/api/admin/predefined-roles",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/user-roles/:userId",
+          "fullPath": "/api/admin/user-roles/:userId",
+          "mount": "/admin"
+        },
+        {
+          "method": "POST",
+          "path": "/user-roles",
+          "fullPath": "/api/admin/user-roles",
+          "mount": "/admin"
+        },
+        {
+          "method": "DELETE",
+          "path": "/user-roles/:id",
+          "fullPath": "/api/admin/user-roles/:id",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/integrations",
+          "fullPath": "/api/admin/integrations",
+          "mount": "/admin"
+        },
+        {
+          "method": "POST",
+          "path": "/integrations",
+          "fullPath": "/api/admin/integrations",
+          "mount": "/admin"
+        },
+        {
+          "method": "PATCH",
+          "path": "/integrations/:id",
+          "fullPath": "/api/admin/integrations/:id",
+          "mount": "/admin"
+        },
+        {
+          "method": "DELETE",
+          "path": "/integrations/:id",
+          "fullPath": "/api/admin/integrations/:id",
+          "mount": "/admin"
+        },
+        {
+          "method": "POST",
+          "path": "/integrations/:id/test",
+          "fullPath": "/api/admin/integrations/:id/test",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/integration-logs",
+          "fullPath": "/api/admin/integration-logs",
+          "mount": "/admin"
+        },
+        {
+          "method": "POST",
+          "path": "/integration-logs/retry",
+          "fullPath": "/api/admin/integration-logs/retry",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/system-health",
+          "fullPath": "/api/admin/system-health",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/violations-report",
+          "fullPath": "/api/admin/violations-report",
+          "mount": "/admin"
+        },
+        {
+          "method": "PATCH",
+          "path": "/violations/:id/resolve",
+          "fullPath": "/api/admin/violations/:id/resolve",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/security-log",
+          "fullPath": "/api/admin/security-log",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/role-permissions",
+          "fullPath": "/api/admin/role-permissions",
+          "mount": "/admin"
+        },
+        {
+          "method": "POST",
+          "path": "/role-permissions",
+          "fullPath": "/api/admin/role-permissions",
+          "mount": "/admin"
+        },
+        {
+          "method": "PUT",
+          "path": "/role-permissions/bulk",
+          "fullPath": "/api/admin/role-permissions/bulk",
+          "mount": "/admin"
+        },
+        {
+          "method": "DELETE",
+          "path": "/role-permissions/:id",
+          "fullPath": "/api/admin/role-permissions/:id",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/governance/policy-audit",
+          "fullPath": "/api/admin/governance/policy-audit",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/governance/role-strategies",
+          "fullPath": "/api/admin/governance/role-strategies",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/governance/system-guards",
+          "fullPath": "/api/admin/governance/system-guards",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/governance/domain-registry",
+          "fullPath": "/api/admin/governance/domain-registry",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/governance/gl-reconciliation",
+          "fullPath": "/api/admin/governance/gl-reconciliation",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/governance/lifecycle-machines",
+          "fullPath": "/api/admin/governance/lifecycle-machines",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/governance/event-dlq",
+          "fullPath": "/api/admin/governance/event-dlq",
+          "mount": "/admin"
+        },
+        {
+          "method": "POST",
+          "path": "/governance/event-dlq/:id/replay",
+          "fullPath": "/api/admin/governance/event-dlq/:id/replay",
+          "mount": "/admin"
+        },
+        {
+          "method": "DELETE",
+          "path": "/governance/event-dlq/:id",
+          "fullPath": "/api/admin/governance/event-dlq/:id",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/governance/event-catalog",
+          "fullPath": "/api/admin/governance/event-catalog",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/governance/rbac-matrix",
+          "fullPath": "/api/admin/governance/rbac-matrix",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/system-registry",
+          "fullPath": "/api/admin/system-registry",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/system-registry/entities",
+          "fullPath": "/api/admin/system-registry/entities",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/system-registry/actions",
+          "fullPath": "/api/admin/system-registry/actions",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/system-registry/pages",
+          "fullPath": "/api/admin/system-registry/pages",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/system-registry/missing",
+          "fullPath": "/api/admin/system-registry/missing",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/system-health-checks",
+          "fullPath": "/api/admin/system-health-checks",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/system-health/dependency-graph",
+          "fullPath": "/api/admin/system-health/dependency-graph",
+          "mount": "/admin"
+        },
+        {
+          "method": "GET",
+          "path": "/system-stops",
+          "fullPath": "/api/admin/system-stops",
+          "mount": "/admin"
+        },
+        {
+          "method": "POST",
+          "path": "/system-stops",
+          "fullPath": "/api/admin/system-stops",
+          "mount": "/admin"
+        },
+        {
+          "method": "PATCH",
+          "path": "/system-stops/:id/deactivate",
+          "fullPath": "/api/admin/system-stops/:id/deactivate",
+          "mount": "/admin"
+        }
+      ],
+      "approvalActions.ts": [
+        {
+          "method": "GET",
+          "path": "/overrides/report",
+          "fullPath": "/api/approval-actions/overrides/report",
+          "mount": "/approval-actions"
+        },
+        {
+          "method": "GET",
+          "path": "/:entityType/:entityId",
+          "fullPath": "/api/approval-actions/:entityType/:entityId",
+          "mount": "/approval-actions"
+        }
+      ],
+      "auditLogs.ts": [
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/audit-logs/",
+          "mount": "/audit-logs"
+        },
+        {
+          "method": "GET",
+          "path": "/entities",
+          "fullPath": "/api/audit-logs/entities",
+          "mount": "/audit-logs"
+        },
+        {
+          "method": "GET",
+          "path": "/:entityType/:entityId",
+          "fullPath": "/api/audit-logs/:entityType/:entityId",
+          "mount": "/audit-logs"
+        }
+      ],
+      "auth.ts": [
+        {
+          "method": "POST",
+          "path": "/register",
+          "fullPath": "/api/auth/register",
+          "mount": "/auth"
+        },
+        {
+          "method": "POST",
+          "path": "/login",
+          "fullPath": "/api/auth/login",
+          "mount": "/auth"
+        },
+        {
+          "method": "POST",
+          "path": "/refresh",
+          "fullPath": "/api/auth/refresh",
+          "mount": "/auth"
+        },
+        {
+          "method": "POST",
+          "path": "/logout",
+          "fullPath": "/api/auth/logout",
+          "mount": "/auth"
+        },
+        {
+          "method": "POST",
+          "path": "/switch-assignment",
+          "fullPath": "/api/auth/switch-assignment",
+          "mount": "/auth"
+        },
+        {
+          "method": "GET",
+          "path": "/me",
+          "fullPath": "/api/auth/me",
+          "mount": "/auth"
+        },
+        {
+          "method": "POST",
+          "path": "/change-password",
+          "fullPath": "/api/auth/change-password",
+          "mount": "/auth"
+        }
+      ],
+      "automation.ts": [
+        {
+          "method": "GET",
+          "path": "/cron-jobs",
+          "fullPath": "/api/automation/cron-jobs",
+          "mount": "/automation"
+        },
+        {
+          "method": "POST",
+          "path": "/cron-jobs/:id/toggle",
+          "fullPath": "/api/automation/cron-jobs/:id/toggle",
+          "mount": "/automation"
+        },
+        {
+          "method": "POST",
+          "path": "/cron-jobs/:id/trigger",
+          "fullPath": "/api/automation/cron-jobs/:id/trigger",
+          "mount": "/automation"
+        },
+        {
+          "method": "GET",
+          "path": "/cron-logs",
+          "fullPath": "/api/automation/cron-logs",
+          "mount": "/automation"
+        },
+        {
+          "method": "GET",
+          "path": "/notification-stats",
+          "fullPath": "/api/automation/notification-stats",
+          "mount": "/automation"
+        },
+        {
+          "method": "GET",
+          "path": "/event-logs",
+          "fullPath": "/api/automation/event-logs",
+          "mount": "/automation"
+        },
+        {
+          "method": "GET",
+          "path": "/proactive-rules",
+          "fullPath": "/api/automation/proactive-rules",
+          "mount": "/automation"
+        },
+        {
+          "method": "POST",
+          "path": "/proactive-rules/:id/toggle",
+          "fullPath": "/api/automation/proactive-rules/:id/toggle",
+          "mount": "/automation"
+        },
+        {
+          "method": "GET",
+          "path": "/automation-logs",
+          "fullPath": "/api/automation/automation-logs",
+          "mount": "/automation"
+        },
+        {
+          "method": "GET",
+          "path": "/automation-stats",
+          "fullPath": "/api/automation/automation-stats",
+          "mount": "/automation"
+        }
+      ],
+      "bi.ts": [
+        {
+          "method": "GET",
+          "path": "/dashboards",
+          "fullPath": "/api/bi/dashboards",
+          "mount": "/bi"
+        },
+        {
+          "method": "POST",
+          "path": "/dashboards",
+          "fullPath": "/api/bi/dashboards",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/kpis",
+          "fullPath": "/api/bi/kpis",
+          "mount": "/bi"
+        },
+        {
+          "method": "POST",
+          "path": "/kpis",
+          "fullPath": "/api/bi/kpis",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/reports",
+          "fullPath": "/api/bi/reports",
+          "mount": "/bi"
+        },
+        {
+          "method": "POST",
+          "path": "/reports",
+          "fullPath": "/api/bi/reports",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/overview",
+          "fullPath": "/api/bi/overview",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/operations/sla-delays",
+          "fullPath": "/api/bi/operations/sla-delays",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/operations/rejection-rate",
+          "fullPath": "/api/bi/operations/rejection-rate",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/operations/bottleneck",
+          "fullPath": "/api/bi/operations/bottleneck",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/operations/employee-productivity",
+          "fullPath": "/api/bi/operations/employee-productivity",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/operations/approval-timeliness",
+          "fullPath": "/api/bi/operations/approval-timeliness",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/operations/avg-completion-time",
+          "fullPath": "/api/bi/operations/avg-completion-time",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/operations/trend",
+          "fullPath": "/api/bi/operations/trend",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/admin-reports/daily",
+          "fullPath": "/api/bi/admin-reports/daily",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/admin-reports/weekly",
+          "fullPath": "/api/bi/admin-reports/weekly",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/admin-reports/monthly",
+          "fullPath": "/api/bi/admin-reports/monthly",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/ceo-dashboard",
+          "fullPath": "/api/bi/ceo-dashboard",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/reports/branch-performance",
+          "fullPath": "/api/bi/reports/branch-performance",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/reports/vendor-performance",
+          "fullPath": "/api/bi/reports/vendor-performance",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/reports/fleet-tco",
+          "fullPath": "/api/bi/reports/fleet-tco",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/reports/department-leave-balance",
+          "fullPath": "/api/bi/reports/department-leave-balance",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/reports/property-occupancy",
+          "fullPath": "/api/bi/reports/property-occupancy",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/reports/training-roi",
+          "fullPath": "/api/bi/reports/training-roi",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/ai-insights",
+          "fullPath": "/api/bi/ai-insights",
+          "mount": "/bi"
+        },
+        {
+          "method": "PATCH",
+          "path": "/ai-insights/:id/dismiss",
+          "fullPath": "/api/bi/ai-insights/:id/dismiss",
+          "mount": "/bi"
+        },
+        {
+          "method": "PATCH",
+          "path": "/ai-insights/:id/read",
+          "fullPath": "/api/bi/ai-insights/:id/read",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/alert-fatigue/settings",
+          "fullPath": "/api/bi/alert-fatigue/settings",
+          "mount": "/bi"
+        },
+        {
+          "method": "POST",
+          "path": "/alert-fatigue/mute",
+          "fullPath": "/api/bi/alert-fatigue/mute",
+          "mount": "/bi"
+        },
+        {
+          "method": "DELETE",
+          "path": "/alert-fatigue/mute/:alertType",
+          "fullPath": "/api/bi/alert-fatigue/mute/:alertType",
+          "mount": "/bi"
+        },
+        {
+          "method": "GET",
+          "path": "/alert-fatigue/daily-count",
+          "fullPath": "/api/bi/alert-fatigue/daily-count",
+          "mount": "/bi"
+        }
+      ],
+      "careersPortal.ts": [
+        {
+          "method": "POST",
+          "path": "/auth/register",
+          "fullPath": "/api/careers/auth/register",
+          "mount": "/careers"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/login",
+          "fullPath": "/api/careers/auth/login",
+          "mount": "/careers"
+        },
+        {
+          "method": "GET",
+          "path": "/jobs",
+          "fullPath": "/api/careers/jobs",
+          "mount": "/careers"
+        },
+        {
+          "method": "GET",
+          "path": "/jobs/:id",
+          "fullPath": "/api/careers/jobs/:id",
+          "mount": "/careers"
+        },
+        {
+          "method": "GET",
+          "path": "/me",
+          "fullPath": "/api/careers/me",
+          "mount": "/careers"
+        },
+        {
+          "method": "PATCH",
+          "path": "/me",
+          "fullPath": "/api/careers/me",
+          "mount": "/careers"
+        },
+        {
+          "method": "PATCH",
+          "path": "/me/resume",
+          "fullPath": "/api/careers/me/resume",
+          "mount": "/careers"
+        },
+        {
+          "method": "GET",
+          "path": "/my-applications",
+          "fullPath": "/api/careers/my-applications",
+          "mount": "/careers"
+        },
+        {
+          "method": "POST",
+          "path": "/apply",
+          "fullPath": "/api/careers/apply",
+          "mount": "/careers"
+        }
+      ],
+      "clientPortal.ts": [
+        {
+          "method": "POST",
+          "path": "/auth/login",
+          "fullPath": "/api/portal/auth/login",
+          "mount": "/portal"
+        }
+      ],
+      "clients.ts": [
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/clients/",
+          "mount": "/clients"
+        },
+        {
+          "method": "POST",
+          "path": "/",
+          "fullPath": "/api/clients/",
+          "mount": "/clients"
+        },
+        {
+          "method": "GET",
+          "path": "/:id",
+          "fullPath": "/api/clients/:id",
+          "mount": "/clients"
+        },
+        {
+          "method": "PATCH",
+          "path": "/:id",
+          "fullPath": "/api/clients/:id",
+          "mount": "/clients"
+        },
+        {
+          "method": "POST",
+          "path": "/auto-create",
+          "fullPath": "/api/clients/auto-create",
+          "mount": "/clients"
+        },
+        {
+          "method": "DELETE",
+          "path": "/:id",
+          "fullPath": "/api/clients/:id",
+          "mount": "/clients"
+        },
+        {
+          "method": "GET",
+          "path": "/:id/portal-account",
+          "fullPath": "/api/clients/:id/portal-account",
+          "mount": "/clients"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/portal-account",
+          "fullPath": "/api/clients/:id/portal-account",
+          "mount": "/clients"
+        },
+        {
+          "method": "PATCH",
+          "path": "/:id/portal-account",
+          "fullPath": "/api/clients/:id/portal-account",
+          "mount": "/clients"
+        }
+      ],
+      "communications.ts": [
+        {
+          "method": "GET",
+          "path": "/whatsapp/webhook",
+          "fullPath": "/api/communications/whatsapp/webhook",
+          "mount": "/communications"
+        },
+        {
+          "method": "POST",
+          "path": "/whatsapp/webhook",
+          "fullPath": "/api/communications/whatsapp/webhook",
+          "mount": "/communications"
+        },
+        {
+          "method": "POST",
+          "path": "/pbx/incoming",
+          "fullPath": "/api/communications/pbx/incoming",
+          "mount": "/communications"
+        },
+        {
+          "method": "POST",
+          "path": "/pbx/completed",
+          "fullPath": "/api/communications/pbx/completed",
+          "mount": "/communications"
+        },
+        {
+          "method": "POST",
+          "path": "/pbx/status",
+          "fullPath": "/api/communications/pbx/status",
+          "mount": "/communications"
+        },
+        {
+          "method": "GET",
+          "path": "/log",
+          "fullPath": "/api/communications/log",
+          "mount": "/communications"
+        },
+        {
+          "method": "POST",
+          "path": "/send",
+          "fullPath": "/api/communications/send",
+          "mount": "/communications"
+        },
+        {
+          "method": "GET",
+          "path": "/whatsapp",
+          "fullPath": "/api/communications/whatsapp",
+          "mount": "/communications"
+        },
+        {
+          "method": "GET",
+          "path": "/sms",
+          "fullPath": "/api/communications/sms",
+          "mount": "/communications"
+        },
+        {
+          "method": "GET",
+          "path": "/pbx",
+          "fullPath": "/api/communications/pbx",
+          "mount": "/communications"
+        },
+        {
+          "method": "PATCH",
+          "path": "/log/:id",
+          "fullPath": "/api/communications/log/:id",
+          "mount": "/communications"
+        },
+        {
+          "method": "POST",
+          "path": "/log/:id/convert",
+          "fullPath": "/api/communications/log/:id/convert",
+          "mount": "/communications"
+        },
+        {
+          "method": "DELETE",
+          "path": "/log/:id",
+          "fullPath": "/api/communications/log/:id",
+          "mount": "/communications"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/communications/stats",
+          "mount": "/communications"
+        },
+        {
+          "method": "GET",
+          "path": "/queue-stats",
+          "fullPath": "/api/communications/queue-stats",
+          "mount": "/communications"
+        },
+        {
+          "method": "GET",
+          "path": "/push/vapid-key",
+          "fullPath": "/api/communications/push/vapid-key",
+          "mount": "/communications"
+        },
+        {
+          "method": "POST",
+          "path": "/push/subscribe",
+          "fullPath": "/api/communications/push/subscribe",
+          "mount": "/communications"
+        },
+        {
+          "method": "DELETE",
+          "path": "/push/unsubscribe",
+          "fullPath": "/api/communications/push/unsubscribe",
+          "mount": "/communications"
+        },
+        {
+          "method": "POST",
+          "path": "/push/test",
+          "fullPath": "/api/communications/push/test",
+          "mount": "/communications"
+        }
+      ],
+      "crm.ts": [
+        {
+          "method": "GET",
+          "path": "/opportunities",
+          "fullPath": "/api/crm/opportunities",
+          "mount": "/crm"
+        },
+        {
+          "method": "POST",
+          "path": "/opportunities",
+          "fullPath": "/api/crm/opportunities",
+          "mount": "/crm"
+        },
+        {
+          "method": "PATCH",
+          "path": "/opportunities/:id",
+          "fullPath": "/api/crm/opportunities/:id",
+          "mount": "/crm"
+        },
+        {
+          "method": "GET",
+          "path": "/opportunities/:id",
+          "fullPath": "/api/crm/opportunities/:id",
+          "mount": "/crm"
+        },
+        {
+          "method": "POST",
+          "path": "/opportunities/:id/convert",
+          "fullPath": "/api/crm/opportunities/:id/convert",
+          "mount": "/crm"
+        },
+        {
+          "method": "DELETE",
+          "path": "/opportunities/:id",
+          "fullPath": "/api/crm/opportunities/:id",
+          "mount": "/crm"
+        },
+        {
+          "method": "GET",
+          "path": "/opportunities/:id/related",
+          "fullPath": "/api/crm/opportunities/:id/related",
+          "mount": "/crm"
+        },
+        {
+          "method": "GET",
+          "path": "/opportunities/:id/activities",
+          "fullPath": "/api/crm/opportunities/:id/activities",
+          "mount": "/crm"
+        },
+        {
+          "method": "POST",
+          "path": "/opportunities/:id/activities",
+          "fullPath": "/api/crm/opportunities/:id/activities",
+          "mount": "/crm"
+        },
+        {
+          "method": "GET",
+          "path": "/pipeline",
+          "fullPath": "/api/crm/pipeline",
+          "mount": "/crm"
+        },
+        {
+          "method": "POST",
+          "path": "/followup-check",
+          "fullPath": "/api/crm/followup-check",
+          "mount": "/crm"
+        },
+        {
+          "method": "GET",
+          "path": "/analytics",
+          "fullPath": "/api/crm/analytics",
+          "mount": "/crm"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/crm/stats",
+          "mount": "/crm"
+        }
+      ],
+      "dashboard.ts": [
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/dashboard/",
+          "mount": "/dashboard"
+        },
+        {
+          "method": "GET",
+          "path": "/summary",
+          "fullPath": "/api/dashboard/summary",
+          "mount": "/dashboard"
+        },
+        {
+          "method": "GET",
+          "path": "/role-data",
+          "fullPath": "/api/dashboard/role-data",
+          "mount": "/dashboard"
+        },
+        {
+          "method": "GET",
+          "path": "/charts/revenue",
+          "fullPath": "/api/dashboard/charts/revenue",
+          "mount": "/dashboard"
+        },
+        {
+          "method": "GET",
+          "path": "/charts/attendance",
+          "fullPath": "/api/dashboard/charts/attendance",
+          "mount": "/dashboard"
+        },
+        {
+          "method": "GET",
+          "path": "/charts/departments",
+          "fullPath": "/api/dashboard/charts/departments",
+          "mount": "/dashboard"
+        },
+        {
+          "method": "GET",
+          "path": "/charts/recent-events",
+          "fullPath": "/api/dashboard/charts/recent-events",
+          "mount": "/dashboard"
+        }
+      ],
+      "digital-signature.ts": [
+        {
+          "method": "POST",
+          "path": "/request-otp",
+          "fullPath": "/api/digital-signature/request-otp",
+          "mount": "/digital-signature"
+        },
+        {
+          "method": "POST",
+          "path": "/verify",
+          "fullPath": "/api/digital-signature/verify",
+          "mount": "/digital-signature"
+        },
+        {
+          "method": "GET",
+          "path": "/logs",
+          "fullPath": "/api/digital-signature/logs",
+          "mount": "/digital-signature"
+        }
+      ],
+      "documents.ts": [
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/documents/",
+          "mount": "/documents"
+        },
+        {
+          "method": "POST",
+          "path": "/",
+          "fullPath": "/api/documents/",
+          "mount": "/documents"
+        },
+        {
+          "method": "POST",
+          "path": "/upload",
+          "fullPath": "/api/documents/upload",
+          "mount": "/documents"
+        },
+        {
+          "method": "GET",
+          "path": "/:id/download",
+          "fullPath": "/api/documents/:id/download",
+          "mount": "/documents"
+        },
+        {
+          "method": "GET",
+          "path": "/:id/preview",
+          "fullPath": "/api/documents/:id/preview",
+          "mount": "/documents"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/versions",
+          "fullPath": "/api/documents/:id/versions",
+          "mount": "/documents"
+        },
+        {
+          "method": "GET",
+          "path": "/:id/versions",
+          "fullPath": "/api/documents/:id/versions",
+          "mount": "/documents"
+        },
+        {
+          "method": "PATCH",
+          "path": "/:id/status",
+          "fullPath": "/api/documents/:id/status",
+          "mount": "/documents"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/entity-links",
+          "fullPath": "/api/documents/:id/entity-links",
+          "mount": "/documents"
+        },
+        {
+          "method": "GET",
+          "path": "/:id/entity-links",
+          "fullPath": "/api/documents/:id/entity-links",
+          "mount": "/documents"
+        },
+        {
+          "method": "GET",
+          "path": "/folders",
+          "fullPath": "/api/documents/folders",
+          "mount": "/documents"
+        },
+        {
+          "method": "POST",
+          "path": "/folders",
+          "fullPath": "/api/documents/folders",
+          "mount": "/documents"
+        },
+        {
+          "method": "GET",
+          "path": "/templates",
+          "fullPath": "/api/documents/templates",
+          "mount": "/documents"
+        },
+        {
+          "method": "GET",
+          "path": "/templates/:id",
+          "fullPath": "/api/documents/templates/:id",
+          "mount": "/documents"
+        },
+        {
+          "method": "POST",
+          "path": "/templates",
+          "fullPath": "/api/documents/templates",
+          "mount": "/documents"
+        },
+        {
+          "method": "PUT",
+          "path": "/templates/:id",
+          "fullPath": "/api/documents/templates/:id",
+          "mount": "/documents"
+        },
+        {
+          "method": "DELETE",
+          "path": "/templates/:id",
+          "fullPath": "/api/documents/templates/:id",
+          "mount": "/documents"
+        },
+        {
+          "method": "POST",
+          "path": "/templates/:id/generate",
+          "fullPath": "/api/documents/templates/:id/generate",
+          "mount": "/documents"
+        },
+        {
+          "method": "GET",
+          "path": "/templates/:id/variables",
+          "fullPath": "/api/documents/templates/:id/variables",
+          "mount": "/documents"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/documents/stats",
+          "mount": "/documents"
+        },
+        {
+          "method": "GET",
+          "path": "/:id",
+          "fullPath": "/api/documents/:id",
+          "mount": "/documents"
+        },
+        {
+          "method": "PATCH",
+          "path": "/:id",
+          "fullPath": "/api/documents/:id",
+          "mount": "/documents"
+        },
+        {
+          "method": "DELETE",
+          "path": "/:id",
+          "fullPath": "/api/documents/:id",
+          "mount": "/documents"
+        }
+      ],
+      "employees.ts": [
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/employees/",
+          "mount": "/employees"
+        },
+        {
+          "method": "POST",
+          "path": "/",
+          "fullPath": "/api/employees/",
+          "mount": "/employees"
+        },
+        {
+          "method": "GET",
+          "path": "/onboarding-tasks",
+          "fullPath": "/api/employees/onboarding-tasks",
+          "mount": "/employees"
+        },
+        {
+          "method": "PATCH",
+          "path": "/onboarding-tasks/:id",
+          "fullPath": "/api/employees/onboarding-tasks/:id",
+          "mount": "/employees"
+        },
+        {
+          "method": "GET",
+          "path": "/job-titles",
+          "fullPath": "/api/employees/job-titles",
+          "mount": "/employees"
+        },
+        {
+          "method": "GET",
+          "path": "/documents",
+          "fullPath": "/api/employees/documents",
+          "mount": "/employees"
+        },
+        {
+          "method": "GET",
+          "path": "/:id",
+          "fullPath": "/api/employees/:id",
+          "mount": "/employees"
+        },
+        {
+          "method": "PATCH",
+          "path": "/:id",
+          "fullPath": "/api/employees/:id",
+          "mount": "/employees"
+        },
+        {
+          "method": "DELETE",
+          "path": "/:id",
+          "fullPath": "/api/employees/:id",
+          "mount": "/employees"
+        },
+        {
+          "method": "POST",
+          "path": "/obligations/seed",
+          "fullPath": "/api/employees/obligations/seed",
+          "mount": "/employees"
+        }
+      ],
+      "entityMeta.ts": [
+        {
+          "method": "GET",
+          "path": "/comments/:entityType/:entityId",
+          "fullPath": "/api/entity-meta/comments/:entityType/:entityId",
+          "mount": "/entity-meta"
+        },
+        {
+          "method": "POST",
+          "path": "/comments/:entityType/:entityId",
+          "fullPath": "/api/entity-meta/comments/:entityType/:entityId",
+          "mount": "/entity-meta"
+        },
+        {
+          "method": "DELETE",
+          "path": "/comments/:id",
+          "fullPath": "/api/entity-meta/comments/:id",
+          "mount": "/entity-meta"
+        },
+        {
+          "method": "GET",
+          "path": "/tags/:entityType/:entityId",
+          "fullPath": "/api/entity-meta/tags/:entityType/:entityId",
+          "mount": "/entity-meta"
+        },
+        {
+          "method": "POST",
+          "path": "/tags/:entityType/:entityId",
+          "fullPath": "/api/entity-meta/tags/:entityType/:entityId",
+          "mount": "/entity-meta"
+        },
+        {
+          "method": "DELETE",
+          "path": "/tags/:id",
+          "fullPath": "/api/entity-meta/tags/:id",
+          "mount": "/entity-meta"
+        },
+        {
+          "method": "GET",
+          "path": "/tags-filter/:entityType",
+          "fullPath": "/api/entity-meta/tags-filter/:entityType",
+          "mount": "/entity-meta"
+        },
+        {
+          "method": "GET",
+          "path": "/tags-list/:entityType",
+          "fullPath": "/api/entity-meta/tags-list/:entityType",
+          "mount": "/entity-meta"
+        },
+        {
+          "method": "POST",
+          "path": "/bulk-action",
+          "fullPath": "/api/entity-meta/bulk-action",
+          "mount": "/entity-meta"
+        }
+      ],
+      "finance-cost-centers.ts": [
+        {
+          "method": "GET",
+          "path": "/cost-centers",
+          "fullPath": "/api/finance/cost-centers",
+          "mount": "/finance"
+        },
+        {
+          "method": "GET",
+          "path": "/cost-centers/:id",
+          "fullPath": "/api/finance/cost-centers/:id",
+          "mount": "/finance"
+        },
+        {
+          "method": "POST",
+          "path": "/cost-centers",
+          "fullPath": "/api/finance/cost-centers",
+          "mount": "/finance"
+        },
+        {
+          "method": "PATCH",
+          "path": "/cost-centers/:id",
+          "fullPath": "/api/finance/cost-centers/:id",
+          "mount": "/finance"
+        },
+        {
+          "method": "DELETE",
+          "path": "/cost-centers/:id",
+          "fullPath": "/api/finance/cost-centers/:id",
+          "mount": "/finance"
+        }
+      ],
+      "fleet.ts": [
+        {
+          "method": "GET",
+          "path": "/vehicles",
+          "fullPath": "/api/fleet/vehicles",
+          "mount": "/fleet"
+        },
+        {
+          "method": "POST",
+          "path": "/vehicles",
+          "fullPath": "/api/fleet/vehicles",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/drivers",
+          "fullPath": "/api/fleet/drivers",
+          "mount": "/fleet"
+        },
+        {
+          "method": "POST",
+          "path": "/drivers",
+          "fullPath": "/api/fleet/drivers",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/vehicles/:id",
+          "fullPath": "/api/fleet/vehicles/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/vehicles/:id/impact-preview",
+          "fullPath": "/api/fleet/vehicles/:id/impact-preview",
+          "mount": "/fleet"
+        },
+        {
+          "method": "PATCH",
+          "path": "/vehicles/:id",
+          "fullPath": "/api/fleet/vehicles/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "DELETE",
+          "path": "/vehicles/:id",
+          "fullPath": "/api/fleet/vehicles/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/drivers/:id",
+          "fullPath": "/api/fleet/drivers/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "PATCH",
+          "path": "/drivers/:id",
+          "fullPath": "/api/fleet/drivers/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "DELETE",
+          "path": "/drivers/:id",
+          "fullPath": "/api/fleet/drivers/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/trips",
+          "fullPath": "/api/fleet/trips",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/trips/:id",
+          "fullPath": "/api/fleet/trips/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "POST",
+          "path": "/trips",
+          "fullPath": "/api/fleet/trips",
+          "mount": "/fleet"
+        },
+        {
+          "method": "POST",
+          "path": "/trips/:id/complete",
+          "fullPath": "/api/fleet/trips/:id/complete",
+          "mount": "/fleet"
+        },
+        {
+          "method": "POST",
+          "path": "/trips/:id/cancel",
+          "fullPath": "/api/fleet/trips/:id/cancel",
+          "mount": "/fleet"
+        },
+        {
+          "method": "POST",
+          "path": "/trips/:id/waypoints",
+          "fullPath": "/api/fleet/trips/:id/waypoints",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/maintenance",
+          "fullPath": "/api/fleet/maintenance",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/maintenance/:id",
+          "fullPath": "/api/fleet/maintenance/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "POST",
+          "path": "/maintenance",
+          "fullPath": "/api/fleet/maintenance",
+          "mount": "/fleet"
+        },
+        {
+          "method": "POST",
+          "path": "/maintenance/:id/complete",
+          "fullPath": "/api/fleet/maintenance/:id/complete",
+          "mount": "/fleet"
+        },
+        {
+          "method": "POST",
+          "path": "/maintenance/:id/cancel",
+          "fullPath": "/api/fleet/maintenance/:id/cancel",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/alerts",
+          "fullPath": "/api/fleet/alerts",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/fuel-logs",
+          "fullPath": "/api/fleet/fuel-logs",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/fuel-logs/:id",
+          "fullPath": "/api/fleet/fuel-logs/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "POST",
+          "path": "/fuel-logs",
+          "fullPath": "/api/fleet/fuel-logs",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/insurance",
+          "fullPath": "/api/fleet/insurance",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/insurance/:id",
+          "fullPath": "/api/fleet/insurance/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "POST",
+          "path": "/insurance",
+          "fullPath": "/api/fleet/insurance",
+          "mount": "/fleet"
+        },
+        {
+          "method": "PATCH",
+          "path": "/trips/:id",
+          "fullPath": "/api/fleet/trips/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "DELETE",
+          "path": "/trips/:id",
+          "fullPath": "/api/fleet/trips/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "PATCH",
+          "path": "/maintenance/:id",
+          "fullPath": "/api/fleet/maintenance/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "DELETE",
+          "path": "/maintenance/:id",
+          "fullPath": "/api/fleet/maintenance/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "PATCH",
+          "path": "/fuel-logs/:id",
+          "fullPath": "/api/fleet/fuel-logs/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "DELETE",
+          "path": "/fuel-logs/:id",
+          "fullPath": "/api/fleet/fuel-logs/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "PATCH",
+          "path": "/insurance/:id",
+          "fullPath": "/api/fleet/insurance/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "DELETE",
+          "path": "/insurance/:id",
+          "fullPath": "/api/fleet/insurance/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/fleet/stats",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/preventive-plans",
+          "fullPath": "/api/fleet/preventive-plans",
+          "mount": "/fleet"
+        },
+        {
+          "method": "POST",
+          "path": "/preventive-plans",
+          "fullPath": "/api/fleet/preventive-plans",
+          "mount": "/fleet"
+        },
+        {
+          "method": "PATCH",
+          "path": "/preventive-plans/:id",
+          "fullPath": "/api/fleet/preventive-plans/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/traffic-violations",
+          "fullPath": "/api/fleet/traffic-violations",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/traffic-violations/:id",
+          "fullPath": "/api/fleet/traffic-violations/:id",
+          "mount": "/fleet"
+        },
+        {
+          "method": "POST",
+          "path": "/traffic-violations",
+          "fullPath": "/api/fleet/traffic-violations",
+          "mount": "/fleet"
+        },
+        {
+          "method": "PATCH",
+          "path": "/traffic-violations/:id/pay",
+          "fullPath": "/api/fleet/traffic-violations/:id/pay",
+          "mount": "/fleet"
+        },
+        {
+          "method": "GET",
+          "path": "/vehicles/:id/tco",
+          "fullPath": "/api/fleet/vehicles/:id/tco",
+          "mount": "/fleet"
+        }
+      ],
+      "gov-integrations.ts": [
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/gov-integrations/",
+          "mount": "/gov-integrations"
+        },
+        {
+          "method": "PUT",
+          "path": "/:id",
+          "fullPath": "/api/gov-integrations/:id",
+          "mount": "/gov-integrations"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/test",
+          "fullPath": "/api/gov-integrations/:id/test",
+          "mount": "/gov-integrations"
+        },
+        {
+          "method": "GET",
+          "path": "/expiring/iqama",
+          "fullPath": "/api/gov-integrations/expiring/iqama",
+          "mount": "/gov-integrations"
+        },
+        {
+          "method": "GET",
+          "path": "/expiring/registration",
+          "fullPath": "/api/gov-integrations/expiring/registration",
+          "mount": "/gov-integrations"
+        },
+        {
+          "method": "GET",
+          "path": "/links",
+          "fullPath": "/api/gov-integrations/links",
+          "mount": "/gov-integrations"
+        },
+        {
+          "method": "POST",
+          "path": "/links",
+          "fullPath": "/api/gov-integrations/links",
+          "mount": "/gov-integrations"
+        },
+        {
+          "method": "PATCH",
+          "path": "/links/:id",
+          "fullPath": "/api/gov-integrations/links/:id",
+          "mount": "/gov-integrations"
+        },
+        {
+          "method": "DELETE",
+          "path": "/links/:id",
+          "fullPath": "/api/gov-integrations/links/:id",
+          "mount": "/gov-integrations"
+        }
+      ],
+      "governance.ts": [
+        {
+          "method": "GET",
+          "path": "/policies",
+          "fullPath": "/api/governance/policies",
+          "mount": "/governance"
+        },
+        {
+          "method": "POST",
+          "path": "/policies",
+          "fullPath": "/api/governance/policies",
+          "mount": "/governance"
+        },
+        {
+          "method": "GET",
+          "path": "/policies/:id",
+          "fullPath": "/api/governance/policies/:id",
+          "mount": "/governance"
+        },
+        {
+          "method": "PATCH",
+          "path": "/policies/:id",
+          "fullPath": "/api/governance/policies/:id",
+          "mount": "/governance"
+        },
+        {
+          "method": "POST",
+          "path": "/policies/:id/new-version",
+          "fullPath": "/api/governance/policies/:id/new-version",
+          "mount": "/governance"
+        },
+        {
+          "method": "GET",
+          "path": "/policies/:id/module-links",
+          "fullPath": "/api/governance/policies/:id/module-links",
+          "mount": "/governance"
+        },
+        {
+          "method": "GET",
+          "path": "/module-policies/:module",
+          "fullPath": "/api/governance/module-policies/:module",
+          "mount": "/governance"
+        },
+        {
+          "method": "DELETE",
+          "path": "/policies/:id",
+          "fullPath": "/api/governance/policies/:id",
+          "mount": "/governance"
+        },
+        {
+          "method": "GET",
+          "path": "/risks",
+          "fullPath": "/api/governance/risks",
+          "mount": "/governance"
+        },
+        {
+          "method": "POST",
+          "path": "/risks",
+          "fullPath": "/api/governance/risks",
+          "mount": "/governance"
+        },
+        {
+          "method": "GET",
+          "path": "/risks/:id",
+          "fullPath": "/api/governance/risks/:id",
+          "mount": "/governance"
+        },
+        {
+          "method": "PATCH",
+          "path": "/risks/:id",
+          "fullPath": "/api/governance/risks/:id",
+          "mount": "/governance"
+        },
+        {
+          "method": "DELETE",
+          "path": "/risks/:id",
+          "fullPath": "/api/governance/risks/:id",
+          "mount": "/governance"
+        },
+        {
+          "method": "GET",
+          "path": "/audits",
+          "fullPath": "/api/governance/audits",
+          "mount": "/governance"
+        },
+        {
+          "method": "POST",
+          "path": "/audits",
+          "fullPath": "/api/governance/audits",
+          "mount": "/governance"
+        },
+        {
+          "method": "GET",
+          "path": "/audits/:id",
+          "fullPath": "/api/governance/audits/:id",
+          "mount": "/governance"
+        },
+        {
+          "method": "PATCH",
+          "path": "/audits/:id",
+          "fullPath": "/api/governance/audits/:id",
+          "mount": "/governance"
+        },
+        {
+          "method": "DELETE",
+          "path": "/audits/:id",
+          "fullPath": "/api/governance/audits/:id",
+          "mount": "/governance"
+        },
+        {
+          "method": "GET",
+          "path": "/compliance",
+          "fullPath": "/api/governance/compliance",
+          "mount": "/governance"
+        },
+        {
+          "method": "POST",
+          "path": "/compliance",
+          "fullPath": "/api/governance/compliance",
+          "mount": "/governance"
+        },
+        {
+          "method": "GET",
+          "path": "/compliance/:id",
+          "fullPath": "/api/governance/compliance/:id",
+          "mount": "/governance"
+        },
+        {
+          "method": "PATCH",
+          "path": "/compliance/:id",
+          "fullPath": "/api/governance/compliance/:id",
+          "mount": "/governance"
+        },
+        {
+          "method": "DELETE",
+          "path": "/compliance/:id",
+          "fullPath": "/api/governance/compliance/:id",
+          "mount": "/governance"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/governance/stats",
+          "mount": "/governance"
+        },
+        {
+          "method": "GET",
+          "path": "/compliance-dashboard",
+          "fullPath": "/api/governance/compliance-dashboard",
+          "mount": "/governance"
+        },
+        {
+          "method": "GET",
+          "path": "/compliance-actions",
+          "fullPath": "/api/governance/compliance-actions",
+          "mount": "/governance"
+        },
+        {
+          "method": "POST",
+          "path": "/compliance-actions",
+          "fullPath": "/api/governance/compliance-actions",
+          "mount": "/governance"
+        },
+        {
+          "method": "PATCH",
+          "path": "/compliance-actions/:actionId",
+          "fullPath": "/api/governance/compliance-actions/:actionId",
+          "mount": "/governance"
+        },
+        {
+          "method": "DELETE",
+          "path": "/compliance-actions/:actionId",
+          "fullPath": "/api/governance/compliance-actions/:actionId",
+          "mount": "/governance"
+        },
+        {
+          "method": "GET",
+          "path": "/policies/:id/compliance-actions",
+          "fullPath": "/api/governance/policies/:id/compliance-actions",
+          "mount": "/governance"
+        },
+        {
+          "method": "POST",
+          "path": "/policies/:id/compliance-actions",
+          "fullPath": "/api/governance/policies/:id/compliance-actions",
+          "mount": "/governance"
+        },
+        {
+          "method": "PATCH",
+          "path": "/compliance-actions/:id",
+          "fullPath": "/api/governance/compliance-actions/:id",
+          "mount": "/governance"
+        },
+        {
+          "method": "PATCH",
+          "path": "/risks/:id/treatment",
+          "fullPath": "/api/governance/risks/:id/treatment",
+          "mount": "/governance"
+        },
+        {
+          "method": "GET",
+          "path": "/capa",
+          "fullPath": "/api/governance/capa",
+          "mount": "/governance"
+        },
+        {
+          "method": "POST",
+          "path": "/capa",
+          "fullPath": "/api/governance/capa",
+          "mount": "/governance"
+        },
+        {
+          "method": "PATCH",
+          "path": "/capa/:id",
+          "fullPath": "/api/governance/capa/:id",
+          "mount": "/governance"
+        }
+      ],
+      "health.ts": [
+        {
+          "method": "GET",
+          "path": "/healthz",
+          "fullPath": null,
+          "mount": null
+        },
+        {
+          "method": "GET",
+          "path": "/health/schema",
+          "fullPath": null,
+          "mount": null
+        }
+      ],
+      "hr-discipline.ts": [
+        {
+          "method": "GET",
+          "path": "/regulation",
+          "fullPath": "/api/hr/discipline/regulation",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "GET",
+          "path": "/regulation/:id",
+          "fullPath": "/api/hr/discipline/regulation/:id",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "POST",
+          "path": "/regulation",
+          "fullPath": "/api/hr/discipline/regulation",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "PATCH",
+          "path": "/regulation/:id",
+          "fullPath": "/api/hr/discipline/regulation/:id",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "POST",
+          "path": "/regulation/reseed",
+          "fullPath": "/api/hr/discipline/regulation/reseed",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "DELETE",
+          "path": "/regulation/:id",
+          "fullPath": "/api/hr/discipline/regulation/:id",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "GET",
+          "path": "/memos",
+          "fullPath": "/api/hr/discipline/memos",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "GET",
+          "path": "/memos/:id",
+          "fullPath": "/api/hr/discipline/memos/:id",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "POST",
+          "path": "/memos",
+          "fullPath": "/api/hr/discipline/memos",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "POST",
+          "path": "/memos/:id/justify",
+          "fullPath": "/api/hr/discipline/memos/:id/justify",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "POST",
+          "path": "/memos/:id/manager-recommendation",
+          "fullPath": "/api/hr/discipline/memos/:id/manager-recommendation",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "POST",
+          "path": "/memos/:id/gm-decision",
+          "fullPath": "/api/hr/discipline/memos/:id/gm-decision",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "POST",
+          "path": "/memos/:id/cancel",
+          "fullPath": "/api/hr/discipline/memos/:id/cancel",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "POST",
+          "path": "/memos/:id/appeal",
+          "fullPath": "/api/hr/discipline/memos/:id/appeal",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "POST",
+          "path": "/memos/:id/appeal-decision",
+          "fullPath": "/api/hr/discipline/memos/:id/appeal-decision",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "POST",
+          "path": "/memos/:id/close",
+          "fullPath": "/api/hr/discipline/memos/:id/close",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "POST",
+          "path": "/penalty-preview",
+          "fullPath": "/api/hr/discipline/penalty-preview",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "GET",
+          "path": "/employee/:employeeId/summary",
+          "fullPath": "/api/hr/discipline/employee/:employeeId/summary",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/hr/discipline/stats",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "GET",
+          "path": "/auto-detection/settings",
+          "fullPath": "/api/hr/discipline/auto-detection/settings",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "PUT",
+          "path": "/auto-detection/settings",
+          "fullPath": "/api/hr/discipline/auto-detection/settings",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "POST",
+          "path": "/auto-detection/run",
+          "fullPath": "/api/hr/discipline/auto-detection/run",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "GET",
+          "path": "/auto-detection/log",
+          "fullPath": "/api/hr/discipline/auto-detection/log",
+          "mount": "/hr/discipline"
+        },
+        {
+          "method": "GET",
+          "path": "/auto-detection/summary",
+          "fullPath": "/api/hr/discipline/auto-detection/summary",
+          "mount": "/hr/discipline"
+        }
+      ],
+      "hr-exit.ts": [
+        {
+          "method": "GET",
+          "path": "/exit",
+          "fullPath": "/api/hr/exit",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/exit/:id",
+          "fullPath": "/api/hr/exit/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/exit",
+          "fullPath": "/api/hr/exit",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/exit/:id/approve",
+          "fullPath": "/api/hr/exit/:id/approve",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/exit/clearance/:id",
+          "fullPath": "/api/hr/exit/clearance/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/exit/:id/complete",
+          "fullPath": "/api/hr/exit/:id/complete",
+          "mount": "/hr"
+        }
+      ],
+      "hr-loans.ts": [
+        {
+          "method": "GET",
+          "path": "/loans",
+          "fullPath": "/api/hr/loans",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/loans/my",
+          "fullPath": "/api/hr/loans/my",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/loans/:id",
+          "fullPath": "/api/hr/loans/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/loans",
+          "fullPath": "/api/hr/loans",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/loans/:id/approve",
+          "fullPath": "/api/hr/loans/:id/approve",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/loans/:id/reject",
+          "fullPath": "/api/hr/loans/:id/reject",
+          "mount": "/hr"
+        }
+      ],
+      "hr-overtime.ts": [
+        {
+          "method": "GET",
+          "path": "/overtime",
+          "fullPath": "/api/hr/overtime",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/overtime/my",
+          "fullPath": "/api/hr/overtime/my",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/overtime/summary",
+          "fullPath": "/api/hr/overtime/summary",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/overtime/:id",
+          "fullPath": "/api/hr/overtime/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/overtime",
+          "fullPath": "/api/hr/overtime",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/overtime/:id/approve",
+          "fullPath": "/api/hr/overtime/:id/approve",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/overtime/:id/reject",
+          "fullPath": "/api/hr/overtime/:id/reject",
+          "mount": "/hr"
+        }
+      ],
+      "hr.ts": [
+        {
+          "method": "POST",
+          "path": "/check-in",
+          "fullPath": "/api/hr/check-in",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/check-out",
+          "fullPath": "/api/hr/check-out",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/attendance",
+          "fullPath": "/api/hr/attendance",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/attendance/today-summary",
+          "fullPath": "/api/hr/attendance/today-summary",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/attendance/:id",
+          "fullPath": "/api/hr/attendance/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/leave-types",
+          "fullPath": "/api/hr/leave-types",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/leave-balance",
+          "fullPath": "/api/hr/leave-balance",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/leave-requests",
+          "fullPath": "/api/hr/leave-requests",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/leaves/:id",
+          "fullPath": "/api/hr/leaves/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/leave-requests",
+          "fullPath": "/api/hr/leave-requests",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/leave-requests/:id/approve",
+          "fullPath": "/api/hr/leave-requests/:id/approve",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/leave-requests/:id/stages",
+          "fullPath": "/api/hr/leave-requests/:id/stages",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/leave-requests/:id/escalate",
+          "fullPath": "/api/hr/leave-requests/:id/escalate",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/payroll",
+          "fullPath": "/api/hr/payroll",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/payroll/:id",
+          "fullPath": "/api/hr/payroll/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/payroll/:id/lines",
+          "fullPath": "/api/hr/payroll/:id/lines",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/payroll",
+          "fullPath": "/api/hr/payroll",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/payroll/:id/approve",
+          "fullPath": "/api/hr/payroll/:id/approve",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/violations",
+          "fullPath": "/api/hr/violations",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/violations/:id",
+          "fullPath": "/api/hr/violations/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/violations",
+          "fullPath": "/api/hr/violations",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/shifts",
+          "fullPath": "/api/hr/shifts",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/shifts",
+          "fullPath": "/api/hr/shifts",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/performance",
+          "fullPath": "/api/hr/performance",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/performance/:id",
+          "fullPath": "/api/hr/performance/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/performance",
+          "fullPath": "/api/hr/performance",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/attendance-stats",
+          "fullPath": "/api/hr/attendance-stats",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/leave-stats",
+          "fullPath": "/api/hr/leave-stats",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/salary-components",
+          "fullPath": "/api/hr/salary-components",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/salary-components",
+          "fullPath": "/api/hr/salary-components",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/approval-chains",
+          "fullPath": "/api/hr/approval-chains",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/approval-chain-definitions",
+          "fullPath": "/api/hr/approval-chain-definitions",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/approval-chain-definitions",
+          "fullPath": "/api/hr/approval-chain-definitions",
+          "mount": "/hr"
+        },
+        {
+          "method": "DELETE",
+          "path": "/approval-chain-definitions/:id",
+          "fullPath": "/api/hr/approval-chain-definitions/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/approval-requests",
+          "fullPath": "/api/hr/approval-requests",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/approval-requests/:id/decide",
+          "fullPath": "/api/hr/approval-requests/:id/decide",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/attendance-policy",
+          "fullPath": "/api/hr/attendance-policy",
+          "mount": "/hr"
+        },
+        {
+          "method": "PUT",
+          "path": "/attendance-policy",
+          "fullPath": "/api/hr/attendance-policy",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/payroll-summary",
+          "fullPath": "/api/hr/payroll-summary",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/violations-stats",
+          "fullPath": "/api/hr/violations-stats",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/violations/:id",
+          "fullPath": "/api/hr/violations/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/violations/:id/approve",
+          "fullPath": "/api/hr/violations/:id/approve",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/violations/:id/reject",
+          "fullPath": "/api/hr/violations/:id/reject",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/violations/:id/return",
+          "fullPath": "/api/hr/violations/:id/return",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/shifts/:id",
+          "fullPath": "/api/hr/shifts/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "DELETE",
+          "path": "/shifts/:id",
+          "fullPath": "/api/hr/shifts/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/shift-assignments",
+          "fullPath": "/api/hr/shift-assignments",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/shift-assignments",
+          "fullPath": "/api/hr/shift-assignments",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/official-letters",
+          "fullPath": "/api/hr/official-letters",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/official-letters",
+          "fullPath": "/api/hr/official-letters",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/monthly-attendance",
+          "fullPath": "/api/hr/monthly-attendance",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/leave-requests/:id",
+          "fullPath": "/api/hr/leave-requests/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/leave-requests/:id/cancel",
+          "fullPath": "/api/hr/leave-requests/:id/cancel",
+          "mount": "/hr"
+        },
+        {
+          "method": "DELETE",
+          "path": "/leave-requests/:id",
+          "fullPath": "/api/hr/leave-requests/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/payroll/:id",
+          "fullPath": "/api/hr/payroll/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "DELETE",
+          "path": "/payroll/:id",
+          "fullPath": "/api/hr/payroll/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/performance/:id",
+          "fullPath": "/api/hr/performance/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "DELETE",
+          "path": "/performance/:id",
+          "fullPath": "/api/hr/performance/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "DELETE",
+          "path": "/violations/:id",
+          "fullPath": "/api/hr/violations/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/official-letters/:id",
+          "fullPath": "/api/hr/official-letters/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/official-letters/:id",
+          "fullPath": "/api/hr/official-letters/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "DELETE",
+          "path": "/official-letters/:id",
+          "fullPath": "/api/hr/official-letters/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/official-letters/:id/approve",
+          "fullPath": "/api/hr/official-letters/:id/approve",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/hr/stats",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/deductions",
+          "fullPath": "/api/hr/deductions",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/onboarding-steps",
+          "fullPath": "/api/hr/onboarding-steps",
+          "mount": "/hr"
+        },
+        {
+          "method": "PUT",
+          "path": "/onboarding-steps",
+          "fullPath": "/api/hr/onboarding-steps",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/impact-preview/leave",
+          "fullPath": "/api/hr/impact-preview/leave",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/impact-preview/termination",
+          "fullPath": "/api/hr/impact-preview/termination",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/impact-preview/violation",
+          "fullPath": "/api/hr/impact-preview/violation",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/employee-status/:employeeId",
+          "fullPath": "/api/hr/employee-status/:employeeId",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/employees-status",
+          "fullPath": "/api/hr/employees-status",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/evaluation-cycles",
+          "fullPath": "/api/hr/evaluation-cycles",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/evaluation-cycles",
+          "fullPath": "/api/hr/evaluation-cycles",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/evaluation-cycles/:id",
+          "fullPath": "/api/hr/evaluation-cycles/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/evaluation-cycles/:id/system-report",
+          "fullPath": "/api/hr/evaluation-cycles/:id/system-report",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/evaluation-cycles/:id/peer-evaluation",
+          "fullPath": "/api/hr/evaluation-cycles/:id/peer-evaluation",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/evaluation-cycles/:id/upward-review",
+          "fullPath": "/api/hr/evaluation-cycles/:id/upward-review",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/evaluation-cycles/:id/summary",
+          "fullPath": "/api/hr/evaluation-cycles/:id/summary",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/employees/:id/evaluation-history",
+          "fullPath": "/api/hr/employees/:id/evaluation-history",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/upward-reviews/manager/:managerId",
+          "fullPath": "/api/hr/upward-reviews/manager/:managerId",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/delegations",
+          "fullPath": "/api/hr/delegations",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/delegations",
+          "fullPath": "/api/hr/delegations",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/public-holidays",
+          "fullPath": "/api/hr/public-holidays",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/public-holidays",
+          "fullPath": "/api/hr/public-holidays",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/public-holidays/:id",
+          "fullPath": "/api/hr/public-holidays/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/public-holidays/check",
+          "fullPath": "/api/hr/public-holidays/check",
+          "mount": "/hr"
+        },
+        {
+          "method": "DELETE",
+          "path": "/public-holidays/:id",
+          "fullPath": "/api/hr/public-holidays/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/transfers",
+          "fullPath": "/api/hr/transfers",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/transfers/:id",
+          "fullPath": "/api/hr/transfers/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/transfers",
+          "fullPath": "/api/hr/transfers",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/transfers/:id/approve",
+          "fullPath": "/api/hr/transfers/:id/approve",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/transfers/:id/receive",
+          "fullPath": "/api/hr/transfers/:id/receive",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/idp",
+          "fullPath": "/api/hr/idp",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/idp",
+          "fullPath": "/api/hr/idp",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/idp/:id",
+          "fullPath": "/api/hr/idp/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "DELETE",
+          "path": "/idp/:id",
+          "fullPath": "/api/hr/idp/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/gratuity/:employeeId",
+          "fullPath": "/api/hr/gratuity/:employeeId",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/accruals/monthly",
+          "fullPath": "/api/hr/accruals/monthly",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/accruals/preview",
+          "fullPath": "/api/hr/accruals/preview",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/turnover-report",
+          "fullPath": "/api/hr/turnover-report",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/expiring-documents",
+          "fullPath": "/api/hr/expiring-documents",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/company-documents",
+          "fullPath": "/api/hr/company-documents",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/company-documents",
+          "fullPath": "/api/hr/company-documents",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/employee-documents",
+          "fullPath": "/api/hr/employee-documents",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/employee-documents",
+          "fullPath": "/api/hr/employee-documents",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/excuse-requests",
+          "fullPath": "/api/hr/excuse-requests",
+          "mount": "/hr"
+        },
+        {
+          "method": "GET",
+          "path": "/excuse-requests/:id",
+          "fullPath": "/api/hr/excuse-requests/:id",
+          "mount": "/hr"
+        },
+        {
+          "method": "POST",
+          "path": "/excuse-requests",
+          "fullPath": "/api/hr/excuse-requests",
+          "mount": "/hr"
+        },
+        {
+          "method": "PATCH",
+          "path": "/excuse-requests/:id/approve",
+          "fullPath": "/api/hr/excuse-requests/:id/approve",
+          "mount": "/hr"
+        }
+      ],
+      "impactPreview.ts": [
+        {
+          "method": "POST",
+          "path": "/",
+          "fullPath": "/api/impact-preview/",
+          "mount": "/impact-preview"
+        }
+      ],
+      "intelligence.ts": [
+        {
+          "method": "GET",
+          "path": "/alerts",
+          "fullPath": "/api/intelligence/alerts",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "POST",
+          "path": "/alerts/scan",
+          "fullPath": "/api/intelligence/alerts/scan",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "PATCH",
+          "path": "/alerts/:id/read",
+          "fullPath": "/api/intelligence/alerts/:id/read",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "GET",
+          "path": "/kpis",
+          "fullPath": "/api/intelligence/kpis",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "GET",
+          "path": "/kpis/employee/:employeeId",
+          "fullPath": "/api/intelligence/kpis/employee/:employeeId",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "GET",
+          "path": "/daily-schedule",
+          "fullPath": "/api/intelligence/daily-schedule",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "GET",
+          "path": "/daily-schedule/employee/:employeeId",
+          "fullPath": "/api/intelligence/daily-schedule/employee/:employeeId",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "GET",
+          "path": "/overview",
+          "fullPath": "/api/intelligence/overview",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "GET",
+          "path": "/suggestions",
+          "fullPath": "/api/intelligence/suggestions",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "POST",
+          "path": "/ai/categorize",
+          "fullPath": "/api/intelligence/ai/categorize",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "POST",
+          "path": "/ai/draft-reply",
+          "fullPath": "/api/intelligence/ai/draft-reply",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "POST",
+          "path": "/ai/translate",
+          "fullPath": "/api/intelligence/ai/translate",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "POST",
+          "path": "/ai/summarize",
+          "fullPath": "/api/intelligence/ai/summarize",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "POST",
+          "path": "/ai/evaluate-rules",
+          "fullPath": "/api/intelligence/ai/evaluate-rules",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "POST",
+          "path": "/ai/forecast",
+          "fullPath": "/api/intelligence/ai/forecast",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "POST",
+          "path": "/algorithms/haversine",
+          "fullPath": "/api/intelligence/algorithms/haversine",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "POST",
+          "path": "/algorithms/moving-average",
+          "fullPath": "/api/intelligence/algorithms/moving-average",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "POST",
+          "path": "/algorithms/load-balance",
+          "fullPath": "/api/intelligence/algorithms/load-balance",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "GET",
+          "path": "/activity/stats",
+          "fullPath": "/api/intelligence/activity/stats",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "GET",
+          "path": "/clients/analytics",
+          "fullPath": "/api/intelligence/clients/analytics",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "GET",
+          "path": "/clients/analytics/recalculate",
+          "fullPath": "/api/intelligence/clients/analytics/recalculate",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "GET",
+          "path": "/clients/:clientId/rfm",
+          "fullPath": "/api/intelligence/clients/:clientId/rfm",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "GET",
+          "path": "/seasonal-patterns",
+          "fullPath": "/api/intelligence/seasonal-patterns",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "GET",
+          "path": "/recommendations",
+          "fullPath": "/api/intelligence/recommendations",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "GET",
+          "path": "/company-kpis",
+          "fullPath": "/api/intelligence/company-kpis",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "POST",
+          "path": "/smart-assign",
+          "fullPath": "/api/intelligence/smart-assign",
+          "mount": "/intelligence"
+        },
+        {
+          "method": "GET",
+          "path": "/insights-summary",
+          "fullPath": "/api/intelligence/insights-summary",
+          "mount": "/intelligence"
+        }
+      ],
+      "legal.ts": [
+        {
+          "method": "GET",
+          "path": "/contracts",
+          "fullPath": "/api/legal/contracts",
+          "mount": "/legal"
+        },
+        {
+          "method": "POST",
+          "path": "/contracts",
+          "fullPath": "/api/legal/contracts",
+          "mount": "/legal"
+        },
+        {
+          "method": "GET",
+          "path": "/contracts/renewal-alerts",
+          "fullPath": "/api/legal/contracts/renewal-alerts",
+          "mount": "/legal"
+        },
+        {
+          "method": "GET",
+          "path": "/contracts/:id",
+          "fullPath": "/api/legal/contracts/:id",
+          "mount": "/legal"
+        },
+        {
+          "method": "PATCH",
+          "path": "/contracts/:id",
+          "fullPath": "/api/legal/contracts/:id",
+          "mount": "/legal"
+        },
+        {
+          "method": "DELETE",
+          "path": "/contracts/:id",
+          "fullPath": "/api/legal/contracts/:id",
+          "mount": "/legal"
+        },
+        {
+          "method": "POST",
+          "path": "/contracts/:id/renew",
+          "fullPath": "/api/legal/contracts/:id/renew",
+          "mount": "/legal"
+        },
+        {
+          "method": "POST",
+          "path": "/contracts/:id/terminate",
+          "fullPath": "/api/legal/contracts/:id/terminate",
+          "mount": "/legal"
+        },
+        {
+          "method": "GET",
+          "path": "/cases",
+          "fullPath": "/api/legal/cases",
+          "mount": "/legal"
+        },
+        {
+          "method": "POST",
+          "path": "/cases",
+          "fullPath": "/api/legal/cases",
+          "mount": "/legal"
+        },
+        {
+          "method": "GET",
+          "path": "/cases/:id",
+          "fullPath": "/api/legal/cases/:id",
+          "mount": "/legal"
+        },
+        {
+          "method": "PATCH",
+          "path": "/cases/:id",
+          "fullPath": "/api/legal/cases/:id",
+          "mount": "/legal"
+        },
+        {
+          "method": "DELETE",
+          "path": "/cases/:id",
+          "fullPath": "/api/legal/cases/:id",
+          "mount": "/legal"
+        },
+        {
+          "method": "POST",
+          "path": "/cases/:id/close",
+          "fullPath": "/api/legal/cases/:id/close",
+          "mount": "/legal"
+        },
+        {
+          "method": "GET",
+          "path": "/cases/:caseId/sessions",
+          "fullPath": "/api/legal/cases/:caseId/sessions",
+          "mount": "/legal"
+        },
+        {
+          "method": "POST",
+          "path": "/cases/:caseId/sessions",
+          "fullPath": "/api/legal/cases/:caseId/sessions",
+          "mount": "/legal"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/legal/stats",
+          "mount": "/legal"
+        },
+        {
+          "method": "GET",
+          "path": "/cases/:caseId/correspondence",
+          "fullPath": "/api/legal/cases/:caseId/correspondence",
+          "mount": "/legal"
+        },
+        {
+          "method": "POST",
+          "path": "/cases/:caseId/correspondence",
+          "fullPath": "/api/legal/cases/:caseId/correspondence",
+          "mount": "/legal"
+        },
+        {
+          "method": "POST",
+          "path": "/cases/:caseId/costs",
+          "fullPath": "/api/legal/cases/:caseId/costs",
+          "mount": "/legal"
+        },
+        {
+          "method": "GET",
+          "path": "/cases/:caseId/judgments",
+          "fullPath": "/api/legal/cases/:caseId/judgments",
+          "mount": "/legal"
+        },
+        {
+          "method": "POST",
+          "path": "/cases/:caseId/judgments",
+          "fullPath": "/api/legal/cases/:caseId/judgments",
+          "mount": "/legal"
+        },
+        {
+          "method": "PATCH",
+          "path": "/cases/:caseId/judgments/:id",
+          "fullPath": "/api/legal/cases/:caseId/judgments/:id",
+          "mount": "/legal"
+        },
+        {
+          "method": "PATCH",
+          "path": "/cases/:id/financial-risk",
+          "fullPath": "/api/legal/cases/:id/financial-risk",
+          "mount": "/legal"
+        },
+        {
+          "method": "GET",
+          "path": "/sessions/:id",
+          "fullPath": "/api/legal/sessions/:id",
+          "mount": "/legal"
+        },
+        {
+          "method": "GET",
+          "path": "/judgments/:id",
+          "fullPath": "/api/legal/judgments/:id",
+          "mount": "/legal"
+        },
+        {
+          "method": "GET",
+          "path": "/correspondence/:id",
+          "fullPath": "/api/legal/correspondence/:id",
+          "mount": "/legal"
+        },
+        {
+          "method": "GET",
+          "path": "/sessions/upcoming",
+          "fullPath": "/api/legal/sessions/upcoming",
+          "mount": "/legal"
+        },
+        {
+          "method": "GET",
+          "path": "/judgments/financial-report",
+          "fullPath": "/api/legal/judgments/financial-report",
+          "mount": "/legal"
+        },
+        {
+          "method": "GET",
+          "path": "/financial-report",
+          "fullPath": "/api/legal/financial-report",
+          "mount": "/legal"
+        }
+      ],
+      "marketing.ts": [
+        {
+          "method": "GET",
+          "path": "/campaigns",
+          "fullPath": "/api/request-catalog/campaigns",
+          "mount": "/request-catalog"
+        },
+        {
+          "method": "POST",
+          "path": "/campaigns",
+          "fullPath": "/api/request-catalog/campaigns",
+          "mount": "/request-catalog"
+        },
+        {
+          "method": "GET",
+          "path": "/campaigns/:id",
+          "fullPath": "/api/request-catalog/campaigns/:id",
+          "mount": "/request-catalog"
+        },
+        {
+          "method": "PATCH",
+          "path": "/campaigns/:id",
+          "fullPath": "/api/request-catalog/campaigns/:id",
+          "mount": "/request-catalog"
+        },
+        {
+          "method": "DELETE",
+          "path": "/campaigns/:id",
+          "fullPath": "/api/request-catalog/campaigns/:id",
+          "mount": "/request-catalog"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/request-catalog/stats",
+          "mount": "/request-catalog"
+        },
+        {
+          "method": "GET",
+          "path": "/campaigns/:id/roas",
+          "fullPath": "/api/request-catalog/campaigns/:id/roas",
+          "mount": "/request-catalog"
+        },
+        {
+          "method": "GET",
+          "path": "/funnel",
+          "fullPath": "/api/request-catalog/funnel",
+          "mount": "/request-catalog"
+        },
+        {
+          "method": "PATCH",
+          "path": "/campaigns/:id/revenue",
+          "fullPath": "/api/request-catalog/campaigns/:id/revenue",
+          "mount": "/request-catalog"
+        },
+        {
+          "method": "GET",
+          "path": "/templates",
+          "fullPath": "/api/request-catalog/templates",
+          "mount": "/request-catalog"
+        }
+      ],
+      "moduleDashboards.ts": [
+        {
+          "method": "GET",
+          "path": "/hr",
+          "fullPath": "/api/module-dashboards/hr",
+          "mount": "/module-dashboards"
+        },
+        {
+          "method": "GET",
+          "path": "/finance",
+          "fullPath": "/api/module-dashboards/finance",
+          "mount": "/module-dashboards"
+        },
+        {
+          "method": "GET",
+          "path": "/fleet",
+          "fullPath": "/api/module-dashboards/fleet",
+          "mount": "/module-dashboards"
+        },
+        {
+          "method": "GET",
+          "path": "/legal",
+          "fullPath": "/api/module-dashboards/legal",
+          "mount": "/module-dashboards"
+        },
+        {
+          "method": "GET",
+          "path": "/properties",
+          "fullPath": "/api/module-dashboards/properties",
+          "mount": "/module-dashboards"
+        },
+        {
+          "method": "GET",
+          "path": "/projects",
+          "fullPath": "/api/module-dashboards/projects",
+          "mount": "/module-dashboards"
+        },
+        {
+          "method": "GET",
+          "path": "/crm",
+          "fullPath": "/api/module-dashboards/crm",
+          "mount": "/module-dashboards"
+        },
+        {
+          "method": "GET",
+          "path": "/store",
+          "fullPath": "/api/module-dashboards/store",
+          "mount": "/module-dashboards"
+        },
+        {
+          "method": "GET",
+          "path": "/support",
+          "fullPath": "/api/module-dashboards/support",
+          "mount": "/module-dashboards"
+        },
+        {
+          "method": "GET",
+          "path": "/tasks",
+          "fullPath": "/api/module-dashboards/tasks",
+          "mount": "/module-dashboards"
+        },
+        {
+          "method": "GET",
+          "path": "/warehouse",
+          "fullPath": "/api/module-dashboards/warehouse",
+          "mount": "/module-dashboards"
+        }
+      ],
+      "mySpace.ts": [
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/my-space/",
+          "mount": "/my-space"
+        },
+        {
+          "method": "GET",
+          "path": "/attendance",
+          "fullPath": "/api/my-space/attendance",
+          "mount": "/my-space"
+        },
+        {
+          "method": "GET",
+          "path": "/payslip",
+          "fullPath": "/api/my-space/payslip",
+          "mount": "/my-space"
+        },
+        {
+          "method": "GET",
+          "path": "/performance",
+          "fullPath": "/api/my-space/performance",
+          "mount": "/my-space"
+        },
+        {
+          "method": "GET",
+          "path": "/documents",
+          "fullPath": "/api/my-space/documents",
+          "mount": "/my-space"
+        },
+        {
+          "method": "GET",
+          "path": "/requests",
+          "fullPath": "/api/my-space/requests",
+          "mount": "/my-space"
+        }
+      ],
+      "notification-engine.ts": [
+        {
+          "method": "GET",
+          "path": "/preferences",
+          "fullPath": "/api/notification-engine/preferences",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "PUT",
+          "path": "/preferences",
+          "fullPath": "/api/notification-engine/preferences",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "GET",
+          "path": "/routing-rules",
+          "fullPath": "/api/notification-engine/routing-rules",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "POST",
+          "path": "/routing-rules",
+          "fullPath": "/api/notification-engine/routing-rules",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "PUT",
+          "path": "/routing-rules/:id",
+          "fullPath": "/api/notification-engine/routing-rules/:id",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "DELETE",
+          "path": "/routing-rules/:id",
+          "fullPath": "/api/notification-engine/routing-rules/:id",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "GET",
+          "path": "/templates",
+          "fullPath": "/api/notification-engine/templates",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "POST",
+          "path": "/templates",
+          "fullPath": "/api/notification-engine/templates",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "PUT",
+          "path": "/templates/:id",
+          "fullPath": "/api/notification-engine/templates/:id",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "DELETE",
+          "path": "/templates/:id",
+          "fullPath": "/api/notification-engine/templates/:id",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "GET",
+          "path": "/fallback-chains",
+          "fullPath": "/api/notification-engine/fallback-chains",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "POST",
+          "path": "/fallback-chains",
+          "fullPath": "/api/notification-engine/fallback-chains",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "PUT",
+          "path": "/fallback-chains/:id",
+          "fullPath": "/api/notification-engine/fallback-chains/:id",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "DELETE",
+          "path": "/fallback-chains/:id",
+          "fullPath": "/api/notification-engine/fallback-chains/:id",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "GET",
+          "path": "/webhooks",
+          "fullPath": "/api/notification-engine/webhooks",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "POST",
+          "path": "/webhooks",
+          "fullPath": "/api/notification-engine/webhooks",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "PUT",
+          "path": "/webhooks/:id",
+          "fullPath": "/api/notification-engine/webhooks/:id",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "DELETE",
+          "path": "/webhooks/:id",
+          "fullPath": "/api/notification-engine/webhooks/:id",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "GET",
+          "path": "/delivery-stats",
+          "fullPath": "/api/notification-engine/delivery-stats",
+          "mount": "/notification-engine"
+        },
+        {
+          "method": "GET",
+          "path": "/delivery-log",
+          "fullPath": "/api/notification-engine/delivery-log",
+          "mount": "/notification-engine"
+        }
+      ],
+      "notifications.ts": [
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/notifications/",
+          "mount": "/notifications"
+        },
+        {
+          "method": "PATCH",
+          "path": "/:id/read",
+          "fullPath": "/api/notifications/:id/read",
+          "mount": "/notifications"
+        },
+        {
+          "method": "GET",
+          "path": "/unread-count",
+          "fullPath": "/api/notifications/unread-count",
+          "mount": "/notifications"
+        },
+        {
+          "method": "GET",
+          "path": "/preferences",
+          "fullPath": "/api/notifications/preferences",
+          "mount": "/notifications"
+        },
+        {
+          "method": "POST",
+          "path": "/preferences",
+          "fullPath": "/api/notifications/preferences",
+          "mount": "/notifications"
+        },
+        {
+          "method": "PATCH",
+          "path": "/mark-all-read",
+          "fullPath": "/api/notifications/mark-all-read",
+          "mount": "/notifications"
+        }
+      ],
+      "operationsCenter.ts": [
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/operations-center/",
+          "mount": "/operations-center"
+        },
+        {
+          "method": "GET",
+          "path": "/daily-close/checklist",
+          "fullPath": "/api/operations-center/daily-close/checklist",
+          "mount": "/operations-center"
+        },
+        {
+          "method": "POST",
+          "path": "/daily-close/execute",
+          "fullPath": "/api/operations-center/daily-close/execute",
+          "mount": "/operations-center"
+        }
+      ],
+      "pdpl.ts": [
+        {
+          "method": "GET",
+          "path": "/privacy-notice",
+          "fullPath": "/api/pdpl/privacy-notice",
+          "mount": "/pdpl"
+        },
+        {
+          "method": "GET",
+          "path": "/retention-policies",
+          "fullPath": "/api/pdpl/retention-policies",
+          "mount": "/pdpl"
+        },
+        {
+          "method": "GET",
+          "path": "/employee-data-export/:employeeId",
+          "fullPath": "/api/pdpl/employee-data-export/:employeeId",
+          "mount": "/pdpl"
+        },
+        {
+          "method": "POST",
+          "path": "/data-request",
+          "fullPath": "/api/pdpl/data-request",
+          "mount": "/pdpl"
+        },
+        {
+          "method": "GET",
+          "path": "/processing-log",
+          "fullPath": "/api/pdpl/processing-log",
+          "mount": "/pdpl"
+        }
+      ],
+      "permissions.ts": [
+        {
+          "method": "GET",
+          "path": "/my",
+          "fullPath": "/api/permissions/my",
+          "mount": "/permissions"
+        },
+        {
+          "method": "GET",
+          "path": "/role-permissions",
+          "fullPath": "/api/permissions/role-permissions",
+          "mount": "/permissions"
+        },
+        {
+          "method": "POST",
+          "path": "/role-permissions",
+          "fullPath": "/api/permissions/role-permissions",
+          "mount": "/permissions"
+        },
+        {
+          "method": "DELETE",
+          "path": "/role-permissions",
+          "fullPath": "/api/permissions/role-permissions",
+          "mount": "/permissions"
+        },
+        {
+          "method": "GET",
+          "path": "/user-permissions",
+          "fullPath": "/api/permissions/user-permissions",
+          "mount": "/permissions"
+        },
+        {
+          "method": "POST",
+          "path": "/user-permissions",
+          "fullPath": "/api/permissions/user-permissions",
+          "mount": "/permissions"
+        },
+        {
+          "method": "DELETE",
+          "path": "/user-permissions",
+          "fullPath": "/api/permissions/user-permissions",
+          "mount": "/permissions"
+        }
+      ],
+      "projects.ts": [
+        {
+          "method": "POST",
+          "path": "/impact-preview",
+          "fullPath": "/api/projects/impact-preview",
+          "mount": "/projects"
+        },
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/projects/",
+          "mount": "/projects"
+        },
+        {
+          "method": "POST",
+          "path": "/",
+          "fullPath": "/api/projects/",
+          "mount": "/projects"
+        },
+        {
+          "method": "GET",
+          "path": "/:id",
+          "fullPath": "/api/projects/:id",
+          "mount": "/projects"
+        },
+        {
+          "method": "PATCH",
+          "path": "/:id",
+          "fullPath": "/api/projects/:id",
+          "mount": "/projects"
+        },
+        {
+          "method": "DELETE",
+          "path": "/:id",
+          "fullPath": "/api/projects/:id",
+          "mount": "/projects"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/phases",
+          "fullPath": "/api/projects/:id/phases",
+          "mount": "/projects"
+        },
+        {
+          "method": "PATCH",
+          "path": "/:id/phases/:phaseId/complete",
+          "fullPath": "/api/projects/:id/phases/:phaseId/complete",
+          "mount": "/projects"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/tasks",
+          "fullPath": "/api/projects/:id/tasks",
+          "mount": "/projects"
+        },
+        {
+          "method": "PATCH",
+          "path": "/tasks/:taskId",
+          "fullPath": "/api/projects/tasks/:taskId",
+          "mount": "/projects"
+        },
+        {
+          "method": "GET",
+          "path": "/stats/summary",
+          "fullPath": "/api/projects/stats/summary",
+          "mount": "/projects"
+        },
+        {
+          "method": "GET",
+          "path": "/stats/overview",
+          "fullPath": "/api/projects/stats/overview",
+          "mount": "/projects"
+        },
+        {
+          "method": "GET",
+          "path": "/manager/:employeeId/workload",
+          "fullPath": "/api/projects/manager/:employeeId/workload",
+          "mount": "/projects"
+        },
+        {
+          "method": "GET",
+          "path": "/:id/milestones",
+          "fullPath": "/api/projects/:id/milestones",
+          "mount": "/projects"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/milestones",
+          "fullPath": "/api/projects/:id/milestones",
+          "mount": "/projects"
+        },
+        {
+          "method": "PATCH",
+          "path": "/milestones/:milestoneId",
+          "fullPath": "/api/projects/milestones/:milestoneId",
+          "mount": "/projects"
+        },
+        {
+          "method": "GET",
+          "path": "/:id/risks",
+          "fullPath": "/api/projects/:id/risks",
+          "mount": "/projects"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/risks",
+          "fullPath": "/api/projects/:id/risks",
+          "mount": "/projects"
+        },
+        {
+          "method": "PATCH",
+          "path": "/risks/:riskId",
+          "fullPath": "/api/projects/risks/:riskId",
+          "mount": "/projects"
+        },
+        {
+          "method": "GET",
+          "path": "/:id/resources",
+          "fullPath": "/api/projects/:id/resources",
+          "mount": "/projects"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/resources",
+          "fullPath": "/api/projects/:id/resources",
+          "mount": "/projects"
+        },
+        {
+          "method": "GET",
+          "path": "/:id/costs",
+          "fullPath": "/api/projects/:id/costs",
+          "mount": "/projects"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/costs",
+          "fullPath": "/api/projects/:id/costs",
+          "mount": "/projects"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/close",
+          "fullPath": "/api/projects/:id/close",
+          "mount": "/projects"
+        },
+        {
+          "method": "GET",
+          "path": "/:id/gantt",
+          "fullPath": "/api/projects/:id/gantt",
+          "mount": "/projects"
+        },
+        {
+          "method": "GET",
+          "path": "/:id/letters",
+          "fullPath": "/api/projects/:id/letters",
+          "mount": "/projects"
+        }
+      ],
+      "properties.ts": [
+        {
+          "method": "GET",
+          "path": "/units",
+          "fullPath": "/api/properties/units",
+          "mount": "/properties"
+        },
+        {
+          "method": "POST",
+          "path": "/units",
+          "fullPath": "/api/properties/units",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/units/:id",
+          "fullPath": "/api/properties/units/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/units/:id/impact-preview",
+          "fullPath": "/api/properties/units/:id/impact-preview",
+          "mount": "/properties"
+        },
+        {
+          "method": "PATCH",
+          "path": "/units/:id",
+          "fullPath": "/api/properties/units/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "DELETE",
+          "path": "/units/:id",
+          "fullPath": "/api/properties/units/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "POST",
+          "path": "/contracts/impact-preview",
+          "fullPath": "/api/properties/contracts/impact-preview",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/contracts",
+          "fullPath": "/api/properties/contracts",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/contracts/:id",
+          "fullPath": "/api/properties/contracts/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "POST",
+          "path": "/contracts",
+          "fullPath": "/api/properties/contracts",
+          "mount": "/properties"
+        },
+        {
+          "method": "PATCH",
+          "path": "/contracts/:id",
+          "fullPath": "/api/properties/contracts/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "DELETE",
+          "path": "/contracts/:id",
+          "fullPath": "/api/properties/contracts/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "POST",
+          "path": "/contracts/:id/renew",
+          "fullPath": "/api/properties/contracts/:id/renew",
+          "mount": "/properties"
+        },
+        {
+          "method": "POST",
+          "path": "/contracts/:id/terminate",
+          "fullPath": "/api/properties/contracts/:id/terminate",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/tenants/list",
+          "fullPath": "/api/properties/tenants/list",
+          "mount": "/properties"
+        },
+        {
+          "method": "PATCH",
+          "path": "/tenants/:id",
+          "fullPath": "/api/properties/tenants/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "DELETE",
+          "path": "/tenants/:id",
+          "fullPath": "/api/properties/tenants/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/payments",
+          "fullPath": "/api/properties/payments",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/payments/:id",
+          "fullPath": "/api/properties/payments/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "POST",
+          "path": "/payments/:id/pay",
+          "fullPath": "/api/properties/payments/:id/pay",
+          "mount": "/properties"
+        },
+        {
+          "method": "POST",
+          "path": "/late-rent/escalate",
+          "fullPath": "/api/properties/late-rent/escalate",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/maintenance-requests",
+          "fullPath": "/api/properties/maintenance-requests",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/maintenance/:id",
+          "fullPath": "/api/properties/maintenance/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "POST",
+          "path": "/maintenance-requests",
+          "fullPath": "/api/properties/maintenance-requests",
+          "mount": "/properties"
+        },
+        {
+          "method": "PATCH",
+          "path": "/maintenance-requests/:id/approve",
+          "fullPath": "/api/properties/maintenance-requests/:id/approve",
+          "mount": "/properties"
+        },
+        {
+          "method": "POST",
+          "path": "/maintenance-requests/:id/complete",
+          "fullPath": "/api/properties/maintenance-requests/:id/complete",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/technicians",
+          "fullPath": "/api/properties/technicians",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/tenants",
+          "fullPath": "/api/properties/tenants",
+          "mount": "/properties"
+        },
+        {
+          "method": "POST",
+          "path": "/tenants",
+          "fullPath": "/api/properties/tenants",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/tenants/:id",
+          "fullPath": "/api/properties/tenants/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/buildings",
+          "fullPath": "/api/properties/buildings",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/buildings/:id",
+          "fullPath": "/api/properties/buildings/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "POST",
+          "path": "/buildings",
+          "fullPath": "/api/properties/buildings",
+          "mount": "/properties"
+        },
+        {
+          "method": "PATCH",
+          "path": "/buildings/:id",
+          "fullPath": "/api/properties/buildings/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "DELETE",
+          "path": "/buildings/:id",
+          "fullPath": "/api/properties/buildings/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/maintenance",
+          "fullPath": "/api/properties/maintenance",
+          "mount": "/properties"
+        },
+        {
+          "method": "POST",
+          "path": "/maintenance",
+          "fullPath": "/api/properties/maintenance",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/properties/stats",
+          "mount": "/properties"
+        },
+        {
+          "method": "PATCH",
+          "path": "/maintenance-requests/:id",
+          "fullPath": "/api/properties/maintenance-requests/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/operations-dashboard",
+          "fullPath": "/api/properties/operations-dashboard",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/owners",
+          "fullPath": "/api/properties/owners",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/owners/:id",
+          "fullPath": "/api/properties/owners/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "POST",
+          "path": "/owners",
+          "fullPath": "/api/properties/owners",
+          "mount": "/properties"
+        },
+        {
+          "method": "PATCH",
+          "path": "/owners/:id",
+          "fullPath": "/api/properties/owners/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "DELETE",
+          "path": "/owners/:id",
+          "fullPath": "/api/properties/owners/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/contracts/:id/schedule",
+          "fullPath": "/api/properties/contracts/:id/schedule",
+          "mount": "/properties"
+        },
+        {
+          "method": "POST",
+          "path": "/contracts/:id/schedule/:installmentId/pay",
+          "fullPath": "/api/properties/contracts/:id/schedule/:installmentId/pay",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/inspections",
+          "fullPath": "/api/properties/inspections",
+          "mount": "/properties"
+        },
+        {
+          "method": "POST",
+          "path": "/inspections",
+          "fullPath": "/api/properties/inspections",
+          "mount": "/properties"
+        },
+        {
+          "method": "PATCH",
+          "path": "/inspections/:id",
+          "fullPath": "/api/properties/inspections/:id",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/deposits",
+          "fullPath": "/api/properties/deposits",
+          "mount": "/properties"
+        },
+        {
+          "method": "POST",
+          "path": "/deposits",
+          "fullPath": "/api/properties/deposits",
+          "mount": "/properties"
+        },
+        {
+          "method": "PATCH",
+          "path": "/deposits/:id/refund",
+          "fullPath": "/api/properties/deposits/:id/refund",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/occupancy-report",
+          "fullPath": "/api/properties/occupancy-report",
+          "mount": "/properties"
+        },
+        {
+          "method": "GET",
+          "path": "/tenants/:id/letters",
+          "fullPath": "/api/properties/tenants/:id/letters",
+          "mount": "/properties"
+        }
+      ],
+      "publicData.ts": [
+        {
+          "method": "GET",
+          "path": "/announcements",
+          "fullPath": "/api/public/announcements",
+          "mount": "/public"
+        },
+        {
+          "method": "GET",
+          "path": "/employee-of-month",
+          "fullPath": "/api/public/employee-of-month",
+          "mount": "/public"
+        },
+        {
+          "method": "POST",
+          "path": "/forgot-password",
+          "fullPath": "/api/public/forgot-password",
+          "mount": "/public"
+        }
+      ],
+      "recruitment.ts": [
+        {
+          "method": "GET",
+          "path": "/postings",
+          "fullPath": "/api/hr/recruitment/postings",
+          "mount": "/hr/recruitment"
+        },
+        {
+          "method": "POST",
+          "path": "/postings",
+          "fullPath": "/api/hr/recruitment/postings",
+          "mount": "/hr/recruitment"
+        },
+        {
+          "method": "GET",
+          "path": "/postings/:id",
+          "fullPath": "/api/hr/recruitment/postings/:id",
+          "mount": "/hr/recruitment"
+        },
+        {
+          "method": "PATCH",
+          "path": "/postings/:id",
+          "fullPath": "/api/hr/recruitment/postings/:id",
+          "mount": "/hr/recruitment"
+        },
+        {
+          "method": "POST",
+          "path": "/postings/:id/close",
+          "fullPath": "/api/hr/recruitment/postings/:id/close",
+          "mount": "/hr/recruitment"
+        },
+        {
+          "method": "POST",
+          "path": "/postings/:id/reopen",
+          "fullPath": "/api/hr/recruitment/postings/:id/reopen",
+          "mount": "/hr/recruitment"
+        },
+        {
+          "method": "DELETE",
+          "path": "/postings/:id",
+          "fullPath": "/api/hr/recruitment/postings/:id",
+          "mount": "/hr/recruitment"
+        },
+        {
+          "method": "GET",
+          "path": "/applications",
+          "fullPath": "/api/hr/recruitment/applications",
+          "mount": "/hr/recruitment"
+        },
+        {
+          "method": "POST",
+          "path": "/applications",
+          "fullPath": "/api/hr/recruitment/applications",
+          "mount": "/hr/recruitment"
+        },
+        {
+          "method": "GET",
+          "path": "/applications/:id",
+          "fullPath": "/api/hr/recruitment/applications/:id",
+          "mount": "/hr/recruitment"
+        },
+        {
+          "method": "PATCH",
+          "path": "/applications/:id",
+          "fullPath": "/api/hr/recruitment/applications/:id",
+          "mount": "/hr/recruitment"
+        },
+        {
+          "method": "DELETE",
+          "path": "/applications/:id",
+          "fullPath": "/api/hr/recruitment/applications/:id",
+          "mount": "/hr/recruitment"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/hr/recruitment/stats",
+          "mount": "/hr/recruitment"
+        }
+      ],
+      "requests.ts": [
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/requests/",
+          "mount": "/requests"
+        },
+        {
+          "method": "POST",
+          "path": "/",
+          "fullPath": "/api/requests/",
+          "mount": "/requests"
+        },
+        {
+          "method": "GET",
+          "path": "/catalog",
+          "fullPath": "/api/requests/catalog",
+          "mount": "/requests"
+        },
+        {
+          "method": "GET",
+          "path": "/types",
+          "fullPath": "/api/requests/types",
+          "mount": "/requests"
+        },
+        {
+          "method": "POST",
+          "path": "/types",
+          "fullPath": "/api/requests/types",
+          "mount": "/requests"
+        },
+        {
+          "method": "GET",
+          "path": "/workflows",
+          "fullPath": "/api/requests/workflows",
+          "mount": "/requests"
+        },
+        {
+          "method": "POST",
+          "path": "/workflows",
+          "fullPath": "/api/requests/workflows",
+          "mount": "/requests"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/requests/stats",
+          "mount": "/requests"
+        },
+        {
+          "method": "GET",
+          "path": "/:id",
+          "fullPath": "/api/requests/:id",
+          "mount": "/requests"
+        },
+        {
+          "method": "PATCH",
+          "path": "/:id",
+          "fullPath": "/api/requests/:id",
+          "mount": "/requests"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/approve",
+          "fullPath": "/api/requests/:id/approve",
+          "mount": "/requests"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/reject",
+          "fullPath": "/api/requests/:id/reject",
+          "mount": "/requests"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/return",
+          "fullPath": "/api/requests/:id/return",
+          "mount": "/requests"
+        },
+        {
+          "method": "GET",
+          "path": "/:id/actions",
+          "fullPath": "/api/requests/:id/actions",
+          "mount": "/requests"
+        },
+        {
+          "method": "DELETE",
+          "path": "/:id",
+          "fullPath": "/api/requests/:id",
+          "mount": "/requests"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/convert",
+          "fullPath": "/api/requests/:id/convert",
+          "mount": "/requests"
+        }
+      ],
+      "rules.ts": [
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/rules/",
+          "mount": "/rules"
+        },
+        {
+          "method": "GET",
+          "path": "/logs",
+          "fullPath": "/api/rules/logs",
+          "mount": "/rules"
+        },
+        {
+          "method": "POST",
+          "path": "/",
+          "fullPath": "/api/rules/",
+          "mount": "/rules"
+        },
+        {
+          "method": "PATCH",
+          "path": "/:id",
+          "fullPath": "/api/rules/:id",
+          "mount": "/rules"
+        },
+        {
+          "method": "DELETE",
+          "path": "/:id",
+          "fullPath": "/api/rules/:id",
+          "mount": "/rules"
+        },
+        {
+          "method": "PATCH",
+          "path": "/:id/toggle",
+          "fullPath": "/api/rules/:id/toggle",
+          "mount": "/rules"
+        }
+      ],
+      "search.ts": [
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/search/",
+          "mount": "/search"
+        }
+      ],
+      "settings.ts": [
+        {
+          "method": "GET",
+          "path": "/resolve",
+          "fullPath": "/api/settings/resolve",
+          "mount": "/settings"
+        },
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/settings/",
+          "mount": "/settings"
+        },
+        {
+          "method": "PUT",
+          "path": "/",
+          "fullPath": "/api/settings/",
+          "mount": "/settings"
+        },
+        {
+          "method": "DELETE",
+          "path": "/",
+          "fullPath": "/api/settings/",
+          "mount": "/settings"
+        },
+        {
+          "method": "GET",
+          "path": "/general",
+          "fullPath": "/api/settings/general",
+          "mount": "/settings"
+        },
+        {
+          "method": "GET",
+          "path": "/resolved",
+          "fullPath": "/api/settings/resolved",
+          "mount": "/settings"
+        },
+        {
+          "method": "PUT",
+          "path": "/general",
+          "fullPath": "/api/settings/general",
+          "mount": "/settings"
+        },
+        {
+          "method": "GET",
+          "path": "/branches",
+          "fullPath": "/api/settings/branches",
+          "mount": "/settings"
+        },
+        {
+          "method": "GET",
+          "path": "/branches/:id",
+          "fullPath": "/api/settings/branches/:id",
+          "mount": "/settings"
+        },
+        {
+          "method": "GET",
+          "path": "/departments",
+          "fullPath": "/api/settings/departments",
+          "mount": "/settings"
+        },
+        {
+          "method": "GET",
+          "path": "/companies",
+          "fullPath": "/api/settings/companies",
+          "mount": "/settings"
+        },
+        {
+          "method": "GET",
+          "path": "/audit-log",
+          "fullPath": "/api/settings/audit-log",
+          "mount": "/settings"
+        },
+        {
+          "method": "POST",
+          "path": "/branches",
+          "fullPath": "/api/settings/branches",
+          "mount": "/settings"
+        },
+        {
+          "method": "PUT",
+          "path": "/branches/:id",
+          "fullPath": "/api/settings/branches/:id",
+          "mount": "/settings"
+        },
+        {
+          "method": "DELETE",
+          "path": "/branches/:id",
+          "fullPath": "/api/settings/branches/:id",
+          "mount": "/settings"
+        },
+        {
+          "method": "POST",
+          "path": "/departments",
+          "fullPath": "/api/settings/departments",
+          "mount": "/settings"
+        },
+        {
+          "method": "PUT",
+          "path": "/departments/:id",
+          "fullPath": "/api/settings/departments/:id",
+          "mount": "/settings"
+        },
+        {
+          "method": "DELETE",
+          "path": "/departments/:id",
+          "fullPath": "/api/settings/departments/:id",
+          "mount": "/settings"
+        },
+        {
+          "method": "POST",
+          "path": "/companies",
+          "fullPath": "/api/settings/companies",
+          "mount": "/settings"
+        },
+        {
+          "method": "PUT",
+          "path": "/companies/:id",
+          "fullPath": "/api/settings/companies/:id",
+          "mount": "/settings"
+        },
+        {
+          "method": "DELETE",
+          "path": "/companies/:id",
+          "fullPath": "/api/settings/companies/:id",
+          "mount": "/settings"
+        },
+        {
+          "method": "GET",
+          "path": "/timezone",
+          "fullPath": "/api/settings/timezone",
+          "mount": "/settings"
+        },
+        {
+          "method": "GET",
+          "path": "/system-controls",
+          "fullPath": "/api/settings/system-controls",
+          "mount": "/settings"
+        },
+        {
+          "method": "PUT",
+          "path": "/system-controls",
+          "fullPath": "/api/settings/system-controls",
+          "mount": "/settings"
+        },
+        {
+          "method": "GET",
+          "path": "/role-modules",
+          "fullPath": "/api/settings/role-modules",
+          "mount": "/settings"
+        },
+        {
+          "method": "PUT",
+          "path": "/role-modules/:roleKey",
+          "fullPath": "/api/settings/role-modules/:roleKey",
+          "mount": "/settings"
+        },
+        {
+          "method": "GET",
+          "path": "/approval-config",
+          "fullPath": "/api/settings/approval-config",
+          "mount": "/settings"
+        },
+        {
+          "method": "POST",
+          "path": "/approval-config",
+          "fullPath": "/api/settings/approval-config",
+          "mount": "/settings"
+        },
+        {
+          "method": "DELETE",
+          "path": "/approval-config/:id",
+          "fullPath": "/api/settings/approval-config/:id",
+          "mount": "/settings"
+        },
+        {
+          "method": "GET",
+          "path": "/channels",
+          "fullPath": "/api/settings/channels",
+          "mount": "/settings"
+        },
+        {
+          "method": "PUT",
+          "path": "/channels",
+          "fullPath": "/api/settings/channels",
+          "mount": "/settings"
+        }
+      ],
+      "storage.ts": [
+        {
+          "method": "POST",
+          "path": "/storage/uploads/request-url",
+          "fullPath": null,
+          "mount": null
+        },
+        {
+          "method": "GET",
+          "path": "/storage/public-objects/*filePath",
+          "fullPath": null,
+          "mount": null
+        },
+        {
+          "method": "GET",
+          "path": "/storage/objects/*path",
+          "fullPath": null,
+          "mount": null
+        }
+      ],
+      "store.ts": [
+        {
+          "method": "GET",
+          "path": "/products",
+          "fullPath": "/api/store/products",
+          "mount": "/store"
+        },
+        {
+          "method": "POST",
+          "path": "/products",
+          "fullPath": "/api/store/products",
+          "mount": "/store"
+        },
+        {
+          "method": "GET",
+          "path": "/products/:id",
+          "fullPath": "/api/store/products/:id",
+          "mount": "/store"
+        },
+        {
+          "method": "PATCH",
+          "path": "/products/:id",
+          "fullPath": "/api/store/products/:id",
+          "mount": "/store"
+        },
+        {
+          "method": "DELETE",
+          "path": "/products/:id",
+          "fullPath": "/api/store/products/:id",
+          "mount": "/store"
+        },
+        {
+          "method": "GET",
+          "path": "/orders",
+          "fullPath": "/api/store/orders",
+          "mount": "/store"
+        },
+        {
+          "method": "POST",
+          "path": "/orders",
+          "fullPath": "/api/store/orders",
+          "mount": "/store"
+        },
+        {
+          "method": "GET",
+          "path": "/orders/:id",
+          "fullPath": "/api/store/orders/:id",
+          "mount": "/store"
+        },
+        {
+          "method": "PATCH",
+          "path": "/orders/:id",
+          "fullPath": "/api/store/orders/:id",
+          "mount": "/store"
+        },
+        {
+          "method": "DELETE",
+          "path": "/orders/:id",
+          "fullPath": "/api/store/orders/:id",
+          "mount": "/store"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/store/stats",
+          "mount": "/store"
+        }
+      ],
+      "support.ts": [
+        {
+          "method": "GET",
+          "path": "/tickets",
+          "fullPath": "/api/support/tickets",
+          "mount": "/support"
+        },
+        {
+          "method": "POST",
+          "path": "/tickets",
+          "fullPath": "/api/support/tickets",
+          "mount": "/support"
+        },
+        {
+          "method": "POST",
+          "path": "/tickets/check-sla",
+          "fullPath": "/api/support/tickets/check-sla",
+          "mount": "/support"
+        },
+        {
+          "method": "GET",
+          "path": "/tickets/:id",
+          "fullPath": "/api/support/tickets/:id",
+          "mount": "/support"
+        },
+        {
+          "method": "POST",
+          "path": "/tickets/:id/replies",
+          "fullPath": "/api/support/tickets/:id/replies",
+          "mount": "/support"
+        },
+        {
+          "method": "POST",
+          "path": "/tickets/:id/field-visit",
+          "fullPath": "/api/support/tickets/:id/field-visit",
+          "mount": "/support"
+        },
+        {
+          "method": "PATCH",
+          "path": "/tickets/:id",
+          "fullPath": "/api/support/tickets/:id",
+          "mount": "/support"
+        },
+        {
+          "method": "DELETE",
+          "path": "/tickets/:id",
+          "fullPath": "/api/support/tickets/:id",
+          "mount": "/support"
+        },
+        {
+          "method": "GET",
+          "path": "/replies",
+          "fullPath": "/api/support/replies",
+          "mount": "/support"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/support/stats",
+          "mount": "/support"
+        },
+        {
+          "method": "POST",
+          "path": "/tickets/:id/csat",
+          "fullPath": "/api/support/tickets/:id/csat",
+          "mount": "/support"
+        },
+        {
+          "method": "GET",
+          "path": "/csat",
+          "fullPath": "/api/support/csat",
+          "mount": "/support"
+        },
+        {
+          "method": "GET",
+          "path": "/kb",
+          "fullPath": "/api/support/kb",
+          "mount": "/support"
+        },
+        {
+          "method": "GET",
+          "path": "/kb/:id",
+          "fullPath": "/api/support/kb/:id",
+          "mount": "/support"
+        },
+        {
+          "method": "POST",
+          "path": "/kb",
+          "fullPath": "/api/support/kb",
+          "mount": "/support"
+        },
+        {
+          "method": "PATCH",
+          "path": "/kb/:id",
+          "fullPath": "/api/support/kb/:id",
+          "mount": "/support"
+        },
+        {
+          "method": "DELETE",
+          "path": "/kb/:id",
+          "fullPath": "/api/support/kb/:id",
+          "mount": "/support"
+        },
+        {
+          "method": "POST",
+          "path": "/kb/:id/feedback",
+          "fullPath": "/api/support/kb/:id/feedback",
+          "mount": "/support"
+        }
+      ],
+      "tasks.ts": [
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/tasks/",
+          "mount": "/tasks"
+        },
+        {
+          "method": "GET",
+          "path": "/entity-search",
+          "fullPath": "/api/tasks/entity-search",
+          "mount": "/tasks"
+        },
+        {
+          "method": "GET",
+          "path": "/:id",
+          "fullPath": "/api/tasks/:id",
+          "mount": "/tasks"
+        },
+        {
+          "method": "POST",
+          "path": "/",
+          "fullPath": "/api/tasks/",
+          "mount": "/tasks"
+        },
+        {
+          "method": "PATCH",
+          "path": "/:id",
+          "fullPath": "/api/tasks/:id",
+          "mount": "/tasks"
+        },
+        {
+          "method": "DELETE",
+          "path": "/:id",
+          "fullPath": "/api/tasks/:id",
+          "mount": "/tasks"
+        }
+      ],
+      "training.ts": [
+        {
+          "method": "GET",
+          "path": "/programs",
+          "fullPath": "/api/hr/training/programs",
+          "mount": "/hr/training"
+        },
+        {
+          "method": "POST",
+          "path": "/programs",
+          "fullPath": "/api/hr/training/programs",
+          "mount": "/hr/training"
+        },
+        {
+          "method": "GET",
+          "path": "/programs/:id",
+          "fullPath": "/api/hr/training/programs/:id",
+          "mount": "/hr/training"
+        },
+        {
+          "method": "PATCH",
+          "path": "/programs/:id",
+          "fullPath": "/api/hr/training/programs/:id",
+          "mount": "/hr/training"
+        },
+        {
+          "method": "PATCH",
+          "path": "/programs/:id/approve",
+          "fullPath": "/api/hr/training/programs/:id/approve",
+          "mount": "/hr/training"
+        },
+        {
+          "method": "PATCH",
+          "path": "/programs/:id/reject",
+          "fullPath": "/api/hr/training/programs/:id/reject",
+          "mount": "/hr/training"
+        },
+        {
+          "method": "DELETE",
+          "path": "/programs/:id",
+          "fullPath": "/api/hr/training/programs/:id",
+          "mount": "/hr/training"
+        },
+        {
+          "method": "GET",
+          "path": "/enrollments",
+          "fullPath": "/api/hr/training/enrollments",
+          "mount": "/hr/training"
+        },
+        {
+          "method": "POST",
+          "path": "/enrollments",
+          "fullPath": "/api/hr/training/enrollments",
+          "mount": "/hr/training"
+        },
+        {
+          "method": "GET",
+          "path": "/enrollments/:id",
+          "fullPath": "/api/hr/training/enrollments/:id",
+          "mount": "/hr/training"
+        },
+        {
+          "method": "PATCH",
+          "path": "/enrollments/:id",
+          "fullPath": "/api/hr/training/enrollments/:id",
+          "mount": "/hr/training"
+        },
+        {
+          "method": "DELETE",
+          "path": "/enrollments/:id",
+          "fullPath": "/api/hr/training/enrollments/:id",
+          "mount": "/hr/training"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/hr/training/stats",
+          "mount": "/hr/training"
+        }
+      ],
+      "umrah-entities.ts": [
+        {
+          "method": "GET",
+          "path": "/sub-agents",
+          "fullPath": "/api/umrah/sub-agents",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/sub-agents",
+          "fullPath": "/api/umrah/sub-agents",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/sub-agents/unlinked",
+          "fullPath": "/api/umrah/sub-agents/unlinked",
+          "mount": "/umrah"
+        },
+        {
+          "method": "PATCH",
+          "path": "/sub-agents/:id",
+          "fullPath": "/api/umrah/sub-agents/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "DELETE",
+          "path": "/sub-agents/:id",
+          "fullPath": "/api/umrah/sub-agents/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "PUT",
+          "path": "/sub-agents/:id/link",
+          "fullPath": "/api/umrah/sub-agents/:id/link",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/sub-agents/link-by-nusk",
+          "fullPath": "/api/umrah/sub-agents/link-by-nusk",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/sub-agents/:id/link-client",
+          "fullPath": "/api/umrah/sub-agents/:id/link-client",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/pricing",
+          "fullPath": "/api/umrah/pricing",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/pricing",
+          "fullPath": "/api/umrah/pricing",
+          "mount": "/umrah"
+        },
+        {
+          "method": "PATCH",
+          "path": "/pricing/:id",
+          "fullPath": "/api/umrah/pricing/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "DELETE",
+          "path": "/pricing/:id",
+          "fullPath": "/api/umrah/pricing/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/groups",
+          "fullPath": "/api/umrah/groups",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/groups/:id",
+          "fullPath": "/api/umrah/groups/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/groups",
+          "fullPath": "/api/umrah/groups",
+          "mount": "/umrah"
+        },
+        {
+          "method": "PATCH",
+          "path": "/groups/:id",
+          "fullPath": "/api/umrah/groups/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "DELETE",
+          "path": "/groups/:id",
+          "fullPath": "/api/umrah/groups/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/nusk-invoices",
+          "fullPath": "/api/umrah/nusk-invoices",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/nusk-invoices/:id",
+          "fullPath": "/api/umrah/nusk-invoices/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/nusk-invoices",
+          "fullPath": "/api/umrah/nusk-invoices",
+          "mount": "/umrah"
+        },
+        {
+          "method": "PATCH",
+          "path": "/nusk-invoices/:id",
+          "fullPath": "/api/umrah/nusk-invoices/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "DELETE",
+          "path": "/nusk-invoices/:id",
+          "fullPath": "/api/umrah/nusk-invoices/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/employees/:employeeId/assignments",
+          "fullPath": "/api/umrah/employees/:employeeId/assignments",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/commission-plans",
+          "fullPath": "/api/umrah/commission-plans",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/commission-plans/:id",
+          "fullPath": "/api/umrah/commission-plans/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/commission-plans",
+          "fullPath": "/api/umrah/commission-plans",
+          "mount": "/umrah"
+        },
+        {
+          "method": "PATCH",
+          "path": "/commission-plans/:id",
+          "fullPath": "/api/umrah/commission-plans/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/commission-plans/:id/simulate",
+          "fullPath": "/api/umrah/commission-plans/:id/simulate",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/commission-plans/:id/calculate",
+          "fullPath": "/api/umrah/commission-plans/:id/calculate",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/commission-calculations",
+          "fullPath": "/api/umrah/commission-calculations",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/import/batches",
+          "fullPath": "/api/umrah/import/batches",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/import/batches/:id/changes",
+          "fullPath": "/api/umrah/import/batches/:id/changes",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/invoices",
+          "fullPath": "/api/umrah/invoices",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/invoices/generate",
+          "fullPath": "/api/umrah/invoices/generate",
+          "mount": "/umrah"
+        },
+        {
+          "method": "PATCH",
+          "path": "/invoices/:id",
+          "fullPath": "/api/umrah/invoices/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/payments",
+          "fullPath": "/api/umrah/payments",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/payments",
+          "fullPath": "/api/umrah/payments",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/statements/:subAgentId",
+          "fullPath": "/api/umrah/statements/:subAgentId",
+          "mount": "/umrah"
+        }
+      ],
+      "umrah.ts": [
+        {
+          "method": "GET",
+          "path": "/seasons",
+          "fullPath": "/api/umrah/seasons",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/seasons/:id",
+          "fullPath": "/api/umrah/seasons/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/seasons",
+          "fullPath": "/api/umrah/seasons",
+          "mount": "/umrah"
+        },
+        {
+          "method": "PATCH",
+          "path": "/seasons/:id",
+          "fullPath": "/api/umrah/seasons/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/agents",
+          "fullPath": "/api/umrah/agents",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/agents/:id",
+          "fullPath": "/api/umrah/agents/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/agents",
+          "fullPath": "/api/umrah/agents",
+          "mount": "/umrah"
+        },
+        {
+          "method": "PATCH",
+          "path": "/agents/:id",
+          "fullPath": "/api/umrah/agents/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "DELETE",
+          "path": "/agents/:id",
+          "fullPath": "/api/umrah/agents/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/packages",
+          "fullPath": "/api/umrah/packages",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/packages",
+          "fullPath": "/api/umrah/packages",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/packages/:id",
+          "fullPath": "/api/umrah/packages/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "PATCH",
+          "path": "/packages/:id",
+          "fullPath": "/api/umrah/packages/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "DELETE",
+          "path": "/packages/:id",
+          "fullPath": "/api/umrah/packages/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/pilgrims",
+          "fullPath": "/api/umrah/pilgrims",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/pilgrims",
+          "fullPath": "/api/umrah/pilgrims",
+          "mount": "/umrah"
+        },
+        {
+          "method": "PATCH",
+          "path": "/pilgrims/:id",
+          "fullPath": "/api/umrah/pilgrims/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/pilgrims/:id",
+          "fullPath": "/api/umrah/pilgrims/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "DELETE",
+          "path": "/pilgrims/:id",
+          "fullPath": "/api/umrah/pilgrims/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/import/preview",
+          "fullPath": "/api/umrah/import/preview",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/import/mutamers",
+          "fullPath": "/api/umrah/import/mutamers",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/import/vouchers",
+          "fullPath": "/api/umrah/import/vouchers",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/import",
+          "fullPath": "/api/umrah/import",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/dashboard",
+          "fullPath": "/api/umrah/dashboard",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/run-daily-status",
+          "fullPath": "/api/umrah/run-daily-status",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/run-penalty-engine",
+          "fullPath": "/api/umrah/run-penalty-engine",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/penalties",
+          "fullPath": "/api/umrah/penalties",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/penalties/:id",
+          "fullPath": "/api/umrah/penalties/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "PATCH",
+          "path": "/penalties/:id/waive",
+          "fullPath": "/api/umrah/penalties/:id/waive",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/agent-invoices/:id/record-payment",
+          "fullPath": "/api/umrah/agent-invoices/:id/record-payment",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/agent-invoices/generate",
+          "fullPath": "/api/umrah/agent-invoices/generate",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/agent-invoices",
+          "fullPath": "/api/umrah/agent-invoices",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/agent-invoices/:id",
+          "fullPath": "/api/umrah/agent-invoices/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/transport",
+          "fullPath": "/api/umrah/transport",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/transport/:id",
+          "fullPath": "/api/umrah/transport/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "DELETE",
+          "path": "/transport/:id",
+          "fullPath": "/api/umrah/transport/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/transport",
+          "fullPath": "/api/umrah/transport",
+          "mount": "/umrah"
+        },
+        {
+          "method": "PATCH",
+          "path": "/transport/:id",
+          "fullPath": "/api/umrah/transport/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/transport/:id/assign-pilgrims",
+          "fullPath": "/api/umrah/transport/:id/assign-pilgrims",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/import-logs",
+          "fullPath": "/api/umrah/import-logs",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/unassigned",
+          "fullPath": "/api/umrah/unassigned",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/assign-bulk",
+          "fullPath": "/api/umrah/assign-bulk",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/violations",
+          "fullPath": "/api/umrah/violations",
+          "mount": "/umrah"
+        },
+        {
+          "method": "GET",
+          "path": "/violations/:id",
+          "fullPath": "/api/umrah/violations/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/violations",
+          "fullPath": "/api/umrah/violations",
+          "mount": "/umrah"
+        },
+        {
+          "method": "PATCH",
+          "path": "/violations/:id",
+          "fullPath": "/api/umrah/violations/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "DELETE",
+          "path": "/violations/:id",
+          "fullPath": "/api/umrah/violations/:id",
+          "mount": "/umrah"
+        },
+        {
+          "method": "POST",
+          "path": "/penalties",
+          "fullPath": "/api/umrah/penalties",
+          "mount": "/umrah"
+        }
+      ],
+      "warehouse.ts": [
+        {
+          "method": "GET",
+          "path": "/products",
+          "fullPath": "/api/warehouse/products",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "POST",
+          "path": "/products",
+          "fullPath": "/api/warehouse/products",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "GET",
+          "path": "/products/:id",
+          "fullPath": "/api/warehouse/products/:id",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "PATCH",
+          "path": "/products/:id",
+          "fullPath": "/api/warehouse/products/:id",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "DELETE",
+          "path": "/products/:id",
+          "fullPath": "/api/warehouse/products/:id",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "GET",
+          "path": "/movements",
+          "fullPath": "/api/warehouse/movements",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "GET",
+          "path": "/movements/:id",
+          "fullPath": "/api/warehouse/movements/:id",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "POST",
+          "path": "/movements",
+          "fullPath": "/api/warehouse/movements",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "POST",
+          "path": "/transfers",
+          "fullPath": "/api/warehouse/transfers",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "GET",
+          "path": "/categories",
+          "fullPath": "/api/warehouse/categories",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "GET",
+          "path": "/categories/:id",
+          "fullPath": "/api/warehouse/categories/:id",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "POST",
+          "path": "/categories",
+          "fullPath": "/api/warehouse/categories",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "GET",
+          "path": "/suppliers",
+          "fullPath": "/api/warehouse/suppliers",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "GET",
+          "path": "/suppliers/:id",
+          "fullPath": "/api/warehouse/suppliers/:id",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "POST",
+          "path": "/suppliers",
+          "fullPath": "/api/warehouse/suppliers",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "PATCH",
+          "path": "/categories/:id",
+          "fullPath": "/api/warehouse/categories/:id",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "DELETE",
+          "path": "/categories/:id",
+          "fullPath": "/api/warehouse/categories/:id",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "PATCH",
+          "path": "/suppliers/:id",
+          "fullPath": "/api/warehouse/suppliers/:id",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "DELETE",
+          "path": "/suppliers/:id",
+          "fullPath": "/api/warehouse/suppliers/:id",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/warehouse/stats",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "GET",
+          "path": "/inventory-counts",
+          "fullPath": "/api/warehouse/inventory-counts",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "POST",
+          "path": "/inventory-counts",
+          "fullPath": "/api/warehouse/inventory-counts",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "GET",
+          "path": "/inventory-counts/:id/items",
+          "fullPath": "/api/warehouse/inventory-counts/:id/items",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "POST",
+          "path": "/inventory-counts/:id/items",
+          "fullPath": "/api/warehouse/inventory-counts/:id/items",
+          "mount": "/warehouse"
+        },
+        {
+          "method": "POST",
+          "path": "/inventory-counts/:id/approve",
+          "fullPath": "/api/warehouse/inventory-counts/:id/approve",
+          "mount": "/warehouse"
+        }
+      ],
+      "workflows.ts": [
+        {
+          "method": "POST",
+          "path": "/submit",
+          "fullPath": "/api/workflows/submit",
+          "mount": "/workflows"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/approve",
+          "fullPath": "/api/workflows/:id/approve",
+          "mount": "/workflows"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/reject",
+          "fullPath": "/api/workflows/:id/reject",
+          "mount": "/workflows"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/refer",
+          "fullPath": "/api/workflows/:id/refer",
+          "mount": "/workflows"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/escalate",
+          "fullPath": "/api/workflows/:id/escalate",
+          "mount": "/workflows"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/return",
+          "fullPath": "/api/workflows/:id/return",
+          "mount": "/workflows"
+        },
+        {
+          "method": "GET",
+          "path": "/:id/timeline",
+          "fullPath": "/api/workflows/:id/timeline",
+          "mount": "/workflows"
+        },
+        {
+          "method": "GET",
+          "path": "/timeline/:refTable/:refId",
+          "fullPath": "/api/workflows/timeline/:refTable/:refId",
+          "mount": "/workflows"
+        },
+        {
+          "method": "GET",
+          "path": "/",
+          "fullPath": "/api/workflows/",
+          "mount": "/workflows"
+        },
+        {
+          "method": "GET",
+          "path": "/pending",
+          "fullPath": "/api/workflows/pending",
+          "mount": "/workflows"
+        },
+        {
+          "method": "GET",
+          "path": "/definitions",
+          "fullPath": "/api/workflows/definitions",
+          "mount": "/workflows"
+        },
+        {
+          "method": "GET",
+          "path": "/definitions/:id",
+          "fullPath": "/api/workflows/definitions/:id",
+          "mount": "/workflows"
+        },
+        {
+          "method": "POST",
+          "path": "/definitions",
+          "fullPath": "/api/workflows/definitions",
+          "mount": "/workflows"
+        },
+        {
+          "method": "PUT",
+          "path": "/definitions/:id",
+          "fullPath": "/api/workflows/definitions/:id",
+          "mount": "/workflows"
+        },
+        {
+          "method": "DELETE",
+          "path": "/definitions/:id",
+          "fullPath": "/api/workflows/definitions/:id",
+          "mount": "/workflows"
+        },
+        {
+          "method": "GET",
+          "path": "/sla-definitions",
+          "fullPath": "/api/workflows/sla-definitions",
+          "mount": "/workflows"
+        },
+        {
+          "method": "POST",
+          "path": "/sla-definitions",
+          "fullPath": "/api/workflows/sla-definitions",
+          "mount": "/workflows"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "fullPath": "/api/workflows/stats",
+          "mount": "/workflows"
+        }
+      ]
+    },
+    "fileMounts": {
+      "auth.ts": [
+        "/auth"
+      ],
+      "clientPortal.ts": [
+        "/portal"
+      ],
+      "publicData.ts": [
+        "/public"
+      ],
+      "careersPortal.ts": [
+        "/careers"
+      ],
+      "pdpl.ts": [
+        "/pdpl"
+      ],
+      "dashboard.ts": [
+        "/dashboard"
+      ],
+      "employees.ts": [
+        "/employees"
+      ],
+      "clients.ts": [
+        "/clients"
+      ],
+      "hr.ts": [
+        "/hr"
+      ],
+      "hr-discipline.ts": [
+        "/hr/discipline"
+      ],
+      "hr-loans.ts": [
+        "/hr"
+      ],
+      "hr-overtime.ts": [
+        "/hr"
+      ],
+      "hr-exit.ts": [
+        "/hr"
+      ],
+      "training.ts": [
+        "/hr/training"
+      ],
+      "recruitment.ts": [
+        "/hr/recruitment"
+      ],
+      "finance-invoices.ts": [
+        "/finance"
+      ],
+      "finance-journal.ts": [
+        "/finance"
+      ],
+      "finance-purchase.ts": [
+        "/finance"
+      ],
+      "finance-reports.ts": [
+        "/finance"
+      ],
+      "finance-custodies.ts": [
+        "/finance"
+      ],
+      "finance-zatca.ts": [
+        "/finance"
+      ],
+      "accounting-engine.ts": [
+        "/finance"
+      ],
+      "finance-algorithms.ts": [
+        "/finance"
+      ],
+      "finance-collection.ts": [
+        "/finance"
+      ],
+      "finance-budget.ts": [
+        "/finance"
+      ],
+      "finance-accounts.ts": [
+        "/finance"
+      ],
+      "finance-vendors.ts": [
+        "/finance"
+      ],
+      "finance-hardening.ts": [
+        "/finance"
+      ],
+      "finance-recurring.ts": [
+        "/finance"
+      ],
+      "finance-cost-centers.ts": [
+        "/finance"
+      ],
+      "notifications.ts": [
+        "/notifications"
+      ],
+      "tasks.ts": [
+        "/tasks"
+      ],
+      "fleet.ts": [
+        "/fleet"
+      ],
+      "warehouse.ts": [
+        "/warehouse"
+      ],
+      "properties.ts": [
+        "/properties"
+      ],
+      "legal.ts": [
+        "/legal"
+      ],
+      "projects.ts": [
+        "/projects"
+      ],
+      "support.ts": [
+        "/support"
+      ],
+      "crm.ts": [
+        "/crm"
+      ],
+      "intelligence.ts": [
+        "/intelligence"
+      ],
+      "automation.ts": [
+        "/automation"
+      ],
+      "communications.ts": [
+        "/communications"
+      ],
+      "governance.ts": [
+        "/governance"
+      ],
+      "bi.ts": [
+        "/bi"
+      ],
+      "store.ts": [
+        "/store"
+      ],
+      "documents.ts": [
+        "/documents"
+      ],
+      "requests.ts": [
+        "/requests"
+      ],
+      "marketing.ts": [
+        "/request-catalog"
+      ],
+      "settings.ts": [
+        "/settings"
+      ],
+      "rules.ts": [
+        "/rules"
+      ],
+      "moduleDashboards.ts": [
+        "/module-dashboards"
+      ],
+      "admin.ts": [
+        "/admin"
+      ],
+      "permissions.ts": [
+        "/permissions"
+      ],
+      "auditLogs.ts": [
+        "/audit-logs"
+      ],
+      "search.ts": [
+        "/search"
+      ],
+      "activityLog.ts": [
+        "/activity-log"
+      ],
+      "approvalActions.ts": [
+        "/approval-actions"
+      ],
+      "workflows.ts": [
+        "/workflows"
+      ],
+      "impactPreview.ts": [
+        "/impact-preview"
+      ],
+      "mySpace.ts": [
+        "/my-space"
+      ],
+      "actionCenter.ts": [
+        "/action-center"
+      ],
+      "entityMeta.ts": [
+        "/entity-meta"
+      ],
+      "umrah.ts": [
+        "/umrah"
+      ],
+      "umrah-entities.ts": [
+        "/umrah"
+      ],
+      "operationsCenter.ts": [
+        "/operations-center"
+      ],
+      "export.ts": [
+        "/export"
+      ],
+      "scheduled-reports.ts": [
+        "/scheduled-reports"
+      ],
+      "notification-engine.ts": [
+        "/notification-engine"
+      ],
+      "gov-integrations.ts": [
+        "/gov-integrations"
+      ],
+      "digital-signature.ts": [
+        "/digital-signature"
+      ],
+      "events.ts": [
+        "/events"
+      ],
+      "execDashboard.ts": [
+        "/exec-dashboard"
+      ],
+      "obligations.ts": [
+        "/obligations"
+      ],
+      "calendar.ts": [
+        "/calendar"
+      ],
+      "hr-contracts.ts": [
+        "/hr/contracts"
+      ],
+      "correspondence.ts": [
+        "/correspondence"
+      ]
+    },
+    "unmountedFiles": [
+      "activityIngest.ts",
+      "health.ts",
+      "storage.ts"
+    ],
+    "fileCount": 58,
+    "methodBreakdown": {
+      "GET": 452,
+      "POST": 256,
+      "PUT": 23,
+      "DELETE": 84,
+      "PATCH": 113
+    }
+  }
+}

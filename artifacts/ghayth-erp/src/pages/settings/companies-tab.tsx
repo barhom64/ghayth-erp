@@ -196,7 +196,7 @@ export function CompaniesTab() {
               </div>
             )}
             <div className="md:col-span-2">
-              <Button onClick={handleSave} disabled={creating}>
+              <Button onClick={handleSave} disabled={creating} rateLimitAware>
                 {creating ? "جاري الإنشاء..." : (editingId ? "تحديث الشركة" : "إنشاء الشركة")}
               </Button>
             </div>

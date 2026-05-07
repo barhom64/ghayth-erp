@@ -272,6 +272,7 @@ export default function AutoDetectionPage() {
             className="gap-1.5"
             onClick={handleRun}
             disabled={runMutation.isPending}
+            rateLimitAware
           >
             {runMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />

@@ -6630,10 +6630,6 @@ CREATE TABLE public.journal_lines (
     "contractId" integer,
     "activityType" character varying(100),
     "templateId" integer,
-    "productId" integer,
-    "clientId" integer,
-    "vendorId" integer,
-    "driverId" integer,
     "deletedAt" timestamp with time zone
 );
 

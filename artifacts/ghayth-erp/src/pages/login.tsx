@@ -3,6 +3,8 @@ import { useLocation } from "wouter";
 import "@/styles/login.css";
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
+import { notifyRateLimited } from "@/lib/rate-limit-toast";
+import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
 import { formatDateAr } from "@/lib/formatters";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,6 +53,8 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  const cooldown = useRateLimitCooldown();
 
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
@@ -118,6 +122,11 @@ export default function Login() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: forgotEmail }),
       });
+      if (res.status === 429) {
+        // Surface the live cooldown on the forgot-password button too.
+        notifyRateLimited(res);
+        throw new Error("تم تجاوز الحد المسموح، حاول لاحقاً");
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "حدث خطأ");
       setForgotSuccess(true);
@@ -357,14 +366,19 @@ export default function Login() {
 
                   <button
                     type="submit"
-                    disabled={isLoading}
+                    disabled={isLoading || cooldown.isCoolingDown}
                     className="w-full h-11 rounded-lg text-white font-semibold text-sm shadow-md hover:shadow-lg active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                    style={{ background: isLoading ? "#64748b" : "linear-gradient(135deg,#1565c0,#0d47a1)" }}
+                    style={{ background: (isLoading || cooldown.isCoolingDown) ? "#64748b" : "linear-gradient(135deg,#1565c0,#0d47a1)" }}
                   >
                     {isLoading ? (
                       <span className="flex items-center justify-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         جاري تسجيل الدخول...
+                      </span>
+                    ) : cooldown.isCoolingDown ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        {cooldown.label}
                       </span>
                     ) : (
                       "تسجيل الدخول"
@@ -429,14 +443,19 @@ export default function Login() {
 
                     <button
                       type="submit"
-                      disabled={forgotLoading}
+                      disabled={forgotLoading || cooldown.isCoolingDown}
                       className="w-full h-11 rounded-lg text-white font-semibold text-sm shadow-md hover:shadow-lg active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                      style={{ background: forgotLoading ? "#64748b" : "linear-gradient(135deg,#d97706,#b45309)" }}
+                      style={{ background: (forgotLoading || cooldown.isCoolingDown) ? "#64748b" : "linear-gradient(135deg,#d97706,#b45309)" }}
                     >
                       {forgotLoading ? (
                         <span className="flex items-center justify-center gap-2">
                           <Loader2 className="h-4 w-4 animate-spin" />
                           جاري إرسال الطلب...
+                        </span>
+                      ) : cooldown.isCoolingDown ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          {cooldown.label}
                         </span>
                       ) : (
                         "إرسال طلب الاستعادة"

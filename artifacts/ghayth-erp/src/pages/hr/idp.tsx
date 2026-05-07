@@ -262,7 +262,7 @@ export default function IDPPage() {
             <Button variant="outline" onClick={() => setShowForm(false)} disabled={createIdpMut.isPending}>
               إلغاء
             </Button>
-            <Button onClick={handleSave} disabled={createIdpMut.isPending}>
+            <Button onClick={handleSave} disabled={createIdpMut.isPending} rateLimitAware>
               {createIdpMut.isPending ? "جاري الحفظ..." : "حفظ الخطة"}
             </Button>
           </DialogFooter>

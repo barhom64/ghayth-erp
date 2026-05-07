@@ -127,7 +127,7 @@ export function LetterheadSettings() {
                   <div className="md:col-span-2"><Label>نص التذييل</Label><textarea className="w-full border rounded-md p-2 h-16" value={form.footerText} onChange={(e) => setForm({ ...form, footerText: e.target.value })} placeholder="يظهر في أسفل كل مطبوعة..." /></div>
                 </div>
                 <div className="flex gap-2 pt-2">
-                  <Button onClick={handleSave} disabled={saving}>
+                  <Button onClick={handleSave} disabled={saving} rateLimitAware>
                     <Save className="h-4 w-4 me-1" />{saving ? "جاري الحفظ..." : "حفظ الكليشة"}
                   </Button>
                   <Button variant="outline" onClick={() => setShowPreview(!showPreview)}>

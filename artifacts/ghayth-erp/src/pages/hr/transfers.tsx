@@ -253,7 +253,7 @@ export default function TransfersPage() {
               <Input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="السبب..." />
             </div>
             <div className="col-span-2 flex gap-2">
-              <Button onClick={handleSubmit} disabled={createTransferMut.isPending}>
+              <Button onClick={handleSubmit} disabled={createTransferMut.isPending} rateLimitAware>
                 {createTransferMut.isPending ? "جاري الإرسال..." : "إرسال الطلب"}
               </Button>
               <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
