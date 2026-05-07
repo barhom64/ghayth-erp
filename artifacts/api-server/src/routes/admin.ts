@@ -7,7 +7,8 @@ import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, pool } from "../lib/rawdb.js";
 import { hashPassword } from "../lib/auth.js";
 import { logger } from "../lib/logger.js";
-import rateLimit from "express-rate-limit";
+import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
+import { getRedisRateLimitStatus } from "../lib/rateLimitStore.js";
 import { integrationService } from "../lib/integrationService.js";
 import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
@@ -83,13 +84,17 @@ const testIntegrationSchema = z.object({
   testRecipient: z.string().optional(),
 });
 
-const resetPasswordLimiter = rateLimit({
+// Per-user limiter for admin password resets. The /admin router is mounted
+// after authMiddleware in routes/index.ts (and gated by requireMinLevel(90)),
+// so req.scope is always set here. Owner/admin roles are NOT exempted because
+// this is the admin endpoint itself — the cap is a per-actor safety net
+// against a runaway script, not against admins as a class.
+const resetPasswordLimiter = createPerUserLimiter({
+  prefix: "admin:reset-pw",
   windowMs: 60 * 1000,
   max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "تم تجاوز الحد الأقصى لمحاولات إعادة تعيين كلمة المرور. يرجى المحاولة بعد دقيقة" },
-  validate: { ip: false, trustProxy: false },
+  message: "تم تجاوز الحد الأقصى لمحاولات إعادة تعيين كلمة المرور. يرجى المحاولة بعد دقيقة",
+  skip: () => false,
 });
 
 const ADMIN_ROLE_LEVEL = 90;
@@ -836,6 +841,10 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
           errored: Number(integrationStats?.errored || 0),
           pendingMessages: Number(pendingMessages?.count || 0),
         },
+        // Rate-limit backend status. `fallback-memory` means caps are still
+        // enforced but only per-process — the operator should investigate
+        // why Redis is unreachable. See lib/rateLimitStore.ts.
+        redisRateLimit: getRedisRateLimitStatus(),
       },
       cronJobs: recentCrons,
       recentCronLogs,
