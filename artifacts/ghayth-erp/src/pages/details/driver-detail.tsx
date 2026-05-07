@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
@@ -134,12 +139,28 @@ export default function DriverDetail() {
     return [{ kind: "info-grid", items }];
   }, [driver, assignedVehicle]);
 
-  const handleEdit = () => {
-    setLocation(`/fleet/drivers`);
-  };
+  const editDelete = useDetailEditDelete({
+    entityLabel: "السائق",
+    patchPath: `/fleet/drivers/${id}`,
+    deletePath: `/fleet/drivers/${id}`,
+    listPath: "/fleet/drivers",
+    initialValues: driver,
+    fields: [
+      { key: "fullName", label: "الاسم الكامل" },
+      { key: "phone", label: "الهاتف" },
+      { key: "nationalId", label: "رقم الهوية" },
+      { key: "licenseNumber", label: "رقم الرخصة" },
+      { key: "address", label: "العنوان" },
+    ],
+    invalidateKeys: [["driver", String(id)], ["drivers"]],
+    onSaved: () => refetch(),
+  });
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
+      <div className="md:col-span-3">
+        <InlineEditCard hook={editDelete} />
+      </div>
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">بيانات السائق</CardTitle>
@@ -283,10 +304,7 @@ export default function DriverDetail() {
             date={formatDateAr(new Date().toISOString())}
             sections={printSections}
           />
-          <GuardedButton perm="fleet:update" variant="outline" size="sm" onClick={handleEdit} disabled={!driver}>
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
+          <DetailActionButtons hook={editDelete} />
         </>
       }
     />
