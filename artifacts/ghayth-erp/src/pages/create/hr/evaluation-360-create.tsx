@@ -190,7 +190,7 @@ export default function Evaluation360Create() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/hr/evaluation-360")}>إلغاء</Button>
-        <Button onClick={handleSave} disabled={createMut.isPending} className="gap-2">
+        <Button onClick={handleSave} disabled={createMut.isPending} className="gap-2" rateLimitAware>
           <Save className="h-4 w-4" /> {createMut.isPending ? "جارٍ البدء..." : "بدء دورة التقييم"}
         </Button>
       </div>
