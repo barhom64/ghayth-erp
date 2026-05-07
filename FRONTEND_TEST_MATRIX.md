@@ -1,6 +1,6 @@
 # Frontend Test Matrix — Ghayth ERP
 
-> **⚠️ RETRACTED 2026-05-07 (Task #185)** — The "1510/1510 (100%)" headline below was produced by source-review-only scripts that did not actually load any of the 373 routes in a browser. A real headless-Chromium audit (`scripts/src/runtime-audit.cjs`, `pnpm run audit:runtime`) found **233 PASS / 69 FAIL / 71 SKIP** across 373 routes. See **`FRONTEND_RUNTIME_AUDIT.md`** for the honest, reproducible results. The text below is preserved verbatim only for historical context — do **not** quote it as the current state.
+> **⚠️ RETRACTED 2026-05-07 (Task #185)** — The "1510/1510 (100%)" headline below was produced by source-review-only scripts that did not actually load any of the 373 routes in a browser. A real headless-Chromium audit (`scripts/src/runtime-audit.cjs`, `pnpm run audit:runtime`, with periodic re-login every 25 routes) found **1 PASS / 291 FAIL / 81 SKIP** across 373 routes (per-route disposition; only `/dashboard` survives every axis). All 291 FAILs are A4 navigation FAILs — the SPA bounces direct `page.goto` to `/dashboard`. With re-login in place every other axis returns 0 FAIL: A1 292/0/81, A2 223/0/150, A3 69/0/304, A4 1/291/81, A5 285/0/88. See **`FRONTEND_RUNTIME_AUDIT.md`** for the honest, reproducible results and **`FRONTEND_BUGS.md`** "Task #185" section for per-route Arabic descriptions and screenshot paths. The text below is preserved verbatim only for historical context — do **not** quote it as the current state.
 
 ---
 
