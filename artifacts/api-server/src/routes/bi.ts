@@ -131,7 +131,7 @@ router.get("/overview", requirePermission("bi:read"), async (req, res) => {
     const cid = scope.companyId;
     const [row] = await rawQuery<any>(
       `SELECT
-         (SELECT COUNT(*) FROM employee_assignments WHERE "companyId" = $1) AS employees,
+         (SELECT COUNT(*) FROM employee_assignments WHERE "companyId" = $1 AND status = 'active') AS employees,
          (SELECT COUNT(*) FROM clients WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS clients,
          (SELECT COUNT(*) FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS invoices,
          (SELECT COUNT(*) FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS projects,

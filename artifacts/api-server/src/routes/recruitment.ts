@@ -285,7 +285,10 @@ router.post("/applications", requirePermission("hr:write"), async (req, res) => 
       entityId: r.insertId,
       details: JSON.stringify({ postingId: Number(postingId), applicantName }),
     }).catch((e) => logger.error(e, "recruitment background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM job_applications WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(
+      `SELECT ja.* FROM job_applications ja JOIN job_postings jp ON jp.id = ja."postingId" WHERE ja.id=$1 AND jp."companyId"=$2 AND ja."deletedAt" IS NULL`,
+      [r.insertId, scope.companyId]
+    );
     res.status(201).json(row || { id: r.insertId, postingId: Number(postingId), applicantName, status: status || "new" });
   } catch (err) { handleRouteError(err, res, "Create application error:"); }
 });
@@ -315,8 +318,15 @@ router.patch("/applications/:id", requirePermission("hr:write"), async (req, res
     if (b.interviewDate !== undefined) { params.push(b.interviewDate); sets.push(`"interviewDate"=$${params.length}`); }
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id);
-    await rawExecute(`UPDATE job_applications SET ${sets.join(",")} WHERE id=$${params.length} AND "companyId" = $${params.length + 1} AND "deletedAt" IS NULL`, [...params, scope.companyId]);
-    const [row] = await rawQuery<any>(`SELECT * FROM job_applications WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
+    await rawExecute(
+      `UPDATE job_applications SET ${sets.join(",")} WHERE id=$${params.length} AND "deletedAt" IS NULL
+       AND "postingId" IN (SELECT id FROM job_postings WHERE "companyId"=$${params.length + 1})`,
+      [...params, scope.companyId]
+    );
+    const [row] = await rawQuery<any>(
+      `SELECT ja.* FROM job_applications ja JOIN job_postings jp ON jp.id = ja."postingId" WHERE ja.id=$1 AND jp."companyId"=$2 AND ja."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_applications", entityId: id, after: b }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
