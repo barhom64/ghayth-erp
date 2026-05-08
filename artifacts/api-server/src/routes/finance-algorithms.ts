@@ -250,7 +250,7 @@ financeAlgorithmsRouter.get("/ap-aging", requirePermission("finance:read"), asyn
          s2.email AS "supplierEmail"
        FROM purchase_requests pr
        LEFT JOIN suppliers s2 ON s2.id = pr."supplierId" AND s2."deletedAt" IS NULL
-       WHERE pr."companyId" = $2 AND pr."deletedAt" IS NULL
+       WHERE pr."companyId" = $2
          AND pr.status NOT IN ('cancelled','rejected','completed','draft')
          AND pr."supplierId" IS NOT NULL
          AND COALESCE(pr."totalAmount", 0) > 0.009
@@ -1675,7 +1675,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", requirePermission("fina
                 jl.debit, jl.credit
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
-         LEFT JOIN chart_of_accounts ca ON ca.code = jl."accountCode" AND ca."companyId" = $1 AND ca."deletedAt" IS NULL
+         LEFT JOIN chart_of_accounts ca ON ca.code = jl."accountCode" AND ca."companyId" = $1
          WHERE ${safeCol} = $2 AND je."deletedAt" IS NULL
          ORDER BY je."createdAt" DESC
          LIMIT 50`,
@@ -1690,7 +1690,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", requirePermission("fina
                 COUNT(*) AS "transactionCount"
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
-         LEFT JOIN chart_of_accounts ca ON ca.code = jl."accountCode" AND ca."companyId" = $1 AND ca."deletedAt" IS NULL
+         LEFT JOIN chart_of_accounts ca ON ca.code = jl."accountCode" AND ca."companyId" = $1
          WHERE ${safeCol} = $2 AND je.status = 'posted' AND je."deletedAt" IS NULL
          GROUP BY ca.code, ca.name
          ORDER BY SUM(jl.debit) DESC

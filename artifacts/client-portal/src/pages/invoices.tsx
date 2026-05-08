@@ -75,8 +75,7 @@ export default function Invoices() {
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="divide-y divide-gray-100">
             {invoices.map((inv: any) => (
-              <Link key={inv.id} href={`/invoices/${inv.id}`}>
-                <a className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors block">
+              <Link key={inv.id} href={`/invoices/${inv.id}`} className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors block">
                   <div>
                     <p className="font-mono font-semibold text-gray-900 text-sm">{inv.ref}</p>
                     <div className="flex items-center gap-3 mt-0.5">
@@ -95,8 +94,7 @@ export default function Invoices() {
                       )}
                     </div>
                   </div>
-                </a>
-              </Link>
+                </Link>
             ))}
           </div>
         </div>

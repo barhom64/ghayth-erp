@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { notifyRateLimited } from "./rate-limit-toast";
 
 /**
  * ApiError — P1.3 of the unification plan (docs/UNIFICATION_PLAN.md).
@@ -143,6 +144,21 @@ export async function apiFetch<T = any>(path: string, options?: RequestInit): Pr
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "خطأ في الخادم" }));
+    // 429: surface a clear Arabic toast with retry-after seconds, debounced
+    // so a flurry of failed retries does not spam the user. We tag the
+    // ApiError with code RATE_LIMITED so useApiMutation can suppress its
+    // own generic destructive toast.
+    if (res.status === 429) {
+      const seconds = notifyRateLimited(res);
+      throw new ApiError(
+        body.error || `تم تجاوز الحد المسموح، حاول بعد ${seconds} ثانية`,
+        {
+          status: 429,
+          code: "RATE_LIMITED",
+          meta: { retryAfterSeconds: seconds },
+        },
+      );
+    }
     // Preserve the typed-error shape the server sent (P0.3 / P1.3).
     // The server's typed errors ship { error, code, field?, fix?, meta? }.
     // Older routes still ship { error } — the ApiError constructor fills
@@ -160,6 +176,16 @@ export async function apiFetch<T = any>(path: string, options?: RequestInit): Pr
     return {} as T;
   }
   return res.json();
+}
+
+/**
+ * Returns true when an error is the result of a 429 rate-limit response.
+ * The shared rate-limit toast has already been shown by `apiFetch` /
+ * `notifyRateLimited`, so local catch handlers should branch on this and
+ * skip their own destructive toast/alert to keep messaging one-per-burst.
+ */
+export function isRateLimitedError(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 429 || err.code === "RATE_LIMITED");
 }
 
 export function getErrorMessage(err: unknown): string {
@@ -199,7 +225,12 @@ export function useApiQuery<T = any>(
     queryKey: key,
     queryFn: () => apiFetch<T>(path!),
     enabled: isEnabled,
-    retry: 1,
+    // Don't retry rate-limited responses — retrying immediately would
+    // just trigger the limiter again and spam the user with toasts.
+    retry: (failureCount, error) => {
+      if (error instanceof ApiError && error.status === 429) return false;
+      return failureCount < 1;
+    },
   });
 }
 
@@ -362,6 +393,13 @@ export function useApiMutation<TData = any, TBody = any>(
     //      legacy generic toast so pre-P1.3 call sites behave identically.
     onError: (error, body) => {
       if (error instanceof ApiError) {
+        // 429 toast is already shown by apiFetch via notifyRateLimited().
+        // Skip the default destructive toast to avoid double notifications,
+        // but still let the caller's onError run for any local cleanup.
+        if (error.code === "RATE_LIMITED") {
+          options?.onError?.(error, body);
+          return;
+        }
         if (
           (error.code === "VALIDATION_ERROR" || error.code === "CONFLICT") &&
           error.field &&

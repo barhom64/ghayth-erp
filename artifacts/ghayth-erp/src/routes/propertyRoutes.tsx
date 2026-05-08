@@ -15,6 +15,7 @@ const TenantsCreate = lazy(() => import("@/pages/create/properties/tenants-creat
 const PropertyMaintenanceCreate = lazy(() => import("@/pages/create/properties/maintenance-create"));
 const PropertyMaintenanceDetail = lazy(() => import("@/pages/details/property-maintenance-detail"));
 const OwnersCreate = lazy(() => import("@/pages/create/properties/owners-create"));
+const OwnersEdit = lazy(() => import("@/pages/create/properties/owners-edit"));
 const BuildingsCreate = lazy(() => import("@/pages/create/properties/buildings-create"));
 const PaymentRecord = lazy(() => import("@/pages/create/properties/payment-record"));
 const UnitStatusChange = lazy(() => import("@/pages/create/properties/unit-status-change"));
@@ -38,6 +39,7 @@ export const propertyRoutes = [
   { path: "/properties/tenants/:id", component: TenantDetail },
   { path: "/properties/tenants", component: PropertiesTenants },
   { path: "/properties/owners/create", component: OwnersCreate },
+  { path: "/properties/owners/:id/edit", component: OwnersEdit },
   { path: "/properties/owners/:id", component: OwnerDetail },
   { path: "/properties/owners", component: PropertiesOwners },
   { path: "/properties/contracts/create", component: ContractsCreate },

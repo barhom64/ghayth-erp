@@ -724,7 +724,7 @@ function ClientPortalTab({ clientId, clientEmail }: { clientId: string; clientEm
                 </div>
                 <p className="text-xs text-muted-foreground">سيُطلب من العميل تغيير كلمة المرور عند أول دخول</p>
                 <div className="flex gap-2">
-                  <Button onClick={handleCreate} disabled={createMut.isPending} size="sm">
+                  <Button onClick={handleCreate} disabled={createMut.isPending} size="sm" rateLimitAware>
                     {createMut.isPending ? "جارٍ الإنشاء..." : "إنشاء الحساب"}
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => setShowCreate(false)}>إلغاء</Button>

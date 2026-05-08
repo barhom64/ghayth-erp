@@ -4,6 +4,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, zodParse } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import rateLimit from "express-rate-limit";
+import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { logger } from "../lib/logger.js";
 
 const forgotPasswordSchema = z.object({
@@ -18,6 +19,7 @@ const publicLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   validate: { ip: false, trustProxy: false },
+  store: makeRateLimitStore("public:ip"),
 });
 
 router.get("/announcements", publicLimiter, async (_req, res) => {

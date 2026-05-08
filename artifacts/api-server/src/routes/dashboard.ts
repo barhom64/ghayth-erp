@@ -90,7 +90,7 @@ router.get("/", async (req, res) => {
       pendingPurchaseRequests = await rawQuery<any>(
         `SELECT id, title, status, "createdAt"
          FROM purchase_requests
-         WHERE ${pw} AND status = 'pending' AND "deletedAt" IS NULL
+         WHERE ${pw} AND status = 'pending'
          ORDER BY "createdAt" DESC
          LIMIT 5`,
         pp
@@ -259,7 +259,7 @@ router.get("/role-data", async (req, res) => {
 
     if (HR_ROLES.includes(role)) {
       const [onboarding] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM tasks WHERE ${where} AND category = 'onboarding' AND status != 'completed'`, params
+        `SELECT COUNT(*) AS total FROM tasks WHERE ${where} AND type = 'onboarding' AND status != 'completed'`, params
       ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ total: 0 }]; });
       const probationRows = await rawQuery<any>(
         `SELECT e.name, ec."probationEndDate"

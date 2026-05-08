@@ -86,7 +86,7 @@ export default function BiReportsCreate() {
         </FormFieldWrapper>
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="outline" onClick={() => setLocation("/bi/reports")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={createMut.isPending}>{createMut.isPending ? "جاري الحفظ..." : "حفظ"}</Button>
+          <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>{createMut.isPending ? "جاري الحفظ..." : "حفظ"}</Button>
         </div>
       </div>
     </CreatePageLayout>

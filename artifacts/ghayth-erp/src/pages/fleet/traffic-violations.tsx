@@ -220,7 +220,7 @@ export default function TrafficViolationsPage() {
               <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
             <div className="flex items-end">
-              <Button onClick={handleSave} className="w-full">حفظ</Button>
+              <Button onClick={handleSave} className="w-full" rateLimitAware>حفظ</Button>
             </div>
             <div className="col-span-3">
               <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>

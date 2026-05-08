@@ -2,6 +2,21 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import { Redirect } from "wouter";
+import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
+
+function LoginSubmit({ submitting }: { submitting: boolean }) {
+  const { isCoolingDown, label } = useRateLimitCooldown();
+  const busy = submitting || isCoolingDown;
+  return (
+    <button
+      type="submit"
+      disabled={busy}
+      className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors text-sm"
+    >
+      {isCoolingDown ? label : submitting ? "جارٍ تسجيل الدخول..." : "تسجيل الدخول"}
+    </button>
+  );
+}
 
 export default function Login() {
   const { login, isAuthenticated, loading } = useAuth();
@@ -86,13 +101,7 @@ export default function Login() {
                 autoComplete="current-password"
               />
             </div>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors text-sm"
-            >
-              {submitting ? "جارٍ تسجيل الدخول..." : "تسجيل الدخول"}
-            </button>
+            <LoginSubmit submitting={submitting} />
           </form>
         </div>
       </div>

@@ -332,7 +332,7 @@ router.get("/links", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.query as any;
-    const conditions = [`gl."companyId" = $1`, `gl."deletedAt" IS NULL`];
+    const conditions = [`gl."companyId" = $1`];
     const params: any[] = [scope.companyId];
 
     if (entityType) { params.push(entityType); conditions.push(`gl."entityType" = $${params.length}`); }

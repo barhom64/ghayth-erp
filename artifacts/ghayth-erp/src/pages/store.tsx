@@ -105,7 +105,7 @@ function ProductsTab() {
           <div><Label>السعر</Label><Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></div>
           <div><Label>سعر التكلفة</Label><Input type="number" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} /></div>
           <div><Label>الكمية</Label><Input type="number" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></div>
-          <div className="md:col-span-3"><Button onClick={handleSubmit} disabled={!form.name || createMut.isPending}>حفظ</Button></div>
+          <div className="md:col-span-3"><Button onClick={handleSubmit} disabled={!form.name || createMut.isPending} rateLimitAware>حفظ</Button></div>
         </CardContent></Card>
       )}
       <Card>
@@ -226,7 +226,7 @@ function OrdersTab() {
           <div><Label>الهاتف</Label><Input value={form.customerPhone} onChange={(e) => setForm({ ...form, customerPhone: e.target.value })} /></div>
           <div><Label>المبلغ الإجمالي</Label><Input type="number" value={form.totalAmount} onChange={(e) => setForm({ ...form, totalAmount: e.target.value })} /></div>
           <div><Label>ملاحظات</Label><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
-          <div className="md:col-span-2"><Button onClick={handleSubmit} disabled={!form.customerName || createMut.isPending}>حفظ</Button></div>
+          <div className="md:col-span-2"><Button onClick={handleSubmit} disabled={!form.customerName || createMut.isPending} rateLimitAware>حفظ</Button></div>
         </CardContent></Card>
       )}
       <Card>

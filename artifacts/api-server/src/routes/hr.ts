@@ -12,7 +12,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission, requireAnyPermission } from "../middlewares/permissionMiddleware.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
-import rateLimit from "express-rate-limit";
+import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { haversineKm } from "../lib/algorithms.js";
 import {
   createNotification,
@@ -391,13 +391,16 @@ const excuseApprovalSchema = z.object({
 
 const router = Router();
 
-const checkInLimiter = rateLimit({
+// Per-user check-in limiter. The /hr router runs after authMiddleware in
+// routes/index.ts, so req.scope is set. We deliberately do NOT exempt
+// owner/admin: the cap reflects "humans can't physically check in 5 times
+// per minute," and the role of the actor doesn't change that physical fact.
+const checkInLimiter = createPerUserLimiter({
+  prefix: "hr:check-in",
   windowMs: 60 * 1000,
   max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "تم تجاوز الحد الأقصى لمحاولات تسجيل الحضور. يرجى المحاولة بعد دقيقة" },
-  validate: { ip: false, trustProxy: false },
+  message: "تم تجاوز الحد الأقصى لمحاولات تسجيل الحضور. يرجى المحاولة بعد دقيقة",
+  skip: () => false,
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -6302,7 +6305,7 @@ router.get("/gratuity/:employeeId", requirePermission("hr:read"), async (req, re
     const { terminationType, terminationDate } = req.query as any;
 
     const [assignment] = await rawQuery<any>(
-      `SELECT ea.salary, ea."startDate", ea."jobTitle",
+      `SELECT ea.salary, ea."hireDate" AS "startDate", ea."jobTitle",
               ec."startDate" AS "contractStart", ec."endDate" AS "contractEnd",
               e.name AS "employeeName"
        FROM employee_assignments ea
@@ -6516,8 +6519,8 @@ router.get("/accruals/preview", requirePermission("hr:read"), async (req, res) =
     );
 
     const employees = await rawQuery<any>(
-      `SELECT ea."employeeId", e.name AS "employeeName", ea.salary, ea."startDate",
-              COALESCE(ec."startDate", ea."startDate") AS "contractStart"
+      `SELECT ea."employeeId", e.name AS "employeeName", ea.salary, ea."hireDate" AS "startDate",
+              COALESCE(ec."startDate", ea."hireDate") AS "contractStart"
        FROM employee_assignments ea
        JOIN employees e ON e.id=ea."employeeId"
        LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId"

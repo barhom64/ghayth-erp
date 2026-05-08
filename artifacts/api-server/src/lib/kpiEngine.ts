@@ -64,7 +64,6 @@ async function calcSlaAdherence(companyId: number, employeeId: number, date: str
             COUNT(*) FILTER (WHERE st."slaBreached" = true) AS breached
      FROM support_tickets st
      WHERE st."companyId" = $1 AND st."assigneeId" = $2
-       AND st."deletedAt" IS NULL
        AND st."createdAt"::date >= ($3::date - INTERVAL '30 days')
        AND st."createdAt"::date <= $3::date`,
     [companyId, employeeId, date]
@@ -79,7 +78,7 @@ async function calcClientSatisfaction(companyId: number, employeeId: number, dat
     `SELECT COALESCE(AVG(st.rating), 0) AS "avgRating"
      FROM support_tickets st
      WHERE st."companyId" = $1 AND st."assigneeId" = $2
-       AND st."deletedAt" IS NULL AND st.rating IS NOT NULL
+       AND st.rating IS NOT NULL
        AND st."resolvedAt"::date >= ($3::date - INTERVAL '30 days')
        AND st."resolvedAt"::date <= $3::date`,
     [companyId, employeeId, date]
@@ -93,7 +92,6 @@ async function calcReopenRate(companyId: number, employeeId: number, date: strin
             COUNT(*) FILTER (WHERE st."escalationLevel" > 1) AS reopened
      FROM support_tickets st
      WHERE st."companyId" = $1 AND st."assigneeId" = $2
-       AND st."deletedAt" IS NULL
        AND st."resolvedAt"::date >= ($3::date - INTERVAL '30 days')
        AND st."resolvedAt"::date <= $3::date`,
     [companyId, employeeId, date]
@@ -162,7 +160,6 @@ async function calcSupportResponseRate(companyId: number, employeeId: number, da
             COUNT(*) FILTER (WHERE st."firstResponseAt" IS NOT NULL) AS responded
      FROM support_tickets st
      WHERE st."companyId" = $1 AND st."assigneeId" = $2
-       AND st."deletedAt" IS NULL
        AND st."createdAt"::date >= ($3::date - INTERVAL '30 days')
        AND st."createdAt"::date <= $3::date`,
     [companyId, employeeId, date]
@@ -192,7 +189,7 @@ async function calcInvoiceCollectionRate(companyId: number, _employeeId: number,
     `SELECT COUNT(*) AS total,
             COUNT(*) FILTER (WHERE status = 'paid') AS collected
      FROM invoices
-     WHERE "companyId" = $1 AND "deletedAt" IS NULL
+     WHERE "companyId" = $1
        AND "createdAt"::date >= ($2::date - INTERVAL '30 days')
        AND "createdAt"::date <= $2::date`,
     [companyId, date]
@@ -212,12 +209,12 @@ export async function getCompanyKPIs(companyId: number): Promise<{
   const today = todayISO();
   const [supResp] = await rawQuery<any>(
     `SELECT COUNT(*) FILTER (WHERE "firstResponseAt" IS NOT NULL)::float / NULLIF(COUNT(*), 0) * 100 AS rate
-     FROM support_tickets WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt"::date >= CURRENT_DATE - INTERVAL '30 days'`,
+     FROM support_tickets WHERE "companyId"=$1 AND "createdAt"::date >= CURRENT_DATE - INTERVAL '30 days'`,
     [companyId]
   );
   const [collection] = await rawQuery<any>(
     `SELECT COUNT(*) FILTER (WHERE status='paid')::float / NULLIF(COUNT(*),0) * 100 AS rate
-     FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt"::date >= CURRENT_DATE - INTERVAL '30 days'`,
+     FROM invoices WHERE "companyId"=$1 AND "createdAt"::date >= CURRENT_DATE - INTERVAL '30 days'`,
     [companyId]
   );
   const [approval] = await rawQuery<any>(
@@ -227,7 +224,7 @@ export async function getCompanyKPIs(companyId: number): Promise<{
   );
   const [satisfaction] = await rawQuery<any>(
     `SELECT COALESCE(AVG(rating),0) AS avg FROM support_tickets
-     WHERE "companyId"=$1 AND "deletedAt" IS NULL AND rating IS NOT NULL AND "resolvedAt"::date >= CURRENT_DATE - INTERVAL '30 days'`,
+     WHERE "companyId"=$1 AND rating IS NOT NULL AND "resolvedAt"::date >= CURRENT_DATE - INTERVAL '30 days'`,
     [companyId]
   );
   const [tasks] = await rawQuery<any>(

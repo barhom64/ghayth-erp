@@ -86,7 +86,7 @@ function QuickCreateDialog({
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
-          <Button onClick={handleCreate} disabled={createMut.isPending}>
+          <Button onClick={handleCreate} disabled={createMut.isPending} rateLimitAware>
             {createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}
           </Button>
         </div>

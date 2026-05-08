@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, apiFetch, isRateLimitedError } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -195,7 +195,10 @@ export default function AdminUsersPage() {
       });
       toast({ title: "تم إعادة تعيين كلمة المرور بنجاح" });
       setResetUserId(null); setResetPassword("");
-    } catch {
+    } catch (err) {
+      // The shared apiFetch already shows a debounced rate-limit toast on
+      // 429, so swallow it here to avoid a duplicate generic error toast.
+      if (isRateLimitedError(err)) return;
       toast({ variant: "destructive", title: "فشل في إعادة تعيين كلمة المرور" });
     }
   };

@@ -7,7 +7,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { rawQuery } from "../lib/rawdb.js";
-import rateLimit from "express-rate-limit";
+import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { logger } from "../lib/logger.js";
 
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -46,16 +46,16 @@ const RequestUploadUrlResponse = z.object({
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
 
-const uploadLimiter = rateLimit({
+// Per-user upload limiter — runs after authMiddleware (re-ordered below) so
+// req.scope is set. Owner/admin roles are exempt; everyone else gets 30/min.
+const uploadLimiter = createPerUserLimiter({
+  prefix: "storage:upload",
   windowMs: 60 * 1000,
   max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "تم تجاوز الحد الأقصى لطلبات الرفع. يرجى المحاولة بعد دقيقة" },
-  validate: { ip: false, trustProxy: false },
+  message: "تم تجاوز الحد الأقصى لطلبات الرفع. يرجى المحاولة بعد دقيقة",
 });
 
-router.post("/storage/uploads/request-url", uploadLimiter, authMiddleware, requirePermission("documents:write"), async (req: Request, res: Response) => {
+router.post("/storage/uploads/request-url", authMiddleware, uploadLimiter, requirePermission("documents:write"), async (req: Request, res: Response) => {
   try {
     const { name, size, contentType } = zodParse(RequestUploadUrlBody.safeParse(req.body));
 

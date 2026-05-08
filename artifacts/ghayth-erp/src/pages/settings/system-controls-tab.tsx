@@ -123,7 +123,7 @@ export function SystemControlsTab() {
           </CardContent>
         </Card>
       ))}
-      <Button onClick={handleSave} disabled={saving}>
+      <Button onClick={handleSave} disabled={saving} rateLimitAware>
         <Save className="h-4 w-4 me-1" />{saving ? "جاري الحفظ..." : "حفظ الإعدادات"}
       </Button>
     </div>

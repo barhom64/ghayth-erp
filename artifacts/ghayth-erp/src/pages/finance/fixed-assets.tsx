@@ -201,7 +201,7 @@ export default function FixedAssetsPage() {
                 </div>
                 <div className="flex gap-2 justify-end">
                   <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>إلغاء</Button>
-                  <Button type="submit" disabled={createMutation.isPending}>
+                  <Button type="submit" disabled={createMutation.isPending} rateLimitAware>
                     {createMutation.isPending ? "جارٍ الحفظ..." : "حفظ الأصل"}
                   </Button>
                 </div>
@@ -238,7 +238,7 @@ export default function FixedAssetsPage() {
               )}
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => { setShowDepreciate(false); setDepResult(null); }}>إغلاق</Button>
-                <Button onClick={handleDepreciate} disabled={depreciateMutation.isPending}>
+                <Button onClick={handleDepreciate} disabled={depreciateMutation.isPending} rateLimitAware>
                   {depreciateMutation.isPending ? "جارٍ الإهلاك..." : "تسجيل الإهلاك"}
                 </Button>
               </div>

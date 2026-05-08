@@ -26,6 +26,11 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { DetailPageLayout, type DetailStatus } from "@/components/shared/detail-page-layout";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 
 /**
@@ -162,9 +167,24 @@ export default function InvoiceDetailPage() {
     zatcaMut.mutate({});
   };
 
+  const editDelete = useDetailEditDelete({
+    entityLabel: "الفاتورة",
+    patchPath: `/finance/invoices/${id}`,
+    deletePath: `/finance/invoices/${id}`,
+    listPath: "/finance/invoices",
+    initialValues: invoice,
+    fields: [
+      { key: "notes", label: "ملاحظات" },
+      { key: "dueDate", label: "تاريخ الاستحقاق" },
+    ],
+    invalidateKeys: [["invoice", String(id)], ["invoices"]],
+    onSaved: () => refetch(),
+  });
+
   // --- Action buttons for the header ---
   const actions = (
     <div className="flex items-center gap-2">
+      <DetailActionButtons hook={editDelete} />
       <Link href={`/finance/invoices/create?copyFrom=${id}`}>
         <Button variant="outline" size="sm" className="gap-1">
           <Copy className="h-4 w-4" />
@@ -199,6 +219,7 @@ export default function InvoiceDetailPage() {
   // --- Overview content (main tab) ---
   const overview = invoice ? (
     <div className="space-y-4">
+      <InlineEditCard hook={editDelete} />
       {/* Visible payment lifecycle strip */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-4">
@@ -288,6 +309,7 @@ export default function InvoiceDetailPage() {
                       size="sm"
                       onClick={handleZatcaSubmit}
                       disabled={zatcaMut.isPending}
+                      rateLimitAware
                       className="gap-1"
                     >
                       <Send className="h-4 w-4" />
@@ -327,7 +349,7 @@ export default function InvoiceDetailPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button type="submit" disabled={paymentMut.isPending}>
+              <Button type="submit" disabled={paymentMut.isPending} rateLimitAware>
                 {paymentMut.isPending ? "جاري التسجيل..." : "تسجيل"}
               </Button>
               <Button type="button" variant="outline" onClick={() => setShowPayment(false)}>

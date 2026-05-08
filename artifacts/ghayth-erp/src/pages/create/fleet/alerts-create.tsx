@@ -87,7 +87,7 @@ export default function FleetAlertsCreate() {
       </div>
       <div className="flex justify-end gap-3 pt-6">
         <Button type="button" variant="outline" onClick={() => setLocation("/fleet/alerts")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الإضافة..." : "إضافة"}
         </Button>
       </div>

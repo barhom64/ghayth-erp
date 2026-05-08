@@ -232,7 +232,7 @@ export default function OvertimeCreate() {
 
         {/* أزرار الإرسال */}
         <div className="flex items-center gap-3 pt-4 border-t">
-          <Button type="submit" disabled={createMut.isPending} className="gap-1.5">
+          <Button type="submit" disabled={createMut.isPending} className="gap-1.5" rateLimitAware>
             <Clock className="h-4 w-4" />
             {createMut.isPending ? "جاري الإرسال..." : "إرسال الطلب"}
           </Button>

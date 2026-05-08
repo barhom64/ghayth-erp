@@ -49,8 +49,7 @@ function KBList() {
       ) : (
         <div className="space-y-3">
           {articles.map((a: any) => (
-            <Link key={a.id} href={`/kb/${a.id}`}>
-              <a className="block bg-white rounded-xl border border-gray-200 p-4 hover:border-blue-300 hover:shadow-sm transition-all">
+            <Link key={a.id} href={`/kb/${a.id}`} className="block bg-white rounded-xl border border-gray-200 p-4 hover:border-blue-300 hover:shadow-sm transition-all">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-gray-900 text-sm leading-snug">{a.title}</h3>
@@ -70,8 +69,7 @@ function KBList() {
                     {a.views || 0}
                   </div>
                 </div>
-              </a>
-            </Link>
+              </Link>
           ))}
         </div>
       )}
@@ -104,14 +102,12 @@ function KBArticle() {
 
   return (
     <div className="space-y-5">
-      <Link href="/kb">
-        <a className="text-gray-500 hover:text-gray-700 text-sm flex items-center gap-1">
+      <Link href="/kb" className="text-gray-500 hover:text-gray-700 text-sm flex items-center gap-1">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
           مركز المساعدة
-        </a>
-      </Link>
+        </Link>
 
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
         <div>

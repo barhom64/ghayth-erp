@@ -175,7 +175,7 @@ export default function RegisterPage() {
                   </div>
                 )}
 
-                <Button type="submit" className="w-full h-11" disabled={loading}>
+                <Button type="submit" className="w-full h-11" disabled={loading} rateLimitAware>
                   {loading ? "جاري إنشاء الحساب..." : "إنشاء حساب"}
                 </Button>
               </form>

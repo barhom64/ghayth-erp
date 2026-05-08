@@ -1,8 +1,10 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
+import { Clock } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown"
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0" +
@@ -46,10 +48,98 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
+  /**
+   * Task #169 — when true, the button subscribes to the global
+   * rate-limit cooldown and:
+   *   • disables itself while the cooldown is active
+   *   • replaces its children with "حاول بعد N ثانية…" (with a Clock
+   *     icon) so the applicant sees exactly when they may retry
+   * Cleared automatically when the countdown reaches zero. Mirrors the
+   * main app's Task #155 implementation.
+   */
+  rateLimitAware?: boolean
 }
 
+/**
+ * Inner variant for native <button> rendering that subscribes to the
+ * rate-limit cooldown. Rendered only when `rateLimitAware` is set,
+ * so non-opted-in buttons pay no subscription cost and aren't
+ * re-rendered every cooldown tick.
+ */
+const RateLimitAwareNativeButton = React.forwardRef<
+  HTMLButtonElement,
+  Omit<ButtonProps, "rateLimitAware" | "asChild">
+>(({ className, variant, size, disabled, children, ...props }, ref) => {
+  const cooldown = useRateLimitCooldown()
+  const cooling = cooldown.isCoolingDown
+  return (
+    <button
+      className={cn(buttonVariants({ variant, size, className }))}
+      ref={ref}
+      disabled={disabled || cooling}
+      {...props}
+    >
+      {cooling ? (
+        <>
+          <Clock className="h-3.5 w-3.5" />
+          {cooldown.label}
+        </>
+      ) : (
+        children
+      )}
+    </button>
+  )
+})
+RateLimitAwareNativeButton.displayName = "RateLimitAwareNativeButton"
+
+/**
+ * Slot variant: forwards onto the single child element. Slot doesn't
+ * accept `disabled` as a typed prop, so signal the cooled-down state
+ * via `aria-disabled` and let consumers decide how to render it.
+ */
+const RateLimitAwareSlotButton = React.forwardRef<
+  HTMLElement,
+  Omit<ButtonProps, "rateLimitAware" | "asChild">
+>(({ className, variant, size, disabled, children, ...props }, ref) => {
+  const cooldown = useRateLimitCooldown()
+  const cooling = cooldown.isCoolingDown
+  return (
+    <Slot
+      className={cn(buttonVariants({ variant, size, className }))}
+      ref={ref}
+      aria-disabled={disabled || cooling || undefined}
+      {...props}
+    >
+      {children}
+    </Slot>
+  )
+})
+RateLimitAwareSlotButton.displayName = "RateLimitAwareSlotButton"
+
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, rateLimitAware = false, ...props }, ref) => {
+    if (rateLimitAware) {
+      if (asChild) {
+        return (
+          <RateLimitAwareSlotButton
+            className={className}
+            variant={variant}
+            size={size}
+            ref={ref as React.Ref<HTMLElement>}
+            {...props}
+          />
+        )
+      }
+      return (
+        <RateLimitAwareNativeButton
+          className={className}
+          variant={variant}
+          size={size}
+          ref={ref}
+          {...props}
+        />
+      )
+    }
     const Comp = asChild ? Slot : "button"
     return (
       <Comp

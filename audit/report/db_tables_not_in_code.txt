@@ -1,0 +1,14 @@
+daily_closures
+deduction_rules
+discipline_memos
+hr_violations
+invoice_items
+privacy_consent_records
+products
+quality_checks
+stock_transfer_items
+stock_transfers
+ticket_escalations
+training_courses
+trainings
+user_shortcuts

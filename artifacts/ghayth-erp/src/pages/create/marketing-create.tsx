@@ -114,7 +114,7 @@ export default function MarketingCreate() {
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/marketing")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ الحملة"}
         </Button>
       </div>

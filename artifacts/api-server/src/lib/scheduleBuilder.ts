@@ -50,7 +50,7 @@ export async function buildEmployeeSchedule(
             st."escalationLevel", st."slaBreached"
      FROM support_tickets st
      WHERE st."companyId"=$1
-       AND st."deletedAt" IS NULL AND st.status='open'
+       AND st.status='open'
      ORDER BY st."createdAt"
      LIMIT 5`,
     [companyId]

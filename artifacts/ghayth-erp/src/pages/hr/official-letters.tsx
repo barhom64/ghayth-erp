@@ -152,7 +152,7 @@ export default function OfficialLettersPage() {
               </div>
               <div><Label>الموضوع</Label><Input className="mt-1" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} /></div>
               <div className="md:col-span-2"><Label>المحتوى</Label><Textarea className="mt-1 h-24" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} /></div>
-              <div><Button onClick={handleSubmit} disabled={!form.subject || createMut.isPending}>{createMut.isPending ? "جاري الحفظ..." : "حفظ"}</Button></div>
+              <div><Button onClick={handleSubmit} disabled={!form.subject || createMut.isPending} rateLimitAware>{createMut.isPending ? "جاري الحفظ..." : "حفظ"}</Button></div>
             </div>
           </CardContent>
         </Card>

@@ -219,7 +219,7 @@ export default function ExitCreate() {
 
         {/* أزرار الإرسال */}
         <div className="flex items-center gap-3 pt-4 border-t">
-          <Button type="submit" disabled={createMut.isPending} className="gap-1.5 bg-red-600 hover:bg-red-700">
+          <Button type="submit" disabled={createMut.isPending} className="gap-1.5 bg-red-600 hover:bg-red-700" rateLimitAware>
             <LogOut className="h-4 w-4" />
             {createMut.isPending ? "جاري الإنشاء..." : "إنشاء طلب نهاية الخدمة"}
           </Button>

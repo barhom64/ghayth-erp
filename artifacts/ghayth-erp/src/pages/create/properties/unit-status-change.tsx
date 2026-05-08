@@ -168,6 +168,7 @@ export default function UnitStatusChangePage() {
         <Button
           disabled={!selectedNewStatus || !impactData || !impactData.canProceed || confirming}
           onClick={applyStatusChange}
+          rateLimitAware
         >
           {confirming ? "جاري التطبيق..." : "تطبيق التغيير"}
         </Button>

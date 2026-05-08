@@ -207,7 +207,7 @@ export function WorkflowDefinitionsTab() {
                 </label>
               </div>
             </div>
-            <Button size="sm" onClick={handleSaveSla}><Save className="h-4 w-4 me-1" />حفظ إعدادات مستوى الخدمة</Button>
+            <Button size="sm" onClick={handleSaveSla} rateLimitAware><Save className="h-4 w-4 me-1" />حفظ إعدادات مستوى الخدمة</Button>
 
             {slas.length > 0 && (
               <div className="mt-4">
@@ -285,7 +285,7 @@ export function WorkflowDefinitionsTab() {
               </div>
             </div>
 
-            <Button onClick={handleSave}><Save className="h-4 w-4 me-1" />{editingId ? "تحديث" : "حفظ"}</Button>
+            <Button onClick={handleSave} rateLimitAware><Save className="h-4 w-4 me-1" />{editingId ? "تحديث" : "حفظ"}</Button>
           </CardContent>
         </Card>
       )}

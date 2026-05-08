@@ -438,8 +438,8 @@ custodiesRouter.post("/custodies", requirePermission("finance:create"), async (r
     let custodyAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "custody_account", "debit", "1400");
     if (resolvedAssignmentId) {
       const [empRow] = await rawQuery<{ id: number }>(
-        `SELECT e.id FROM employee_assignments ea JOIN employees e ON e.id = ea."employeeId" WHERE ea.id = $1 AND ea."companyId" = $2`,
-        [resolvedAssignmentId, scope.companyId]
+        `SELECT e.id FROM employee_assignments ea JOIN employees e ON e.id = ea."employeeId" WHERE ea.id = $1`,
+        [resolvedAssignmentId]
       );
       if (empRow) {
         custodyEmployeeId = empRow.id;

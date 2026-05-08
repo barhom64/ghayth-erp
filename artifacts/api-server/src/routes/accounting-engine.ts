@@ -90,8 +90,8 @@ export async function validateAccountingMapping(
             da.code AS "debitCode", da.name AS "debitName",
             ca.code AS "creditCode", ca.name AS "creditName"
      FROM accounting_mappings am
-     LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId" AND da."deletedAt" IS NULL AND da."deletedAt" IS NULL
-     LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId" AND ca."deletedAt" IS NULL AND ca."deletedAt" IS NULL
+     LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
+     LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
      WHERE am."companyId" = $1 AND am."operationType" = $2 AND am."isActive" = true`,
     [companyId, operationType]
   );
@@ -132,8 +132,8 @@ router.get("/accounting-mappings", requirePermission("finance:read"), async (req
               da.code AS "debitCode", da.name AS "debitName",
               ca.code AS "creditCode", ca.name AS "creditName"
        FROM accounting_mappings am
-       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId" AND da."deletedAt" IS NULL
-       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId" AND ca."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
+       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
        WHERE am."companyId" = $1
        ORDER BY am."operationType" ASC
        LIMIT 500`,
@@ -188,8 +188,8 @@ router.get("/accounting-mappings/:operationType", requirePermission("finance:rea
               da.code AS "debitCode", da.name AS "debitName",
               ca.code AS "creditCode", ca.name AS "creditName"
        FROM accounting_mappings am
-       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId" AND da."deletedAt" IS NULL
-       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId" AND ca."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
+       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
        WHERE am."companyId" = $1 AND am."operationType" = $2`,
       [scope.companyId, req.params.operationType]
     );
@@ -252,8 +252,8 @@ router.put("/accounting-mappings/:operationType", requirePermission("finance:wri
     const [updated] = await rawQuery<any>(
       `SELECT am.*, da.code AS "debitCode", da.name AS "debitName", ca.code AS "creditCode", ca.name AS "creditName"
        FROM accounting_mappings am
-       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId" AND da."deletedAt" IS NULL
-       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId" AND ca."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
+       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
        WHERE am."companyId" = $1 AND am."operationType" = $2`,
       [scope.companyId, operationType]
     );
@@ -304,7 +304,7 @@ router.get("/journal-templates", requirePermission("finance:read"), async (req, 
       t.lines = await rawQuery<any>(
         `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
          FROM journal_entry_template_lines tl
-         LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."deletedAt" IS NULL
+         LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId"
          WHERE tl."templateId" = $1
          ORDER BY tl."sortOrder", tl.id LIMIT 500`,
         [t.id]
@@ -352,7 +352,7 @@ router.post("/journal-templates", requirePermission("finance:write"), async (req
     template.lines = await rawQuery<any>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
-       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId"
        WHERE tl."templateId" = $1 ORDER BY tl."sortOrder" LIMIT 500`,
       [result]
     );
@@ -406,7 +406,7 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
     template.lines = await rawQuery<any>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
-       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId"
        WHERE tl."templateId" = $1 ORDER BY tl."sortOrder" LIMIT 500`,
       [id]
     );

@@ -2,7 +2,6 @@ import express, { type Express, type Request, type Response, type NextFunction }
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
-import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 import { randomUUID } from "node:crypto";
 import router from "./routes/index.js";
@@ -68,9 +67,15 @@ if (process.env.CORS_ORIGINS) {
 if (process.env.CORS_ORIGIN) {
   process.env.CORS_ORIGIN.split(",").forEach(s => allowedOrigins.add(s.trim().replace(/\/$/, "")));
 }
-if (allowedOrigins.size === 0 && process.env.NODE_ENV === "development") {
+if (process.env.NODE_ENV !== "production") {
+  // In dev, the Replit proxy serves apps on http(s)://localhost (port 80/443),
+  // so the browser sends Origin: http://localhost for same-origin XHRs.
+  // Allow common dev origins so internal calls (e.g. activity tracking) don't 500.
+  allowedOrigins.add("http://localhost");
+  allowedOrigins.add("https://localhost");
   allowedOrigins.add("http://localhost:3000");
   allowedOrigins.add("http://localhost:5173");
+  allowedOrigins.add("http://localhost:80");
 }
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -116,26 +121,19 @@ app.use(eventBusMiddleware);
 app.use(auditMiddleware);
 app.use(activityTrackerMiddleware());
 
-const globalLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: process.env.NODE_ENV === "production" ? 100 : 2000,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة لاحقاً" },
-  validate: { ip: false, trustProxy: false },
-  skip: (req) => req.path === "/api/health",
-});
-app.use("/api", globalLimiter);
-
-const umrahLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "تم تجاوز الحد الأقصى لطلبات العمرة. يرجى المحاولة لاحقاً" },
-  validate: { ip: false, trustProxy: false },
-});
-app.use("/api/umrah", umrahLimiter);
+// NOTE: A blanket per-IP `globalLimiter` previously sat here on `/api`.
+// It violated the per-user rate-limit policy because every authenticated
+// request — admin or not, on a shared proxy IP or not — was counted
+// against the same per-IP bucket. The replacement lives in routes/index.ts:
+//  - `anonymousIpLimiter` is mounted on the truly anonymous routes
+//    (/api/auth, /api/portal, /api/public, /api/careers, /api/pdpl) and
+//    gives those endpoints the same anonymous-abuse protection.
+//  - `globalUserLimiter` is mounted right after authMiddleware as a
+//    catch-all per-user budget for every authenticated route, so admins
+//    on a shared IP aren't lumped together.
+//
+// The umrah-specific limiter that previously lived here as well was
+// moved into routes/index.ts for the same reason.
 
 app.get("/api/health", async (_req, res) => {
   try {

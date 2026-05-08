@@ -99,7 +99,7 @@ async function checkOverdueInvoicesNoCollection(companyId: number): Promise<Audi
      WHERE i."companyId" = $1
        AND i.status NOT IN ('paid','cancelled')
        AND i."dueDate" < CURRENT_DATE - INTERVAL '7 days'
-       AND i."deletedAt" IS NULL`,
+       AND i."overduePhase" IS NULL`,
     [companyId]
   );
   return rows.map((r: any) => ({

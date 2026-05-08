@@ -173,7 +173,9 @@ export default function VehicleDetail() {
     </div>
   );
 
-  const overview = (
+  const overview = !vehicle ? (
+    <div className="text-sm text-muted-foreground p-4">جاري التحميل...</div>
+  ) : (
     <div className="space-y-4">
       {editing && (
         <Card>

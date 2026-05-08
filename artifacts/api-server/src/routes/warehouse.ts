@@ -752,7 +752,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
       logger.error(glOuterErr, `[warehouse-gl] unexpected error posting GL for movement ${insertId}:`);
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1`, [insertId]);
     if (row) (row as any).journalEntryId = journalEntryId;
 
     // Bus emission — closes the dead listener in eventListeners.ts:261 so the
@@ -806,7 +806,7 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
   const reorderQty = Math.max(Number(product.maxStock) - Number(product.currentStock), Number(product.minStock) * 2, 1);
 
   const preferredSupplier = await rawQuery<any>(
-    `SELECT s.* FROM suppliers s JOIN purchase_requests pr ON pr."supplierId"=s.id WHERE pr."companyId"=$1 ORDER BY pr."createdAt" DESC LIMIT 1`,
+    `SELECT s.* FROM suppliers s JOIN purchase_requests pr ON pr."supplierId"=s.id WHERE pr."companyId"=$1 AND s."deletedAt" IS NULL ORDER BY pr."createdAt" DESC LIMIT 1`,
     [companyId]
   );
   const supplierId = preferredSupplier[0]?.id || null;
@@ -960,7 +960,7 @@ router.post("/categories", requirePermission("warehouse:create"), async (req, re
       `INSERT INTO warehouse_categories ("companyId",name,"parentId") VALUES ($1,$2,$3)`,
       [scope.companyId, b.name.trim(), b.parentId || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_categories WHERE id=$1`, [insertId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1219,7 +1219,7 @@ router.get("/inventory-counts", requirePermission("warehouse:read"), async (req,
     const rows = await rawQuery<any>(
       `SELECT ic.*, e.name AS "conductedByName"
        FROM inventory_counts ic
-       LEFT JOIN employees e ON e.id=ic."conductedBy"
+       LEFT JOIN employees e ON e.id=ic."conductedBy" AND e."deletedAt" IS NULL
        WHERE ${conditions.join(" AND ")}
        ORDER BY ic."countDate" DESC LIMIT 500`,
       params

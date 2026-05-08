@@ -202,7 +202,7 @@ export default function RecruitmentCreate() {
       <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات الوظيفة (وصف وظيفي، نماذج)" />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/hr/recruitment")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.title || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!form.title || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "نشر الوظيفة"}
         </Button>
       </div>

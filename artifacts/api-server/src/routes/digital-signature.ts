@@ -145,10 +145,10 @@ router.get("/logs", requirePermission("documents:write"), async (req, res: Respo
   try {
     const scope = (req as any).scope!;
     const { entityType, entityId } = req.query as any;
-    const conditions = [`"companyId"=$1`];
+    const conditions = [`dsl."companyId"=$1`];
     const params: any[] = [scope.companyId];
-    if (entityType) { params.push(entityType); conditions.push(`"entityType"=$${params.length}`); }
-    if (entityId) { params.push(String(entityId)); conditions.push(`"entityId"=$${params.length}`); }
+    if (entityType) { params.push(entityType); conditions.push(`dsl."entityType"=$${params.length}`); }
+    if (entityId) { params.push(String(entityId)); conditions.push(`dsl."entityId"=$${params.length}`); }
     const rows = await rawQuery<any>(
       `SELECT dsl.*, e.name AS "userName" FROM digital_signature_logs dsl LEFT JOIN employees e ON e.id=dsl."userId" WHERE ${conditions.join(" AND ")} ORDER BY dsl."createdAt" DESC LIMIT 100`,
       params

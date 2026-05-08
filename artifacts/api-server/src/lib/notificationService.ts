@@ -64,6 +64,11 @@ const TYPE_CHANNEL_MAP: Record<string, NotificationChannel[]> = {
   kpi: ["in_app"],
   maintenance: ["in_app", "whatsapp"],
   contract: ["in_app", "email"],
+  // Security-relevant infra degradations: alert overnight via email too
+  // (Task #177). The cron caller (cronScheduler.rateLimitFallbackAlertCheck)
+  // already gates re-alerts behind a 30m cooldown, so this won't flood.
+  rate_limit_fallback: ["in_app", "email"],
+  rate_limit_recovered: ["in_app", "email"],
   default: ["in_app"],
 };
 

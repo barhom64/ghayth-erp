@@ -72,10 +72,10 @@ export default function TasksCreate() {
     subtitle: item.category || item.email || item.phone || undefined,
   }));
 
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
-  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -196,7 +196,7 @@ export default function TasksCreate() {
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/tasks")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.title || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!form.title || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>

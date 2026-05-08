@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { notifyRateLimited, RateLimitError } from "./rate-limit-toast";
 
 function getToken() {
   return localStorage.getItem("portal_token");
@@ -28,6 +29,10 @@ export async function apiFetch<T = any>(path: string, options?: RequestInit): Pr
       throw new Error("انقطع الاتصال بالخادم، يرجى التحقق من الإنترنت والمحاولة مجدداً");
     }
     throw networkErr;
+  }
+  if (res.status === 429) {
+    const seconds = notifyRateLimited(res);
+    throw new RateLimitError(seconds);
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "خطأ في الخادم" }));

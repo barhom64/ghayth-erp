@@ -181,7 +181,7 @@ export default function PayrollCreate() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/hr/payroll")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.month || createMut.isPending} size="lg">
+        <Button onClick={handleSubmit} disabled={!form.month || createMut.isPending} size="lg" rateLimitAware>
           {createMut.isPending ? "جاري التشغيل..." : "تشغيل مسير الرواتب"}
         </Button>
       </div>

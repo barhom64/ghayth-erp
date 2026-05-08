@@ -1,3 +1,5 @@
+import { notifyRateLimited, RateLimitError } from "./rate-limit-toast";
+
 const API_BASE = "/api/careers";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -11,6 +13,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
     headers: { ...headers, ...(options?.headers as Record<string, string>) },
   });
+
+  if (res.status === 429) {
+    const seconds = notifyRateLimited(res);
+    throw new RateLimitError(seconds);
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

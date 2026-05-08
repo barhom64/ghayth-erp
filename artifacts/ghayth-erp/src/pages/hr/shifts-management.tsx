@@ -117,7 +117,7 @@ export default function ShiftsManagementPage() {
                     </Select>
                   </div>
                   <div><Label>من تاريخ</Label><div className="mt-1"><DatePicker value={assignForm.startDate} onChange={(v) => setAssignForm({ ...assignForm, startDate: v })} /></div></div>
-                  <div className="flex items-end"><Button onClick={handleAssign} disabled={!assignForm.shiftId || assignMut.isPending}>تعيين</Button></div>
+                  <div className="flex items-end"><Button onClick={handleAssign} disabled={!assignForm.shiftId || assignMut.isPending} rateLimitAware>تعيين</Button></div>
                 </div>
               </CardContent>
             </Card>

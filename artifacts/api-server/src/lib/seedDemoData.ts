@@ -350,7 +350,7 @@ export async function seedDemoData(): Promise<void> {
       const dueDate = new Date(today);
       dueDate.setDate(dueDate.getDate() + (i * 7) - 20);
       const total = 5000 + i * 3000;
-      const invStatuses = ["paid", "pending_approval", "overdue", "partial", "draft", "paid", "sent", "sent"];
+      const invStatuses = ["paid", "pending_approval", "overdue", "partially_paid", "draft", "paid", "sent", "sent"];
       const subtotal = roundTo2(total / 1.15);
       const vatAmount = total - subtotal;
 
@@ -361,7 +361,7 @@ export async function seedDemoData(): Promise<void> {
         [companyId, clientIds[i], ref,
           `فاتورة مبيعات - ${clientData[i]?.name || "عميل"}`,
           subtotal, total, vatAmount,
-          invStatuses[i] === "paid" ? total : invStatuses[i] === "partial" ? roundTo2(total * 0.4) : 0,
+          invStatuses[i] === "paid" ? total : invStatuses[i] === "partially_paid" ? roundTo2(total * 0.4) : 0,
           invStatuses[i],
           toDateISO(dueDate)]
       );

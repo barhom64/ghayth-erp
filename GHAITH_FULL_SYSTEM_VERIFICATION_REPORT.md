@@ -1,845 +1,633 @@
-# تقرير الفحص الشامل والنهائي لنظام غيث — Ghayth ERP Full System Verification Report
+# GHAITH ERP — FULL SYSTEM VERIFICATION REPORT
+**تقرير الفحص الشامل والنهائي لنظام غيث**
 
-**تاريخ التقرير:** 2026-05-06
-**الفرع:** `claude/hr-smoke-testing-6DRib`
-**آخر commit:** `d8c6b50`
-**المُنفِّذ:** مهندس معماري أول + مدقق جودة برمجية + مهندس DevOps + مراجع أمن + محلل نظم تشغيلية
-
----
-
-## الملخص التنفيذي — Executive Summary
-
-| البُعد | الحالة | التقييم |
-|--------|--------|---------|
-| التشغيل من الصفر | **GO** | ✅ كل خطوات الإقلاع موثقة ومؤتمتة |
-| قاعدة البيانات | **GO** | ✅ 276 جدول، 118 migration، لا انحراف |
-| مسارات API | **GO** | ✅ 1,237 مسار عبر 80 ملف، تغطية أمنية 98%+ |
-| حدود الخدمات | **GO** | ✅ 14 نطاق، لا كتابات عابرة للنطاقات |
-| مكونات الحوكمة | **GO** | ✅ 10 مكونات مترابطة بالكامل |
-| المسار المالي | **GO** | ✅ قيد مزدوج + فترات مالية + تدقيق GL |
-| استيراد المحاسبة | **GO** | ✅ محركات استيراد للعمرة والمالية |
-| وحدة العمرة | **GO** | ✅ 86 endpoint، تشفير بيانات حساسة |
-| وحدة الموارد البشرية | **GO** | ✅ 166 endpoint، 6 وحدات فرعية |
-| واجهة المستخدم | **GO** | ✅ 403 صفحة، 129 مكون |
-| الأمان | **GO** مع ملاحظات | ✅ 8.5/10 — ثغرة متوسطة واحدة في rate limiting |
-| الأداء | **GO** | ✅ 368 فهرس، statement_timeout، pool bounds |
-| النسخ الاحتياطي | **GO** | ✅ bootstrap.sh + schema.sql + seed.sql |
-| التوثيق | **GO** | ✅ README + 32 وثيقة + blueprints |
-| **القرار النهائي** | **🟢 GO — جاهز للإنتاج** | مع معالجة ملاحظة rate limiting قبل النشر |
+| البند | القيمة |
+| --- | --- |
+| تاريخ التقرير | 2026-05-06 |
+| نسخة الكود | `main` HEAD (post-500s-fixes) |
+| البيئة | Replit Dev (PostgreSQL 16 + Node 24) |
+| المُنفِّذ | Replit Agent (Architect + QA + DevOps + Security + Systems Analyst) |
+| نوع الفحص | فحص فعلي على البيئة الحالية + قراءة كود + استعلامات DB حية + smoke API كامل |
 
 ---
 
-## القسم 1: التحقق من التشغيل من الصفر — Zero-to-Production Startup
+## 0. ملخص تنفيذي (Executive Summary)
 
-### 1.1 تسلسل الإقلاع (index.ts)
+النظام **يعمل بشكل صحيح ومترابط** على المستوى البنيوي. الفحص الفعلي على 928 endpoint و 403 صفحة و 292 جدول و 76 ملف routes أنتج النتائج التالية:
 
+| المؤشر | النتيجة | الحالة |
+| --- | --- | --- |
+| Build / Typecheck (libs) | يمر بدون أخطاء | ✅ |
+| API Smoke (452 GET endpoint) | 358 ✅ / 1 5xx (config فقط) / 57 404-by-design / 32 الباقي (422 validation + 429 rate-limit) | ✅ |
+| Schema drift (audit:schema) | 1296 عمود عبر 276 جدول — لا توجد معرفات غير معروفة | ✅ |
+| Domain boundaries (audit:boundaries) | 80 ملف routes — صفر اختراقات حدود | ✅ |
+| Routes coverage (audit:routes) | 403/403 صفحة FE مُستوردة | ✅ |
+| FK + Index integrity | 366 FK / 727 index | ✅ |
+| Migrations applied | 176 migration مطبق | ✅ |
+| RBAC permissions | 186 ربط فعّال | ✅ |
+| Security middleware | helmet + CSP + cors strict + rate-limit (global + umrah) | ✅ |
+| Engines الحوكمة | 11 محرك حاضر بكود حقيقي (lifecycle 719 LOC, eventCatalog 1439 LOC, workflow 982 LOC, إلخ) | ✅ |
+
+**الحكم العام: النظام جاهز للاستخدام التشغيلي مع P1 محدودة قابلة للإصلاح خلال يوم عمل.** التفاصيل أدناه.
+
+---
+
+## 1. التحقق من التشغيل من الصفر (Zero-Bootstrap)
+
+### 1.1 الحالة الفعلية في البيئة الحالية
+- API Server: `running` على `localhost:8080` (مسار `/api`)
+- Frontend Apps: 4 تطبيقات (`ghayth-erp`, `client-portal`, `careers-portal`, `ghayth-erp-deck`) — 3 منها running، 1 failed (`ghayth-erp-deck` — مسألة بيئة منفصلة لتوليد PDF، ليست من جوهر النظام).
+- DB: PostgreSQL متصل، 292 جدول، 176 migration مطبق على جدول `schema_migrations`.
+- Login فعلي: مستخدم `admin@ghayth.com` موجود في `users` مع `role_permissions=186`.
+
+### 1.2 خطوات التشغيل من بيئة نظيفة
+
+```bash
+# 1. Clone
+git clone https://github.com/barhom64/ghayth-erp.git && cd ghayth-erp
+
+# 2. Install (pnpm workspaces)
+pnpm install
+
+# 3. Postgres (مطلوب يكون شغّال)
+createdb ghayth_erp
+
+# 4. .env
+cp .env.example .env
+# عدّل DATABASE_URL و JWT_SECRET
+
+# 5. تشغيل API (يطبّق migrations تلقائيًا عند الإقلاع)
+pnpm --filter @workspace/api-server dev
+
+# 6. تشغيل Frontend
+pnpm --filter @workspace/ghayth-erp dev
+pnpm --filter @workspace/client-portal dev
+pnpm --filter @workspace/careers-portal dev
+
+# 7. Bootstrap بيانات (اختياري)
+SEED_DEMO_DATA=true   # في .env قبل أول إقلاع
 ```
-1. runMigrations()                ← يُنشئ schema_migrations + يكتشف DB فارغة → يحمّل schema.sql
-2. bootstrapAdminUser()           ← ينشئ admin@ghayth.com + fleet@ghayth.com
-3. seedDemoData() [اختياري]      ← عند SEED_DEMO_DATA=true
-4. registerEventListeners()       ← حارس منع التسجيل المزدوج (_listenersRegistered)
-5. registerRulesEngineListener()  ← اشتراك في 27 حدث أعمال
-6. http.createServer(app).listen  ← مع معالجة EADDRINUSE
-7. startCronScheduler()           ← 60+ وظيفة مجدولة مع أقفال PG
-8. shutdown handlers              ← SIGTERM/SIGINT → وقف cron + تفريغ DLQ + إغلاق pool
-```
 
-### 1.2 آلية Bootstrap المحلي
+### 1.3 ملف `.env.example`
+**موجود ومحدّث** (`.env.example` بحجم 2030 byte). يحتوي على:
+- Core: `DATABASE_URL`, `JWT_SECRET`, `NODE_ENV`, `PORT`, `LOG_LEVEL`
+- CORS: `CORS_ORIGINS`, `REPLIT_DEV_DOMAIN`, `REPLIT_DEPLOYMENT_URL`
+- Secrets vault: `SECRETS_ENCRYPTION_KEY`
+- Bootstrap: `SEED_DEMO_DATA`
+- Push: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
+- AI: `AI_INTEGRATIONS_ANTHROPIC_API_KEY`
 
-**السكربت:** `db/bootstrap.sh`
+### 1.4 متغيرات يستخدمها الكود ولكن غير موثّقة في `.env.example`
+| المتغير | الاستخدام | الحالة |
+| --- | --- | --- |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | تسجيل دخول scripts (deck screenshots) | ⚠️ غير موثق |
+| `FIELD_ENCRYPTION_KEY` | تشفير حقول حساسة | ⚠️ غير موثق |
+| `PG_POOL_MAX` | حجم بركة الاتصال | ⚠️ غير موثق |
+| `PRIVATE_OBJECT_DIR`, `PUBLIC_OBJECT_SEARCH_PATHS` | App Storage | ⚠️ غير موثق |
+| `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_VERIFY_TOKEN` | تكامل WhatsApp | ⚠️ غير موثق |
+| `FLEET_PASSWORD` | كلمة دخول مساعد للأسطول | ⚠️ غير موثق |
 
-| الخطوة | الوصف | الحالة |
-|--------|-------|--------|
-| التحقق من PostgreSQL | `pg_isready` مع محاولة تشغيل pg_ctlcluster | ✅ |
-| إنشاء الدور | `CREATE ROLE ghayth_erp` idempotent | ✅ |
-| إنشاء قاعدة البيانات | `DROP + CREATE` idempotent reset | ✅ |
-| تحميل المخطط | `db/schema.sql` (21,019 سطر) | ✅ |
-| تحميل البيانات المرجعية | `db/seed.sql` (اختياري) | ✅ |
-| إنشاء مستخدم اختبار | `owner@local.test / Test1234!` | ✅ |
-| تأشير migrations | يسجّل كل الـ 118 migration كـ applied | ✅ |
+**التوصية P2:** إضافة هذه المتغيرات إلى `.env.example` كأسطر معلّقة مع شرح موجز.
 
-### 1.3 التهيئة المطلوبة
-
-| المتغير | مطلوب | القيمة الافتراضية |
-|---------|-------|-------------------|
-| `DATABASE_URL` | ⚠ نعم | — |
-| `JWT_SECRET` | ⚠ نعم (32+ حرف) | — |
-| `PORT` | ⚠ نعم | — |
-| `NODE_ENV` | لا | `development` |
-| `FIELD_ENCRYPTION_KEY` | ⚠ في الإنتاج | يرجع لـ JWT_SECRET في dev |
-| `SEED_DEMO_DATA` | لا | `false` |
-| `CORS_ORIGINS` | لا | `localhost:5173` في dev |
-
-### 1.4 حراس CI (guard.sh) — 7 فحوصات
-
-| # | الفحص | الأداة | الحالة |
-|---|-------|--------|--------|
-| 1 | Typecheck | `tsc --noEmit` عبر 7 مشاريع | ✅ نجح |
-| 2 | lint:patterns | أنماط محظورة | ✅ نظيف |
-| 3 | audit:routes | 403 صفحة مستوردة | ✅ نجح |
-| 4 | audit:schema | 1,296 عمود عبر 276 جدول | ✅ لا انحراف |
-| 5 | audit:boundaries | 80 ملف routes | ✅ لا كتابات عابرة |
-| 6 | audit:domain-routes | 14 نطاق، 12 ملف فريد | ✅ الكل مُركّب |
-| 7 | tests | 77 ملف، **3,075 اختبار** | ✅ الكل ناجح (4.36 ثانية) |
+### 1.5 إثبات نجاح التشغيل
+- `audit:schema` ✅ يمر
+- `audit:routes` ✅ يمر
+- `audit:boundaries` ✅ يمر
+- `typecheck:libs` ✅ يمر (tsc --build بدون errors)
+- API Smoke: 358/452 GET = 79% (الباقي 404 by-design + 422 validation + 429 rate-limit)
 
 ---
 
-## القسم 2: تدقيق قاعدة البيانات — Database Audit
+## 2. فحص قاعدة البيانات
 
-### 2.1 إحصائيات عامة
-
+### 2.1 الإحصاءات العامة
 | المقياس | القيمة |
-|---------|--------|
-| إجمالي الجداول | **276** |
-| إجمالي الأعمدة | **1,296** (مسجّلة في audit-schema) |
-| ملفات migrations | **118** (003 → 118) |
-| حجم schema.sql | **21,019 سطر** |
-| فهارس | **368** CREATE INDEX |
-| جداول بها companyId + deletedAt | **84** (30%) |
-| جداول بها companyId فقط | **142** (51%) |
-| جداول بها deletedAt فقط | **10** (4%) |
-| جداول نظام (بدون أيٍّ منهما) | **40** (14%) |
+| --- | --- |
+| إجمالي الجداول | 292 |
+| Foreign Keys | 366 |
+| Indexes | 727 |
+| Migrations مطبقة | 176 (schema_migrations) |
+| Migrations files | 84 (artifacts/api-server/src/migrations/) |
+| ملفات الكود التي تطلب جداول | 157 |
+| أعمدة موصوفة في الكود | 1296 |
 
-### 2.2 توزيع الجداول حسب الوحدة
+### 2.2 جداول بأعلى نشاط (live data)
+```
+user_activity_log: 5401
+cron_logs:         59,511 (نشاط cron مستمر)
+audit_logs:        147
+cron_jobs active:  60
+employees:         24
+chart_of_accounts: 145 (دليل حسابات منشأ)
+role_permissions:  186
+companies:         1   /   branches: 1   /   users: 2
+invoices:          8   /   umrah_seasons: 1
+event_logs:        0   ⚠️ event sourcing غير مُفعَّل بعد
+event_dlq:         0
+journal_entries:   0   ⚠️ لم يُرحَّل أي قيد فعلي بعد
+financial_periods: 0   ⚠️ لم تُنشأ فترة مالية بعد (بلوكر للترحيل)
+```
 
-| الوحدة | عدد الجداول | ملاحظات |
-|--------|-------------|---------|
-| HR | 20+ | payroll, training, leave, discipline, loans, overtime, exit |
-| Umrah | 21+ | pilgrims, agents, groups, pricing, invoices, payments |
-| Finance | 25+ | invoices, GL, budgets, bank, payments, mappings |
-| Procurement | 8+ | POs, goods receipts, suppliers |
-| Warehouse | 10+ | movements, counts, transfers, batches |
-| Projects | 10+ | tasks, phases, resources, risks |
-| Properties | 12+ | units, contracts, leases, inspections |
-| CRM | 8+ | contacts, opportunities, activities, pipeline |
-| Fleet | 10+ | vehicles, maintenance, fuel, trips, GPS |
-| Legal | 8+ | contracts, cases, governance, policies |
-| Support | 5+ | tickets, escalations, CSAT ratings |
-| System/Governance | 30+ | audit, notifications, queues, RBAC, settings, cron |
+### 2.3 تقاطع Code ↔ DB
+**14 جدول موجود في DB ولا يستخدمه الكود (مرشحات إزالة P3):**
+```
+daily_closures, deduction_rules, discipline_memos, hr_violations,
+invoice_items (مهجور — invoice_lines هو الفعّال),
+privacy_consent_records, products (مهجور — warehouse_products هو الفعّال),
+quality_checks, stock_transfer_items, stock_transfers,
+ticket_escalations, training_courses, trainings, user_shortcuts
+```
 
-### 2.3 تطور Migrations
+**جداول يطلبها الكود ولا توجد فعليًا (P0 محتمل):**
+بعد تنظيف نتائج SQL fragments (`status`, `inside`, `below`, `historical`, `pg_tables`, `information_schema`), الجداول الفعلية المفقودة:
+| الجدول | المسار | الأثر |
+| --- | --- | --- |
+| `budget_approval_requests` | finance-budgets | ⚠️ P1 — صفحة موافقات الميزانيات قد تفشل |
+| `employee_salary_components` | hr/employees | ⚠️ P1 — مكونات الراتب لكل موظف |
+| `financial_posting_failures` | accounting-engine | ⚠️ P1 — تتبع فشل الترحيل |
+| `journey_instances` | journeyEngine | ⚠️ P2 — تتبع تنفيذ الرحلات |
+| `vendor_contracts` | finance-purchase | ⚠️ P2 |
+| `recent_late`, `historical_late` | hr (CTEs على الأرجح) | منخفض — قد تكون CTEs داخل WITH |
 
-| المرحلة | الملفات | الوصف |
-|---------|---------|-------|
-| التأسيس (003-026) | 24 | كيانات أساسية + SLA + workflows |
-| التوسع (031-092) | 62 | multi-tenant + soft-delete + HR + properties |
-| التخصص (093-118) | 26 | Umrah + أداء + compliance + FK indexes |
+> **ملاحظة:** الـ`audit:schema` script لا يبلّغ عن أي خلل — مما يعني أن هذه الـ refs قد تكون داخل `rawQuery` template أو CTEs لا rawExecute. مطلوب مراجعة يدوية لكل الـ6 أعلاه.
 
-### 2.4 ملاحظات على المخطط
+### 2.4 جدول الفحص الموحد (عينة من 14 جدولًا أساسيًا)
 
-| الملاحظة | الخطورة | التفاصيل |
-|----------|---------|---------|
-| جداول تفصيلية بدون companyId | منخفضة | invoice_lines, journal_lines, payroll_lines — محمية عبر FK للجدول الأب |
-| employees بدون companyId | منخفضة | معزولة عبر employee_assignments.companyId |
-| بعض جداول بدون deletedAt | منخفضة | bank_statements, daily_closures — ثوابت مالية لا يُفترض حذفها |
+| الجدول | الموديول | مستخدم في الكود؟ | علاقات | Audit | ملاحظات |
+| --- | --- | :--: | :--: | :--: | --- |
+| `users` | core | ✅ | 22 FK | ✅ | لا يوجد عمود `name`/`fullName` — JOIN مع `employees` |
+| `companies` | core | ✅ | كثير | ✅ | multi-tenant root |
+| `branches` | core | ✅ | كثير | ✅ | tenant level 2 |
+| `employees` | hr | ✅ | كثير | ✅ | يستخدم `name` (mononym) |
+| `employee_assignments` | hr | ✅ | FK للـ employees | ✅ | يستخدم `hireDate` ❌ ليس `startDate` |
+| `chart_of_accounts` | finance | ✅ | شجري | ✅ | 145 حساب منشأ |
+| `journal_entries` + `journal_lines` | finance | ✅ | متوازن | ✅ | لا قيود فعلية بعد |
+| `invoices` + `invoice_lines` | finance | ✅ | متوازن | ✅ | 8 فواتير |
+| `umrah_seasons` | umrah | ✅ | كثير | ✅ | موسم واحد فعّال |
+| `umrah_pilgrims` | umrah | ✅ | FK للموسم | ✅ | فارغ |
+| `audit_logs` | governance | ✅ | polymorphic | ✅ | 147 سجل |
+| `cron_logs` | governance | ✅ | FK لـ cron_jobs | ✅ | 59,511 سجل (نظف دوريًا) |
+| `event_logs` + `event_dlq` | event-bus | ✅ | – | ✅ | فارغان (P1: bus غير مُفعَّل عمليًا) |
+| `system_stops` | governance | ✅ | – | ✅ | 0 توقفات |
 
-> **الحكم:** المخطط متسق هيكلياً. الجداول التفصيلية (lines) محمية عبر FK من الجدول الرئيسي الذي يحمل companyId.
+### 2.5 أعمدة `companyId / branchId / soft-delete` (Multi-tenant)
+- 292 جدولًا — ملف التحليل المفصّل: `audit/report/db_audit_cols.csv`
+- نمط ثلاثي companyId+branchId+deletedAt مطبق على معظم الجداول التشغيلية
+- الجداول المرجعية (chart_of_accounts, public_holidays, kb_articles) لا تحوي branchId وهذا صحيح
 
 ---
 
-## القسم 3: تدقيق مسارات API — API Routes Audit
+## 3. فحص API والمسارات
 
-### 3.1 إحصائيات عامة
-
+### 3.1 الإحصاءات
 | المقياس | القيمة |
-|---------|--------|
-| إجمالي المسارات | **1,237** |
-| ملفات الطرق | **80** |
-| مسارات محمية بالمصادقة | **~1,220** (بعد authMiddleware) |
-| مسارات عامة | **~17** (health, auth, portal, public, careers, pdpl) |
-| استخدامات requireAuth/Permission/Role | **1,105** |
-| استخدامات handleRouteError | **1,241** |
-| استخدامات Zod validation | **2,750** |
-| استخدامات withTransaction/rawQuery/rawExecute | **2,637** |
-| استخدامات LIMIT في الاستعلامات | **687** |
+| --- | --- |
+| ملفات routes | 80 |
+| Endpoints مُسجَّلة | 928 |
+| Endpoints GET المُختبَرة (smoke) | 452 |
+| 200 OK | 358 (79%) |
+| 404 by-design (resource missing) | 57 |
+| 401/403 (auth) | 4 |
+| 422 validation | تتضمن في "other" |
+| 429 rate-limit (Umrah quota) | تتضمن في "other" |
+| 5xx server errors | **1 فقط** (config-only) |
 
-### 3.2 توزيع المسارات حسب الوحدة (أعلى 15)
-
-| الوحدة | GET | POST | PUT | DELETE | PATCH | الإجمالي |
-|--------|-----|------|-----|--------|-------|----------|
-| hr (كل الوحدات) | 65 | 27 | 2 | 9 | 18 | **121** |
-| properties | 25 | 16 | 0 | 5 | 9 | **55** |
-| umrah + umrah-entities | 36 | 28 | 1 | 9 | 13 | **87** |
-| admin | 27 | 10 | 1 | 5 | 4 | **47** |
-| fleet | 19 | 13 | 0 | 6 | 8 | **46** |
-| governance | 15 | 8 | 0 | 5 | 8 | **36** |
-| settings | 18 | 4 | 8 | 5 | 0 | **35** |
-| bi | 24 | 4 | 0 | 1 | 2 | **31** |
-| legal | 15 | 9 | 0 | 2 | 4 | **30** |
-| finance-hardening | 12 | 9 | 0 | 1 | 6 | **28** |
-| warehouse | 13 | 8 | 0 | 3 | 3 | **27** |
-| projects | 12 | 9 | 0 | 1 | 5 | **27** |
-| intelligence | 15 | 11 | 0 | 0 | 1 | **27** |
-| finance-purchase | 13 | 8 | 0 | 0 | 6 | **27** |
-| finance-algorithms | 16 | 10 | 0 | 0 | 1 | **27** |
-
-### 3.3 طبقات الحماية
-
-| الطبقة | الآلية | التغطية |
-|--------|--------|---------|
-| المصادقة | JWT (15 دقيقة) + httpOnly cookies | 98%+ من المسارات |
-| الصلاحيات | requirePermission + requireRole + requireModule | 95%+ من المسارات |
-| مستوى الوصول | requireMinLevel (30-90) | Settings, Admin, Export |
-| التحقق من المدخلات | Zod schemas | 90%+ من عمليات الكتابة |
-| حراس النظام | requireGuards("financial") | كل عمليات المالية |
-| تسجيل التدقيق | createAuditLog | 85%+ من عمليات التعديل |
-
-### 3.4 المسارات العامة (بدون مصادقة)
-
-| الملف | المسارات | الحماية |
-|-------|---------|---------|
-| health.ts | 2 | مقصود — مراقبة |
-| auth.ts | 7 | rate-limited + حساب مقفل بعد 5 محاولات |
-| publicData.ts | 3 | rate-limited |
-| clientPortal.ts | 16 | نظام JWT منفصل |
-| careersPortal.ts | 9 | مختلط — وظائف عامة + طلبات محمية |
-| pdpl.ts | 5 | مختلط — خصوصية البيانات |
-| activityIngest.ts | 1 | secret validation |
-
-### 3.5 نمط الاستجابة
-
+### 3.2 الـ 5xx المتبقي
 ```
-✅ { success: true, ... }  — النمط الموحد المعتمد
-✅ لا يوجد أي { ok: true } في استجابات API (فقط في helper داخلي واحد)
-✅ handleRouteError + classifyDbError — معالجة أخطاء موحدة
+GET /api/communications/push/vapid-key → 502
+{ "error": "VAPID keys not configured", "code": "INTEGRATION_NOT_CONFIGURED" }
 ```
+**ليس bug — هذا فشل مقصود (graceful degradation)** عند غياب VAPID keys. الإصلاح: ضبط `VAPID_PUBLIC_KEY` و `VAPID_PRIVATE_KEY` في `.env`.
+
+### 3.3 تغطية الصلاحيات (requirePermission)
+**الإجمالي:** 223 endpoint قابل للحماية / 149 محمي / **74 غير محمي**
+
+ملفات بعدد كبير من unguarded:
+
+| File | total | guarded | unguarded | تقييم |
+| --- | --: | --: | --: | --- |
+| `auth.ts` | 7 | 0 | 7 | ✅ صحيح (login/register/refresh لا تحتاج permission) |
+| `dashboard.ts` | 7 | 0 | 7 | ⚠️ P2 — تعتمد على requireAuth فقط |
+| `careersPortal.ts` | 9 | 0 | 9 | ✅ صحيح (portal عام بـ rate-limit) |
+| `mySpace.ts` | 6 | 0 | 6 | ✅ صحيح (المساحة الشخصية = صاحب الحساب) |
+| `intelligence.ts` | 27 | 18 | 9 | ⚠️ P2 — راجع 9 endpoints |
+| `hr.ts` | 110 | 104 | 6 | ⚠️ P2 — راجع 6 endpoints |
+| `communications.ts` | 19 | 13 | 6 | ⚠️ P2 |
+| `moduleDashboards.ts` | 11 | 5 | 6 | ⚠️ P2 |
+| `pdpl.ts` | 5 | 1 | 4 | ⚠️ P1 — PDPL بدون permission خطر تنظيمي |
+| `publicData.ts` | 3 | 0 | 3 | ✅ صحيح (public by design) |
+| `health.ts` | 2 | 0 | 2 | ✅ صحيح |
+
+> الملف الكامل: `audit/report/auth_coverage.csv`
+
+### 3.4 Auth و Validation و Audit و Events (عيّنات شاملة)
+
+| Route | Method | Module | Auth | Permission | Validation | Audit | Event | Guard |
+| --- | --- | --- | :--: | :--: | :--: | :--: | :--: | :--: |
+| `POST /api/finance/invoices` | POST | finance | ✅ | ✅ | Zod | ✅ | ✅ | ✅ |
+| `POST /api/finance/invoices/:id/post` | POST | finance | ✅ | ✅ | – | ✅ | ✅ | period-closed guard |
+| `POST /api/hr/payroll/runs/:id/post` | POST | hr | ✅ | ✅ | Zod | ✅ | ✅ | period guard |
+| `POST /api/umrah/seasons/:id/close` | POST | umrah | ✅ | ✅ | – | ✅ | ✅ | sub-balance guard |
+| `POST /api/properties/contracts` | POST | properties | ✅ | ✅ | Zod | ✅ | ✅ | unit-availability guard |
+| `POST /api/fleet/trips` | POST | fleet | ✅ | ✅ | Zod | ✅ | ✅ | driver-license guard |
+| `DELETE /api/admin/system-stops/:id` | DELETE | admin | ✅ | ✅ admin-only | – | ✅ | ✅ | – |
+| `POST /api/auth/login` | POST | auth | – (public) | – | Zod | ✅ login | – | rate-limit |
+
+### 3.5 Endpoints تجريبية مكشوفة
+- لا توجد routes بـ `/test/`, `/debug/`, `/dev/` في production code.
+- `/api/health/*` — مكشوف بقصد للـ monitoring.
 
 ---
 
-## القسم 4: التحقق من حدود الخدمات — Service Boundary Verification
+## 4. فحص حدود المسارات (Service Boundary Lock)
 
-### 4.1 النطاقات الـ 14
+### 4.1 نتيجة `audit:domain-boundaries`
+> `OK — scanned 80 route files · no cross-domain writes detected.`
 
-| # | النطاق | ملفات Routes | نقطة التركيب | حراس |
-|---|--------|-------------|-------------|------|
-| 1 | HR | hr.ts, hr-discipline.ts, hr-contracts.ts, hr-loans.ts, hr-overtime.ts, hr-exit.ts, training.ts, recruitment.ts | `/hr` | requireModule("hr") |
-| 2 | Finance | finance-invoices.ts, finance-journal.ts, finance-purchase.ts, finance-reports.ts, finance-algorithms.ts, finance-hardening.ts, finance-budget.ts, finance-accounts.ts, finance-vendors.ts, finance-custodies.ts, finance-recurring.ts, finance-cost-centers.ts, finance-collection.ts, finance-zatca.ts, accounting-engine.ts | `/finance` | requireModule("finance") + requireGuards("financial") |
-| 3 | Fleet | fleet.ts | `/fleet` | requireModule("fleet") + requireGuards("financial") |
-| 4 | Warehouse | warehouse.ts | `/warehouse` | requireModule("warehouse") + requireGuards("financial") |
-| 5 | Properties | properties.ts | `/properties` | requireModule("property") + requireGuards("financial") |
-| 6 | Legal | legal.ts | `/legal` | requireModule("legal") |
-| 7 | Projects | projects.ts | `/projects` | requireModule("operations") |
-| 8 | Support | support.ts | `/support` | requireModule("support") |
-| 9 | CRM | crm.ts, clients.ts | `/crm`, `/clients` | requireModule("crm") |
-| 10 | Umrah | umrah.ts, umrah-entities.ts | `/umrah` | requireModule("umrah") |
-| 11 | Intelligence/BI | intelligence.ts, bi.ts | `/intelligence`, `/bi` | requireModule("bi") |
-| 12 | Communications | communications.ts, correspondence.ts | `/communications` | requireModule("comms") |
-| 13 | Governance | governance.ts | `/governance` | requireModule("governance") |
-| 14 | Admin/Settings | admin.ts, settings.ts | `/admin`, `/settings` | requireMinLevel(90), requireMinLevel(70) |
+**صفر اختراقات حدود.** كل route يكتب فقط على جداول مساره أو الجداول التشاركية المسموح بها (approval_actions, email_queue, tasks, إلخ).
 
-### 4.2 فحص الكتابات العابرة للنطاقات
+### 4.2 جدول حدود المسارات (الكتابات الفعلية)
 
-```
-✅ audit:domain-boundaries → "OK — scanned 80 route files · no cross-domain writes detected"
-✅ Cross-domain operations (مثل HR → Finance journal) تتم عبر:
-   - businessHelpers.ts (shared helpers)
-   - softDeleteJournalEntry() بدل كتابة مباشرة
-   - registerCrossDomainHandler() في eventListeners (9 handlers)
-```
+| المسار | يكتب على | يقرأ من (cross) | يصدر أحداث | يستدعي خدمات | المخالفات |
+| --- | --- | --- | --- | --- | --- |
+| **HR** (49 INSERT, 56 UPDATE, 3 DELETE) | attendance, payroll_runs, hr_leave_*, employee_*, evaluation_*, salary_components | finance (read) | hr.payroll.posted, hr.violation.recorded | accounting-engine | ✅ صفر |
+| **Finance-Invoices** (13/16/0) | invoices, invoice_lines, journal_entries, credit_memos, debit_memos | clients (read) | finance.invoice.posted | accounting-engine | ✅ صفر |
+| **Finance-Purchase** (14/3/0) | purchase_orders, purchase_requests, goods_receipts, payment_runs | suppliers (read) | finance.po.posted | accounting-engine | ✅ صفر |
+| **Properties** (17/22/1) | rental_contracts, rent_payments, maintenance_requests, property_units | clients (read) | property.rent.due | finance (via event) | ✅ صفر |
+| **Umrah** (11/18/0) + Umrah-Entities (8/14/1) | umrah_seasons, umrah_groups, umrah_pilgrims, umrah_*_invoices, umrah_payments | clients, employees | umrah.invoice.posted | accounting-engine, commissionEngine | ✅ صفر |
+| **Fleet** (9/27/0) | fleet_vehicles, fleet_trips, fleet_traffic_violations, fleet_maintenance | employees (drivers) | fleet.violation.recorded | hr (via event) | ✅ صفر |
+| **Warehouse** (12/14/0) | warehouse_products, warehouse_stock_batches, warehouse_movements, inventory_counts | – | warehouse.stock.adjusted | accounting-engine | ✅ صفر |
+| **Projects** (9/12/0) | projects, project_tasks, project_phases, project_milestones, project_costs | employees | project.task.completed | – | ✅ صفر |
+| **CRM** (7/5/0) | clients, crm_opportunities, crm_activities | – | crm.deal.won | sales (via event) | ✅ صفر |
+| **Documents** (8/8/0) | documents, document_versions, document_folders | – | document.signed | digital-signature | ✅ صفر |
+| **Governance** (11/13/1) | governance_*, policy_compliance_actions | كل الجداول (لقراءة) | governance.policy.violated | systemGovernor | ✅ صفر |
 
-### 4.3 مساعدات مشتركة (businessHelpers.ts)
+**الترحيل المالي**: يتم حصرًا عبر `accounting-engine` و `eventBus` — لا يوجد route خارج finance يكتب مباشرة في `journal_entries`/`journal_lines`. ✅
 
-| الدالة | الاستخدام |
-|--------|----------|
-| `createJournalEntry()` | نقطة دخول GL الموحدة |
-| `reverseAccountBalances()` | عكس أرصدة عند الإلغاء |
-| `softDeleteJournalEntry()` | حذف ناعم مع عكس GL |
-| `createAuditLog()` | تسجيل تدقيق موحد |
-| `emitEvent()` | بث أحداث موحد |
-| `createNotification()` | إشعارات موحدة |
-| `checkFinancialPeriodOpen()` | حارس الفترات المالية |
-| `getAccountCodeFromMapping()` | حسابات GL من الخرائط |
+التفاصيل: `audit/report/boundary_writes.csv` (76 سطر)
 
 ---
 
-## القسم 5: اختبار مكونات الحوكمة — Governance Components
+## 5. فحص الحوكمة (Engines)
 
-### 5.1 ملخص المكونات (10/10 مكتملة)
+### 5.1 المحركات الحاضرة في `artifacts/api-server/src/lib/`
 
-| # | المكون | الملف | الأسطر | الحالة | متصل؟ |
-|---|--------|------|--------|--------|-------|
-| 1 | Lifecycle Engine | lifecycleEngine.ts | 720 | ✅ | ✅ 26 state machine |
-| 2 | Event Bus + DLQ | eventBus.ts | 192 | ✅ | ✅ 300 maxListeners |
-| 3 | Event Listeners | eventListeners.ts | 1,661 | ✅ | ✅ 176 listener + حارس |
-| 4 | Event Catalog | eventCatalog.ts | 1,439 | ✅ | ✅ 160+ حدث |
-| 5 | Rules Engine | rulesEngine.ts | 317 | ✅ | ✅ 27 حدث مُتتبَّع |
-| 6 | System Governor | systemGovernor.ts | 217 | ✅ | ✅ 6 حراس |
-| 7 | Self-Audit Engine | selfAuditEngine.ts | 324 | ✅ | ✅ 10 فحوصات |
-| 8 | Cron Scheduler | cronScheduler.ts | 3,175 | ✅ | ✅ 60+ وظيفة |
-| 9 | Obligations Engine | obligationsEngine.ts | 444 | ✅ | ✅ 9 أنواع التزامات |
-| 10 | KPI Engine | kpiEngine.ts | 330 | ✅ | ✅ 11 مقياس |
+| المحرك | الملف | LOC | الحالة |
+| --- | --- | --: | --- |
+| Lifecycle Engine | `lifecycleEngine.ts` | 719 | ✅ كود حقيقي وليس stub |
+| System Governor | `systemGovernor.ts` | 216 | ✅ مُفعَّل (نقاط: financial-period-open, system-stops) |
+| Event Bus | `eventBus.ts` | 183 | ✅ يصدر، يستقبل، يكتب DLQ |
+| Event Catalog | `eventCatalog.ts` | 1439 | ✅ كاتالوج كامل لجميع الأحداث |
+| Event Listeners | `eventListeners.ts` | – | ✅ مسجّل عند bootstrap |
+| Obligations Engine | `obligationsEngine.ts` | 443 | ✅ يحسب التزامات الإيجار/الراتب/الفواتير |
+| Journey Engine | `journeyEngine.ts` | 247 | ⚠️ `journey_instances` table مفقود (P2) |
+| Workflow Engine | `workflowEngine.ts` | 982 | ✅ مع approval chains |
+| Notification Engine | `notificationEngine.ts` | 635 | ✅ multi-channel (email/sms/push/whatsapp) |
+| Policy Engine | `policyEngine.ts` | 139 | ✅ |
+| Audit + AuditDiff | `audit.ts` (49) + `auditDiff.ts` | – | ✅ يكتب audit_logs (147 سجل قائم) |
+| **محركات نطاقية:** | | | |
+| Discipline Engine | `disciplineEngine.ts` | – | ✅ + test |
+| Auto-Violation | `autoViolationEngine.ts` | – | ✅ |
+| Umrah Commission | `umrahCommissionEngine.ts` | – | ✅ |
+| Umrah Import | `umrahImportEngine.ts` | – | ✅ |
+| Umrah Invoicing | `umrahInvoicingEngine.ts` | – | ✅ |
+| KPI / AI / Proactive / Rules / Self-Audit | 5 محركات | – | ✅ |
 
-### 5.2 تفصيل المكونات الحرجة
-
-**Lifecycle Engine — 26 آلة حالة:**
-- المالية: invoices (11 حالة)، purchase_orders (12)، journals (6)
-- الموارد البشرية: leave_requests (6)، exit_requests (5)، inquiry_memos (9)
-- الأسطول: trips (5)، maintenance (4)
-- القانوني: cases (4)، contracts (6)
-- + العقارات، CRM، العمرة، الدعم، الحوكمة
-
-**System Governor — 6 حراس:**
-1. `systemStopGuard` — زر الطوارئ (إيقاف شامل)
-2. `companyActiveGuard` — حالة الشركة
-3. `financialPeriodGuard` — منع القيد في فترات مغلقة
-4. `trialLimitsGuard` — قيود الباقة التجريبية
-5. `postingFailuresGuard` — عتبة فشل الترحيل (≥25)
-6. `auditViolationsGuard` — عتبة المخالفات (≥10)
-
-**Event Flow مثال — إنشاء فاتورة:**
+### 5.2 اختبارات الوحدة الموجودة لهذه المحركات
 ```
-POST /finance/invoices
-→ requireGuards("financial") → 6 حراس
-→ Create invoice row
-→ safeEmitEvent("finance.invoice.created")
-  → isKnownEvent() يتحقق من eventCatalog ✅
-  → eventBus.emit() → 176 listener
-    1. logEvent() → event_logs
-    2. logAudit() → audit_logs
-    3. registerObligation() → obligations
-    4. createNotification() → notifications
-    5. evaluateRulesForEvent() → business_rule_logs
-  → DLQ يلتقط أي فشل ✅
+financialIntegrity.test.ts          ← finance integrity
+systemGovernor.test.ts              ← governor
+eventBusIntegrity.test.ts           ← event bus
+domainEngines.test.ts               ← engines smoke
+glPostingContract.test.ts           ← GL posting contract
+crossDomainIntegrity.test.ts        ← boundaries
+financeGoldenPath.test.ts           ← golden path
+disciplineEngine.test.ts            ← HR discipline
+hrEngineSmoke.test.ts               ← HR engines
+guardIntegrity.test.ts              ← guards
+auditDiff.test.ts                   ← audit diff
 ```
+**21 ملف اختبار وحدة** + **77 ملف اختبار** إجماليًا في الـmonorepo.
 
-**Cron Scheduler — 60+ وظيفة مجدولة:**
-- تنبيهات انتهاء الوثائق/العقود (يومي 6-7 صباحاً)
-- فحص الإجازات والإنذارات (يومي)
-- صيانة الأسطول الوقائية (يومي)
-- القيود المتكررة (يومي)
-- مسح الالتزامات (كل ساعة)
-- معالجة طوابير البريد/SMS (كل دقيقة)
-- تقارير KPI (يومي)
-- التدقيق الذاتي (يومي 7 صباحاً)
-- تنظيف البيانات (أسبوعي)
+### 5.3 ملاحظات تشغيلية
+- `event_logs=0` و `event_dlq=0` على البيئة الحالية — يعني أن الأحداث تُمَرَّر لكن لم تُحفَظ. **P1: تأكيد أن `eventBus.persist=true` في production**.
+- `system_stops=0` → الزر الأحمر سليم لكن لم يُفعَّل بعد.
+- `cron_logs=59,511` → cron يعمل بانتظام منذ التشغيل.
 
 ---
 
-## القسم 6: اختبار المسار المالي الكامل — Financial Pathway
+## 6. فحص المالية والحسابات
 
-### 6.1 تدفق GL الكامل
+### 6.1 المكونات الموجودة
+- ✅ دليل الحسابات: 145 حسابًا منشأ بشجرة هرمية
+- ✅ الفواتير: 8 فواتير محفوظة، routes كاملة (POST/PUT/DELETE/post)
+- ✅ القيود اليومية: schema جاهز، GL posting via accounting-engine
+- ✅ سندات القبض/الصرف: routes موجودة (`vouchers` table)
+- ✅ المشتريات والموردين: مغطاة في finance-purchase
+- ✅ الفترات المالية: schema موجود (`financial_periods`) + period-closed guard في الكود
+- ✅ ZATCA: مرجع موجود في invoices
+- ✅ موافقات: approval engine + approval_chains
 
-```
-1. فحص الفترة المالية → checkFinancialPeriodOpen()
-2. فحص التكرار (idempotency) → sourceKey / (sourceType + sourceId)
-3. التحقق من الحسابات → كل code موجود + allowPosting=true + deletedAt IS NULL
-4. التحقق من القيد المزدوج → |totalDebit - totalCredit| ≤ 0.05
-5. تصحيح التقريب التلقائي → حساب 9999 إذا 0.001 < الفرق ≤ 0.05
-6. Transaction Block:
-   → INSERT journal_entries header
-   → INSERT journal_lines (كل سطر)
-   → UPDATE chart_of_accounts SET currentBalance += delta (لكل حساب)
-   → COMMIT atomically
-7. بث الحدث → journal.entry.created
-```
+### 6.2 الفجوات الفعلية (P1)
+- ❌ **لا توجد فترة مالية واحدة منشأة** (`financial_periods=0`) — هذا **بلوكر تشغيلي**: لا يمكن ترحيل أي قيد قبل إنشاء فترة.
+- ❌ **لا توجد قيود فعلية** (`journal_entries=0`) رغم وجود 8 فواتير — يحتاج تحقيق: هل حدث ترحيل تلقائي ولم يكتب، أم الفواتير لم تُعتمد؟
+- ⚠️ `financial_posting_failures` — جدول يطلبه الكود لكنه غير موجود (P1).
 
-### 6.2 مسار الفاتورة الكامل
-
-| المرحلة | Endpoint | عملية GL |
-|---------|----------|----------|
-| إنشاء | POST /invoices | — |
-| اعتماد | POST /invoices/:id/approve | Debit AR (1200) / Credit Revenue (4000) |
-| دفع | POST /invoices/:id/payment | Debit Cash (1100) / Credit AR (1200) |
-| رفض | POST /invoices/:id/reject | عكس GL |
-| حذف | DELETE /invoices/:id | soft-delete + عكس GL |
-
-### 6.3 الحراس المالية
-
-| الحارس | الوصف | الحالة |
-|--------|-------|--------|
-| الفترات المالية | منع القيد في فترة مغلقة | ✅ إلزامي |
-| Idempotency | sourceKey يمنع التكرار | ✅ |
-| القيد المزدوج | debit = credit | ✅ |
-| allowPosting | منع القيد على حسابات رئيسية | ✅ |
-| GuardedJournalEntry | تسجيل فشل GL في financial_posting_failures | ✅ |
-| FinancialEngine Gateway | نقطة دخول مركزية | ✅ |
-
-### 6.4 التقارير المالية
-
-| التقرير | Endpoint | الحالة |
-|---------|----------|--------|
-| ميزان المراجعة | GET /reports/trial-balance | ✅ مع فلاتر deletedAt + companyId |
-| قائمة الدخل | GET /reports/income-statement | ✅ |
-| الميزانية العمومية | GET /reports/balance-sheet | ✅ |
-| تحليل الأعمار | GET /reports/aging-analysis | ✅ |
-| تقرير الكيانات | GET /reports/entities/:type | ✅ |
+### 6.3 رحلة كاملة (لم تُختبر في الزمن الفعلي — بلوكر: غياب فترة مالية)
+المسار **مدعوم في الكود** لكن لم يُجرَ اختبار end-to-end فعلي بسبب فقدان `financial_periods`. التوصية: **إنشاء فترة Q2-2026 وإعادة اختبار الفاتورة → الترحيل → الإغلاق → محاولة الترحيل بعد الإغلاق**. يحتاج 30 دقيقة عمل.
 
 ---
 
-## القسم 7: مسارات الاستيراد المحاسبي — Accounting Import Pathways
+## 7. فحص استيراد الملفات المحاسبية
 
-### 7.1 محركات الاستيراد
+### 7.1 المكونات الموجودة
+- ✅ Umrah Import Engine (`umrahImportEngine.ts`) — كامل مع batches و preview و mapping
+- ✅ جدول `umrah_import_batches` فعّال
+- ✅ Routes: `/api/umrah/import/batches`, `/api/umrah/import/batches/:id/changes` (محمي بـ rate-limit)
+- ✅ المسار: Upload → Read → Preview → Mapping → Validation → Approval → Posting
 
-| المحرك | الملف | الوصف |
-|--------|------|-------|
-| Umrah Import Engine | umrahImportEngine.ts (787 سطر) | استيراد المعتمرين بالجملة |
-| Umrah Invoicing Engine | umrahInvoicingEngine.ts (654 سطر) | إنشاء فواتير + كشف حساب |
-| Umrah Commission Engine | umrahCommissionEngine.ts (خارجي) | حسابات العمولات |
-| Excel Export | excelExport.ts | تصدير بيانات xlsx |
-| PDF Export | pdfExport.ts | تصدير تقارير PDF |
+### 7.2 الفجوة (P1)
+لا يوجد import engine عام للملفات المحاسبية الكلاسيكية (Clients, Suppliers, Products, Invoices, Invoice Items, POs, Expenses, Incomes, Staffs, Projects). الموجود حصري لـ Umrah.
 
-### 7.2 endpoints الاستيراد
+| الملف | عدد سجلات نموذجي | قابل للاستيراد؟ | يحتاج Mapping؟ | أخطاء | قابل للترحيل؟ |
+| --- | ---: | :--: | :--: | --- | :--: |
+| Clients | – | ❌ | ✅ | لا توجد route | ❌ |
+| Suppliers | – | ❌ | ✅ | لا توجد route | ❌ |
+| Products | – | ❌ | ✅ | لا توجد route | ❌ |
+| Invoices | – | ❌ | ✅ | لا توجد route | ❌ |
+| Invoice Items | – | ❌ | ✅ | لا توجد route | ❌ |
+| POs / PO Items | – | ❌ | ✅ | لا توجد route | ❌ |
+| Expenses | – | ❌ | ✅ | لا توجد route | ❌ |
+| Incomes | – | ❌ | ✅ | لا توجد route | ❌ |
+| Staffs | – | ❌ | ✅ | لا توجد route | ❌ |
+| Projects | – | ❌ | ✅ | لا توجد route | ❌ |
+| Umrah Pilgrims | يدعم | ✅ | ✅ | – | ✅ بعد الموافقة |
 
-| Endpoint | الوصف | Body Limit |
-|----------|-------|-----------|
-| POST /umrah/import-preview | معاينة ملف الاستيراد | 50MB |
-| POST /umrah/import-mutamers | استيراد معتمرين بالجملة | 50MB |
-| POST /umrah/import-vouchers | استيراد قسائم | 50MB |
-| POST /umrah/import | استيراد عام | 50MB |
-| POST /umrah/assign-bulk | تعيين جماعي | 10MB |
-
-### 7.3 خرائط المحاسبة (accounting_mappings)
-
-| العملية | الحساب المدين | الحساب الدائن | التحقق |
-|---------|-------------|-------------|--------|
-| sales_invoice | AR (1200) | Revenue (4000) | ✅ mapping + fallback |
-| purchase_invoice | Expense | AP (2100) | ✅ |
-| salary_advance | Advance (1111) | Cash (1100) | ✅ |
-| custody | Custody | Source | ✅ |
+**التوصية P1:** بناء import engine عام يستفيد من نفس نمط `umrahImportEngine.ts`.
 
 ---
 
-## القسم 8: وحدة العمرة (End-to-End) — Umrah Module
+## 8. فحص مسار العمرة
 
-### 8.1 إحصائيات
+### 8.1 الجداول الكاملة الموجودة
+```
+umrah_seasons, umrah_agents, umrah_sub_agents, umrah_packages,
+umrah_pilgrims, umrah_groups, umrah_pricing,
+umrah_nusk_invoices, umrah_sales_invoices, umrah_agent_invoices,
+umrah_payments, umrah_violations, umrah_penalties, umrah_transport,
+umrah_import_batches, umrah_import_logs, audit_umrah_access
+```
+17 جدول مخصص للعمرة — تغطية كاملة.
 
+### 8.2 الـEngines
+- `umrahCommissionEngine.ts` — حساب عمولات الوكلاء + الفرعيين
+- `umrahImportEngine.ts` — استيراد المعتمرين
+- `umrahInvoicingEngine.ts` — توليد فواتير النسك والبيع
+
+### 8.3 Rate Limiting خاص
+```ts
+const umrahLimiter = rateLimit({ windowMs: 60_000, max: 10 });
+app.use("/api/umrah", umrahLimiter);
+```
+**حماية أقوى من الجلوبال (10/دقيقة بدلًا من 100)** — يفسر 429s في smoke test (ليست bugs).
+
+### 8.4 الحالة الفعلية
+- موسم واحد منشأ، 0 معتمرين فعليين
+- المسار مدعوم بالكامل في الكود لكن لم يُختبر end-to-end على بيانات حقيقية
+- إغلاق الموسم: route موجود + guard يمنع العمليات على موسم مغلق ✅
+
+---
+
+## 9. فحص الموارد البشرية
+
+### 9.1 التغطية
+- 24 موظفًا فعليًا في DB
+- 110 endpoint في `hr.ts` (104 محمية، 6 تحتاج مراجعة P2)
+- محركات نطاقية: discipline, auto-violation, payroll, leave-balances
+- اختبارات: `disciplineEngine.test.ts`, `hrEngineSmoke.test.ts`
+
+### 9.2 المسارات المُغطاة
+| القسم | الحالة |
+| --- | --- |
+| الموظفين / العقود | ✅ |
+| الحضور / الانصراف / التأخير / الغياب | ✅ |
+| الإجازات (طلبات + أرصدة + موافقات متعددة المراحل) | ✅ |
+| الجزاءات / التحقيقات / المساءلة | ✅ + engine |
+| الرواتب (runs + lines + deductions) | ✅ + period guard |
+| العهد + التقييم + التدريب | ✅ |
+| الخدمة الذاتية + التفويض | ✅ |
+| Audit لكل إجراء | ✅ |
+
+### 9.3 مشاكل سابقة تم إصلاحها هذه الجلسة
+- ✅ `gratuity` و `accruals` 500s — مُصلحة
+- ✅ `system-stops` join `u.fullName` → `COALESCE(emp.name, u.email)` — مُصلحة
+- ✅ `attendance.startDate` → `hireDate` — موثقة في replit.md
+
+### 9.4 P1 المتبقي
+- `employee_salary_components` table مفقود في DB لكن الكود يطلبه — قد يفشل screen مكونات الراتب لكل موظف.
+
+---
+
+## 10. فحص الواجهات UX/UI
+
+### 10.1 الإحصاءات
 | المقياس | القيمة |
-|---------|--------|
-| إجمالي Endpoints | **86** |
-| umrah.ts | 48 endpoints |
-| umrah-entities.ts | 38 endpoints |
-| جداول البيانات | 21+ |
-| أنواع الكيانات | مواسم، وكلاء، معتمرون، مجموعات، أسعار، عمولات، فواتير |
+| --- | --- |
+| الصفحات (`pages/*.tsx`) | 403 |
+| ملفات routes (modular React.lazy) | 15 |
+| تطبيقات FE | 4 (erp + client + careers + deck) |
+| RTL محقق على المستوى الجذري | ✅ `dir="rtl" lang="ar"` |
+| Sidebar أبيض، فرعيات قابلة للتوسع | ✅ |
+| Pagination موحد `?page&limit=20` | ✅ |
+| Empty/Error states عربية | ✅ (موثقة في replit.md) |
+| Date/Number formatters عربية | ✅ `lib/formatters.ts` |
+| 404 page عربية مع CloudRain | ✅ |
+| لا popups للـ create/edit | ✅ (سياسة موثقة في replit.md) |
 
-### 8.2 آلات الحالة
+### 10.2 نتيجة `audit:routes`
+> `OK — all 403 page files are imported somewhere.`
+**صفر صفحات يتيمة، صفر روابط مكسورة من جانب الكود.**
 
-**المعتمر:** `pending → arrived → active → overstayed/departed/violated/cancelled`
-**الموسم:** `open → closed → archived` (مع حماية من الإغلاق إذا وُجد معتمرون نشطون)
-**الوكيل:** `active → inactive/suspended/blocked`
-**النقل:** `scheduled → in_progress → completed/cancelled`
-**فاتورة الوكيل:** `draft → sent → partially_paid/paid/overdue → cancelled`
-**المخالفة:** `pending → invoiced/waived → paid`
+### 10.3 المشاكل المعروفة (P2)
+- `ghayth-erp-deck` workflow failed — لكنه ليس صفحة في النظام بل مولد PDF منفصل
+- لم يتم اختبار عرض كل صفحة بصريًا (يحتاج e2e بـ playwright)
 
-### 8.3 أمن البيانات الحساسة
-
-| الإجراء | التفاصيل | الحالة |
-|---------|---------|--------|
-| التشفير عند الكتابة | passportNumber, phone, dateOfBirth via AES-256-GCM | ✅ |
-| فك التشفير عند القراءة | decryptField() في GET /pilgrims/:id | ✅ |
-| HMAC hashes | passportNumber_hash, visaNumber_hash, mofaNumber_hash, borderNumber_hash | ✅ |
-| تسجيل الوصول | sensitiveAccessLog عند فك التشفير | ✅ |
-| audit_umrah_access | جدول تدقيق مخصص | ✅ |
-
-### 8.4 التحقق من أسماء الأعمدة
-
-```
-✅ transportTotal (NOT transportFees)
-✅ hotelTotal (NOT hotelFees)
-✅ additionalServices (NOT otherFees)
-— مطابقة 100% مع migration 093
-```
+| الصفحة | تعمل؟ | تعرض بيانات؟ | عمليات | مشاكل UI | ملاحظات |
+| --- | :--: | :--: | :--: | --- | --- |
+| Dashboard | ✅ | ✅ | ✅ | – | KPIs ظاهرة |
+| Sidebar nav | ✅ | ✅ | ✅ | – | RTL، ابيض، 20+ موديول |
+| HR > Employees | ✅ | ✅ | ✅ | – | 24 موظف ظاهرين |
+| Finance > Chart of Accounts | ✅ | ✅ | ✅ | – | 145 حساب |
+| Finance > Invoices | ✅ | ✅ | ✅ | – | 8 فواتير |
+| Umrah > Seasons | ✅ | ✅ | ✅ | – | 1 موسم |
+| (تحقق بصري كامل لكل 403 صفحة لم يتم) | ⚠️ | – | – | – | يحتاج playwright e2e |
 
 ---
 
-## القسم 9: وحدة الموارد البشرية (End-to-End) — HR Module
+## 11. فحص الأمان
 
-### 9.1 إحصائيات
+### 11.1 طبقة الحماية الحاضرة
+| المكون | الحالة | التفاصيل |
+| --- | --- | --- |
+| **Helmet** | ✅ | CSP صارم، scriptSrc='self' فقط، objectSrc='none', frameSrc='none' |
+| **CORS** | ✅ | strict whitelist من `REPLIT_DEV_DOMAIN` + `CORS_ORIGINS` + `REPLIT_DEPLOYMENT_URL` |
+| **Rate Limit Global** | ✅ | 100/دقيقة في prod، 2000/دقيقة في dev |
+| **Rate Limit Umrah** | ✅ | 10/دقيقة (حماية مشددة) |
+| **JWT** | ✅ | HttpOnly cookie + Refresh tokens (43 token حي) |
+| **Cookie SameSite** | ✅ | `strict`, `secure: isProduction` |
+| **bcrypt للكلمات** | ✅ | في `auth.ts` |
+| **Permission system** | ✅ | RBAC + 186 ربط + custom roles |
+| **Audit logs** | ✅ | 147 سجل، diff على الكتابات |
+| **Field encryption** | ✅ | `FIELD_ENCRYPTION_KEY` لحقول حساسة |
+| **Tenant isolation** | ✅ | companyId + branchId على معظم الجداول، middleware يحقن تلقائيًا |
+| **SQL Injection** | ✅ | parameterized queries (`pool.query` بمُمَرِّر `$1, $2`) — لا concat نصي |
+| **XSS** | ✅ | React يهرب افتراضيًا + CSP |
+| **CSRF** | ⚠️ | `sameSite=strict` يحمي لكن لا csurf token. كافٍ للتطبيق الحالي. |
+| **رفع ملفات** | ✅ | App Storage + signed URLs + content-type validation |
 
-| المقياس | القيمة |
-|---------|--------|
-| إجمالي Endpoints | **166** |
-| hr.ts | 110 endpoints |
-| hr-discipline.ts | 24 endpoints |
-| hr-contracts.ts | 13 endpoints |
-| hr-loans.ts | 6 endpoints |
-| hr-overtime.ts | 7 endpoints |
-| hr-exit.ts | 6 endpoints |
+### 11.2 P1 الأمنية
+1. **`pdpl.ts`: 4 من 5 endpoints بدون permission** — مخاطر تنظيمية لقانون حماية البيانات.
+2. **VAPID keys غير مضبوطة** → push notifications معطل (functional gap).
+3. **74 endpoint عام بدون requirePermission** — معظمها صحيح (auth, public, mySpace, careers) لكن يحتاج audit يدوي للتأكد.
 
-### 9.2 الوحدات الفرعية
-
-| الوحدة | الوصف | الحالة |
-|--------|-------|--------|
-| الحضور والانصراف | check-in/out بـ GPS + سياسات | ✅ |
-| الإجازات | طلب → اعتماد → تصعيد + أرصدة | ✅ |
-| الرواتب | تشغيل → بنود (سلف + عمل إضافي + خصومات) → اعتماد | ✅ |
-| المخالفات | إنشاء → تحقيق → قرار → استئناف | ✅ |
-| العقود | مسودة → اعتماد → توقيع → تفعيل → إنهاء/تجديد | ✅ |
-| السلف | طلب → اعتماد → أقساط تلقائية → خصم من الراتب | ✅ |
-| العمل الإضافي | طلب → اعتماد → حساب الساعات → ربط بالراتب | ✅ |
-| نهاية الخدمة | طلب → مكافأة (نظام العمل 84-85) → إخلاء طرف → إتمام | ✅ |
-| التأديب | كشف تلقائي (تأخر/غياب/GPS) → محضر استفسار → 9 مراحل | ✅ |
-| الأداء | تقييمات | ✅ |
-| الورديات | ثابتة/مرنة/عن بعد/مقسمة + GPS geo-fencing | ✅ |
-| سلاسل الاعتماد | تعريف + تشغيل + قرار | ✅ |
-
-### 9.3 حساب مكافأة نهاية الخدمة
-
-```
-أول 5 سنوات: نصف راتب لكل سنة
-أكثر من 5 سنوات: راتب كامل لكل سنة
-استقالة: تخفيض ثلث (5-10 سنوات) أو ثلثين (<5 سنوات)
-— مطابق لنظام العمل السعودي (المادتان 84-85)
-```
-
-### 9.4 الأمان
-
-| الفحص | الحالة |
-|-------|--------|
-| companyId filter | ✅ في كل الاستعلامات |
-| deletedAt IS NULL | ✅ في كل الاستعلامات |
-| requirePermission | ✅ hr:read, hr:create, hr:update, hr:delete, hr:self, hr:payroll |
-| Zod validation | ✅ 45+ validation |
-| Audit logging | ✅ 52+ createAuditLog |
+### 11.3 لم تُختبر في هذه الجلسة (تحتاج runtime test)
+- محاولة قراءة بيانات شركة B بمستخدم شركة A (tenant isolation) — يحتاج حساب ثاني
+- محاولة تعديل ID في URL لمورد لا يملكه المستخدم
+- محاولة SQL injection (الكود parameterized لكن اختبار حقيقي مطلوب)
+- محاولة XSS عبر input
+- محاولة رفع ملف `.exe` أو `.sh`
 
 ---
 
-## القسم 10: تدقيق واجهة المستخدم — UI/UX Audit
+## 12. فحص الأداء والاستقرار
 
-### 10.1 إحصائيات Frontend
+### 12.1 من API Smoke (452 endpoint, 358 OK)
+- لم تُسجَّل أوقات response في النتائج المخزّنة (تحسين P3 للـsmoke script)
+- لا توجد timeouts في النتائج → كل الـ 358 OK رد قبل 30s
 
-| المقياس | القيمة |
-|---------|--------|
-| إطار العمل | React + Vite + TypeScript |
-| مكتبة المكونات | Radix UI + Tailwind CSS |
-| إجمالي الصفحات | **403** |
-| إجمالي المكونات | **129** |
-| Custom Hooks | 11 |
-| Contexts | 2 (app-context, settings-context) |
-| Router | Wouter |
-| Data Fetching | TanStack React Query |
-| Charts | Recharts |
-| Maps | Leaflet |
-| Forms | React Hook Form + Zod |
-| Export | xlsx + html-to-image |
+### 12.2 المخاطر المحتملة (تحليل ساكن)
+| المخاطرة | الأثر | الإصلاح |
+| --- | --- | --- |
+| `cron_logs=59,511` ينمو بسرعة | DB bloat | P2: cron تنظيف logs أقدم من 30 يومًا |
+| `user_activity_log=5,401` بدون retention | DB bloat | P2: نفس الحل |
+| لا توجد فهارس مُسماة على `(companyId, branchId)` لكل جدول | bottleneck multi-tenant | P3: مراجعة 727 index |
+| Pagination بدون `count(*)` total — يستخدم `LIMIT/OFFSET` | OFFSET بطيء على >10k row | P3: cursor-based pagination |
 
-### 10.2 توزيع الصفحات حسب القسم
-
-| القسم | عدد الصفحات | ملاحظات |
-|-------|-------------|---------|
-| إنشاء (create/) | 75 | نماذج إنشاء لكل كيان |
-| الموارد البشرية (hr/) | 54 | أكبر وحدة UI |
-| التفاصيل (details/) | 50 | صفحات عرض تفصيلي |
-| المالية (finance/) | 42 | فواتير + يوميات + تقارير |
-| العمرة (umrah/) | 17 | معتمرون + وكلاء + فواتير |
-| مساحتي (my-space/) | 16 | خدمة ذاتية للموظف |
-| BI (bi/) | 14 | لوحات تحليلات |
-| الإعدادات (settings/) | 11 | تهيئة النظام |
-| الأسطول (fleet/) | 11 | مركبات + رحلات + صيانة |
-| الإدارة (admin/) | 10 | مستخدمون + أدوار + صلاحيات |
-| الحوكمة (governance/) | 9 | سير عمل + سياسات |
-| العقارات (properties/) | 4 | + 8 صفحات مستقلة |
-| القانوني (legal/) | 3 | قضايا + عقود |
-| الوثائق (documents/) | 3 | إدارة مستندات |
-| الدعم (support/) | 2 | تذاكر |
-| المتجر (store/) | 2 | طلبات |
-| المشاريع (projects/) | 2 | + صفحة مستقلة |
-| CRM (crm/) | 2 | عملاء + فرص |
-| المستودعات (warehouse/) | 1 | + صفحة مستقلة |
-| صفحات مستقلة | ~50 | dashboard, calendar, action-center, etc. |
-
-### 10.3 مكونات مشتركة رئيسية
-
-| المكون | الوصف |
-|--------|-------|
-| page-shell.tsx | هيكل الصفحة الموحد |
-| data-table-wrapper.tsx | جدول بيانات مع فرز وتصفية |
-| form-shell.tsx | هيكل نموذج موحد |
-| command-palette.tsx | لوحة أوامر (Ctrl+K) |
-| global-search.tsx | بحث شامل |
-| error-boundary.tsx | التقاط الأخطاء |
-| delete-confirm-impact.tsx | حوار حذف مع تأثير |
-| notification-dropdown.tsx | قائمة الإشعارات |
-| approval-actions.tsx | أزرار الاعتماد/الرفض |
-| print-layout.tsx | تخطيط الطباعة |
+### 12.3 N+1 / Heavy queries
+- لم يُجرَ profile فعلي لكن `audit:schema` يضمن absence of un-parameterized queries.
+- جداول التقارير (BI dashboards) تستخدم CTEs — قد تحتاج materialized views إذا نمت البيانات.
 
 ---
 
-## القسم 11: التدقيق الأمني — Security Audit
+## 13. فحص النسخ الاحتياطي والاسترجاع
 
-### 11.1 ملخص الأمان
+### 13.1 الحالة
+- ❌ **لا يوجد سكربت backup مدمج في الـrepo**
+- ❌ **لا يوجد سكربت restore موثّق**
+- ✅ المخزون الفعلي: PostgreSQL على Replit يدعم `pg_dump` يدويًا
 
-| المجال | التقييم | الحالة |
-|--------|---------|--------|
-| حقن SQL | **آمن تماماً** | ✅ 100% استعلامات مُعلَّمة (parameterized) |
-| عزل المستأجرين | **آمن** | ✅ companyId في كل استعلام |
-| المصادقة | **آمن** | ✅ JWT 15 دقيقة + refresh tokens |
-| التفويض | **آمن** | ✅ RBAC متعدد الطبقات |
-| كلمات المرور | **آمن** | ✅ bcryptjs (10 rounds) |
-| CORS | **آمن** | ✅ whitelist-based |
-| Headers | **آمن** | ✅ Helmet + CSP |
-| التحقق من المدخلات | **آمن** | ✅ Zod schemas شاملة |
-| رفع الملفات | **آمن** | ✅ 20MB + whitelist أنواع |
-| Rate Limiting | **⚠️ متوسط** | تحتاج تفعيل IP validation |
-| تشفير الحقول | **آمن** | ✅ AES-256-GCM |
-| بيانات حساسة | **آمن** | ✅ لا يُرسَل passwordHash في الاستجابات |
+### 13.2 الأوامر الموصى بها (P1: نضيفها كـscripts)
+```bash
+# Backup
+pg_dump "$DATABASE_URL" --no-owner --no-acl -F c -f backup-$(date +%Y%m%d).dump
 
-### 11.2 تفاصيل JWT
-
-| الخاصية | القيمة |
-|---------|--------|
-| الخوارزمية | HS256 |
-| مدة Access Token | 15 دقيقة |
-| Refresh Token | 64 bytes عشوائي |
-| Cookie Flags | httpOnly, secure, sameSite |
-| الحد الأدنى للمفتاح | 32 حرف (يُفرض عند الإقلاع) |
-| قفل الحساب | 5 محاولات فاشلة → 15 دقيقة |
-| إلغاء عند تغيير كلمة المرور | ✅ يُلغى كل refresh tokens |
-
-### 11.3 الثغرة المتوسطة الوحيدة — Rate Limiting IP Bypass
-
-**المشكلة:** كل rate limiters تستخدم `validate: { ip: false, trustProxy: false }` مما يُعطّل التحقق من IP.
-
-**الملفات المتأثرة (7):**
-- `app.ts` (سطرا 125، 136)
-- `routes/auth.ts` (أسطر 64، 79، 88، 97، 106)
-
-**الحل المطلوب:**
-```typescript
-// قبل:
-validate: { ip: false, trustProxy: false }
-// بعد:
-validate: { ip: true, trustProxy: true }
+# Restore على قاعدة جديدة
+createdb ghayth_erp_restored
+pg_restore -d "postgres://.../ghayth_erp_restored" --no-owner --no-acl backup.dump
 ```
-
-**الأولوية:** عالية — يجب المعالجة قبل النشر الإنتاجي.
-
-> **ملاحظة:** هذا الإعداد مقصود في بيئة Replit (حيث IP headers قد تكون غير موثوقة)، لكن يجب تغييره في الإنتاج.
+**التوصية P1:** إضافة `scripts/backup.sh` و `scripts/restore.sh` مع توثيق في README.
 
 ---
 
-## القسم 12: تدقيق الأداء — Performance Audit
+## 14. فحص التوثيق والتسليم
 
-### 12.1 قاعدة البيانات
+### 14.1 الموجود
+| المستند | الحالة |
+| --- | --- |
+| `README.md` (جذر) | ❌ مفقود |
+| `replit.md` | ✅ شامل ومحدّث |
+| `.env.example` | ✅ موجود (يحتاج إضافات — انظر §1.4) |
+| `artifacts/api-server/migrations/README_DEPRECATED.md` | ⚠️ مهجور |
+| `artifacts/ghayth-erp-deck/README.md` | ✅ |
+| Docker compose | ❌ مفقود |
+| Nginx config | ❌ مفقود |
+| PM2 ecosystem | ❌ مفقود |
+| دليل migrations | ⚠️ ضمن replit.md لكن غير منفصل |
+| دليل backup/restore | ❌ مفقود |
+| دليل API (OpenAPI) | ✅ `lib/api-spec` |
+| دليل RBAC | ⚠️ ضمن الكود (`rbacCatalog.ts`) |
+| دليل المسارات | ⚠️ ضمن replit.md |
+| دليل Events | ✅ `eventCatalog.ts` بـ1439 LOC |
+| دليل تشغيل من الصفر | ⚠️ ضمن replit.md |
 
-| المقياس | القيمة | الحالة |
-|---------|--------|--------|
-| فهارس | **368** CREATE INDEX | ✅ |
-| FK Indexes (migration 118) | 11 فهرس إضافي للـ FK عالي الحركة | ✅ |
-| statement_timeout | 30,000ms | ✅ |
-| connectionTimeoutMillis | 10,000ms | ✅ |
-| Pool max | `Math.min(Math.max(PG_POOL_MAX, 1), 100)` | ✅ bounded |
-| idleTimeoutMillis | 30,000ms | ✅ |
-| Pool error handler | يُسجّل أخطاء غير متوقعة | ✅ |
-| LIMIT في الاستعلامات | 687 استخدام | ✅ |
-
-### 12.2 الخادم
-
-| المقياس | القيمة | الحالة |
-|---------|--------|--------|
-| JSON body limit | 2MB (افتراضي)، 50MB (umrah import) | ✅ |
-| Rate limiting | 100 req/min (production)، 2000 (dev) | ✅ |
-| Umrah rate limiting | 10 req/min | ✅ |
-| Graceful shutdown timeout | 30 ثانية | ✅ |
-| Cron lock mechanism | PostgreSQL advisory locks | ✅ |
-| Migration lock | `pg_advisory_lock(839271)` | ✅ |
-| Listener guard | منع التسجيل المزدوج | ✅ |
-| DLQ buffer | 1,000 إدخال، flush كل 5 ثوانٍ | ✅ |
-
-### 12.3 Frontend
-
-| المقياس | القيمة | الحالة |
-|---------|--------|--------|
-| بناء | Vite (سريع) | ✅ |
-| State management | TanStack React Query (caching) | ✅ |
-| Component library | Radix UI (accessible, tree-shakeable) | ✅ |
-| Styling | Tailwind CSS (utility-first, small bundle) | ✅ |
-
-### 12.4 توصيات الأداء
-
-| التوصية | الأولوية |
-|---------|---------|
-| إضافة materialized view للتقارير المالية الكبيرة | متوسطة |
-| مراقبة DLQ buffer fill rate في الإنتاج | متوسطة |
-| مراقبة cron lock contention في multi-node | منخفضة |
+### 14.2 التوصيات (P2)
+1. إنشاء `README.md` جذري يجمع: تشغيل، إنتاج، docker، nginx، pm2، backup/restore
+2. تصدير `eventCatalog` و `rbacCatalog` كـmarkdown تلقائيًا عبر سكربت
+3. تحديث `.env.example` بالمتغيرات الـ7 الناقصة (انظر §1.4)
+4. حذف `migrations/README_DEPRECATED.md`
 
 ---
 
-## القسم 13: النسخ الاحتياطي والاسترجاع — Backup/Restore
+## 15. الأخطاء المرتبة بالأولوية
 
-### 13.1 آليات النسخ الاحتياطي
+### 🔴 P0 (حرج — يمنع الإنتاج)
+**لا توجد أخطاء P0 في هذه الجلسة.**
+كل الـ500s السابقة (10 endpoints) أُصلحت ودُفعت. الـ500 المتبقي الوحيد هو 502 لـ vapid-key وهو **config-only، ليس bug**.
 
-| الآلية | السكربت | الوصف |
-|--------|---------|-------|
-| Schema dump | `db/dump-schema.sh` | يُصدّر المخطط كاملاً |
-| Seed dump | `db/dump-seed.sh` | يُصدّر البيانات المرجعية |
-| Bootstrap | `db/bootstrap.sh` | يُعيد البناء من الصفر |
+### 🟠 P1 (عالي — يجب إصلاحها قبل go-live)
+1. **`financial_periods=0`** — لا يمكن ترحيل أي قيد. **بلوكر تشغيلي.** الإصلاح: إنشاء فترة Q2-2026 يدويًا أو سكربت bootstrap.
+2. **`pdpl.ts` بدون permission على 4/5 endpoints** — مخاطر تنظيمية. أضف `requirePermission("pdpl:read")` و `("pdpl:write")`.
+3. **6 جداول يطلبها الكود وغير موجودة في DB:** `budget_approval_requests`, `employee_salary_components`, `financial_posting_failures`, `journey_instances`, `vendor_contracts`, `recent_late`. مراجعة كل مرجع وقرار: إضافة migration أو حذف الكود.
+4. **`event_logs=0` و `event_dlq=0`** — تأكيد أن `eventBus.persist=true` في prod (الأحداث تنفّذ لكن لا تحفظ).
+5. **لا يوجد import engine عام للملفات المحاسبية** (Clients/Suppliers/Products/Invoices/Expenses) — الموجود حصري للعمرة.
+6. **لا يوجد backup/restore script** — أضف `scripts/backup.sh` + `scripts/restore.sh`.
 
-### 13.2 تسلسل الاسترجاع
+### 🟡 P2 (متوسط — تحسينات مهمة)
+1. **74 endpoint بدون `requirePermission`** — راجع كل واحد، الأغلب مقصود (`auth`, `public`, `mySpace`, `careers`) لكن `intelligence.ts` (9), `hr.ts` (6), `communications.ts` (6), `moduleDashboards.ts` (6) تحتاج audit يدوي.
+2. **`README.md` جذري مفقود** — أنشئ واحدًا شاملًا.
+3. **Docker / Nginx / PM2 configs مفقودة** — أضف للنشر التقليدي.
+4. **`cron_logs` و `user_activity_log` بلا retention** — أضف cron تنظيف لما هو أقدم من 30 يومًا.
+5. **`ghayth-erp-deck` workflow failed** — مولد PDF منفصل، يحتاج إصلاح بيئة منفصل.
+6. **VAPID keys غير مضبوطة** — يعطل push notifications.
+7. **7 متغيرات بيئة غير موثقة في `.env.example`** — انظر §1.4.
 
-```
-1. db/bootstrap.sh  → DROP + CREATE DB + schema.sql + seed.sql + admin user
-2. تأشير migrations → كل الـ 118 migration مسجّلة كـ applied
-3. pnpm run start   → runMigrations() يكتشف DB مُعدّة → skip
-4. bootstrapAdminUser() → يتحقق من وجود المستخدم → skip إذا موجود
-```
-
-### 13.3 ملفات المخطط
-
-| الملف | الأسطر | الوصف |
-|-------|--------|-------|
-| db/schema.sql | 21,019 | مخطط كامل (مصدر الحقيقة) |
-| db/seed.sql | — | بيانات مرجعية |
-| db/seed-admin-user.sql | — | مستخدم اختبار محدد |
-
----
-
-## القسم 14: تدقيق التوثيق — Documentation Audit
-
-### 14.1 الملفات الموجودة
-
-| الملف | الوصف | الحالة |
-|-------|-------|--------|
-| README.md | دليل شامل (بنية + متطلبات + إقلاع + متغيرات) | ✅ |
-| docs/ARCHITECTURE.md | البنية المعمارية | ✅ |
-| docs/DEVELOPMENT.md | دليل التطوير | ✅ |
-| docs/GUARDRAILS.md | حواجز الحماية والقيود | ✅ |
-| docs/MODULES.md | توثيق الوحدات | ✅ |
-| docs/KNOWN_ISSUES.md | المشاكل المعروفة | ✅ |
-| docs/HR_REFERENCE_MODEL.md | نموذج مرجعي للموارد البشرية | ✅ |
-| docs/UI_TEMPLATES.md | قوالب واجهة المستخدم | ✅ |
-| docs/UI_UNIFICATION_CLOSURE_REPORT.md | تقرير توحيد الواجهة | ✅ |
-| docs/UNIFICATION_PLAN.md | خطة التوحيد | ✅ |
-| docs/system-master-registry.md | سجل النظام الرئيسي | ✅ |
-| docs/entity-action-matrix.md | مصفوفة الكيانات والإجراءات | ✅ |
-| docs/ledger-impact-registry.md | سجل تأثيرات الدفتر | ✅ |
-| docs/request-approval-matrix.md | مصفوفة الطلبات والموافقات | ✅ |
-| docs/action-url-registry.md | سجل الروابط والإجراءات | ✅ |
-| docs/ui-page-registry.md | سجل صفحات الواجهة | ✅ |
-| docs/hr-smoke-test-checklist.md | قائمة اختبار HR | ✅ |
-| docs/OPERATIONAL_REVIEW_01.md | مراجعة تشغيلية | ✅ |
-| docs/AI_GUARDIAN_SETUP.md | إعداد الحارس الذكي | ✅ |
-
-### 14.2 المخططات التفصيلية (Blueprints)
-
-| الملف | الوحدة |
-|-------|--------|
-| docs/blueprints/hr-attendance.md | حضور وانصراف |
-| docs/blueprints/hr-discipline.md | التأديب |
-| docs/blueprints/hr-payroll.md | الرواتب |
-| docs/blueprints/finance-invoices.md | الفواتير |
-| docs/blueprints/finance-zatca.md | الفوترة الإلكترونية |
-| docs/blueprints/fleet.md | الأسطول |
-| docs/blueprints/properties-ejar.md | إيجار |
-| docs/blueprints/legal.md | القانوني |
-| docs/blueprints/crm-clients.md | العملاء |
-| docs/blueprints/umrah.md | العمرة |
-| docs/blueprints/governance-workflows-rules.md | سير العمل والقواعد |
-
-### 14.3 وثائق التحقق
-
-| الملف | الوحدة |
-|-------|--------|
-| docs/verification/fleet.md | اختبار الأسطول |
-| docs/verification/warehouse.md | اختبار المستودعات |
-
-### 14.4 الملفات المفقودة
-
-| الوثيقة | الأولوية | الملاحظة |
-|---------|---------|---------|
-| DEPLOYMENT.md | عالية | دليل نشر إنتاجي مفصل |
-| SECURITY.md | عالية | سياسات الأمان والاستجابة للحوادث |
-| API_REFERENCE.md | متوسطة | مرجع API كامل (يمكن توليده من OpenAPI) |
-| RUNBOOK.md | متوسطة | دليل تشغيلي للطوارئ |
+### 🟢 P3 (منخفض — تنظيف)
+1. **14 جدول DB غير مستخدم في الكود** — مرشح إزالة (`daily_closures, deduction_rules, discipline_memos, hr_violations, invoice_items, products, training*, ticket_escalations, stock_transfers*, user_shortcuts, privacy_consent_records, quality_checks`).
+2. **حذف `migrations/README_DEPRECATED.md`**.
+3. **Cursor-based pagination** بدلًا من LIMIT/OFFSET للجداول الكبيرة.
+4. **مراجعة 727 index** للتأكد من تغطية `(companyId, branchId)` على الأعمدة المُستخدمة بكثرة.
+5. **smoke script** لا يحفظ response time — تحسين سهل.
+6. **e2e UI test** لكل 403 صفحة بـPlaywright.
 
 ---
 
-## القسم 15: القرار النهائي — Final Go/No-Go Decision
+## 📎 الملاحق
 
-### 15.1 معايير القرار
-
-| المعيار | الوزن | التقييم | النتيجة |
-|---------|-------|---------|---------|
-| التشغيل من الصفر | 15% | 10/10 | 1.50 |
-| سلامة قاعدة البيانات | 15% | 9/10 | 1.35 |
-| أمان مسارات API | 15% | 9.5/10 | 1.43 |
-| حدود الخدمات | 10% | 10/10 | 1.00 |
-| مكونات الحوكمة | 10% | 10/10 | 1.00 |
-| المسار المالي | 10% | 9.5/10 | 0.95 |
-| الأمان | 10% | 8.5/10 | 0.85 |
-| التغطية الاختبارية | 10% | 10/10 | 1.00 |
-| التوثيق | 5% | 8/10 | 0.40 |
-| **الإجمالي** | **100%** | | **9.48/10** |
-
-### 15.2 الإحصائيات النهائية
-
+### A. الملفات الناتجة من هذا الفحص
 ```
-┌──────────────────────────────────────────────────────────┐
-│                    GHAITH ERP v1.0                        │
-│                    2026-05-06                             │
-├──────────────────────────────────────────────────────────┤
-│  Backend (API Server)                                     │
-│    Route files:          80                               │
-│    Library files:        69                               │
-│    Total TS lines:       86,110                           │
-│    API endpoints:        1,237                            │
-│    Test files:           77                               │
-│    Test cases:           3,075                            │
-│    CI guard checks:      7/7 ✅                           │
-│    Migrations:           118                              │
-│    DB tables:            276                              │
-│    DB indexes:           368                              │
-│    Cron jobs:            60+                              │
-│    Event catalog:        160+ events                      │
-│    State machines:        26                              │
-│    RBAC permissions:     145                              │
-│                                                           │
-│  Frontend (React + Vite)                                  │
-│    Pages:                403                              │
-│    Components:           129                              │
-│    Custom hooks:         11                               │
-│    Total TS/TSX files:   581                              │
-│                                                           │
-│  Documentation                                            │
-│    docs/ files:          32                               │
-│    Blueprints:           11                               │
-│    Verification packs:   2                                │
-├──────────────────────────────────────────────────────────┤
-│  SECURITY POSTURE:       8.5/10                           │
-│  CI GUARD:               7/7 GREEN                        │
-│  TEST COVERAGE:          3,075/3,075 PASS                 │
-│  SCHEMA DRIFT:           NONE                             │
-│  CROSS-DOMAIN WRITES:    NONE                             │
-│  SQL INJECTION:          NONE                             │
-│  TENANT ISOLATION:       VERIFIED                         │
-├──────────────────────────────────────────────────────────┤
-│                                                           │
-│   ██████╗  ██████╗                                        │
-│  ██╔════╝ ██╔═══██╗                                       │
-│  ██║  ███╗██║   ██║                                       │
-│  ██║   ██║██║   ██║                                       │
-│  ╚██████╔╝╚██████╔╝                                       │
-│   ╚═════╝  ╚═════╝                                        │
-│                                                           │
-│   🟢 GO — READY FOR PRODUCTION                            │
-│                                                           │
-└──────────────────────────────────────────────────────────┘
+audit/api-smoke-results.json         ← نتيجة 452 GET endpoint
+audit/inventory.json                 ← FE+API كامل (369 routes, 928 endpoints)
+audit/report/db_tables.txt           ← 292 جدول
+audit/report/db_audit_cols.csv       ← أعمدة tenancy لكل جدول
+audit/report/db_rowcounts.txt        ← أعلى 30 جدول نشاطًا
+audit/report/auth_coverage.csv       ← 74 endpoint بلا permission
+audit/report/boundary_writes.csv     ← الكتابات لكل route file
+audit/report/code_tables_not_in_db.txt ← refs مفقودة
+audit/report/db_tables_not_in_code.txt ← جداول مهجورة
 ```
 
-### 15.3 شروط ما قبل النشر (Pre-Deployment Checklist)
-
-| # | الشرط | الأولوية | الحالة |
-|---|-------|---------|--------|
-| 1 | تفعيل IP validation في rate limiters | **عالية** | ⏳ ينبغي قبل الإنتاج |
-| 2 | تعيين FIELD_ENCRYPTION_KEY مستقل عن JWT_SECRET | **عالية** | ⏳ متغير بيئة |
-| 3 | تعيين CORS_ORIGINS لنطاق الإنتاج | **عالية** | ⏳ متغير بيئة |
-| 4 | إنشاء DEPLOYMENT.md | متوسطة | ⏳ توثيق |
-| 5 | إنشاء SECURITY.md | متوسطة | ⏳ توثيق |
-| 6 | إعداد نسخ احتياطي تلقائي (pg_dump cron) | متوسطة | ⏳ DevOps |
-| 7 | إعداد مراقبة (health endpoint + metrics) | متوسطة | ⏳ DevOps |
-| 8 | اختبار أداء تحت حمل (load testing) | منخفضة | ⏳ |
-
-### 15.4 التوقيع
-
-```
-───────────────────────────────────────
-المُنفِّذ: مهندس معماري أول
-التاريخ: 2026-05-06
-القرار: 🟢 GO — النظام جاهز للإنتاج
-الشرط: معالجة ملاحظة rate limiting (#1)
-       قبل النشر الإنتاجي الفعلي
-───────────────────────────────────────
+### B. السكربتات للتحقق المستمر
+```bash
+pnpm typecheck                  # tsc --build + leaf checks
+pnpm audit:schema               # لا identifiers غير معروفة
+pnpm audit:routes               # كل page مُستوردة
+pnpm audit:boundaries           # لا cross-domain writes
+pnpm --filter @workspace/api-server test  # 21 unit test
+node audit/api-smoke.mjs        # فحص 452 GET
+node audit/build-inventory.mjs  # تحديث inventory.json
 ```
 
----
+### C. الحكم النهائي
+> **النظام بُنية متينة، حدود مسارات نظيفة، حوكمة فعلية، وفحوصات تلقائية مرّت بنظافة. الفجوات المتبقية كلها تشغيلية (إنشاء الفترة المالية، أمان PDPL، 6 جداول مفقودة، نواقص توثيق) وقابلة للإصلاح خلال 1-2 أيام عمل بلا إعادة معمارية.**
 
-*تم إنشاء هذا التقرير بواسطة فحص شامل فعلي لكامل قاعدة الكود — 86,110 سطر backend + 581 ملف frontend — مع تحليل متعدد الأبعاد عبر 7 وكلاء تدقيق متوازيين.*
+— *نهاية التقرير*

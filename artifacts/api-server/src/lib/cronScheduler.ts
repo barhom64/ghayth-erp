@@ -18,7 +18,7 @@ import {
   currentPeriod,
   roundTo2,
 } from "./businessHelpers.js";
-import { broadcastAlert } from "./notificationService.js";
+import { broadcastAlert, sendNotification } from "./notificationService.js";
 import { processFallbackChains } from "./notificationEngine.js";
 import { checkSlaStatus } from "./workflowEngine.js";
 import { runAllProactiveChecks, registerProactiveEventListeners } from "./proactiveEngine.js";
@@ -27,6 +27,7 @@ import { decryptSecret } from "./secrets.js";
 import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
 import { scanObligations } from "./obligationsEngine.js";
 import { runAutoDetectionAllCompanies } from "./autoViolationEngine.js";
+import { getRedisRateLimitStatus, type RedisRateLimitStatus } from "./rateLimitStore.js";
 
 async function getSystemTimezone(): Promise<string> {
   try {
@@ -3033,6 +3034,328 @@ async function umrahMonthlyFinancialSummary(): Promise<string> {
   return `الملخص المالي الشهري للعمرة: ${sent} شركة`;
 }
 
+// --- Rate-limit fallback alerter (Task #176) ---------------------------------
+// Notify GM/owner when getRedisRateLimitStatus() degrades to fallback-memory
+// (and on recovery). Cooldown gates ALL fallback alerts (including flap
+// re-entries). State is persisted in `system_settings` for cross-replica
+// consistency under cron lock ownership changes.
+const RATE_LIMIT_STATE_KEY = "rate_limit_alerter_state";
+const RATE_LIMIT_REALERT_COOLDOWN_MS = 30 * 60_000;
+
+interface RateLimitAlerterState {
+  lastSeenStatus: RedisRateLimitStatus | null;
+  lastAlertedAt: number;
+  fallbackSince: number | null;
+}
+
+const EMPTY_RATE_LIMIT_STATE: RateLimitAlerterState = {
+  lastSeenStatus: null,
+  lastAlertedAt: 0,
+  fallbackSince: null,
+};
+
+async function loadRateLimitAlerterState(): Promise<RateLimitAlerterState> {
+  try {
+    const rows = await rawQuery<{ value: string }>(
+      `SELECT value FROM system_settings WHERE key = $1 AND "companyId" IS NULL AND "branchId" IS NULL`,
+      [RATE_LIMIT_STATE_KEY]
+    );
+    if (rows.length === 0 || !rows[0]?.value) return { ...EMPTY_RATE_LIMIT_STATE };
+    const parsed = JSON.parse(rows[0].value) as Partial<RateLimitAlerterState>;
+    return {
+      lastSeenStatus: (parsed.lastSeenStatus as RedisRateLimitStatus | null) ?? null,
+      lastAlertedAt: typeof parsed.lastAlertedAt === "number" ? parsed.lastAlertedAt : 0,
+      fallbackSince: typeof parsed.fallbackSince === "number" ? parsed.fallbackSince : null,
+    };
+  } catch (e) {
+    logger.error(e, "[cronScheduler] rate-limit alerter state load failed");
+    return { ...EMPTY_RATE_LIMIT_STATE };
+  }
+}
+
+async function saveRateLimitAlerterState(state: RateLimitAlerterState): Promise<void> {
+  const value = JSON.stringify(state);
+  try {
+    // Upsert via INSERT … ON CONFLICT against the partial unique index that
+    // covers `(key) WHERE "companyId" IS NULL AND "branchId" IS NULL` (see
+    // migration 006_system_settings_table.sql). This makes the read+write
+    // safe under concurrent ticks: the "DO UPDATE" branch atomically replaces
+    // the JSON blob with the latest decision.
+    await rawExecute(
+      `INSERT INTO system_settings (key, value, "createdAt", "updatedAt")
+       VALUES ($1, $2, NOW(), NOW())
+       ON CONFLICT (key) WHERE "companyId" IS NULL AND "branchId" IS NULL
+       DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()`,
+      [RATE_LIMIT_STATE_KEY, value]
+    );
+  } catch (e) {
+    logger.error(e, "[cronScheduler] rate-limit alerter state save failed");
+  }
+}
+
+interface RateLimitAdminRecipient {
+  companyId: number;
+  assignmentId: number;
+  email: string | null;
+}
+
+// Task #177: a configurable list of "infra admin" recipient emails that get
+// the rate-limit fallback / recovery email even if they aren't a GM/owner of
+// any tenant. Sources are merged (env + system_settings), de-duplicated case-
+// insensitively, and applied on top of the per-tenant GM list. Cooldown in
+// rateLimitFallbackAlertCheck still gates ALL emails (incl. these), so a
+// flapping outage cannot storm the inbox.
+const INFRA_ADMIN_EMAILS_SETTING_KEY = "infra_admin_emails";
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function parseEmailList(raw: string): string[] {
+  return raw
+    .split(/[,;\s]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && EMAIL_RE.test(s));
+}
+
+function getInfraAdminEmailsFromEnv(): string[] {
+  const raw = process.env.INFRA_ADMIN_EMAILS ?? "";
+  return parseEmailList(raw);
+}
+
+async function getInfraAdminEmailsFromSettings(): Promise<string[]> {
+  try {
+    const rows = await rawQuery<{ value: string }>(
+      `SELECT value FROM system_settings WHERE key = $1 AND "companyId" IS NULL AND "branchId" IS NULL`,
+      [INFRA_ADMIN_EMAILS_SETTING_KEY]
+    );
+    if (rows.length === 0 || !rows[0]?.value) return [];
+    const v = rows[0].value;
+    // Accept both a JSON array (["a@x", "b@y"]) and a delimited string.
+    try {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((x) => (typeof x === "string" ? x.trim() : ""))
+          .filter((s) => s.length > 0 && EMAIL_RE.test(s));
+      }
+    } catch {
+      /* fall through to delimited parsing */
+    }
+    return parseEmailList(v);
+  } catch (e) {
+    logger.error(e, "[cronScheduler] infra admin emails settings lookup failed");
+    return [];
+  }
+}
+
+async function getInfraAdminEmails(): Promise<string[]> {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const push = (e: string) => {
+    const k = e.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push(e);
+  };
+  for (const e of getInfraAdminEmailsFromEnv()) push(e);
+  for (const e of await getInfraAdminEmailsFromSettings()) push(e);
+  return out;
+}
+
+// Pivot company id used to satisfy the `email_queue."companyId"` column for
+// infra-admin emails (which are platform-wide, not tenant-scoped). Prefers a
+// company we already touched (admins[0]) so we never invent a foreign-key
+// mismatch; falls back to any active company.
+async function getPivotCompanyId(admins: RateLimitAdminRecipient[]): Promise<number | null> {
+  if (admins.length > 0 && admins[0]) return admins[0].companyId;
+  try {
+    const rows = await rawQuery<{ id: number }>(
+      `SELECT id FROM companies ORDER BY id ASC LIMIT 1`
+    );
+    return rows[0]?.id ?? null;
+  } catch (e) {
+    logger.error(e, "[cronScheduler] pivot company lookup failed");
+    return null;
+  }
+}
+
+async function sendInfraAdminEmails(
+  emails: string[],
+  pivotCompanyId: number | null,
+  type: "rate_limit_fallback" | "rate_limit_recovered",
+  title: string,
+  body: string,
+  excludeEmails: Iterable<string> = []
+): Promise<number> {
+  if (emails.length === 0 || pivotCompanyId === null) return 0;
+  // Dedupe against GM/owner mailboxes that already received the same alert
+  // through sendNotification — same human shouldn't get the same page twice.
+  const exclude = new Set<string>();
+  for (const e of excludeEmails) {
+    if (e) exclude.add(e.toLowerCase());
+  }
+  let queued = 0;
+  for (const toEmail of emails) {
+    if (exclude.has(toEmail.toLowerCase())) continue;
+    try {
+      await rawExecute(
+        `INSERT INTO email_queue ("companyId", "toEmail", "recipientName", subject, body, status, "createdAt", "refType", "refId")
+         VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), $6, $7)`,
+        [pivotCompanyId, toEmail, "Infra Admin", title, body, "system_health", null]
+      );
+      queued++;
+    } catch (e) {
+      logger.error(e, `[cronScheduler] failed to queue infra-admin email for ${toEmail} (${type})`);
+    }
+  }
+  return queued;
+}
+
+// Resolve one GM/owner per company (with their login email if any). Used by
+// both the fallback alert and the recovery alert so the recipient set stays
+// consistent — anyone who got the "degraded" ping will get the "recovered"
+// ping from the same address.
+async function getRateLimitAlertRecipients(): Promise<RateLimitAdminRecipient[]> {
+  try {
+    return await rawQuery<RateLimitAdminRecipient>(
+      `SELECT DISTINCT ON (ea."companyId")
+              ea."companyId" AS "companyId",
+              ea.id          AS "assignmentId",
+              u.email        AS "email"
+       FROM employee_assignments ea
+       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN users u ON u."employeeId" = e.id
+       WHERE ea.role IN ('general_manager','owner') AND ea.status = 'active'
+       ORDER BY ea."companyId",
+                CASE ea.role WHEN 'owner' THEN 1 WHEN 'general_manager' THEN 2 ELSE 3 END,
+                ea.id`
+    );
+  } catch (e) {
+    logger.error(e, "[cronScheduler] rate-limit alert recipient lookup failed");
+    return [];
+  }
+}
+
+export async function rateLimitFallbackAlertCheck(): Promise<string> {
+  const current = getRedisRateLimitStatus();
+  const state = await loadRateLimitAlerterState();
+  const previous = state.lastSeenStatus;
+
+  // `disabled` = REDIS_URL not set (intentional, e.g. local dev). Not a
+  // degradation worth alerting on — just clear any prior fallback timer.
+  if (current === "disabled") {
+    if (state.lastSeenStatus !== "disabled" || state.fallbackSince !== null) {
+      await saveRateLimitAlerterState({
+        lastSeenStatus: "disabled",
+        lastAlertedAt: 0,
+        fallbackSince: null,
+      });
+    }
+    return "skipped (REDIS_URL not configured)";
+  }
+
+  const now = Date.now();
+
+  if (current === "fallback-memory") {
+    const fallbackSince = state.fallbackSince ?? now;
+    const sinceLastAlert = now - state.lastAlertedAt;
+    const isTransition = previous !== null && previous !== "fallback-memory";
+    // Cooldown gates ALL fallback notifications (including fresh transitions
+    // back into fallback after a brief recovery), so a flapping outage
+    // — connected ↔ fallback every few minutes — cannot storm the inbox.
+    if (state.lastAlertedAt > 0 && sinceLastAlert < RATE_LIMIT_REALERT_COOLDOWN_MS) {
+      if (state.fallbackSince === null || state.lastSeenStatus !== "fallback-memory") {
+        await saveRateLimitAlerterState({
+          lastSeenStatus: "fallback-memory",
+          lastAlertedAt: state.lastAlertedAt,
+          fallbackSince,
+        });
+      }
+      return "fallback active, within cooldown";
+    }
+    const minutesInFallback = Math.floor((now - fallbackSince) / 60000);
+    const admins = await getRateLimitAlertRecipients();
+    const fallbackTitle = "تنبيه أمني: حدود الطلبات تعمل بالذاكرة المحلية فقط";
+    const fallbackBody = isTransition
+      ? "تعذّر الاتصال بـ Redis — حدود معدّل الطلبات (rate limit) عادت للذاكرة المحلية لكل خادم. يبقى الحد مطبّقاً ولكن مشاركته بين النسخ والإقلاعات معطّلة. تحقّق من المتغيّر REDIS_URL وحالة خادم Redis."
+      : `لا يزال نظام حدود الطلبات يعمل بالذاكرة المحلية منذ ${minutesInFallback} دقيقة — تحقّق من المتغيّر REDIS_URL وحالة خادم Redis.`;
+    for (const admin of admins) {
+      await sendNotification({
+        companyId: admin.companyId,
+        assignmentId: admin.assignmentId,
+        type: "rate_limit_fallback",
+        title: fallbackTitle,
+        body: fallbackBody,
+        priority: "high",
+        refType: "system_health",
+        // Push on both in-app AND email so an overnight degradation reaches an
+        // admin who isn't looking at the dashboard. Email is silently dropped
+        // by sendNotification when recipientEmail is unset, so this is safe
+        // even for admin users without an email on file.
+        channels: admin.email ? ["in_app", "email"] : ["in_app"],
+        recipientEmail: admin.email ?? undefined,
+      });
+    }
+    // Task #177: also email the configurable infra-admin recipient list
+    // (env INFRA_ADMIN_EMAILS + system_settings 'infra_admin_emails'). These
+    // are platform-level on-call addresses that may not map to any tenant GM.
+    // The 30-minute cooldown above gates this whole branch, so infra admins
+    // are not flooded by a flapping outage either.
+    const infraEmails = await getInfraAdminEmails();
+    const pivot = await getPivotCompanyId(admins);
+    const adminEmails = admins.map((a) => a.email).filter((e): e is string => !!e);
+    const infraQueued = await sendInfraAdminEmails(infraEmails, pivot, "rate_limit_fallback", fallbackTitle, fallbackBody, adminEmails);
+    await saveRateLimitAlerterState({
+      lastSeenStatus: "fallback-memory",
+      lastAlertedAt: now,
+      fallbackSince,
+    });
+    return `Rate-limit fallback alert sent to ${admins.length} admins + ${infraQueued} infra emails (${isTransition ? "transition" : `still degraded ${minutesInFallback}m`})`;
+  }
+
+  // current === "connected"
+  if (previous === "fallback-memory") {
+    const downtimeMin = state.fallbackSince ? Math.floor((now - state.fallbackSince) / 60000) : 0;
+    const admins = await getRateLimitAlertRecipients();
+    const recoveredTitle = "تم استعادة الاتصال بـ Redis";
+    const recoveredBody = `عادت حدود معدّل الطلبات إلى وضعها المشترك بين النسخ بعد ${downtimeMin} دقيقة من العمل بالذاكرة المحلية.`;
+    for (const admin of admins) {
+      await sendNotification({
+        companyId: admin.companyId,
+        assignmentId: admin.assignmentId,
+        type: "rate_limit_recovered",
+        title: recoveredTitle,
+        body: recoveredBody,
+        priority: "normal",
+        refType: "system_health",
+        channels: admin.email ? ["in_app", "email"] : ["in_app"],
+        recipientEmail: admin.email ?? undefined,
+      });
+    }
+    // Mirror the infra-admin email recipients on recovery too — anyone who
+    // was woken up by the "degraded" page deserves the all-clear.
+    const infraEmails = await getInfraAdminEmails();
+    const pivot = await getPivotCompanyId(admins);
+    const adminEmails = admins.map((a) => a.email).filter((e): e is string => !!e);
+    const infraQueued = await sendInfraAdminEmails(infraEmails, pivot, "rate_limit_recovered", recoveredTitle, recoveredBody, adminEmails);
+    // Preserve `lastAlertedAt` so a fresh fallback within the cooldown
+    // window after this recovery is still suppressed (flap suppression).
+    await saveRateLimitAlerterState({
+      lastSeenStatus: "connected",
+      lastAlertedAt: state.lastAlertedAt,
+      fallbackSince: null,
+    });
+    return `Rate-limit recovery alert sent to ${admins.length} admins + ${infraQueued} infra emails (downtime ${downtimeMin}m)`;
+  }
+
+  if (state.lastSeenStatus !== "connected") {
+    await saveRateLimitAlerterState({
+      lastSeenStatus: "connected",
+      lastAlertedAt: state.lastAlertedAt,
+      fallbackSince: null,
+    });
+  }
+  return "ok";
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "gov_expiry_alerts", description: "تنبيهات انتهاء الإقامات والاستمارات (مقيم/تم)", schedule: "0 7 * * *", handler: govExpiryAlerts },
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },
@@ -3094,6 +3417,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "monthly_bad_debt_reminder", description: "تذكير CFO باحتساب مخصص الديون المشكوك فيها", schedule: "0 9 1 * *", handler: monthlyBadDebtReminder },
   { name: "monthly_fx_revaluation_reminder", description: "تذكير CFO بترحيل إعادة تقييم العملات", schedule: "0 9 28 * *", handler: monthlyFxRevaluationReminder },
   { name: "daily_budget_variance_alert", description: "تنبيه تجاوز الميزانية اليومي", schedule: "0 10 * * *", handler: dailyBudgetVarianceAlert },
+  { name: "rate_limit_fallback_alert", description: "تنبيه عند انتقال حدود الطلبات إلى الذاكرة المحلية (Redis fallback)", schedule: "*/2 * * * *", handler: rateLimitFallbackAlertCheck },
 ];
 
 export async function seedCronJobs(): Promise<void> {

@@ -1,0 +1,507 @@
+{
+  "testedAt": "2026-05-06T19:14:36.945Z",
+  "total": 452,
+  "counts": {
+    "ok": 358,
+    "unauthorized": 2,
+    "forbidden": 2,
+    "notFound": 57,
+    "serverError": 1,
+    "other": 32
+  },
+  "serverErrors": [
+    {
+      "file": "communications.ts",
+      "method": "GET",
+      "original": "/push/vapid-key",
+      "mount": "/communications",
+      "testPath": "/api/communications/push/vapid-key",
+      "status": 502,
+      "body": "{\"error\":\"VAPID keys not configured\",\"code\":\"INTEGRATION_ERROR\"}"
+    }
+  ],
+  "notFoundSamples": [
+    {
+      "file": "accounting-engine.ts",
+      "method": "GET",
+      "original": "/accounting-mappings/:operationType",
+      "mount": "/finance",
+      "testPath": "/api/finance/accounting-mappings/1",
+      "status": 404
+    },
+    {
+      "file": "careersPortal.ts",
+      "method": "GET",
+      "original": "/jobs/:id",
+      "mount": "/careers",
+      "testPath": "/api/careers/jobs/1",
+      "status": 404
+    },
+    {
+      "file": "documents.ts",
+      "method": "GET",
+      "original": "/:id/download",
+      "mount": "/documents",
+      "testPath": "/api/documents/1/download",
+      "status": 404
+    },
+    {
+      "file": "documents.ts",
+      "method": "GET",
+      "original": "/:id/preview",
+      "mount": "/documents",
+      "testPath": "/api/documents/1/preview",
+      "status": 404
+    },
+    {
+      "file": "fleet.ts",
+      "method": "GET",
+      "original": "/trips/:id",
+      "mount": "/fleet",
+      "testPath": "/api/fleet/trips/1",
+      "status": 404
+    },
+    {
+      "file": "fleet.ts",
+      "method": "GET",
+      "original": "/drivers/:id",
+      "mount": "/fleet",
+      "testPath": "/api/fleet/drivers/1",
+      "status": 404
+    },
+    {
+      "file": "fleet.ts",
+      "method": "GET",
+      "original": "/maintenance/:id",
+      "mount": "/fleet",
+      "testPath": "/api/fleet/maintenance/1",
+      "status": 404
+    },
+    {
+      "file": "fleet.ts",
+      "method": "GET",
+      "original": "/fuel-logs/:id",
+      "mount": "/fleet",
+      "testPath": "/api/fleet/fuel-logs/1",
+      "status": 404
+    },
+    {
+      "file": "fleet.ts",
+      "method": "GET",
+      "original": "/insurance/:id",
+      "mount": "/fleet",
+      "testPath": "/api/fleet/insurance/1",
+      "status": 404
+    },
+    {
+      "file": "fleet.ts",
+      "method": "GET",
+      "original": "/traffic-violations/:id",
+      "mount": "/fleet",
+      "testPath": "/api/fleet/traffic-violations/1",
+      "status": 404
+    },
+    {
+      "file": "governance.ts",
+      "method": "GET",
+      "original": "/policies/:id",
+      "mount": "/governance",
+      "testPath": "/api/governance/policies/1",
+      "status": 404
+    },
+    {
+      "file": "governance.ts",
+      "method": "GET",
+      "original": "/policies/:id/module-links",
+      "mount": "/governance",
+      "testPath": "/api/governance/policies/1/module-links",
+      "status": 404
+    },
+    {
+      "file": "governance.ts",
+      "method": "GET",
+      "original": "/audits/:id",
+      "mount": "/governance",
+      "testPath": "/api/governance/audits/1",
+      "status": 404
+    },
+    {
+      "file": "governance.ts",
+      "method": "GET",
+      "original": "/compliance/:id",
+      "mount": "/governance",
+      "testPath": "/api/governance/compliance/1",
+      "status": 404
+    },
+    {
+      "file": "hr-discipline.ts",
+      "method": "GET",
+      "original": "/regulation/:id",
+      "mount": "/hr/discipline",
+      "testPath": "/api/hr/discipline/regulation/1",
+      "status": 404
+    },
+    {
+      "file": "hr-discipline.ts",
+      "method": "GET",
+      "original": "/memos/:id",
+      "mount": "/hr/discipline",
+      "testPath": "/api/hr/discipline/memos/1",
+      "status": 404
+    },
+    {
+      "file": "finance-cost-centers.ts",
+      "method": "GET",
+      "original": "/cost-centers/:id",
+      "mount": "/finance",
+      "testPath": "/api/finance/cost-centers/1",
+      "status": 404
+    },
+    {
+      "file": "hr-exit.ts",
+      "method": "GET",
+      "original": "/exit/:id",
+      "mount": "/hr",
+      "testPath": "/api/hr/exit/1",
+      "status": 404
+    },
+    {
+      "file": "hr-overtime.ts",
+      "method": "GET",
+      "original": "/overtime/:id",
+      "mount": "/hr",
+      "testPath": "/api/hr/overtime/1",
+      "status": 404
+    },
+    {
+      "file": "hr-loans.ts",
+      "method": "GET",
+      "original": "/loans/:id",
+      "mount": "/hr",
+      "testPath": "/api/hr/loans/1",
+      "status": 404
+    },
+    {
+      "file": "hr.ts",
+      "method": "GET",
+      "original": "/leave-requests/:id/stages",
+      "mount": "/hr",
+      "testPath": "/api/hr/leave-requests/1/stages",
+      "status": 404
+    },
+    {
+      "file": "hr.ts",
+      "method": "GET",
+      "original": "/leaves/:id",
+      "mount": "/hr",
+      "testPath": "/api/hr/leaves/1",
+      "status": 404
+    },
+    {
+      "file": "hr.ts",
+      "method": "GET",
+      "original": "/violations/:id",
+      "mount": "/hr",
+      "testPath": "/api/hr/violations/1",
+      "status": 404
+    },
+    {
+      "file": "hr.ts",
+      "method": "GET",
+      "original": "/payroll/:id/lines",
+      "mount": "/hr",
+      "testPath": "/api/hr/payroll/1/lines",
+      "status": 404
+    },
+    {
+      "file": "hr.ts",
+      "method": "GET",
+      "original": "/performance/:id",
+      "mount": "/hr",
+      "testPath": "/api/hr/performance/1",
+      "status": 404
+    },
+    {
+      "file": "hr.ts",
+      "method": "GET",
+      "original": "/payroll/:id",
+      "mount": "/hr",
+      "testPath": "/api/hr/payroll/1",
+      "status": 404
+    },
+    {
+      "file": "hr.ts",
+      "method": "GET",
+      "original": "/official-letters/:id",
+      "mount": "/hr",
+      "testPath": "/api/hr/official-letters/1",
+      "status": 404
+    },
+    {
+      "file": "hr.ts",
+      "method": "GET",
+      "original": "/evaluation-cycles/:id/system-report",
+      "mount": "/hr",
+      "testPath": "/api/hr/evaluation-cycles/1/system-report",
+      "status": 404
+    },
+    {
+      "file": "hr.ts",
+      "method": "GET",
+      "original": "/evaluation-cycles/:id/summary",
+      "mount": "/hr",
+      "testPath": "/api/hr/evaluation-cycles/1/summary",
+      "status": 404
+    },
+    {
+      "file": "hr.ts",
+      "method": "GET",
+      "original": "/evaluation-cycles/:id",
+      "mount": "/hr",
+      "testPath": "/api/hr/evaluation-cycles/1",
+      "status": 404
+    }
+  ],
+  "otherSamples": [
+    {
+      "file": "entityMeta.ts",
+      "method": "GET",
+      "original": "/tags-filter/:entityType",
+      "mount": "/entity-meta",
+      "testPath": "/api/entity-meta/tags-filter/1",
+      "status": 422
+    },
+    {
+      "file": "fleet.ts",
+      "method": "GET",
+      "original": "/vehicles/:id/impact-preview",
+      "mount": "/fleet",
+      "testPath": "/api/fleet/vehicles/1/impact-preview",
+      "status": 422
+    },
+    {
+      "file": "hr.ts",
+      "method": "GET",
+      "original": "/public-holidays/check",
+      "mount": "/hr",
+      "testPath": "/api/hr/public-holidays/check",
+      "status": 422
+    },
+    {
+      "file": "legal.ts",
+      "method": "GET",
+      "original": "/sessions/upcoming",
+      "mount": "/legal",
+      "testPath": "/api/legal/sessions/upcoming",
+      "status": 422
+    },
+    {
+      "file": "legal.ts",
+      "method": "GET",
+      "original": "/judgments/financial-report",
+      "mount": "/legal",
+      "testPath": "/api/legal/judgments/financial-report",
+      "status": 422
+    },
+    {
+      "file": "properties.ts",
+      "method": "GET",
+      "original": "/units/:id/impact-preview",
+      "mount": "/properties",
+      "testPath": "/api/properties/units/1/impact-preview",
+      "status": 422
+    },
+    {
+      "file": "settings.ts",
+      "method": "GET",
+      "original": "/resolve",
+      "mount": "/settings",
+      "testPath": "/api/settings/resolve",
+      "status": 422
+    },
+    {
+      "file": "umrah-entities.ts",
+      "method": "GET",
+      "original": "/commission-calculations",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/commission-calculations",
+      "status": 429
+    },
+    {
+      "file": "umrah-entities.ts",
+      "method": "GET",
+      "original": "/import/batches",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/import/batches",
+      "status": 429
+    },
+    {
+      "file": "umrah-entities.ts",
+      "method": "GET",
+      "original": "/import/batches/:id/changes",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/import/batches/1/changes",
+      "status": 429
+    },
+    {
+      "file": "umrah-entities.ts",
+      "method": "GET",
+      "original": "/invoices",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/invoices",
+      "status": 429
+    },
+    {
+      "file": "umrah-entities.ts",
+      "method": "GET",
+      "original": "/payments",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/payments",
+      "status": 429
+    },
+    {
+      "file": "umrah-entities.ts",
+      "method": "GET",
+      "original": "/statements/:subAgentId",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/statements/1",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/seasons",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/seasons",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/seasons/:id",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/seasons/1",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/agents",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/agents",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/agents/:id",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/agents/1",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/packages",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/packages",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/packages/:id",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/packages/1",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/pilgrims",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/pilgrims",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/pilgrims/:id",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/pilgrims/1",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/dashboard",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/dashboard",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/penalties",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/penalties",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/penalties/:id",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/penalties/1",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/agent-invoices",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/agent-invoices",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/agent-invoices/:id",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/agent-invoices/1",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/transport",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/transport",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/transport/:id",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/transport/1",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/import-logs",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/import-logs",
+      "status": 429
+    },
+    {
+      "file": "umrah.ts",
+      "method": "GET",
+      "original": "/unassigned",
+      "mount": "/umrah",
+      "testPath": "/api/umrah/unassigned",
+      "status": 429
+    }
+  ]
+}

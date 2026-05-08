@@ -259,7 +259,7 @@ export default function OpeningBalancesCreatePage() {
         <Button variant="outline" onClick={() => setLocation("/finance/opening-balances")}>
           إلغاء
         </Button>
-        <Button onClick={handleSubmit} disabled={!isBalanced || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!isBalanced || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>

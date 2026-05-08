@@ -491,7 +491,7 @@ export default function UmrahViolations() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(null)}>إلغاء</Button>
-            <Button onClick={handleSave} disabled={isSaving || !editing?.type}>
+            <Button onClick={handleSave} disabled={isSaving || !editing?.type} rateLimitAware>
               {isSaving ? "جاري الحفظ..." : editing?.id ? "حفظ التعديلات" : "إنشاء المخالفة"}
             </Button>
           </DialogFooter>

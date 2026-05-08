@@ -60,12 +60,13 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
         [cid, now, cutoff]
       ), []),
       safe(() => rawQuery<any>(
-        `SELECT t.id, t.title, t."dueDate" as "date", t.status, t.priority, p.name as "projectName"
-         FROM project_tasks t
-         LEFT JOIN projects p ON p.id = t."projectId"
+        `SELECT t.id, t.title, t."scheduledDate" as "date", t.status, t.priority,
+                p.name as "projectName"
+         FROM tasks t
+         LEFT JOIN projects p ON t."linkedEntityType" = 'project' AND p.id = t."linkedEntityId"
          WHERE t."companyId" = $1 AND t."deletedAt" IS NULL AND t.status NOT IN ('completed','cancelled')
-           AND t."dueDate" BETWEEN $2 AND $3
-         ORDER BY t."dueDate" LIMIT 50`,
+           AND t."scheduledDate" BETWEEN $2 AND $3
+         ORDER BY t."scheduledDate" LIMIT 50`,
         [cid, now, cutoff]
       ), []),
       safe(() => rawQuery<any>(
@@ -78,7 +79,7 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
       ), []),
       safe(() => rawQuery<any>(
         `SELECT ed.id, ed.type, ed.name, ed."expiryDate" as "date", ed."employeeId",
-                e."firstName" || ' ' || e."lastName" as "employeeName"
+                e."name" as "employeeName"
          FROM employee_documents ed
          JOIN employees e ON e.id = ed."employeeId"
          WHERE ed."companyId" = $1 AND ed."expiryDate" BETWEEN $2 AND $3
@@ -109,7 +110,7 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
       ), []),
       safe(() => rawQuery<any>(
         `SELECT lr.id, lr."startDate" as "date", lr."endDate", lr.status, lr.days,
-                lr."employeeId", e."firstName" || ' ' || e."lastName" as "employeeName",
+                lr."employeeId", e."name" as "employeeName",
                 lt.name as "leaveTypeName"
          FROM hr_leave_requests lr
          JOIN employees e ON e.id = lr."employeeId"

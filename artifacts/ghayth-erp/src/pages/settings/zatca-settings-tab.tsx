@@ -181,7 +181,7 @@ export function ZatcaSettingsTab() {
       </Card>
 
       <div className="flex items-center gap-3">
-        <Button onClick={handleSave} disabled={saving}>
+        <Button onClick={handleSave} disabled={saving} rateLimitAware>
           <Save className="h-4 w-4 me-1" />{saving ? "جاري الحفظ..." : "حفظ الإعدادات"}
         </Button>
         <Button variant="outline" onClick={handleTestConnection} disabled={testing}>

@@ -966,8 +966,9 @@ router.get("/dashboard", requirePermission("umrah:read"), async (req, res) => {
     const scope = req.scope!;
     const { seasonId } = req.query as any;
     let seasonFilter = "";
+    let seasonFilterP = "";
     const params: any[] = [scope.companyId];
-    if (seasonId) { params.push(seasonId); seasonFilter = ` AND "seasonId"=$${params.length}`; }
+    if (seasonId) { params.push(seasonId); seasonFilter = ` AND "seasonId"=$${params.length}`; seasonFilterP = ` AND p."seasonId"=$${params.length}`; }
     const stats = await rawQuery(`
       SELECT
         COUNT(*) as total,
@@ -992,7 +993,7 @@ router.get("/dashboard", requirePermission("umrah:read"), async (req, res) => {
       SELECT a.id, a.name, COUNT(p.id) as "pilgrimCount",
         COUNT(p.id) FILTER (WHERE p.status='overstayed') as "overstayedCount"
       FROM umrah_agents a
-      LEFT JOIN umrah_pilgrims p ON p."agentId"=a.id AND p."companyId"=$1 AND p."deletedAt" IS NULL${seasonFilter}
+      LEFT JOIN umrah_pilgrims p ON p."agentId"=a.id AND p."companyId"=$1 AND p."deletedAt" IS NULL${seasonFilterP}
       WHERE a."companyId"=$1 AND a.status='active' AND a."deletedAt" IS NULL
       GROUP BY a.id, a.name ORDER BY "pilgrimCount" DESC LIMIT 10
     `, params);

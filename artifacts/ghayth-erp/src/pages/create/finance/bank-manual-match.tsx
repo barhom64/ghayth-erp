@@ -93,7 +93,7 @@ export default function BankManualMatchPage() {
               onKeyDown={e => e.key === "Enter" && searchJournalLines()}
               className="flex-1"
             />
-            <Button onClick={searchJournalLines} disabled={jeSearching} variant="outline" className="gap-1">
+            <Button onClick={searchJournalLines} disabled={jeSearching} variant="outline" className="gap-1" rateLimitAware>
               <Search className="h-4 w-4" /> بحث
             </Button>
           </div>
@@ -138,7 +138,7 @@ export default function BankManualMatchPage() {
                     key: "actions",
                     header: "",
                     render: (jl) => (
-                      <Button size="sm" onClick={() => handleManualMatch(jl.id)} disabled={manualMatchMutation.isPending}>
+                      <Button size="sm" onClick={() => handleManualMatch(jl.id)} disabled={manualMatchMutation.isPending} rateLimitAware>
                         ربط
                       </Button>
                     ),

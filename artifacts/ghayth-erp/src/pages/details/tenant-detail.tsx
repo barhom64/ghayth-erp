@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,8 +45,26 @@ export default function TenantDetail() {
 
   const subtitleBits = tenant ? [tenant.phone, tenant.email].filter(Boolean).join(" • ") : "";
 
+  const editDelete = useDetailEditDelete({
+    entityLabel: "المستأجر",
+    patchPath: `/properties/tenants/${id}`,
+    deletePath: `/properties/tenants/${id}`,
+    listPath: "/properties/tenants",
+    initialValues: tenant,
+    fields: [
+      { key: "name", label: "الاسم" },
+      { key: "phone", label: "الهاتف" },
+      { key: "email", label: "البريد الإلكتروني" },
+      { key: "nationalId", label: "رقم الهوية" },
+      { key: "address", label: "العنوان" },
+    ],
+    invalidateKeys: [["tenant-detail", id || ""], ["tenants"]],
+    onSaved: () => refetch(),
+  });
+
   const overview = tenant ? (
     <div className="space-y-4">
+      <InlineEditCard hook={editDelete} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
@@ -235,7 +258,7 @@ export default function TenantDetail() {
     },
   ];
 
-  const actions = activeContract ? (
+  const tenantActionsExtra = activeContract ? (
     <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">مستأجر نشط</Badge>
   ) : null;
 
@@ -251,7 +274,7 @@ export default function TenantDetail() {
       error={isError ? true : undefined}
       onRetry={refetch}
       overview={overview}
-      actions={actions}
+      actions={<DetailActionButtons hook={editDelete} extra={tenantActionsExtra} />}
       extraTabs={extraTabs}
     />
   );

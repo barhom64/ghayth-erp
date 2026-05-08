@@ -231,7 +231,7 @@ journalRouter.get("/expenses", requirePermission("finance:read"), async (req, re
               COALESCE(SUM(jl.debit), 0) AS amount
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
-       LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId"
+       LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId" AND coa."deletedAt" IS NULL
        WHERE ${where} AND je.ref LIKE 'EXP%' AND je."deletedAt" IS NULL
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status,
                 je."costCenter", je."departmentId", je."relatedEntityType", je."relatedEntityId",
@@ -314,7 +314,7 @@ journalRouter.post("/expenses/impact-preview", requirePermission("finance:create
 
     if (supplierId) {
       const [supplier] = await rawQuery<any>(
-        `SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2`,
+        `SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [Number(supplierId), scope.companyId]
       );
       if (supplier) {
@@ -985,8 +985,8 @@ journalRouter.get("/journal/:id", requirePermission("finance:read"), async (req,
               ro.ref AS "reversalOfRef", ro.description AS "reversalOfDescription",
               rb.ref AS "reversedByRef", rb.description AS "reversedByDescription"
        FROM journal_entries je
-       LEFT JOIN journal_entries ro ON ro.id = je."reversalOfId"
-       LEFT JOIN journal_entries rb ON rb.id = je."reversedById"
+       LEFT JOIN journal_entries ro ON ro.id = je."reversalOfId" AND ro."deletedAt" IS NULL
+       LEFT JOIN journal_entries rb ON rb.id = je."reversedById" AND rb."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        LIMIT 1`,
       [id, scope.companyId]
@@ -995,7 +995,7 @@ journalRouter.get("/journal/:id", requirePermission("finance:read"), async (req,
     const lines = await rawQuery<any>(
       `SELECT jl.*, coa.name AS "accountName"
        FROM journal_lines jl
-       LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = $2
+       LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = $2 AND coa."deletedAt" IS NULL
        WHERE jl."journalId" = $1
        ORDER BY jl.id ASC`,
       [id, je.companyId]
@@ -1368,7 +1368,7 @@ journalRouter.get("/opening-balances", requirePermission("finance:read"), async 
               ) ORDER BY jl.id) AS lines
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl."journalId" = je.id
-       LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId"
+       LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId" AND coa."deletedAt" IS NULL
        WHERE ${where}${extraWhere}
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je."branchId", je."companyId"
        ORDER BY je."createdAt" DESC`,

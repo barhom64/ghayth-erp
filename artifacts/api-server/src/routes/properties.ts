@@ -1848,7 +1848,6 @@ router.get("/payments/:id", requirePermission("property:read"), async (req, res)
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (req.path.includes("/pay")) return;
     const [row] = await rawQuery<any>(
       `SELECT rp.*, c."tenantName", u."unitNumber"
        FROM rent_payments rp
@@ -1937,7 +1936,7 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
         [paidAmount, b.paidDate || todayISO(), b.method || 'bank_transfer', journalEntryId, Number(id)]
       );
 
-      const updatedRes = await client.query(`SELECT * FROM rent_payments WHERE id=$1 AND "deletedAt" IS NULL`, [Number(id)]);
+      const updatedRes = await client.query(`SELECT * FROM rent_payments WHERE id=$1`, [Number(id)]);
       return { row: updatedRes.rows[0], journalEntryId };
     });
 
@@ -2829,7 +2828,9 @@ router.patch("/buildings/:id", requirePermission("property:update"), async (req,
     }
     if (Object.keys(after).length === 0) { res.json(existing); return; }
     params.push(id);
-    await rawExecute(`UPDATE property_buildings SET ${sets.join(",")}, "updatedAt"=NOW() WHERE id=$${params.length}`, params);
+    // sets already starts with `"updatedAt"=NOW()` — do not append a second
+    // assignment or PostgreSQL raises 42601 "multiple assignments to same column".
+    await rawExecute(`UPDATE property_buildings SET ${sets.join(",")} WHERE id=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
 
     createAuditLog({
@@ -3872,8 +3873,8 @@ router.get("/tenants/:id/letters", requirePermission("property:read"), async (re
               l."senderName" AS "fromEntity", l."recipientName" AS "toEntity", l."createdAt"
        FROM correspondence l
        WHERE l."companyId" = $1
-         AND l."relatedEntity" = 'tenant'
-         AND l."relatedEntityId" = $2
+         AND l."entityType" = 'tenant'
+         AND l."entityId" = $2
          AND l."deletedAt" IS NULL
        ORDER BY l."sentAt" DESC NULLS LAST, l."createdAt" DESC
        LIMIT 50`,

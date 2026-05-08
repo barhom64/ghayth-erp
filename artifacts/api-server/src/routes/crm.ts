@@ -112,7 +112,7 @@ router.get("/opportunities", requirePermission("crm:read"), async (req, res) => 
     if (stage) { where += ` AND o.stage = $${paramIdx}`; params.push(stage); paramIdx++; }
     if (status) { where += ` AND o.status = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" WHERE ${where} AND o."deletedAt" IS NULL ORDER BY o.id DESC LIMIT 500`,
+      `SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" AND e."deletedAt" IS NULL WHERE ${where} AND o."deletedAt" IS NULL ORDER BY o.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -211,7 +211,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
       const [asn] = await rawQuery<{ id: number }>(
         `SELECT e.id FROM employees e
            JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-          WHERE e.id = $1 AND ea."companyId" = $2 LIMIT 1`,
+          WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL LIMIT 1`,
         [Number(b.assignedTo), scope.companyId]
       );
       if (!asn) {
@@ -411,7 +411,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
       const [asn] = await rawQuery<{ id: number }>(
         `SELECT e.id FROM employees e
            JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-          WHERE e.id = $1 AND ea."companyId" = $2 LIMIT 1`,
+          WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL LIMIT 1`,
         [Number(b.assignedTo), scope.companyId]
       );
       if (!asn) {
@@ -742,7 +742,7 @@ router.get("/opportunities/:id", requirePermission("crm:read"), async (req, res)
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" WHERE o.id=$1 AND o."companyId"=$2 AND o."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" AND e."deletedAt" IS NULL WHERE o.id=$1 AND o."companyId"=$2 AND o."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الفرصة غير موجودة");
 
     const activities = await rawQuery<any>(
@@ -987,8 +987,8 @@ router.post("/followup-check", requirePermission("crm:create"), async (req, res)
     const overdueActivities = await rawQuery<any>(
       `SELECT ca.*, co.title AS "oppTitle", co.stage, co."assignedTo", e.name AS "assigneeName"
        FROM crm_activities ca
-       JOIN crm_opportunities co ON co.id=ca."opportunityId"
-       LEFT JOIN employees e ON e.id=co."assignedTo"
+       JOIN crm_opportunities co ON co.id=ca."opportunityId" AND co."deletedAt" IS NULL
+       LEFT JOIN employees e ON e.id=co."assignedTo" AND e."deletedAt" IS NULL
        WHERE co."companyId"=$1 AND ca."completedAt" IS NULL AND ca."scheduledAt" < NOW()
        ORDER BY ca."scheduledAt" ASC`,
       [scope.companyId]

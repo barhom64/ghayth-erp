@@ -263,7 +263,7 @@ export default function ProfilePage() {
                     </div>
                   )}
 
-                  <Button type="submit" disabled={saving} className="gap-2">
+                  <Button type="submit" disabled={saving} className="gap-2" rateLimitAware>
                     <Save className="w-4 h-4" />
                     {saving ? "جاري الحفظ..." : "حفظ البيانات"}
                   </Button>
@@ -291,7 +291,7 @@ export default function ProfilePage() {
                       dir="ltr"
                       className="h-10 flex-1"
                     />
-                    <Button type="submit" disabled={resumeSaving || !resumeUrl.trim()} size="sm" className="gap-1 whitespace-nowrap">
+                    <Button type="submit" disabled={resumeSaving || !resumeUrl.trim()} size="sm" className="gap-1 whitespace-nowrap" rateLimitAware>
                       <Save className="w-3.5 h-3.5" />
                       {resumeSaving ? "حفظ..." : "حفظ الرابط"}
                     </Button>

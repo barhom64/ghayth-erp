@@ -218,7 +218,7 @@ export default function UmrahPackages() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog}>إلغاء</Button>
-            <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending || updateMut.isPending}>
+            <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending || updateMut.isPending} rateLimitAware>
               {createMut.isPending || updateMut.isPending ? "جاري الحفظ..." : isNew ? "إنشاء" : "حفظ"}
             </Button>
           </DialogFooter>

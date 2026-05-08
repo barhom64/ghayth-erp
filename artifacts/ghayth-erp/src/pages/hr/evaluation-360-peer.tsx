@@ -185,7 +185,7 @@ export default function Evaluation360PeerPage() {
         <Link href={`/hr/evaluation-360/${cycleId}`}>
           <Button variant="outline">إلغاء</Button>
         </Link>
-        <Button onClick={handleSubmit} disabled={submitMutation.isPending}>
+        <Button onClick={handleSubmit} disabled={submitMutation.isPending} rateLimitAware>
           {submitMutation.isPending ? "جارٍ الإرسال..." : "إرسال التقييم"}
         </Button>
       </div>

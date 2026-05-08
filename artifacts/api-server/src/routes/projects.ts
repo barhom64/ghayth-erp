@@ -234,7 +234,7 @@ router.post("/impact-preview", requirePermission("projects:read"), async (req, r
 
     if (managerId) {
       const [manager] = await rawQuery<any>(
-        `SELECT name FROM employees WHERE id = $1`, [Number(managerId)]
+        `SELECT name FROM employees WHERE id = $1 AND "deletedAt" IS NULL`, [Number(managerId)]
       );
       const [[active]] = await Promise.all([
         rawQuery<any>(
@@ -336,7 +336,7 @@ router.get("/", requirePermission("projects:read"), async (req, res) => {
     }
 
     const rows = await rawQuery<any>(
-      `SELECT p.*, cl.name AS "clientName", e.name AS "managerName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=p."managerId" WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.id DESC LIMIT 500`,
+      `SELECT p.*, cl.name AS "clientName", e.name AS "managerName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=p."managerId" AND e."deletedAt" IS NULL WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -526,7 +526,7 @@ router.get("/:id", requirePermission("projects:read"), async (req, res) => {
     const [project] = await rawQuery<any>(`SELECT p.*, cl.name AS "clientName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."deletedAt" IS NULL WHERE ${detailWhere}`, detailParams);
     if (!project) throw new NotFoundError("المشروع غير موجود");
     const phases = await rawQuery<any>(`SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`, [project.id]);
-    const tasks = await rawQuery<any>(`SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" WHERE pt."projectId"=$1 AND pt."deletedAt" IS NULL ORDER BY pt."dueDate" LIMIT 500`, [project.id]);
+    const tasks = await rawQuery<any>(`SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" AND e."deletedAt" IS NULL WHERE pt."projectId"=$1 ORDER BY pt."dueDate" LIMIT 500`, [project.id]);
 
     let taskDeps: any[] = [];
     if (tasks.length > 0) {
@@ -1244,7 +1244,7 @@ router.get("/stats/overview", requirePermission("projects:read"), async (req, re
 
     const slippingProjects = await rawQuery<any>(
       `SELECT id, name, status, "endDate", progress, budget, "spentAmount",
-              (SELECT name FROM employees WHERE id=p."managerId") as "managerName"
+              (SELECT name FROM employees WHERE id=p."managerId" AND "deletedAt" IS NULL) as "managerName"
        FROM projects p
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
          AND p.status IN ('active','in_progress') AND p."endDate" < CURRENT_DATE
@@ -1254,7 +1254,7 @@ router.get("/stats/overview", requirePermission("projects:read"), async (req, re
 
     const recentProjects = await rawQuery<any>(
       `SELECT id, name, status, progress, budget, "spentAmount", "endDate",
-              (SELECT name FROM employees WHERE id=p."managerId") as "managerName"
+              (SELECT name FROM employees WHERE id=p."managerId" AND "deletedAt" IS NULL) as "managerName"
        FROM projects p
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL AND p.status IN ('active','in_progress')
        ORDER BY p."updatedAt" DESC LIMIT 8`,
@@ -1682,7 +1682,7 @@ router.get("/:id/resources", requirePermission("projects:read"), async (req, res
     const rows = await rawQuery<any>(
       `SELECT pr.*, e.name AS "employeeName", ea."jobTitle" AS "employeeJobTitle"
        FROM project_resources pr
-       LEFT JOIN employees e ON e.id=pr."employeeId"
+       LEFT JOIN employees e ON e.id=pr."employeeId" AND e."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea.status='active'
        WHERE pr."projectId"=$1 AND pr."companyId"=$2
        ORDER BY pr.id`,
@@ -1745,7 +1745,7 @@ router.get("/:id/costs", requirePermission("projects:read"), async (req, res) =>
     const rows = await rawQuery<any>(
       `SELECT pc.*, e.name AS "enteredByName"
        FROM project_costs pc
-       LEFT JOIN employees e ON e.id=pc."enteredBy"
+       LEFT JOIN employees e ON e.id=pc."enteredBy" AND e."deletedAt" IS NULL
        WHERE pc."projectId"=$1 AND pc."companyId"=$2
        ORDER BY pc."costDate" DESC LIMIT 500`,
       [projectId, scope.companyId]
@@ -2024,7 +2024,7 @@ router.get("/:id/gantt", requirePermission("projects:read"), async (req, res) =>
       [projectId]
     );
     const tasks = await rawQuery<any>(
-      `SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" WHERE pt."projectId"=$1 AND pt."deletedAt" IS NULL ORDER BY pt."startDate","phaseId" LIMIT 500`,
+      `SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" AND e."deletedAt" IS NULL WHERE pt."projectId"=$1 ORDER BY pt."startDate","phaseId" LIMIT 500`,
       [projectId]
     );
     const milestones = await rawQuery<any>(
@@ -2082,8 +2082,8 @@ router.get("/:id/letters", requirePermission("projects:read"), async (req, res) 
               l."senderName" AS "fromEntity", l."recipientName" AS "toEntity", l."createdAt"
        FROM correspondence l
        WHERE l."companyId" = $1
-         AND l."relatedEntity" = 'project'
-         AND l."relatedEntityId" = $2
+         AND l."entityType" = 'project'
+         AND l."entityId" = $2
          AND l."deletedAt" IS NULL
        ORDER BY l."sentAt" DESC NULLS LAST, l."createdAt" DESC
        LIMIT 50`,

@@ -317,7 +317,7 @@ function KBManagement() {
               <textarea className="w-full border rounded px-2 py-1 text-sm" rows={4} value={newForm.content} onChange={e => setNewForm(p => ({ ...p, content: e.target.value }))} />
             </div>
             <div className="col-span-2 flex gap-2">
-              <Button size="sm" onClick={handleCreate}>حفظ</Button>
+              <Button size="sm" onClick={handleCreate} rateLimitAware>حفظ</Button>
               <Button size="sm" variant="ghost" onClick={() => setShowNew(false)}>إلغاء</Button>
             </div>
           </CardContent>

@@ -98,7 +98,7 @@ export default function ContractsCreate() {
         <TextAreaField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="ملاحظات إضافية..." />
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="outline" onClick={() => setLocation("/hr/contracts")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={createMut.isPending}>{createMut.isPending ? "جاري الإنشاء..." : "إنشاء العقد"}</Button>
+          <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>{createMut.isPending ? "جاري الإنشاء..." : "إنشاء العقد"}</Button>
         </div>
       </div>
     </CreatePageLayout>
