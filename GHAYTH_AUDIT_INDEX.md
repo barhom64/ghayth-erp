@@ -20,7 +20,7 @@
 | صفحات منفصلة (بدون API) | 0 |
 | الاختبارات | 3,092 اختبار (80 ملف) — كلها ناجحة |
 | فحوصات CI | 9 فحوصات — كلها ناجحة |
-| إجمالي الأخطاء المُصلحة | ~456 خطأ عبر 10 جولات |
+| إجمالي الأخطاء المُصلحة | ~536 خطأ عبر 11 جولة |
 | تغطية الراوتات | 80/80 ملف (100%) |
 | تغطية المكتبات | 74/74 ملف (100%) |
 | تغطية الـ Middleware | 6/6 ملف (100%) |
@@ -1057,7 +1057,7 @@ kpiEngine, notificationService, clientAnalytics, journeyEngine, recurringJournal
 |-------|---------|
 | INSERT missing companyId | **0 violations** — all 202 INSERTs on multi-tenant tables include companyId |
 | SQL injection | **0 CRITICAL** — all queries parameterized |
-| Missing deletedAt in UPDATE/DELETE | 247 findings (113 HIGH, 134 MEDIUM) — noted, most inside pre-validated transactions |
+| Missing deletedAt in UPDATE/DELETE | 247 findings → **80 fixed in Round 11a** (167 remaining, mostly inside pre-validated transactions) |
 
 ### ي. Frontend lifecycle method errors (2 إصلاح):
 
@@ -1068,7 +1068,72 @@ kpiEngine, notificationService, clientAnalytics, journeyEngine, recurringJournal
 
 ---
 
-> **✅ الفحص مكتمل — 160/160 ملف backend + 3 بوابات frontend تم فحصها**
-> **~456 خطأ مُصلح عبر 10 جولات — CI أخضر (3,092 اختبار)**
+---
 
-*تم تحديث هذا الفهرس بواسطة فحص Claude Code الشامل — الجولة العاشرة مكتملة 2026-05-08.*
+## 16. الجولة الحادية عشرة — ✅ مكتملة (Missing deletedAt IS NULL in UPDATE/DELETE)
+
+إصلاح منهجي لـ 80 عبارة UPDATE/DELETE مفقود منها فلتر `"deletedAt" IS NULL` عبر 18 ملف راوت.
+بدون هذا الفلتر، الصفوف المحذوفة حذفاً ناعماً يمكن تعديلها بواسطة طلبات متزامنة أو قديمة.
+
+### Round 11a — deletedAt IS NULL guards (80 إصلاح — commit 8a3b617):
+
+| الملف | العدد | أمثلة |
+|-------|-------|-------|
+| `fleet.ts` | 18 | vehicle status (in_use/available/maintenance), driver status, trip/maintenance/fuel/insurance PATCH |
+| `properties.ts` | 9 | rental_contracts, property_units, property_buildings, tenants, rent_payments, maintenance_requests, property_owners |
+| `warehouse.ts` | 8 | warehouse_products stock/cost updates (in/out/transfer/audit) |
+| `store.ts` | 7 | store_products quantity, store_orders PATCH/cancel/delete/GL |
+| `employees.ts` | 6 | employees UPDATE, employee_contracts termination, hr_leave_requests cancel, tasks cancel, hr_employee_loans cancel |
+| `hr.ts` | 5 | payroll_runs approve, shifts isDefault/PATCH, employee_violations PATCH |
+| `training.ts` | 4 | training_programs PATCH/enrolled++/--, training_enrollments PATCH |
+| `finance-invoices.ts` | 4 | clients totalRevenue, budgets consumption, invoices paidAmount (x2) |
+| `projects.ts` | 4 | projects PATCH, project_tasks blocked/PATCH/unblock |
+| `hr-loans.ts` | 3 | rejection (x2), approval |
+| `documents.ts` | 3 | version update, status change, PATCH |
+| `accounting-engine.ts` | 2 | journal_entry_templates UPDATE, subsidiary_accounts DELETE |
+| `finance-journal.ts` | 2 | journal_entries metadata + pending_approval |
+| `governance.ts` | 2 | governance_policies PATCH + archive |
+| `hr-contracts.ts` | 1 | renewalDate UPDATE (+companyId scope added) |
+| `hr-exit.ts` | 1 | hr_exit_requests clearanceCompleted |
+| `finance-purchase.ts` | 1 | goods_receipts journalId |
+| `umrah.ts` | 1 | umrah_pilgrims batch import |
+
+### تم التحقق من كل جدول في schema.sql:
+
+**جداول بدون deletedAt (تم استبعادها بشكل صحيح):**
+users, onboarding_tasks, employee_assignments, warehouse_movements, leave_approval_stages,
+approval_requests, accounting_mappings, property_inspections, property_security_deposits,
+hr_exit_clearance, purchase_order_items, payment_runs, fleet_preventive_plans, umrah_import_logs
+
+### الجولة الحادية عشرة أ:
+
+| الخطورة | العدد | الحالة |
+|---------|-------|--------|
+| HIGH | 45 | ✅ مُصلح |
+| MEDIUM | 35 | ✅ مُصلح |
+| **المجموع** | **80** | **✅ مُصلح** |
+
+---
+
+### **الإجمالي الكلي: ~536 خطأ مُصلح عبر 11 جولة — 160/160 ملف backend + 3 بوابات frontend**
+
+### أخطاء مكتشفة لم تُصلح (تحتاج تعديلات أعمق):
+
+| # | الخطورة | الوصف | السبب |
+|---|---------|-------|-------|
+| 1 | HIGH | المرفقات في طلب الإجازة لا تُرسل | يحتاج تعديل frontend + backend + ربما storage |
+| 2 | HIGH | reliefOfficer/contactDuringLeave تُهمل | يحتاج إضافة أعمدة في schema |
+| 3 | MEDIUM | ON CONFLICT DO NOTHING بدون unique constraint | يحتاج migration |
+| 4 | MEDIUM | hr_leave_balances بدون unique constraint | يحتاج migration |
+| 5 | MEDIUM | paymentTerms لا تُحفظ في الفاتورة | يحتاج تعديل INSERT |
+| 6 | MEDIUM | hr-discipline: rawExecute داخل transaction بدل client | يحتاج refactor |
+| 7 | MEDIUM | hr-exit: إكمال الخروج لا يلغي العقود/القروض | يحتاج refactor |
+| 8 | MEDIUM | ~167 deletedAt filter مفقود في UPDATE/DELETE (معظمها داخل transactions محمية) | إصلاح تدريجي |
+| 9 | HIGH | 9 multi-write operations بدون transaction (hr check-in, evaluation cycles, إلخ) | يحتاج refactor |
+| 10 | LOW | الحذف يتجاوز آلة حالة التذاكر | بالتصميم (soft delete) |
+| 11 | LOW | fleet/warehouse/properties: حد ثابت 500 بدون pagination | تصميم |
+
+> **✅ الفحص مكتمل — 160/160 ملف backend + 3 بوابات frontend تم فحصها**
+> **~536 خطأ مُصلح عبر 11 جولة — CI أخضر (3,092 اختبار)**
+
+*تم تحديث هذا الفهرس بواسطة فحص Claude Code الشامل — الجولة الحادية عشرة مكتملة 2026-05-08.*
