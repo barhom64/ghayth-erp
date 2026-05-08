@@ -211,12 +211,8 @@ router.post("/data-request", authMiddleware, pdplUserLimiter, requirePermission(
     }).catch((e) => logger.error(e, "pdpl background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "pdpl.data_request.created", entity: "data_access_requests", entityId: insertId, details: JSON.stringify({ requestType, requesterName: requesterName ?? scope.userName }) }).catch((e) => logger.error(e, "pdpl background task failed"));
 
-    res.status(201).json({
-      id: insertId,
-      message: "تم استلام طلبك وسيتم الرد خلال 30 يوماً وفق متطلبات PDPL",
-      requestType,
-      dueDate: toDateISO(dueDate)
-    });
+    const [row] = await rawQuery<any>(`SELECT * FROM data_access_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json({ ...row, message: "تم استلام طلبك وسيتم الرد خلال 30 يوماً وفق متطلبات PDPL" });
   } catch (err) {
     handleRouteError(err, res, "Data request error:");
   }

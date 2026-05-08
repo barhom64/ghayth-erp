@@ -95,7 +95,8 @@ router.post("/postings", requirePermission("hr:write"), async (req, res) => {
       entityId: r.insertId,
       details: JSON.stringify({ title, type: type || "full-time", status: status || "open" }),
     }).catch((e) => logger.error(e, "recruitment background task failed"));
-    res.status(201).json({ id: r.insertId, title, status: status || "open" });
+    const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, title, status: status || "open" });
   } catch (err) { handleRouteError(err, res, "Create job posting error:"); }
 });
 
@@ -284,7 +285,8 @@ router.post("/applications", requirePermission("hr:write"), async (req, res) => 
       entityId: r.insertId,
       details: JSON.stringify({ postingId: Number(postingId), applicantName }),
     }).catch((e) => logger.error(e, "recruitment background task failed"));
-    res.status(201).json({ id: r.insertId, postingId: Number(postingId), applicantName, status: status || "new" });
+    const [row] = await rawQuery<any>(`SELECT * FROM job_applications WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, postingId: Number(postingId), applicantName, status: status || "new" });
   } catch (err) { handleRouteError(err, res, "Create application error:"); }
 });
 

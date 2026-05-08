@@ -329,10 +329,8 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
       details: JSON.stringify({ loanNumber, amount, installmentCount, assignmentId: b.assignmentId }),
     }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
-    res.status(201).json({
-      id: insertId, loanNumber,
-      approval: approvalResult ?? { requiresApproval: false },
-    });
+    const [row] = await rawQuery<any>(`SELECT * FROM hr_employee_loans WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json({ ...row, approval: approvalResult ?? { requiresApproval: false } });
   } catch (err) {
     handleRouteError(err, res, "خطأ في إنشاء السلفة");
   }

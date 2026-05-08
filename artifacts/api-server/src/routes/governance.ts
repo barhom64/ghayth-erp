@@ -442,7 +442,8 @@ router.post("/risks", requirePermission("governance:write"), async (req, res) =>
       entityId: r.insertId,
       details: JSON.stringify({ title, severity: severity ?? "medium" }),
     }).catch((e) => logger.error(e, "governance background task failed"));
-    res.status(201).json({ id: r.insertId, title, severity: severity ?? "medium", status: status || "open" });
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, title, severity: severity ?? "medium", status: status || "open" });
   } catch (err) { handleRouteError(err, res, "Create risk error:"); }
 });
 
@@ -531,7 +532,8 @@ router.post("/audits", requirePermission("governance:write"), async (req, res) =
       entityId: r.insertId,
       details: JSON.stringify({ title }),
     }).catch((e) => logger.error(e, "governance background task failed"));
-    res.status(201).json({ id: r.insertId });
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
@@ -618,7 +620,8 @@ router.post("/compliance", requirePermission("governance:write"), async (req, re
       entityId: r.insertId,
       details: JSON.stringify({ regulation }),
     }).catch((e) => logger.error(e, "governance background task failed"));
-    res.status(201).json({ id: r.insertId });
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 

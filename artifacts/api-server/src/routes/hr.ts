@@ -3321,7 +3321,8 @@ router.post("/approval-chain-definitions", requirePermission("hr:create"), async
     }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "approval_chain.created", entity: "hr_approval_chain_definitions", entityId: chainId, details: JSON.stringify({ name, chainType }) }).catch((e) => logger.error(e, "hr background task failed"));
 
-    res.status(201).json({ id: chainId, name, chainType, stepsCreated: steps?.length ?? 0 });
+    const [row] = await rawQuery<any>(`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2`, [chainId, scope.companyId]);
+    res.status(201).json({ ...row, stepsCreated: steps?.length ?? 0 });
   } catch (err) { handleRouteError(err, res, "Create approval chain error:"); }
 });
 

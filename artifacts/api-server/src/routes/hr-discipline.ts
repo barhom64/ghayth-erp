@@ -300,7 +300,8 @@ router.post("/regulation", requirePermission("hr:create"), async (req, res) => {
       entityId: insertId,
       details: JSON.stringify({ section, articleNumber, title, severity: severity ?? "medium" }),
     }).catch((e) => logger.error(e, "hr-discipline background task failed"));
-    res.status(201).json({ id: insertId });
+    const [row] = await rawQuery<any>(`SELECT * FROM hr_discipline_regulations WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId });
   } catch (err) {
     handleRouteError(err, res, "Create regulation article error:");
   }
@@ -576,7 +577,8 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
       after: { memoNumber, incidentType, incidentDate, assignmentId, regulationId: resolvedRegulationId, source: "manual" },
     }).catch((e) => logger.error(e, "hr-discipline background task failed"));
 
-    res.status(201).json({ id: memoId, memoNumber, regulationId: resolvedRegulationId, penaltyPreview });
+    const [row] = await rawQuery<any>(`SELECT * FROM hr_inquiry_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
+    res.status(201).json({ ...row, penaltyPreview });
   } catch (err) {
     handleRouteError(err, res, "Create memo error:");
   }

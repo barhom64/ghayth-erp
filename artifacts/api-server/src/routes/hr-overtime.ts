@@ -326,10 +326,8 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
       details: JSON.stringify({ requestNumber, hours, totalAmount, overtimeDate: b.overtimeDate, assignmentId: b.assignmentId }),
     }).catch((e) => logger.error(e, "hr-overtime background task failed"));
 
-    res.status(201).json({
-      id: insertId, requestNumber, totalAmount,
-      approval: approvalResult ?? { requiresApproval: false },
-    });
+    const [row] = await rawQuery<any>(`SELECT * FROM hr_overtime_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json({ ...row, approval: approvalResult ?? { requiresApproval: false } });
   } catch (err) {
     handleRouteError(err, res, "خطأ في إنشاء طلب الوقت الإضافي");
   }

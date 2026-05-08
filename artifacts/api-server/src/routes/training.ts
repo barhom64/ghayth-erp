@@ -112,7 +112,8 @@ router.post("/programs", requirePermission("hr:create"), async (req, res) => {
       after: { title, category: category ?? null, startDate: startDate ?? null, endDate: endDate ?? null, capacity: Number(capacity ?? 0) },
     }).catch((e) => logger.error(e, "training background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.program.created", entity: "training_programs", entityId: r.insertId, details: JSON.stringify({ title, category }) }).catch((e) => logger.error(e, "training background task failed"));
-    res.status(201).json({ id: r.insertId, title, status: status ?? "upcoming" });
+    const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, title, status: status ?? "upcoming" });
   } catch (err) { handleRouteError(err, res, "Create training program error:"); }
 });
 
@@ -308,7 +309,8 @@ router.post("/enrollments", requirePermission("hr:create"), async (req, res) => 
       after: { programId: Number(programId), employeeId: employeeId ? Number(employeeId) : null, employeeName: employeeName ?? null, status: status ?? "enrolled" },
     }).catch((e) => logger.error(e, "training background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.enrollment.created", entity: "training_enrollments", entityId: r.insertId, details: JSON.stringify({ programId, employeeId }) }).catch((e) => logger.error(e, "training background task failed"));
-    res.status(201).json({ id: r.insertId, programId: Number(programId), employeeId: employeeId ?? null, status: status ?? "enrolled" });
+    const [row] = await rawQuery<any>(`SELECT * FROM training_enrollments WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, programId: Number(programId), employeeId: employeeId ?? null, status: status ?? "enrolled" });
   } catch (err) { handleRouteError(err, res, "Create training enrollment error:"); }
 });
 
