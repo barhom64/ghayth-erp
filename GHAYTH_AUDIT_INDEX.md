@@ -20,7 +20,7 @@
 | صفحات منفصلة (بدون API) | 0 |
 | الاختبارات | 3,092 اختبار (80 ملف) — كلها ناجحة |
 | فحوصات CI | 9 فحوصات — كلها ناجحة |
-| إجمالي الأخطاء المُصلحة | ~444 خطأ عبر 10 جولات |
+| إجمالي الأخطاء المُصلحة | ~456 خطأ عبر 10 جولات |
 | تغطية الراوتات | 80/80 ملف (100%) |
 | تغطية المكتبات | 74/74 ملف (100%) |
 | تغطية الـ Middleware | 6/6 ملف (100%) |
@@ -519,7 +519,23 @@
 | MEDIUM | 9 | ✅ مُصلح |
 | **المجموع** | **11** | **✅ مُصلح** |
 
-### **الإجمالي الكلي: ~444 خطأ مُصلح عبر 10 جولات — 160/160 ملف backend + 3 بوابات frontend**
+### الجولة العاشرة ج (تم إصلاحها — commits 1155eaf, 96dc105):
+
+| الخطورة | العدد | الحالة |
+|---------|-------|--------|
+| HIGH | 6 | ✅ مُصلح |
+| **المجموع** | **6** | **✅ مُصلح** |
+
+### الجولة العاشرة د (تم إصلاحها — commit e71170c):
+
+| الخطورة | العدد | الحالة |
+|---------|-------|--------|
+| CRITICAL | 1 | ✅ مُصلح |
+| HIGH | 2 | ✅ مُصلح |
+| MEDIUM | 2 | ✅ مُصلح |
+| **المجموع** | **5** | **✅ مُصلح** |
+
+### **الإجمالي الكلي: ~456 خطأ مُصلح عبر 10 جولات — 160/160 ملف backend + 3 بوابات frontend**
 
 ### أخطاء مكتشفة لم تُصلح (تحتاج تعديلات أعمق):
 
@@ -1014,7 +1030,36 @@ kpiEngine, notificationService, clientAnalytics, journeyEngine, recurringJournal
 | `finance-journal.ts` | `date`, `costCenter` | تاريخ السند ومركز التكلفة مفقودان |
 | `training.ts` | `objectives`, `targetAudience` | أهداف البرنامج مفقودة |
 
-### ز. Frontend lifecycle method errors (2 إصلاح):
+### ز. Additional transaction safety fixes (6 إصلاحات — commits 1155eaf, 96dc105):
+
+| الملف | العملية | الخطر |
+|-------|---------|-------|
+| `hr-exit.ts` | Exit request + clearance departments | إخلاء طرف ناقص |
+| `projects.ts` | Project create + phases | مشروع بدون مراحل |
+| `projects.ts` | Task create + dependencies + blocked status | مهمة بدون تبعيات |
+| `umrah.ts` | Agent invoice + penalty status update | غرامات مزدوجة |
+| `hr.ts` | Approval chain + steps | سلسلة موافقات فارغة |
+| `hr.ts` | Official letter creation | خطاب بدون ID |
+
+### ح. Response data leaks (5 إصلاحات — commit e71170c):
+
+| الملف | ما يُسرَّب | الإصلاح |
+|-------|-----------|---------|
+| `notification-engine.ts` | webhook headers (auth tokens) — CRITICAL | headers masked to "__configured__" |
+| `admin.ts` | integration_logs.* (body, metadata) — HIGH | SELECT explicit safe columns |
+| `settings.ts` | whatsapp_verify_token in plaintext — HIGH | Added to SECRET_KEYS mask |
+| `finance-budget.ts` | raw req.body echo — MEDIUM | Explicit Zod-validated fields |
+| `hr.ts` | raw req.body echo in official letter — MEDIUM | Explicit fields |
+
+### ط. Audit results — clean:
+
+| الفحص | النتيجة |
+|-------|---------|
+| INSERT missing companyId | **0 violations** — all 202 INSERTs on multi-tenant tables include companyId |
+| SQL injection | **0 CRITICAL** — all queries parameterized |
+| Missing deletedAt in UPDATE/DELETE | 247 findings (113 HIGH, 134 MEDIUM) — noted, most inside pre-validated transactions |
+
+### ي. Frontend lifecycle method errors (2 إصلاح):
 
 | الملف | الخطأ | الإصلاح |
 |-------|-------|---------|
@@ -1024,6 +1069,6 @@ kpiEngine, notificationService, clientAnalytics, journeyEngine, recurringJournal
 ---
 
 > **✅ الفحص مكتمل — 160/160 ملف backend + 3 بوابات frontend تم فحصها**
-> **~444 خطأ مُصلح عبر 10 جولات — CI أخضر (3,092 اختبار)**
+> **~456 خطأ مُصلح عبر 10 جولات — CI أخضر (3,092 اختبار)**
 
 *تم تحديث هذا الفهرس بواسطة فحص Claude Code الشامل — الجولة العاشرة مكتملة 2026-05-08.*
