@@ -1114,6 +1114,11 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
       else installmentCount = contractMonths;
     }
 
+    if (b.ownerId) {
+      const [owner] = await rawQuery<{ id: number }>(`SELECT id FROM property_owners WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`, [b.ownerId, scope.companyId]);
+      if (!owner) throw new ValidationError("المالك غير موجود", { field: "ownerId", fix: "اختر مالكاً مسجلاً." });
+    }
+
     const contractNumber = b.contractNumber || generateTimeRef("RC");
 
     const insertId = await withTransaction(async (client) => {
@@ -2726,6 +2731,10 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
       if (!owner) {
         throw new ValidationError("المالك غير موجود", { field: "ownerId", fix: "اختر مالكاً مسجلاً" });
       }
+    }
+    if (b.managerId) {
+      const [mgr] = await rawQuery<{ id: number }>(`SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`, [b.managerId, scope.companyId]);
+      if (!mgr) throw new ValidationError("المدير غير موجود", { field: "managerId", fix: "اختر موظفاً من قائمة الموظفين." });
     }
     const nationalAddress = b.nationalAddress ? (typeof b.nationalAddress === 'string' ? b.nationalAddress : JSON.stringify(b.nationalAddress)) : null;
     const { insertId } = await rawExecute(

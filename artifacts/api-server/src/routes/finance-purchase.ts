@@ -217,7 +217,7 @@ purchaseRouter.get("/purchase-requests", requirePermission("finance:read"), asyn
     let paramIdx = nextParamIndex;
     if (filterStatus) { params.push(filterStatus); extraWhere += ` AND pr.status = $${paramIdx++}`; }
 
-    const offset = (Math.max(Number(page), 1) - 1) * safeLimPR;
+    const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLimPR;
     params.push(safeLimPR);
     const limitIdx = paramIdx++;
     params.push(offset);
@@ -288,6 +288,11 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
     const [seqRow] = await rawQuery<any>(`SELECT nextval('pr_number_seq') AS seq`).catch((e) => { logger.error(e, "finance purchase query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const ref = generateRef("PR", seqRow.seq, 5);
 
+    if (supplierId) {
+      const [sup] = await rawQuery<{ id: number }>(`SELECT id FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`, [supplierId, scope.companyId]);
+      if (!sup) throw new ValidationError("المورد غير موجود", { field: "supplierId", fix: "اختر مورداً من قائمة الموردين." });
+    }
+
     const { insertId } = await rawExecute(
       `INSERT INTO purchase_requests ("companyId","branchId","requestedBy",ref,status,"totalAmount","supplierId",notes,"expectedDelivery","costCenter")
        VALUES ($1,$2,$3,$4,'draft',$5,$6,$7,$8,$9)`,
@@ -347,7 +352,8 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
       data: { ref, totalAmount, supplierId, items: items.length },
     }).catch((e) => logger.error(e, "finance-purchase background task failed"));
 
-    res.status(201).json({ id: insertId, ref, totalAmount, supplierId, notes, expectedDate, items, approval: approvalResult });
+    const [pr] = await rawQuery<any>(`SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
+    res.status(201).json({ ...pr, items, approval: approvalResult });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
     if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
@@ -502,7 +508,7 @@ purchaseRouter.get("/purchase-orders", requirePermission("finance:read"), async 
     const { productId } = req.query as any;
     // productId filter disabled: purchase_order_items has no productId column
 
-    const offset = (Math.max(Number(page), 1) - 1) * safeLim;
+    const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLim;
     params.push(safeLim);
     const limitIdx = paramIdx++;
     params.push(offset);
@@ -537,6 +543,11 @@ purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), asy
     if (!totalAmount || Number(totalAmount) <= 0) { throw new ValidationError("المبلغ الإجمالي مطلوب"); return; }
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies?.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
     const effectiveBranchId = branchId ?? scope.branchId;
+
+    if (supplierId) {
+      const [sup] = await rawQuery<{ id: number }>(`SELECT id FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`, [supplierId, effectiveCompanyId]);
+      if (!sup) throw new ValidationError("المورد غير موجود", { field: "supplierId", fix: "اختر مورداً من قائمة الموردين." });
+    }
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch((e) => { logger.error(e, "finance purchase query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const ref = generateRef("PO", seqRow.seq, 5);
@@ -574,7 +585,8 @@ purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), asy
     }
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "purchase_order.created", entity: "purchase_orders", entityId: insertId, details: JSON.stringify({ ref, totalAmount, supplierId }) }).catch((e) => logger.error(e, "finance-purchase background task failed"));
-    res.status(201).json({ id: insertId, ref, totalAmount, vatAmount, supplierId, notes, expectedDelivery, approval: approvalResult });
+    const [po] = await rawQuery<any>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`, [insertId, effectiveCompanyId]);
+    res.status(201).json({ ...po, approval: approvalResult });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
     if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }

@@ -1031,6 +1031,11 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       });
     }
 
+    if (b.clientId) {
+      const [cl] = await rawQuery<{ id: number }>(`SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`, [b.clientId, scope.companyId]);
+      if (!cl) throw new ValidationError("العميل غير موجود", { field: "clientId", fix: "اختر عميلاً من قائمة العملاء." });
+    }
+
     const fuelPricePerLiter = b.fuelPricePerLiter || 2.5;
     const fuelEfficiency = 10;
     const estimatedFuelCost = (estimatedDistanceKm / fuelEfficiency) * fuelPricePerLiter;

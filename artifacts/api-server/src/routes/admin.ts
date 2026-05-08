@@ -978,8 +978,8 @@ router.get("/security-log", requirePermission("admin:read"), async (req, res) =>
     await assertAdmin(req);
     const scope = req.scope!;
     const { userId, reason, from, to, page = "1", limit: lim = "50" } = req.query as any;
-    const pageNum = Math.max(Number(page), 1);
-    const pageSize = Math.min(Math.max(Number(lim), 1), 200);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const pageSize = Math.min(Math.max(Number(lim) || 50, 1), 200);
     const offset = (pageNum - 1) * pageSize;
 
     const conditions = [`sl."companyId" = $1`];
