@@ -1064,8 +1064,8 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       try {
         const [driverEmp] = await rawQuery<any>(
           `SELECT d."employeeId", ea.id AS "assignmentId" FROM fleet_drivers d
-           LEFT JOIN employee_assignments ea ON ea."employeeId"=d."employeeId" AND ea.status='active'
-           WHERE d.id=$1 AND d."deletedAt" IS NULL`, [selectedDriverId]);
+           LEFT JOIN employee_assignments ea ON ea."employeeId"=d."employeeId" AND ea.status='active' AND ea."companyId"=$2
+           WHERE d.id=$1 AND d."companyId"=$2 AND d."deletedAt" IS NULL`, [selectedDriverId, scope.companyId]);
         if (driverEmp?.assignmentId) {
           createNotification({
             companyId: scope.companyId,
@@ -1697,7 +1697,8 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
 
     const lowRatingDrivers = await rawQuery<any>(
       `SELECT d.name, d.rating, d.id FROM fleet_drivers d
-       WHERE d."companyId"=$1 AND d.rating IS NOT NULL AND d.rating < 3 AND d."deletedAt" IS NULL`,
+       WHERE d."companyId"=$1 AND d.rating IS NOT NULL AND d.rating < 3 AND d."deletedAt" IS NULL
+       LIMIT 500`,
       [cid]
     );
     for (const d of lowRatingDrivers) {

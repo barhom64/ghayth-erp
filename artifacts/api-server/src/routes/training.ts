@@ -338,7 +338,7 @@ router.patch("/enrollments/:id", requirePermission("hr:update"), async (req, res
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id);
     await rawExecute(`UPDATE training_enrollments SET ${sets.join(",")} WHERE id=$${params.length} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM training_enrollments WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM training_enrollments WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "training_enrollments", entityId: id,
@@ -375,8 +375,8 @@ router.get("/stats", requirePermission("hr:read"), async (req, res) => {
     const cid = scope.companyId;
     const [programs] = await rawQuery(`SELECT COUNT(*) as count FROM training_programs WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [active] = await rawQuery(`SELECT COUNT(*) as count FROM training_programs WHERE status='active' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [enrollments] = await rawQuery(`SELECT COUNT(*) as count FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE tp."companyId"=$1 AND tp."deletedAt" IS NULL`, [cid]);
-    const [completed] = await rawQuery(`SELECT COUNT(*) as count FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.status='completed' AND tp."companyId"=$1 AND tp."deletedAt" IS NULL`, [cid]);
+    const [enrollments] = await rawQuery(`SELECT COUNT(*) as count FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE tp."companyId"=$1 AND tp."deletedAt" IS NULL AND e."deletedAt" IS NULL`, [cid]);
+    const [completed] = await rawQuery(`SELECT COUNT(*) as count FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.status='completed' AND tp."companyId"=$1 AND tp."deletedAt" IS NULL AND e."deletedAt" IS NULL`, [cid]);
     res.json({
       totalPrograms: Number(programs.count),
       activePrograms: Number(active.count),

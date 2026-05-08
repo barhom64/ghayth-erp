@@ -1446,7 +1446,7 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
       details: JSON.stringify({ projectId, title: b.title, targetDate: b.targetDate }),
     }).catch((e) => logger.error(e, "projects background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM project_milestones WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM project_milestones WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create milestone error:"); }
 });
@@ -1736,7 +1736,7 @@ router.post("/:id/resources", requirePermission("projects:create"), async (req, 
        b.role || 'member', b.allocatedHours || 0, b.budgetAllocated || 0,
        b.startDate || null, b.endDate || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM project_resources WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM project_resources WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -1864,7 +1864,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
       logger.error(glErr, `[projects-gl] journal entry failed for project cost ${insertId}:`);
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM project_costs WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM project_costs WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,

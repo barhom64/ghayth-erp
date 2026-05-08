@@ -313,7 +313,7 @@ router.get("/tickets/:id", requirePermission("support:read"), async (req, res) =
       [id, scope.companyId]
     );
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
-    const replies = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE "ticketId"=$1 ORDER BY "createdAt" LIMIT 500`, [ticket.id]);
+    const replies = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE "ticketId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" LIMIT 500`, [ticket.id]);
 
     const now = new Date();
     const slaDeadline = ticket.slaDeadline ? new Date(ticket.slaDeadline) : null;
@@ -365,7 +365,7 @@ router.post("/tickets/:id/replies", requirePermission("support:create"), async (
       }
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.reply.created", entity: "ticket_replies", entityId: insertId, details: JSON.stringify({ ticketId, isInternal: b.isInternal || false }) }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -742,7 +742,7 @@ router.post("/kb", requirePermission("support:write"), async (req, res) => {
       `INSERT INTO kb_articles (title, content, category, tags, status, views, helpful, "notHelpful", "companyId", "createdBy") VALUES ($1,$2,$3,$4,'published',0,0,0,$5,$6)`,
       [title, content || '', category || 'general', tags || null, scope.companyId, scope.userId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.created", entity: "kb_articles", entityId: insertId, details: JSON.stringify({ title, category: category || 'general' }) }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,

@@ -1379,7 +1379,7 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
     // Pre-fetch count items so we can use them inside onApply and for
     // GL posting after the transition commits.
     const items = await rawQuery<any>(
-      `SELECT ici.*, wp."currentStock" FROM inventory_count_items ici JOIN warehouse_products wp ON wp.id=ici."productId" WHERE ici."countId"=$1`,
+      `SELECT ici.*, wp."currentStock" FROM inventory_count_items ici JOIN warehouse_products wp ON wp.id=ici."productId" WHERE ici."countId"=$1 LIMIT 10000`,
       [countId]
     );
 

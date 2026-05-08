@@ -589,7 +589,7 @@ router.post("/units", requirePermission("property:create"), async (req, res) => 
        b.ownerId || null, b.parkingSpaces || 0, b.acType || null,
        b.hasKitchen || false, b.yearlyRent || null, b.insurancePolicy || null, b.insuranceExpiry || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     // The GET /units/:id handler renders a timeline straight from audit_logs
     // where entity='property_units', so without this write the unit would
@@ -767,7 +767,7 @@ router.patch("/units/:id", requirePermission("property:update"), async (req, res
     params.push(id);
     params.push(scope.companyId);
     await rawExecute(`UPDATE property_units SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -2585,7 +2585,7 @@ router.post("/tenants", requirePermission("property:create"), async (req, res) =
        b.emergencyContact || null, b.emergencyName || null, b.maritalStatus || null, b.occupation || null,
        b.monthlyIncome || null, b.previousAddress || null, b.previousLandlord || null, b.previousLandlordPhone || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM tenants WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM tenants WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "tenants", entityId: insertId,
@@ -2744,7 +2744,7 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
        b.deedNumber || null, b.deedDate || null, b.buildingPermitNumber || null, nationalAddress, b.latitude || null, b.longitude || null,
        b.totalUnits || 0, b.totalArea || null, b.yearBuilt || null, b.ownerId || null, b.managerId || null, b.description || b.notes || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "property_buildings", entityId: insertId,
@@ -2842,7 +2842,7 @@ router.patch("/buildings/:id", requirePermission("property:update"), async (req,
     // assignment or PostgreSQL raises 42601 "multiple assignments to same column".
     params.push(scope.companyId);
     await rawExecute(`UPDATE property_buildings SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -3298,7 +3298,7 @@ router.post("/owners", requirePermission("property:create"), async (req, res) =>
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
       [scope.companyId, b.ownerType || 'individual', b.name, b.nationalId || null, b.crNumber || null, b.phone || null, b.email || null, b.iban || null, b.bankName || null, b.address || null, b.city || null, b.authorizationNumber || null, b.authorizationDate || null, b.authorizationExpiry || null, b.notes || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM property_owners WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_owners WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "property_owners", entityId: insertId,
@@ -3545,7 +3545,7 @@ router.post("/inspections", requirePermission("property:create"), async (req, re
        b.findings ? JSON.stringify(b.findings) : null,
        b.conditionRating || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM property_inspections WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_inspections WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -3749,7 +3749,7 @@ router.post("/deposits", requirePermission("property:create"), async (req, res) 
       details: `وديعة عقد #${b.contractId} بقيمة ${b.amount}`,
     }).catch((e) => logger.error(e, "properties background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create deposit error:"); }
 });
@@ -3813,7 +3813,7 @@ router.patch("/deposits/:id/refund", requirePermission("property:update"), async
       skipUpdatedAt: true,
     });
 
-    const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
