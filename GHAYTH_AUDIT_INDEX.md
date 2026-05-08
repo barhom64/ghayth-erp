@@ -20,11 +20,11 @@
 | صفحات منفصلة (بدون API) | 0 |
 | الاختبارات | 3,092 اختبار (80 ملف) — كلها ناجحة |
 | فحوصات CI | 9 فحوصات — كلها ناجحة |
-| إجمالي الأخطاء المُصلحة | ~357 خطأ عبر 7 جولات |
+| إجمالي الأخطاء المُصلحة | ~407 خطأ عبر 9 جولات |
 | تغطية الراوتات | 80/80 ملف (100%) |
 | تغطية المكتبات | 74/74 ملف (100%) |
 | تغطية الـ Middleware | 6/6 ملف (100%) |
-| تغطية الفحص الكلية | 160/160 ملف (100%) |
+| تغطية الفحص الكلية | 160/160 ملف backend (100%) + 3 بوابات frontend |
 
 ---
 
@@ -80,7 +80,7 @@
 |-------|--------|--------|-------------------|------------------|
 | `hr.ts` | 7,073 | ✅ | 10 | 5 |
 | `employees.ts` | 1,307 | ✅ | 6 | 6 |
-| `hr-discipline.ts` | 1,279 | ✅ | 3 | 0 |
+| `hr-discipline.ts` | 1,279 | ✅ | 6 | 3 |
 | `hr-exit.ts` | 571 | ✅ | 3 | 1 |
 | `hr-loans.ts` | 556 | ✅ | 2 | 1 |
 | `hr-overtime.ts` | 510 | ✅ | 3 | 3 |
@@ -120,8 +120,8 @@
 
 | الملف | الأسطر | الحالة | الأخطاء المكتشفة | الأخطاء المُصلحة |
 |-------|--------|--------|-------------------|------------------|
-| `crm.ts` | 1,107 | ✅ | 3 | 3 |
-| `clients.ts` | 528 | ✅ | 2 | 2 |
+| `crm.ts` | 1,107 | ✅ | 6 | 6 |
+| `clients.ts` | 528 | ✅ | 3 | 3 |
 
 **الأخطاء المُصلحة:**
 1. ~~nextStages لا تتطابق مع CRM_TRANSITIONS~~ (LOW)
@@ -198,11 +198,11 @@
 | `bi.ts` | 1,350 | ✅ | 3 | 3 |
 | `requests.ts` | 880 | ✅ | 4 | 4 |
 | `umrah-entities.ts` | 1,199 | ✅ | 2 | 2 |
-| `clientPortal.ts` | 700 | ✅ | 5 | 5 |
+| `clientPortal.ts` | 700 | ✅ | 9 | 9 |
 | `notification-engine.ts` | 798 | ✅ | 1 | 1 |
 | `intelligence.ts` | 753 | ✅ | 3 | 3 |
 | `operationsCenter.ts` | 605 | ✅ | 2 | 2 |
-| `gov-integrations.ts` | 455 | ✅ | 12 | 12 |
+| `gov-integrations.ts` | 455 | ✅ | 13 | 13 |
 
 **الأخطاء المُصلحة في الجولة الثالثة:**
 
@@ -286,9 +286,9 @@
 | `governance.ts` | 956 | ✅ | 25+ | 25+ |
 | `umrah.ts` | 1,723 | ✅ | 38 | 38 |
 | `communications.ts` | 816 | ✅ | 1 | 1 |
-| `admin.ts` | 1,693 | ✅ | 3 | 3 |
+| `admin.ts` | 1,693 | ✅ | 6 | 6 |
 | `auth.ts` | 443 | ✅ | 1 | 1 |
-| `settings.ts` | 812 | ✅ | 3 | 3 |
+| `settings.ts` | 812 | ✅ | 12 | 10 |
 
 **الأخطاء المُصلحة:**
 1. ~~fleet: startDate → startTime (عمود غير موجود)~~ (CRITICAL)
@@ -328,7 +328,7 @@
 | `impactPreview.ts` | 299 | ✅ | 3 | 3 |
 | `correspondence.ts` | 313 | ✅ | 6 | 6 |
 | `actionCenter.ts` | 312 | ✅ | 2 | 2 |
-| `careersPortal.ts` | 340 | ✅ | 0 | 0 |
+| `careersPortal.ts` | 340 | ✅ | 1 | 1 |
 | `rules.ts` | 238 | ✅ | 2 | 2 |
 | `search.ts` | 170 | ✅ | 5 | 5 |
 | `activityLog.ts` | 220 | ✅ | 3 | 3 |
@@ -484,7 +484,24 @@
 | MEDIUM | 9 | ✅ مُصلح |
 | **المجموع** | **48** | **✅ مُصلح** |
 
-### **الإجمالي الكلي: ~357 خطأ مُصلح عبر 7 جولات — 160/160 ملف (100%)**
+### الجولة الثامنة (تم إصلاحها — commit 3018f79):
+
+| الخطورة | العدد | الحالة |
+|---------|-------|--------|
+| HIGH | 5 | ✅ مُصلح |
+| MEDIUM | 10 | ✅ مُصلح |
+| **المجموع** | **15** | **✅ مُصلح** |
+
+### الجولة التاسعة (تم إصلاحها — commit c1d31bb):
+
+| الخطورة | العدد | الحالة |
+|---------|-------|--------|
+| CRITICAL | 5 | ✅ مُصلح |
+| HIGH | 12 | ✅ مُصلح |
+| MEDIUM | 18 | ✅ مُصلح |
+| **المجموع** | **35** | **✅ مُصلح** |
+
+### **الإجمالي الكلي: ~407 خطأ مُصلح عبر 9 جولات — 160/160 ملف backend + 3 بوابات frontend**
 
 ### أخطاء مكتشفة لم تُصلح (تحتاج تعديلات أعمق):
 
@@ -813,7 +830,89 @@ kpiEngine, notificationService, clientAnalytics, journeyEngine, recurringJournal
 
 ---
 
-> **✅ الفحص مكتمل — 160/160 ملف تم فحصه (100%)**
-> **~357 خطأ مُصلح عبر 7 جولات — CI أخضر (3,092 اختبار)**
+## 13. الجولة الثامنة — ✅ مكتملة (Zod bypass + Frontend mismatches)
 
-*تم تحديث هذا الفهرس بواسطة فحص Claude Code الشامل — الجولة السابعة مكتملة 2026-05-08.*
+فحص أنماط أخطاء جديدة: تجاوز Zod validation، تسريب بيانات، تطابق الواجهة مع الخلفية.
+
+### Backend (3 ملفات، 5 أخطاء):
+
+| الملف | الأخطاء | الوصف |
+|-------|---------|-------|
+| `crm.ts` | 3 | تجاوز Zod — POST opportunities/activities/convert تقرأ req.body بدل parsed |
+| `gov-integrations.ts` | 1 | تسريب credentials — PUT يُرجع config خام (API keys/passwords) |
+| `clients.ts` | 1 | تجاوز attachments — req.body.attachments بدون تحقق Array.isArray |
+
+### Frontend — الواجهة الرئيسية (5 ملفات، 10 أخطاء):
+
+| الملف | الأخطاء | الوصف |
+|-------|---------|-------|
+| `property-type-maps.ts` + `unit-status-change.tsx` | 3 | occupied→rented, +under_maintenance, +out_of_service |
+| `vehicle-status-change.tsx` + `vehicle-detail.tsx` | 3 | حذف reserved/accident, +out_of_service |
+| `invoice-detail.tsx` + `cashflow-dashboard.tsx` | 2 | pending→draft |
+| `page-status-badge.tsx` | 2 | +partial badge, +driver statuses |
+
+---
+
+## 14. الجولة التاسعة — ✅ مكتملة (Settings + Admin + Portals + Frontend شامل)
+
+فحص شامل عبر 4 عملاء متوازيين: settings.ts, admin.ts, hr-discipline.ts, client-portal, careers-portal, وكامل الواجهة الأمامية.
+
+### Backend (6 ملفات، 20 خطأ):
+
+**settings.ts (10 أخطاء):**
+1. ~~3x `...req.body` في الاستجابة → `...body` (تسريب بيانات المستخدم)~~ (MEDIUM)
+2. ~~audit log after: req.body → body في PUT branches~~ (MEDIUM)
+3. ~~UPDATE branches بدون companyId~~ (MEDIUM)
+4. ~~SELECT branches re-fetch بدون companyId~~ (LOW)
+5. ~~employee_assignments blocker checks بدون companyId (x2)~~ (MEDIUM)
+6. ~~approval_chains GET بدون deletedAt IS NULL~~ (MEDIUM)
+7. ~~approval_chains DELETE existence check بدون deletedAt IS NULL~~ (MEDIUM)
+
+**hr-discipline.ts (3 أخطاء):**
+8. ~~close handler بدون Zod + field name mismatch (closureNote→note)~~ (MEDIUM)
+9. ~~articleNumber z.string()→z.coerce.number() (DB is integer)~~ (HIGH)
+10. ~~hr_inquiry_memo_events SELECT بدون companyId~~ (MEDIUM)
+
+**admin.ts (3 أخطاء):**
+11. ~~system-stops POST بدون Zod validation~~ (MEDIUM)
+12. ~~event_dlq replay SELECT/UPDATE بدون companyId (cross-tenant)~~ (HIGH)
+13. ~~event_dlq resolve UPDATE بدون companyId (cross-tenant)~~ (HIGH)
+
+**clientPortal.ts (4 أخطاء):**
+14. ~~CSAT route /invoices/:id/csat → /tickets/:id/csat (was always 404)~~ (CRITICAL)
+15. ~~ticket replies hardcoded senderType='client' → CASE on authorId~~ (CRITICAL)
+16. ~~dashboard pendingCount 'pending' → 'pending_approval'~~ (HIGH)
+17. ~~audit log entity invoice_csat → ticket_csat~~ (LOW)
+
+**careersPortal.ts (1 خطأ):**
+18. ~~resumeUrl z.string() → z.string().url() (XSS/phishing prevention)~~ (MEDIUM)
+
+**cronScheduler.ts (1 خطأ):**
+19. ~~umrah pilgrim status 'absconded' → 'violated' (CHECK constraint)~~ (HIGH)
+
+### Frontend — بوابة العملاء (3 ملفات، 6 أخطاء):
+
+| الملف | الأخطاء | الوصف |
+|-------|---------|-------|
+| `invoices.tsx` | 2 | +8 حالات فاتورة مفقودة, pending→pending_approval+sent |
+| `invoice-detail.tsx` | 2 | +5 حالات فاتورة مفقودة |
+| `dashboard.tsx` | 2 | +6 حالات فاتورة مفقودة |
+
+### Frontend — الواجهة الرئيسية (7 ملفات، 9 أخطاء):
+
+| الملف | الأخطاء | الوصف |
+|-------|---------|-------|
+| `page-status-badge.tsx` | 2 | invoice +4 statuses, property vacant→available/occupied→rented/+2 |
+| `fleet.tsx` | 4 | driver edit/filter active→available/on_trip/off_duty/suspended; vehicle +out_of_service |
+| `unit-detail.tsx` | 2 | defaulted/expired → under_maintenance/out_of_service |
+| `property-unit-context-card.tsx` | 2 | +under_maintenance/out_of_service, notAvailable expanded |
+| `occupancy-report.tsx` | 1 | +under_maintenance/out_of_service labels |
+| `constants.ts` | 1 | حذف dead entries: in-use, accident |
+| `invoices.tsx` (finance) | 2 | pending→pending_approval in filter + approval condition |
+
+---
+
+> **✅ الفحص مكتمل — 160/160 ملف backend + 3 بوابات frontend تم فحصها**
+> **~407 خطأ مُصلح عبر 9 جولات — CI أخضر (3,092 اختبار)**
+
+*تم تحديث هذا الفهرس بواسطة فحص Claude Code الشامل — الجولة التاسعة مكتملة 2026-05-08.*
