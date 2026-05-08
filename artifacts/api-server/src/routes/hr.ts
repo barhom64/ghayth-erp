@@ -567,11 +567,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     }
 
     if (isOutOfRange) {
-      await rawExecute(
-        `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
-         VALUES ($1,$2,'gps_out_of_range',$3,'low',0,$4)`,
-        [scope.companyId, scope.activeAssignmentId, `تسجيل حضور خارج نطاق الفرع بمسافة ${distanceMeters}م`, period]
-      );
+      // GPS violation will be recorded inside the transaction below
     }
 
     // ── Step 7: Late detection ──
@@ -623,43 +619,107 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
       deductionAmount = roundTo2(minuteRate * lateMinutes);
     }
 
-    const insertResult = await rawQuery<any>(
-      `INSERT INTO attendance ("assignmentId","companyId","branchId",date,"checkIn","lateMinutes",status,notes,"checkInLat","checkInLon","workType","contractId")
-       SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
-       WHERE NOT EXISTS (SELECT 1 FROM attendance WHERE "assignmentId"=$1 AND date=$4 AND "deletedAt" IS NULL)
-       RETURNING id`,
-      [scope.activeAssignmentId, scope.companyId, assignment?.branchId ?? scope.branchId,
-        today, now.toISOString(), lateMinutes, checkInStatus, notes ?? null,
-        lat !== undefined && lat !== null ? Number(lat) : null, lon !== undefined && lon !== null ? Number(lon) : null,
-        isRemoteShift ? 'remote' : (workType || 'office'), activeContract.id]
-    );
-    if (!insertResult || insertResult.length === 0) {
-      throw new ConflictError("لقد سجلت الحضور اليوم. استخدم نقطة الانصراف لتسجيل المغادرة", {
-        field: "attendance",
-        fix: "افتح صفحة الحضور واستخدم زر الانصراف لإكمال الدوام.",
-      });
-    }
-    const attendanceId = insertResult[0].id;
+    // ── Wrap all writes in a single atomic transaction ──
+    const txResult = await withTransaction(async (client) => {
+      // GPS violation
+      if (isOutOfRange) {
+        await client.query(
+          `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
+           VALUES ($1,$2,'gps_out_of_range',$3,'low',0,$4)`,
+          [scope.companyId, scope.activeAssignmentId, `تسجيل حضور خارج نطاق الفرع بمسافة ${distanceMeters}م`, period]
+        );
+      }
 
-    // ── Step 11: Auto violation if late > threshold ──
-    let violationId: number | null = null;
-    if (exceedsThreshold) {
-      const { insertId: vId } = await rawExecute(
-        `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
-         VALUES ($1,$2,'late_arrival',$3,'medium',$4,$5)`,
-        [scope.companyId, scope.activeAssignmentId, `تأخر ${lateMinutes} دقيقة عن وقت البداية (تجاوز الحد ${lateThreshold} دقيقة)`, deductionAmount, period]
+      // Attendance INSERT with idempotency guard
+      const insertRes = await client.query(
+        `INSERT INTO attendance ("assignmentId","companyId","branchId",date,"checkIn","lateMinutes",status,notes,"checkInLat","checkInLon","workType","contractId")
+         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
+         WHERE NOT EXISTS (SELECT 1 FROM attendance WHERE "assignmentId"=$1 AND date=$4 AND "deletedAt" IS NULL)
+         RETURNING id`,
+        [scope.activeAssignmentId, scope.companyId, assignment?.branchId ?? scope.branchId,
+          today, now.toISOString(), lateMinutes, checkInStatus, notes ?? null,
+          lat !== undefined && lat !== null ? Number(lat) : null, lon !== undefined && lon !== null ? Number(lon) : null,
+          isRemoteShift ? 'remote' : (workType || 'office'), activeContract.id]
       );
-      violationId = vId;
+      if (!insertRes.rows.length) {
+        throw new ConflictError("لقد سجلت الحضور اليوم. استخدم نقطة الانصراف لتسجيل المغادرة", {
+          field: "attendance",
+          fix: "افتح صفحة الحضور واستخدم زر الانصراف لإكمال الدوام.",
+        });
+      }
+      const attId = insertRes.rows[0].id;
 
-      // ── Step 12: Record pending payroll deduction ──
-      await rawExecute(
-        `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
-         VALUES ($1,$2,$3,'late',$4,$5,$6,'pending_payroll')`,
-        [scope.companyId, scope.activeAssignmentId, attendanceId, lateMinutes, deductionAmount, period]
+      // Late violation + deduction + penalty
+      let vId: number | null = null;
+      let pLevel = 0, pLabel = "", pDeduction = 0;
+
+      if (exceedsThreshold) {
+        const violRes = await client.query(
+          `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
+           VALUES ($1,$2,'late_arrival',$3,'medium',$4,$5) RETURNING id`,
+          [scope.companyId, scope.activeAssignmentId, `تأخر ${lateMinutes} دقيقة عن وقت البداية (تجاوز الحد ${lateThreshold} دقيقة)`, deductionAmount, period]
+        );
+        vId = violRes.rows[0]?.id ?? null;
+
+        await client.query(
+          `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
+           VALUES ($1,$2,$3,'late',$4,$5,$6,'pending_payroll')`,
+          [scope.companyId, scope.activeAssignmentId, attId, lateMinutes, deductionAmount, period]
+        );
+
+        // Monthly violation count for penalty escalation
+        const monthCountRes = await client.query(
+          `SELECT COUNT(*) AS cnt FROM employee_violations
+           WHERE "assignmentId" = $1 AND period = $2 AND type = 'late_arrival' AND "deletedAt" IS NULL`,
+          [scope.activeAssignmentId, period]
+        );
+        const count = Number(monthCountRes.rows[0]?.cnt ?? 1);
+
+        if (count >= 10) {
+          pLevel = 5; pDeduction = Number(policy?.penaltyLevel5 ?? 500);
+          pLabel = policy?.penaltyLevel5Label ?? "خصم ثلاثة أيام + إنذار نهائي";
+        } else if (count >= 7) {
+          pLevel = 4; pDeduction = Number(policy?.penaltyLevel4 ?? 200);
+          pLabel = policy?.penaltyLevel4Label ?? "خصم يومين";
+        } else if (count >= 5) {
+          pLevel = 3; pDeduction = Number(policy?.penaltyLevel3 ?? 100);
+          pLabel = policy?.penaltyLevel3Label ?? "خصم يوم";
+        } else if (count >= 3) {
+          pLevel = 2; pDeduction = Number(policy?.penaltyLevel2 ?? 50);
+          pLabel = policy?.penaltyLevel2Label ?? "إنذار كتابي";
+        } else {
+          pLevel = 1; pDeduction = Number(policy?.penaltyLevel1 ?? 0);
+          pLabel = policy?.penaltyLevel1Label ?? "إنذار شفهي";
+        }
+
+        if (pDeduction > 0) {
+          await client.query(
+            `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
+             VALUES ($1,$2,$3,'penalty',0,$4,$5,'pending_payroll')`,
+            [scope.companyId, scope.activeAssignmentId, attId, pDeduction, period]
+          );
+        }
+      }
+
+      // Monthly stats UPSERT
+      await client.query(
+        `INSERT INTO employee_monthly_attendance ("companyId","assignmentId",period,"presentDays","lateDays","totalLateMinutes","totalDeduction")
+         VALUES ($1,$2,$3,1,$4,$5,$6)
+         ON CONFLICT ("assignmentId",period) DO UPDATE
+         SET "presentDays" = employee_monthly_attendance."presentDays" + 1,
+             "lateDays" = employee_monthly_attendance."lateDays" + $4,
+             "totalLateMinutes" = employee_monthly_attendance."totalLateMinutes" + $5,
+             "totalDeduction" = employee_monthly_attendance."totalDeduction" + $6`,
+        [scope.companyId, scope.activeAssignmentId, period, isLate ? 1 : 0, lateMinutes, deductionAmount + pDeduction]
       );
 
-      // ── Step 12b: Auto-create an inquiry memo (محضر استفسار) for the lateness ──
-      // يخضع لسياسة اللائحة الحية — idempotent، لا يُنشئ محضراً جديداً إن كان موجوداً
+      return { attendanceId: attId, violationId: vId, penaltyLevel: pLevel, penaltyLabel: pLabel, penaltyDeduction: pDeduction };
+    });
+
+    const { attendanceId, violationId, penaltyLevel, penaltyLabel, penaltyDeduction } = txResult;
+
+    // Fire-and-forget: inquiry memo (outside transaction — idempotent)
+    if (exceedsThreshold && violationId) {
       ensureInquiryMemoForViolation({
         companyId: scope.companyId,
         branchId: assignment?.branchId ?? scope.branchId,
@@ -674,62 +734,6 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
         createdBy: scope.userId,
       }).catch((err) => logger.error(err, "ensureInquiryMemoForViolation (check-in) error:"));
     }
-
-    // ── Step 13: Count monthly violations for penalty escalation ──
-    let penaltyLevel = 0;
-    let penaltyLabel = "";
-    let penaltyDeduction = 0;
-    if (exceedsThreshold) {
-      const [monthCount] = await rawQuery<any>(
-        `SELECT COUNT(*) AS cnt FROM employee_violations
-         WHERE "assignmentId" = $1 AND period = $2 AND type = 'late_arrival' AND "deletedAt" IS NULL`,
-        [scope.activeAssignmentId, period]
-      );
-      const count = Number(monthCount?.cnt ?? 1);
-
-      // ── Step 14: 5-level penalty escalation ──
-      if (count >= 10) {
-        penaltyLevel = 5;
-        penaltyDeduction = Number(policy?.penaltyLevel5 ?? 500);
-        penaltyLabel = policy?.penaltyLevel5Label ?? "خصم ثلاثة أيام + إنذار نهائي";
-      } else if (count >= 7) {
-        penaltyLevel = 4;
-        penaltyDeduction = Number(policy?.penaltyLevel4 ?? 200);
-        penaltyLabel = policy?.penaltyLevel4Label ?? "خصم يومين";
-      } else if (count >= 5) {
-        penaltyLevel = 3;
-        penaltyDeduction = Number(policy?.penaltyLevel3 ?? 100);
-        penaltyLabel = policy?.penaltyLevel3Label ?? "خصم يوم";
-      } else if (count >= 3) {
-        penaltyLevel = 2;
-        penaltyDeduction = Number(policy?.penaltyLevel2 ?? 50);
-        penaltyLabel = policy?.penaltyLevel2Label ?? "إنذار كتابي";
-      } else {
-        penaltyLevel = 1;
-        penaltyDeduction = Number(policy?.penaltyLevel1 ?? 0);
-        penaltyLabel = policy?.penaltyLevel1Label ?? "إنذار شفهي";
-      }
-
-      if (penaltyDeduction > 0) {
-        await rawExecute(
-          `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
-           VALUES ($1,$2,$3,'penalty',0,$4,$5,'pending_payroll')`,
-          [scope.companyId, scope.activeAssignmentId, attendanceId, penaltyDeduction, period]
-        );
-      }
-    }
-
-    // ── Step 15: Update monthly stats ──
-    await rawExecute(
-      `INSERT INTO employee_monthly_attendance ("companyId","assignmentId",period,"presentDays","lateDays","totalLateMinutes","totalDeduction")
-       VALUES ($1,$2,$3,1,$4,$5,$6)
-       ON CONFLICT ("assignmentId",period) DO UPDATE
-       SET "presentDays" = employee_monthly_attendance."presentDays" + 1,
-           "lateDays" = employee_monthly_attendance."lateDays" + $4,
-           "totalLateMinutes" = employee_monthly_attendance."totalLateMinutes" + $5,
-           "totalDeduction" = employee_monthly_attendance."totalDeduction" + $6`,
-      [scope.companyId, scope.activeAssignmentId, period, isLate ? 1 : 0, lateMinutes, deductionAmount + penaltyDeduction]
-    );
 
     // ── Step 16: Notify employee about late ──
     if (exceedsThreshold) {
@@ -5069,18 +5073,14 @@ router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, re
       throw new ValidationError("الموظف لا ينتمي إلى هذه الشركة", { field: "employeeId" });
     }
 
-    // Create the cycle
-    const { insertId: cycleId } = await rawExecute(
-      `INSERT INTO evaluation_cycles ("companyId","employeeId","initiatorId",period,status,notes,"startDate")
-       VALUES ($1,$2,$3,$4,'open',$5,CURRENT_DATE)`,
-      [scope.companyId, employeeId, scope.employeeId ?? null, period, notes ?? null]
-    );
+    // Compute system evaluation before transaction (read-only)
+    const evalData = await computeSystemEvaluation(scope.companyId, employeeId);
 
-    // Register participants — validate each belongs to this company before inserting
-    // validRoles must match the DB CHECK constraint: ('manager','peer')
+    // Validate participants before transaction (read-only)
     const validRoles = new Set(["manager", "peer"]);
     const candidateParticipants = (participants as Array<{ evaluatorId: number; evaluatorRole: string }>)
       .filter(p => p.evaluatorId && validRoles.has(p.evaluatorRole));
+    let validParticipants: Array<{ evaluatorId: number; evaluatorRole: string }> = [];
     if (candidateParticipants.length > 0) {
       const evalIds = candidateParticipants.map(p => p.evaluatorId);
       const idPlaceholders = evalIds.map((_, i) => `$${i + 2}`).join(",");
@@ -5089,28 +5089,39 @@ router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, re
         [scope.companyId, ...evalIds]
       );
       const validIdSet = new Set(validAssignments.map((a: any) => a.employeeId));
-      const validParticipants = candidateParticipants.filter(p => validIdSet.has(p.evaluatorId));
+      validParticipants = candidateParticipants.filter(p => validIdSet.has(p.evaluatorId));
+    }
+
+    // Wrap all inserts in a single atomic transaction
+    const cycleId = await withTransaction(async (client) => {
+      const cycleRes = await client.query(
+        `INSERT INTO evaluation_cycles ("companyId","employeeId","initiatorId",period,status,notes,"startDate")
+         VALUES ($1,$2,$3,$4,'open',$5,CURRENT_DATE) RETURNING id`,
+        [scope.companyId, employeeId, scope.employeeId ?? null, period, notes ?? null]
+      );
+      const cId = cycleRes.rows[0].id;
+
       if (validParticipants.length > 0) {
         const values = validParticipants.map((_, i) => `($${i * 4 + 1},$${i * 4 + 2},$${i * 4 + 3},$${i * 4 + 4})`).join(",");
-        const params = validParticipants.flatMap(p => [cycleId, scope.companyId, p.evaluatorId, p.evaluatorRole]);
-        await rawExecute(
+        const params = validParticipants.flatMap(p => [cId, scope.companyId, p.evaluatorId, p.evaluatorRole]);
+        await client.query(
           `INSERT INTO evaluation_participants ("cycleId","companyId","evaluatorId","evaluatorRole")
            VALUES ${values} ON CONFLICT DO NOTHING`,
           params
         );
       }
-    }
 
-    // Auto-generate system evaluation
-    const evalData = await computeSystemEvaluation(scope.companyId, employeeId);
-    await rawExecute(
-      `INSERT INTO system_evaluations ("cycleId","companyId","employeeId","attendanceScore","taskCompletionScore","onTimeScore","clientSatScore","docQualityScore","overallScore",metrics)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [cycleId, scope.companyId, employeeId,
-       evalData.attendanceScore, evalData.taskCompletionScore,
-       evalData.onTimeScore, evalData.clientSatScore, evalData.docQualityScore,
-       evalData.overallScore, JSON.stringify(evalData.metrics)]
-    );
+      await client.query(
+        `INSERT INTO system_evaluations ("cycleId","companyId","employeeId","attendanceScore","taskCompletionScore","onTimeScore","clientSatScore","docQualityScore","overallScore",metrics)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [cId, scope.companyId, employeeId,
+         evalData.attendanceScore, evalData.taskCompletionScore,
+         evalData.onTimeScore, evalData.clientSatScore, evalData.docQualityScore,
+         evalData.overallScore, JSON.stringify(evalData.metrics)]
+      );
+
+      return cId;
+    });
 
     // Initialize summary
     await recomputeSummary(cycleId, scope.companyId, employeeId);

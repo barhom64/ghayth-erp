@@ -1053,7 +1053,48 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
       params.push(existingTask.status ?? "todo");
       taskWhere += ` AND status=$${params.length}`;
     }
-    await rawExecute(`UPDATE project_tasks SET ${sets.join(",")} WHERE ${taskWhere} AND "deletedAt" IS NULL`, params);
+    // Wrap task update + unblock dependents + project progress in a single transaction
+    const { task, unlockedTasks, progressPct } = await withTransaction(async (client) => {
+      await client.query(`UPDATE project_tasks SET ${sets.join(",")} WHERE ${taskWhere} AND "deletedAt" IS NULL`, params);
+
+      const taskRes = await client.query(`SELECT * FROM project_tasks WHERE id=$1 AND "deletedAt" IS NULL`, [taskId]);
+      const tsk = taskRes.rows[0];
+
+      let unlocked: any[] = [];
+      if (b.status === 'done' && tsk?.projectId) {
+        const candidateRes = await client.query(
+          `SELECT ptd."taskId",
+                  COUNT(*) FILTER (WHERE pt2.status != 'done') AS "pendingDeps"
+           FROM project_task_dependencies ptd
+           JOIN project_task_dependencies all_deps ON all_deps."taskId" = ptd."taskId"
+           JOIN project_tasks pt2 ON pt2.id = all_deps."dependsOnId"
+           WHERE ptd."dependsOnId" = $1
+           GROUP BY ptd."taskId"
+           HAVING COUNT(*) FILTER (WHERE pt2.status != 'done') = 0`,
+          [taskId]
+        );
+        const candidateIds = candidateRes.rows.map((d: any) => Number(d.taskId));
+        if (candidateIds.length > 0) {
+          const unblockRes = await client.query(
+            `UPDATE project_tasks SET status='todo'
+             WHERE id = ANY($1) AND status='blocked' AND "deletedAt" IS NULL
+             RETURNING *`,
+            [candidateIds]
+          );
+          unlocked = unblockRes.rows;
+        }
+      }
+
+      let pPct = 0;
+      if (tsk?.projectId) {
+        const allRes = await client.query(`SELECT status FROM project_tasks WHERE "projectId"=$1 AND "deletedAt" IS NULL LIMIT 500`, [tsk.projectId]);
+        const doneCount = allRes.rows.filter((t: any) => t.status === 'done').length;
+        pPct = allRes.rows.length > 0 ? Math.round((doneCount / allRes.rows.length) * 100) : 0;
+        await client.query(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [pPct, tsk.projectId, scope.companyId]);
+      }
+
+      return { task: tsk, unlockedTasks: unlocked, progressPct: pPct };
+    });
 
     createAuditLog({
       companyId: scope.companyId,
@@ -1077,73 +1118,41 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
       after,
     }).catch((e) => logger.error(e, "projects background task failed"));
 
-    const [task] = await rawQuery<any>(`SELECT * FROM project_tasks WHERE id=$1 AND "deletedAt" IS NULL`, [taskId]);
-
-    let unlockedTasks: any[] = [];
-    if (b.status === 'done' && task?.projectId) {
-      const candidateTasks = await rawQuery<any>(
-        `SELECT ptd."taskId",
-                COUNT(*) FILTER (WHERE pt2.status != 'done') AS "pendingDeps"
-         FROM project_task_dependencies ptd
-         JOIN project_task_dependencies all_deps ON all_deps."taskId" = ptd."taskId"
-         JOIN project_tasks pt2 ON pt2.id = all_deps."dependsOnId"
-         WHERE ptd."dependsOnId" = $1
-         GROUP BY ptd."taskId"
-         HAVING COUNT(*) FILTER (WHERE pt2.status != 'done') = 0`,
-        [taskId]
+    // Notify assignees of unblocked tasks (fire-and-forget, outside transaction)
+    if (unlockedTasks.length > 0) {
+      const assigneeIds = Array.from(
+        new Set(unlockedTasks.map((t: any) => t.assigneeId).filter((x: any) => x != null))
       );
-
-      const candidateIds = candidateTasks.map((d: any) => Number(d.taskId));
-      if (candidateIds.length > 0) {
-        // 1) Single UPDATE that returns the rows that actually moved from
-        //    blocked -> todo, so we don't need a follow-up SELECT per row.
-        unlockedTasks = await rawQuery<any>(
-          `UPDATE project_tasks SET status='todo'
-           WHERE id = ANY($1) AND status='blocked' AND "deletedAt" IS NULL
-           RETURNING *`,
-          [candidateIds]
-        );
-
-        // 2) Resolve all assignment ids in one query, then notify.
-        const assigneeIds = Array.from(
-          new Set(unlockedTasks.map((t: any) => t.assigneeId).filter((x: any) => x != null))
-        );
-        if (assigneeIds.length > 0) {
-          try {
-            const asgnRows = await rawQuery<{ id: number; employeeId: number }>(
-              `SELECT DISTINCT ON ("employeeId") id, "employeeId"
-               FROM employee_assignments
-               WHERE "employeeId" = ANY($1) AND status='active'
-               ORDER BY "employeeId", id`,
-              [assigneeIds]
-            );
-            const empToAssignment = new Map<number, number>();
-            for (const r of asgnRows) empToAssignment.set(Number(r.employeeId), Number(r.id));
-
-            for (const t of unlockedTasks) {
-              const aid = empToAssignment.get(Number(t.assigneeId));
-              if (!aid) continue;
-              createNotification({
-                companyId: scope.companyId,
-                assignmentId: aid,
-                type: "task_unblocked",
-                title: "مهمة أصبحت متاحة للعمل",
-                body: `المهمة "${t.title}" أصبحت جاهزة — جميع المهام المعتمد عليها مكتملة`,
-                priority: "normal",
-                refType: "project_tasks",
-                refId: t.id,
-              }).catch((e) => logger.error(e, "projects background task failed"));
-            }
-          } catch (e) { logger.error(e, "Unlock notification error:"); }
-        }
+      if (assigneeIds.length > 0) {
+        try {
+          const asgnRows = await rawQuery<{ id: number; employeeId: number }>(
+            `SELECT DISTINCT ON ("employeeId") id, "employeeId"
+             FROM employee_assignments
+             WHERE "employeeId" = ANY($1) AND status='active'
+             ORDER BY "employeeId", id`,
+            [assigneeIds]
+          );
+          const empToAssignment = new Map<number, number>();
+          for (const r of asgnRows) empToAssignment.set(Number(r.employeeId), Number(r.id));
+          for (const t of unlockedTasks) {
+            const aid = empToAssignment.get(Number(t.assigneeId));
+            if (!aid) continue;
+            createNotification({
+              companyId: scope.companyId,
+              assignmentId: aid,
+              type: "task_unblocked",
+              title: "مهمة أصبحت متاحة للعمل",
+              body: `المهمة "${t.title}" أصبحت جاهزة — جميع المهام المعتمد عليها مكتملة`,
+              priority: "normal",
+              refType: "project_tasks",
+              refId: t.id,
+            }).catch((e) => logger.error(e, "projects background task failed"));
+          }
+        } catch (e) { logger.error(e, "Unlock notification error:"); }
       }
     }
 
     if (task?.projectId) {
-      const allTasks = await rawQuery<any>(`SELECT * FROM project_tasks WHERE "projectId"=$1 AND "deletedAt" IS NULL LIMIT 500`, [task.projectId]);
-      const doneTasks = allTasks.filter((t: any) => t.status === 'done').length;
-      const progressPct = allTasks.length > 0 ? Math.round((doneTasks / allTasks.length) * 100) : 0;
-      await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [progressPct, task.projectId, scope.companyId]);
 
       const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "deletedAt" IS NULL`, [task.projectId]);
 
