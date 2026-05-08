@@ -410,7 +410,7 @@ protectedRouter.get("/tickets/:id", withPortalScope(async (req, res) => {
     const [ticket] = await portalScopedQuery<any>(scope,
       `SELECT id, ref, title, description, status, priority, category, "createdAt", "updatedAt"
        FROM support_tickets
-       WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
+       WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [scope.clientId, scope.companyId, id]
     );
     if (!ticket) throw new NotFoundError("الطلب غير موجود");
@@ -430,9 +430,9 @@ protectedRouter.get("/tickets/:id/replies", withPortalScope(async (req, res) => 
     );
     if (!ticket) throw new NotFoundError("الطلب غير موجود");
     const replies = await rawQuery<any>(
-      `SELECT tr.id, tr.message, CASE WHEN tr."isInternal" THEN 'agent' ELSE 'client' END AS "senderType", tr."authorName" AS "senderName", tr."createdAt"
+      `SELECT tr.id, tr.message, 'client' AS "senderType", tr."authorName" AS "senderName", tr."createdAt"
        FROM ticket_replies tr
-       WHERE tr."ticketId" = $1
+       WHERE tr."ticketId" = $1 AND ("isInternal" = FALSE OR "isInternal" IS NULL) AND tr."deletedAt" IS NULL
        ORDER BY tr."createdAt" ASC`,
       [id]
     );
@@ -664,7 +664,7 @@ protectedRouter.get("/kb/:id", withPortalScope(async (req, res) => {
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المقالة غير موجودة");
-    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1`, [id]).catch((e) => logger.error(e, "clientPortal background task failed"));
+    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]).catch((e) => logger.error(e, "clientPortal background task failed"));
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "Portal KB article error:");
@@ -676,10 +676,11 @@ protectedRouter.post("/kb/:id/feedback", withPortalScope(async (req, res) => {
     const id = parseId(req.params.id, "id");
     const body = zodParse(portalKbFeedbackSchema.safeParse(req.body));
     const { helpful } = body;
+    const scope = req.portalScope!;
     if (helpful === true || helpful === 'true') {
-      await rawExecute(`UPDATE kb_articles SET helpful=COALESCE(helpful,0)+1 WHERE id=$1`, [id]);
+      await rawExecute(`UPDATE kb_articles SET helpful=COALESCE(helpful,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
     } else {
-      await rawExecute(`UPDATE kb_articles SET "notHelpful"=COALESCE("notHelpful",0)+1 WHERE id=$1`, [id]);
+      await rawExecute(`UPDATE kb_articles SET "notHelpful"=COALESCE("notHelpful",0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
     }
     createAuditLog({
       companyId: req.portalScope!.companyId, userId: req.portalScope!.accountId,

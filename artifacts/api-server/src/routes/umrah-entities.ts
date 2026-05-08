@@ -738,11 +738,11 @@ router.post("/nusk-invoices", requirePermission("umrah:write"), async (req, res)
     if (dup) throw new ConflictError("رقم فاتورة نسك مكرر");
     const rows = await rawQuery(
       `INSERT INTO umrah_nusk_invoices ("companyId","branchId","nuskInvoiceNumber","agentId","subAgentId","groupId","mutamerCount",
-       "groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate",notes,"createdBy")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
+       "groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate","createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
       [scope.companyId, scope.branchId || null, b.nuskInvoiceNumber, b.agentId, b.subAgentId || null, b.groupId || null, b.mutamerCount,
        b.groundServices, b.visaFees, b.insuranceFees, b.transportTotal, b.hotelTotal, b.additionalServices, b.netCost, b.totalAmount, b.nuskStatus,
-       b.issueDate || null, b.expiryDate || null, b.notes || null, scope.userId]
+       b.issueDate || null, b.expiryDate || null, scope.userId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_nusk_invoices", entityId: rows[0]?.id, after: { nuskInvoiceNumber: b.nuskInvoiceNumber } }).catch((e) => logger.error(e, "nusk bg"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.nusk_invoice.created", entity: "umrah_nusk_invoices", entityId: rows[0]?.id }).catch((e) => logger.error(e, "nusk bg"));
@@ -763,7 +763,7 @@ router.patch("/nusk-invoices/:id", requirePermission("umrah:write"), async (req,
     if (existing.nuskStatus === "paid" && b.nuskStatus !== "refunded") {
       throw new ConflictError("لا يمكن تعديل فاتورة نسك مدفوعة");
     }
-    const fields = ["mutamerCount","groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate","notes"] as const;
+    const fields = ["mutamerCount","groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate"] as const;
     const params: any[] = [];
     const sets: string[] = [];
     for (const key of fields) {

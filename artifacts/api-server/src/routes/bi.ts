@@ -768,7 +768,7 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
 
     const [ops] = await rawQuery<any>(
       `SELECT
-         COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "scheduledDate" < CURRENT_DATE) AS "overdueProjects",
+         COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "endDate" < CURRENT_DATE) AS "overdueProjects",
          COUNT(*) AS "totalProjects"
        FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid]
@@ -1002,11 +1002,11 @@ router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) 
          WHERE "vehicleId" = fv.id AND "companyId" = $1
        ) fm_total ON true
        LEFT JOIN LATERAL (
-         SELECT COALESCE(SUM(amount), 0) AS total FROM fleet_fuel_logs
+         SELECT COALESCE(SUM("totalCost"), 0) AS total FROM fleet_fuel_logs
          WHERE "vehicleId" = fv.id AND "companyId" = $1
        ) fuel_total ON true
        LEFT JOIN LATERAL (
-         SELECT COALESCE(SUM("premiumAmount"), 0) AS total FROM fleet_insurance
+         SELECT COALESCE(SUM(premium), 0) AS total FROM fleet_insurance
          WHERE "vehicleId" = fv.id AND "companyId" = $1
        ) ins_total ON true
        WHERE fv."companyId" = $1

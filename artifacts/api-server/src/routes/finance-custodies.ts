@@ -323,7 +323,7 @@ custodiesRouter.get("/custodies/:id", requirePermission("finance:read"), async (
               je."createdAt" AS date,
               e2.name AS "settledByName"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl.credit > 0
        LEFT JOIN employee_assignments ea2 ON ea2.id = je."createdBy"
        LEFT JOIN employees e2 ON e2.id = ea2."employeeId"
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY-SETTLE%' AND je.description = $2

@@ -132,7 +132,7 @@ purchaseRouter.post("/purchase-requests/impact-preview", requirePermission("fina
       );
       supplierName = supplier?.name || "";
       const [row] = await rawQuery<any>(
-        `SELECT COALESCE(SUM(total - COALESCE("paidAmount",0)),0)::numeric AS outstanding
+        `SELECT COALESCE(SUM("totalAmount"),0)::numeric AS outstanding
          FROM purchase_orders
          WHERE "supplierId" = $1 AND "companyId" = $2
            AND "deletedAt" IS NULL
@@ -423,7 +423,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
 
     const items = await rawQuery<any>(`SELECT * FROM purchase_request_items WHERE "requestId" = $1 LIMIT 500`, [id]);
     const subtotal = Number(pr.totalAmount);
-    const vatRate = Number(pr.vatRate ?? 15);
+    const vatRate = 15;
     const vatAmount = computeVat(subtotal, vatRate);
     const totalAmount = subtotal + vatAmount;
 
@@ -442,7 +442,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
       for (const item of items) {
         const base = params.length;
         valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5})`);
-        params.push(poId, item.itemName, item.quantity, item.unitPrice, item.lineTotal);
+        params.push(poId, item.name, item.quantity, item.unitPrice, item.totalPrice);
       }
       await rawExecute(
         `INSERT INTO purchase_order_items ("orderId","itemName",quantity,"unitPrice","lineTotal")
@@ -788,7 +788,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
         obligationType: "follow_up",
         title: `مطابقة فاتورة المورد — ${grnRef} / ${po.ref || ""}`,
         dueAt: matchDueDate.toISOString(),
-        metadata: { grnRef, poRef: po.ref, subtotal, vatAmount, total: grnTotal, vendorId: po.vendorId ?? null },
+        metadata: { grnRef, poRef: po.ref, subtotal, vatAmount, total: grnTotal, vendorId: po.supplierId ?? null },
         dedupeKey: `grn-${grnId}-invoice-match`,
         escalationSteps: [
           { hoursAfterDue: 24, notifyRole: "finance_manager" },
@@ -1257,7 +1257,7 @@ purchaseRouter.get("/purchase-orders/pending-grn", requirePermission("finance:re
               po."createdAt", po."expectedDelivery"
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
-       WHERE po."companyId" = $1 AND po.status IN ('approved','sent','partial_received')
+       WHERE po."companyId" = $1 AND po.status IN ('approved','sent','partially_received')
          AND po."deletedAt" IS NULL
        ORDER BY po."createdAt" DESC`,
       [scope.companyId]
@@ -1352,7 +1352,7 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", requirePermission("fin
     if (!po) {
       throw new NotFoundError("أمر الشراء غير موجود");
     }
-    if (!["received", "partial_received"].includes(po.status)) {
+    if (!["received", "partially_received"].includes(po.status)) {
       throw new ValidationError("يجب استلام البضاعة قبل مطابقة الفاتورة");
     }
 
@@ -1408,7 +1408,7 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", requirePermission("fin
       id,
       scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
       action: isMatched ? "purchase_order.three_way_matched" : "purchase_order.three_way_mismatch",
-      fromStates: ["received", "partial_received"],
+      fromStates: ["received", "partially_received"],
       toState: matchStatus,
       setExtras: {
         notes: { raw: `CONCAT(COALESCE(notes,''), '${matchNote.replace(/'/g, "''")}')` },
