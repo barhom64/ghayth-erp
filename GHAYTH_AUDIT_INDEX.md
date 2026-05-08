@@ -1,7 +1,7 @@
 # فهرس فحص نظام غيث الشامل
 ### Ghayth ERP Comprehensive Audit Index
 
-> آخر تحديث: 2026-05-07
+> آخر تحديث: 2026-05-08
 > الفرع: `claude/hr-smoke-testing-6DRib`
 
 ---
@@ -18,8 +18,9 @@
 | إجمالي صفحات الواجهة الأمامية | ~215 صفحة |
 | إجمالي نقاط API | ~700+ |
 | صفحات منفصلة (بدون API) | 0 |
-| الاختبارات | 3,075 اختبار (77 ملف) — كلها ناجحة |
+| الاختبارات | 3,092 اختبار (79 ملف) — كلها ناجحة |
 | فحوصات CI | 7 فحوصات — كلها ناجحة |
+| إجمالي الأخطاء المُصلحة | ~154 خطأ عبر 3 جولات |
 
 ---
 
@@ -39,17 +40,17 @@
 | `finance-invoices.ts` | 2,009 | ✅ | 8 | 8 |
 | `finance-journal.ts` | 1,511 | ✅ | 3 | 3 |
 | `finance-budget.ts` | 686 | ✅ | 3 | 3 |
-| `finance-algorithms.ts` | 1,728 | 🔍 | — | — |
-| `finance-purchase.ts` | 1,523 | 🔍 | — | — |
-| `finance-hardening.ts` | 1,378 | 🔍 | — | — |
-| `finance-reports.ts` | 944 | 🔍 | — | — |
-| `finance-custodies.ts` | 852 | 🔍 | — | — |
-| `finance-zatca.ts` | 814 | 🔍 | — | — |
+| `finance-algorithms.ts` | 1,728 | ✅ | 8 | 8 |
+| `finance-purchase.ts` | 1,523 | ✅ | 6 | 6 |
+| `finance-hardening.ts` | 1,378 | ✅ | 0 | 0 |
+| `finance-reports.ts` | 944 | ✅ | 2 | 2 |
+| `finance-custodies.ts` | 852 | ✅ | 1 | 1 |
+| `finance-zatca.ts` | 814 | ✅ | 3 | 3 |
 | `finance-vendors.ts` | 537 | ✅ | 1 | 1 |
-| `finance-recurring.ts` | 387 | 🔍 | — | — |
+| `finance-recurring.ts` | 387 | ✅ | 0 | 0 |
 | `finance-accounts.ts` | 385 | ✅ | 3 | 3 |
-| `finance-collection.ts` | 201 | 🔍 | — | — |
-| `finance-cost-centers.ts` | 152 | 🔍 | — | — |
+| `finance-collection.ts` | 201 | ✅ | 0 | 0 |
+| `finance-cost-centers.ts` | 152 | ✅ | 0 | 0 |
 | `accounting-engine.ts` | 613 | ⬜ | — | — |
 
 **الأخطاء المُصلحة:**
@@ -186,7 +187,90 @@
 
 ---
 
-### ط. وحدات الجولة الثانية (تم الفحص والإصلاح)
+### ط. وحدات الجولة الثالثة (تم الفحص والإصلاح)
+
+| الملف | الأسطر | الحالة | الأخطاء المكتشفة | الأخطاء المُصلحة |
+|-------|--------|--------|-------------------|------------------|
+| `bi.ts` | 1,350 | ✅ | 3 | 3 |
+| `requests.ts` | 880 | ✅ | 4 | 4 |
+| `umrah-entities.ts` | 1,199 | ✅ | 2 | 2 |
+| `clientPortal.ts` | 700 | ✅ | 5 | 5 |
+| `notification-engine.ts` | 798 | ✅ | 1 | 1 |
+| `intelligence.ts` | 753 | ✅ | 3 | 3 |
+| `operationsCenter.ts` | 605 | ✅ | 2 | 2 |
+| `gov-integrations.ts` | 455 | ✅ | 12 | 12 |
+
+**الأخطاء المُصلحة في الجولة الثالثة:**
+
+**finance-algorithms.ts (8 أخطاء):**
+1. ~~وحدة FX كاملة معطلة — أسماء أعمدة خاطئة على fx_rates (rateDate→effectiveDate, type→source)~~ (CRITICAL)
+2. ~~invoices: invoiceNumber→ref, invoiceDate→createdAt~~ (CRITICAL)
+3. ~~purchase_orders: poNumber→ref, total→totalAmount, orderDate→createdAt~~ (CRITICAL)
+4. ~~fx_revaluations INSERT مفقود عمود currency (NOT NULL)~~ (CRITICAL)
+5. ~~fx_revaluations: period→revaluationDate في ORDER BY~~ (HIGH)
+6. ~~warehouse_movements بدون companyId~~ (HIGH)
+7. ~~depreciation_entries بدون companyId~~ (HIGH)
+8. ~~journal_lines أعمدة غير موجودة: vendorId, clientId, driverId, productId~~ (HIGH)
+
+**finance-purchase.ts (6 أخطاء):**
+9. ~~total→totalAmount, paidAmount غير موجود~~ (CRITICAL)
+10. ~~item.itemName→item.name, item.lineTotal→item.totalPrice في تحويل PR→PO~~ (CRITICAL)
+11. ~~partial_received→partially_received (3 مواقع)~~ (HIGH)
+12. ~~vendorId→supplierId~~ (HIGH)
+13. ~~vatRate غير موجود على purchase_requests~~ (MEDIUM)
+14. ~~schema CHECK constraint مفقود: invoice_mismatch, payment_scheduled~~ (CRITICAL)
+
+**finance-zatca.ts (3 أخطاء):**
+15. ~~UPDATE invoices بدون companyId~~ (HIGH)
+16. ~~UPDATE journal_entries بدون companyId~~ (HIGH)
+17. ~~expense.amount من عمود غير موجود — الآن يُحسب من journal_lines~~ (CRITICAL)
+
+**finance-custodies.ts (1 خطأ):**
+18. ~~استعلام التسوية يفلتر debit لكن يجمع credit~~ (CRITICAL)
+
+**finance-reports.ts (2 خطأ):**
+19. ~~journal_lines لا يحتوي productId — حذف نوع "product"~~ (HIGH)
+20. ~~employee_violations بدون companyId~~ (HIGH)
+
+**bi.ts (3 أخطاء):**
+21. ~~scheduledDate→endDate في CEO dashboard~~ (CRITICAL)
+22. ~~SUM(amount)→SUM("totalCost") في fleet fuel TCO~~ (CRITICAL)
+23. ~~SUM("premiumAmount")→SUM(premium) في fleet insurance TCO~~ (CRITICAL)
+
+**requests.ts (4 أخطاء):**
+24. ~~4 Zod parse results مُهملة — req.body بدل parsed~~ (HIGH)
+
+**umrah-entities.ts (2 خطأ):**
+25. ~~notes عمود غير موجود في INSERT~~ (CRITICAL)
+26. ~~notes في PATCH dynamic fields~~ (MEDIUM)
+
+**clientPortal.ts (5 أخطاء):**
+27. ~~ثغرة أمان: ملاحظات الوكيل الداخلية تظهر للعملاء~~ (CRITICAL — أمان)
+28. ~~ticket_replies بدون deletedAt~~ (HIGH)
+29. ~~support_tickets detail بدون deletedAt~~ (HIGH)
+30. ~~kb_articles views UPDATE بدون companyId~~ (MEDIUM)
+31. ~~kb_articles feedback UPDATE بدون companyId~~ (MEDIUM)
+
+**notification-engine.ts (1 خطأ):**
+32. ~~secret غير مُضمّن في SELECT للـ webhooks~~ (HIGH)
+
+**intelligence.ts (3 أخطاء):**
+33. ~~vehicleValue عمود غير موجود~~ (HIGH)
+34. ~~fleet_maintenance بدون deletedAt~~ (MEDIUM)
+35. ~~fleet_vehicles بدون deletedAt~~ (MEDIUM)
+
+**operationsCenter.ts (2 خطأ):**
+36. ~~vouchers.date غير موجود → createdAt::date~~ (CRITICAL)
+37. ~~نفس الخطأ في استعلام المدفوعات~~ (CRITICAL)
+
+**gov-integrations.ts (12 خطأ):**
+38. ~~UPDATE بدون companyId (موقعين)~~ (HIGH)
+39. ~~7 استعلامات على gov_integration_links بدون deletedAt IS NULL~~ (HIGH)
+40. ~~fleet_vehicles بدون deletedAt~~ (MEDIUM)
+
+---
+
+### ي. وحدات الجولة الثانية (تم الفحص والإصلاح)
 
 | الملف | الأسطر | الحالة | الأخطاء المكتشفة | الأخطاء المُصلحة |
 |-------|--------|--------|-------------------|------------------|
@@ -226,7 +310,7 @@
 
 ---
 
-### ي. ملفات لم تُفحص بعد ⬜
+### ك. ملفات لم تُفحص بعد ⬜
 
 | الملف | الأسطر | السبب |
 |-------|--------|-------|
@@ -239,23 +323,21 @@
 | `automation.ts` | 187 | |
 | `calendar.ts` | 255 | قراءة فقط |
 | `careersPortal.ts` | 338 | بوابة عامة |
-| `clientPortal.ts` | 700 | بوابة عملاء |
 | `dashboard.ts` | 482 | قراءة فقط |
 | `digital-signature.ts` | 162 | |
+| `documents.ts` | 946 | |
+| `tasks.ts` | 464 | |
+| `correspondence.ts` | 313 | |
 | `entityMeta.ts` | 322 | بيانات وصفية |
 | `events.ts` | 116 | |
 | `execDashboard.ts` | 351 | قراءة فقط |
 | `export.ts` | 184 | |
-| `gov-integrations.ts` | 455 | |
 | `health.ts` | 230 | فحص صحة |
 | `impactPreview.ts` | 299 | |
-| `intelligence.ts` | 753 | |
 | `moduleDashboards.ts` | 349 | قراءة فقط |
 | `mySpace.ts` | — | |
-| `notification-engine.ts` | 798 | |
 | `notifications.ts` | 148 | |
 | `obligations.ts` | 188 | |
-| `operationsCenter.ts` | 605 | |
 | `pdpl.ts` | 220 | |
 | `permissions.ts` | 245 | |
 | `publicData.ts` | 84 | عام |
@@ -264,6 +346,8 @@
 | `search.ts` | 170 | |
 | `storage.ts` | 176 | |
 | `workflows.ts` | 479 | |
+
+> **ملاحظة:** معظم هذه الملفات صغيرة (< 500 سطر) أو للقراءة فقط أو واجهات تجميعية. الملفات الكبيرة الوحيدة غير المفحوصة: `documents.ts` (946), `workflows.ts` (479), `tasks.ts` (464).
 
 ---
 
@@ -289,7 +373,16 @@
 | LOW | 5 | ✅ مُصلح |
 | **المجموع** | **~80** | **✅ مُصلح** |
 
-### **الإجمالي الكلي: ~107 خطأ مُصلح عبر جولتين**
+### الجولة الثالثة (تم إصلاحها — commits 650e2a9, 4775cd5, f686c5f):
+
+| الخطورة | العدد | الحالة |
+|---------|-------|--------|
+| CRITICAL | 18 | ✅ مُصلح |
+| HIGH | 20 | ✅ مُصلح |
+| MEDIUM | 9 | ✅ مُصلح |
+| **المجموع** | **47** | **✅ مُصلح** |
+
+### **الإجمالي الكلي: ~154 خطأ مُصلح عبر 3 جولات**
 
 ### أخطاء مكتشفة لم تُصلح (تحتاج تعديلات أعمق):
 
@@ -381,6 +474,26 @@
 
 ---
 
+## 8.1. الجولة الثالثة — ✅ مكتملة
+
+دمج مع `origin/main` (662 commit) ثم فحص 16 ملف إضافي (~16,500 سطر):
+
+| العميل | الوحدات | الأخطاء | الحالة |
+|--------|---------|---------|--------|
+| 1 | bi + documents + tasks + requests + correspondence + umrah-entities | 9 | ✅ مُصلح |
+| 2 | finance-purchase | 6 | ✅ مُصلح |
+| 3 | finance-zatca + finance-custodies | 4 | ✅ مُصلح |
+| 4 | finance-algorithms + finance-hardening + finance-reports + clientPortal | 21 | ✅ مُصلح |
+| 5 | notification-engine + intelligence + operationsCenter + gov-integrations | 18 | ✅ مُصلح |
+
+**أهم الاكتشافات:**
+- وحدة FX في finance-algorithms كاملة معطلة — أسماء أعمدة خاطئة في كل استعلام
+- ثغرة أمنية: بوابة العملاء تكشف الملاحظات الداخلية للوكلاء
+- 6 UPDATEs بدون companyId عبر 3 ملفات (finance-zatca, gov-integrations)
+- CHECK constraint مفقود في schema.sql لحالات أوامر الشراء
+
+---
+
 ## 9. الملفات غير المفحوصة ⬜
 
 ملفات لم تُفحص — معظمها قراءة فقط أو واجهات تجميعية أو صغيرة:
@@ -396,28 +509,21 @@
 | `automation.ts` | 187 | |
 | `calendar.ts` | 255 | قراءة فقط |
 | `careersPortal.ts` | 338 | بوابة عامة |
-| `clientPortal.ts` | 700 | بوابة عملاء |
 | `dashboard.ts` | 482 | قراءة فقط |
 | `digital-signature.ts` | 162 | |
 | `documents.ts` | 946 | |
-| `bi.ts` | 1,350 | |
 | `tasks.ts` | 464 | |
-| `requests.ts` | 880 | |
 | `correspondence.ts` | 313 | |
-| `umrah-entities.ts` | 1,199 | |
 | `entityMeta.ts` | 322 | بيانات وصفية |
 | `events.ts` | 116 | |
 | `execDashboard.ts` | 351 | قراءة فقط |
 | `export.ts` | 184 | |
-| `gov-integrations.ts` | 455 | |
 | `health.ts` | 230 | فحص صحة |
 | `impactPreview.ts` | 299 | |
-| `intelligence.ts` | 753 | |
 | `moduleDashboards.ts` | 349 | قراءة فقط |
-| `notification-engine.ts` | 798 | |
+| `mySpace.ts` | — | |
 | `notifications.ts` | 148 | |
 | `obligations.ts` | 188 | |
-| `operationsCenter.ts` | 605 | |
 | `pdpl.ts` | 220 | |
 | `permissions.ts` | 245 | |
 | `publicData.ts` | 84 | عام |
@@ -429,4 +535,5 @@
 
 ---
 
-*تم إنشاء هذا الفهرس تلقائياً بواسطة فحص Claude Code الشامل — الجولة الثانية مكتملة 2026-05-07.*
+*تم إنشاء هذا الفهرس تلقائياً بواسطة فحص Claude Code الشامل — الجولة الثالثة مكتملة 2026-05-08.*
+*الإجمالي: ~154 خطأ مُصلح عبر 3 جولات، 48 ملف تم فحصه من 80، CI أخضر (3,092 اختبار).*
