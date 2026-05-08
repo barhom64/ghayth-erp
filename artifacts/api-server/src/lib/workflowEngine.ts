@@ -257,7 +257,7 @@ async function validatePreApproval(
   if (data._budgetAccountCode && data._budgetAmount) {
     const period = currentPeriod();
     const [budget] = await rawQuery<any>(
-      `SELECT amount, used FROM budgets WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3`,
+      `SELECT amount, used FROM budgets WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3 AND "deletedAt" IS NULL`,
       [companyId, data._budgetAccountCode, period]
     );
     if (!budget) {
@@ -666,7 +666,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
       // Propagate rejection to the linked domain first so a handler failure
       // keeps the workflow pending and the rejection can be retried.
       try {
-        await propagateDomainStatus(instance.refTable, instance.refId, "rejected");
+        await propagateDomainStatus(instance.refTable, instance.refId, "rejected", companyId);
       } catch (err) {
         logger.error(
           err as Error,
@@ -699,7 +699,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
     case "return": {
       newStatus = "returned";
       try {
-        await propagateDomainStatus(instance.refTable, instance.refId, "returned");
+        await propagateDomainStatus(instance.refTable, instance.refId, "returned", companyId);
       } catch (err) {
         logger.error(
           err as Error,
@@ -832,7 +832,9 @@ export async function getTimeline(instanceId: number, companyId: number) {
   const actions = await rawQuery<any>(
     `SELECT wsa.*, u.email AS "actionByEmail"
      FROM workflow_step_actions wsa
-     LEFT JOIN users u ON u.id = wsa."actionBy"
+     LEFT JOIN employee_assignments ea2 ON ea2.id = wsa."actionBy"
+     LEFT JOIN employees emp ON emp.id = ea2."employeeId"
+     LEFT JOIN users u ON u."employeeId" = emp.id
      WHERE wsa."instanceId" = $1
      ORDER BY wsa."createdAt" ASC`,
     [instanceId]
@@ -854,7 +856,7 @@ export async function getTimeline(instanceId: number, companyId: number) {
 
 export async function getTimelineByRef(refTable: string, refId: number, companyId: number) {
   const [instance] = await rawQuery<any>(
-    `SELECT * FROM workflow_instances WHERE "refTable" = $1 AND "refId" = $2 AND "companyId" = $3`,
+    `SELECT * FROM workflow_instances WHERE "refTable" = $1 AND "refId" = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
     [refTable, refId, companyId]
   );
   if (!instance) return { instance: null, actions: [], steps: [] };
@@ -870,7 +872,7 @@ export async function checkSlaStatus(companyId: number) {
             sd."autoApproveOnTimeout", sd."escalateTo"
      FROM workflow_instances wi
      LEFT JOIN sla_definitions sd ON sd."companyId" = wi."companyId" AND sd."requestType" = wi."requestType" AND sd."isActive" = true
-     WHERE wi."companyId" = $1 AND wi.status IN ('pending', 'in_review')
+     WHERE wi."companyId" = $1 AND wi.status IN ('pending', 'in_review') AND wi."deletedAt" IS NULL
      ORDER BY wi."createdAt" ASC`,
     [companyId]
   );
