@@ -382,27 +382,29 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
     );
     if (!existing) throw new NotFoundError("القالب غير موجود");
 
-    await rawExecute(
-      `UPDATE journal_entry_templates SET
-        name = COALESCE($1, name),
-        description = COALESCE($2, description),
-        "branchId" = $3, "activityType" = $4,
-        "isActive" = COALESCE($5, "isActive"), "updatedAt" = NOW()
-       WHERE id = $6 AND "companyId" = $7`,
-      [name ?? null, description ?? null, branchId ?? null, activityType ?? null, isActive ?? null, id, scope.companyId]
-    );
+    await withTransaction(async (client) => {
+      await client.query(
+        `UPDATE journal_entry_templates SET
+          name = COALESCE($1, name),
+          description = COALESCE($2, description),
+          "branchId" = $3, "activityType" = $4,
+          "isActive" = COALESCE($5, "isActive"), "updatedAt" = NOW()
+         WHERE id = $6 AND "companyId" = $7`,
+        [name ?? null, description ?? null, branchId ?? null, activityType ?? null, isActive ?? null, id, scope.companyId]
+      );
 
-    if (Array.isArray(lines)) {
-      await rawExecute(`DELETE FROM journal_entry_template_lines WHERE "templateId" = $1`, [id]);
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        await rawExecute(
-          `INSERT INTO journal_entry_template_lines ("templateId","accountId","accountCode","lineType",description,"sortOrder")
-           VALUES ($1,$2,$3,$4,$5,$6)`,
-          [id, line.accountId ?? null, line.accountCode ?? null, line.lineType, line.description ?? null, i]
-        );
+      if (Array.isArray(lines)) {
+        await client.query(`DELETE FROM journal_entry_template_lines WHERE "templateId" = $1`, [id]);
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          await client.query(
+            `INSERT INTO journal_entry_template_lines ("templateId","accountId","accountCode","lineType",description,"sortOrder")
+             VALUES ($1,$2,$3,$4,$5,$6)`,
+            [id, line.accountId ?? null, line.accountCode ?? null, line.lineType, line.description ?? null, i]
+          );
+        }
       }
-    }
+    });
 
     const [template] = await rawQuery<any>(`SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     if (!template) throw new NotFoundError("القالب غير موجود");

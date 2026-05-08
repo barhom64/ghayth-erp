@@ -10,7 +10,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { criticalPathLength } from "../lib/algorithms.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
@@ -1782,18 +1782,21 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
       throw new ValidationError("المبلغ يجب أن يكون أكبر من صفر", { field: "amount", fix: "أدخل قيمة موجبة" });
     }
     const costDate = b.costDate || todayISO();
-    const { insertId } = await rawExecute(
-      `INSERT INTO project_costs ("projectId","companyId",description,amount,category,"costDate","enteredBy",notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [projectId, scope.companyId, b.description, b.amount,
-       b.category || 'other', costDate,
-       scope.employeeId || null, b.notes || null]
-    );
-    // Update project spentAmount
-    await rawExecute(
-      `UPDATE projects SET "spentAmount"=COALESCE("spentAmount",0)+$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
-      [b.amount, projectId, scope.companyId]
-    );
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO project_costs ("projectId","companyId",description,amount,category,"costDate","enteredBy",notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+        [projectId, scope.companyId, b.description, b.amount,
+         b.category || 'other', costDate,
+         scope.employeeId || null, b.notes || null]
+      );
+      insertId = ins.rows[0].id;
+      await client.query(
+        `UPDATE projects SET "spentAmount"=COALESCE("spentAmount",0)+$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+        [b.amount, projectId, scope.companyId]
+      );
+    });
 
     // ─── GL POSTING: project cost → WIP ──────────────────────────────────
     // DR WIP (1350) / CR Cash|AP|Inventory depending on source.

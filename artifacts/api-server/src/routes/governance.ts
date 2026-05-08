@@ -308,38 +308,37 @@ router.post("/policies/:id/new-version", requirePermission("governance:write"), 
     const b = zodParse(newPolicyVersionSchema.safeParse(req.body));
     const existingLinks = await rawQuery<any>(`SELECT module FROM policy_module_links WHERE "policyId"=$1`, [parentId]);
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO governance_policies (title, description, category, status, "effectiveDate", "expiryDate", version, "parentId", "companyId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [
-        b.title || parent.title,
-        b.description || parent.description,
-        b.category || parent.category,
-        "draft",
-        b.effectiveDate || null,
-        b.expiryDate || null,
-        nextVersion,
-        parentId,
-        scope.companyId,
-      ]
-    );
-
-    await applyTransition({
-      entity: "governance_policies",
-      id: parentId,
-      scope,
-      action: "governance.policy.archived",
-      fromStates: ["draft", "active"],
-      toState: "archived",
-      reason: `أرشفة تلقائية — إصدار جديد v${nextVersion}`,
-    });
-
-    for (const link of existingLinks) {
-      await rawExecute(
-        `INSERT INTO policy_module_links ("policyId", module, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
-        [insertId, link.module, scope.companyId]
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO governance_policies (title, description, category, status, "effectiveDate", "expiryDate", version, "parentId", "companyId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [
+          b.title || parent.title,
+          b.description || parent.description,
+          b.category || parent.category,
+          "draft",
+          b.effectiveDate || null,
+          b.expiryDate || null,
+          nextVersion,
+          parentId,
+          scope.companyId,
+        ]
       );
-    }
+      insertId = ins.rows[0].id;
+
+      await client.query(
+        `UPDATE governance_policies SET status='archived', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status IN ('draft','active')`,
+        [parentId, scope.companyId]
+      );
+
+      for (const link of existingLinks) {
+        await client.query(
+          `INSERT INTO policy_module_links ("policyId", module, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+          [insertId, link.module, scope.companyId]
+        );
+      }
+    });
 
     const [row] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_policies", entityId: insertId, after: { version: nextVersion, parentId } }).catch((e) => logger.error(e, "governance background task failed"));

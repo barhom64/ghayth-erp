@@ -2059,23 +2059,24 @@ router.delete("/trips/:id", requirePermission("fleet:delete"), async (req, res) 
     if (existing.status === "in_progress") {
       throw new ConflictError("لا يمكن حذف رحلة قيد التنفيذ", { field: "status", fix: "ألغِ الرحلة عبر /trips/:id/cancel أو أكملها قبل الحذف" });
     }
-    await rawExecute(`UPDATE fleet_trips SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await withTransaction(async (client) => {
+      await client.query(`UPDATE fleet_trips SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
-    // Release vehicle and driver if trip was scheduled/planned (not yet started)
-    if (["scheduled", "planned"].includes(existing.status)) {
-      if (existing.vehicleId) {
-        await rawExecute(
-          `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status IN ('in_use','on_trip')`,
-          [existing.vehicleId, scope.companyId]
-        );
+      if (["scheduled", "planned"].includes(existing.status)) {
+        if (existing.vehicleId) {
+          await client.query(
+            `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status IN ('in_use','on_trip')`,
+            [existing.vehicleId, scope.companyId]
+          );
+        }
+        if (existing.driverId) {
+          await client.query(
+            `UPDATE fleet_drivers SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='on_trip'`,
+            [existing.driverId, scope.companyId]
+          );
+        }
       }
-      if (existing.driverId) {
-        await rawExecute(
-          `UPDATE fleet_drivers SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='on_trip'`,
-          [existing.driverId, scope.companyId]
-        );
-      }
-    }
+    });
 
     emitEvent({
       companyId: scope.companyId,
@@ -2211,15 +2212,16 @@ router.delete("/maintenance/:id", requirePermission("fleet:delete"), async (req,
     if (existing.status === "in_progress") {
       throw new ConflictError("لا يمكن حذف صيانة قيد التنفيذ", { field: "status", fix: "ألغِ الصيانة عبر /maintenance/:id/cancel أو أكملها قبل الحذف" });
     }
-    await rawExecute(`UPDATE fleet_maintenance SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await withTransaction(async (client) => {
+      await client.query(`UPDATE fleet_maintenance SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
-    // Release the vehicle if it was held for this maintenance record
-    if (existing.vehicleId) {
-      await rawExecute(
-        `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='maintenance'`,
-        [existing.vehicleId, scope.companyId]
-      );
-    }
+      if (existing.vehicleId) {
+        await client.query(
+          `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='maintenance'`,
+          [existing.vehicleId, scope.companyId]
+        );
+      }
+    });
 
     emitEvent({
       companyId: scope.companyId,

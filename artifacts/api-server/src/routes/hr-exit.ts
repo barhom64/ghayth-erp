@@ -481,7 +481,7 @@ router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, 
     );
     if (!item) throw new NotFoundError("عنصر إخلاء الطرف غير موجود");
 
-    const newStatus = b.status === "cleared" ? "cleared" : "issue";
+    const newStatus = b.status === "cleared" ? "cleared" : "rejected";
     await rawExecute(
       `UPDATE hr_exit_clearance
        SET status = $1, "clearedBy" = $2, "clearedAt" = NOW(), notes = $3

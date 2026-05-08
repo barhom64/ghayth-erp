@@ -392,8 +392,9 @@ export async function queryObligations(input: QueryObligationsInput): Promise<an
   if (input.dueAfter) { params.push(input.dueAfter); where += ` AND "dueAt" > $${params.length}::timestamp`; }
 
   const limit = Math.min(500, Math.max(1, input.limit ?? 100));
+  params.push(limit);
   return rawQuery<any>(
-    `SELECT * FROM obligations WHERE ${where} ORDER BY "dueAt" ASC LIMIT ${limit}`,
+    `SELECT * FROM obligations WHERE ${where} ORDER BY "dueAt" ASC LIMIT $${params.length}`,
     params
   );
 }

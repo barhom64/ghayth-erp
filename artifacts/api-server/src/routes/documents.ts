@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { Readable } from "stream";
@@ -192,29 +192,31 @@ router.post("/upload", requirePermission("documents:create"), async (req: Reques
       }
     }
 
-    const r = await rawExecute(
-      `INSERT INTO documents (title, description, "fileName", "fileSize", "mimeType", category, status, "storageKey", "currentVersion", "uploadedBy", "companyId")
-       VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,1,$8,$9)`,
-      [title, description, fileName, fileSize, mimeType, category || null, storageKey, scope.userId, scope.companyId]
-    );
+    let docId!: number;
+    await withTransaction(async (client) => {
+      const r = await client.query(
+        `INSERT INTO documents (title, description, "fileName", "fileSize", "mimeType", category, status, "storageKey", "currentVersion", "uploadedBy", "companyId")
+         VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,1,$8,$9) RETURNING id`,
+        [title, description, fileName, fileSize, mimeType, category || null, storageKey, scope.userId, scope.companyId]
+      );
+      docId = r.rows[0].id;
 
-    const docId = r.insertId;
+      await client.query(
+        `INSERT INTO document_versions ("documentId", "versionNumber", "fileName", "fileSize", "mimeType", "storageKey", "uploadedBy")
+         VALUES ($1, 1, $2, $3, $4, $5, $6)`,
+        [docId, fileName, fileSize, mimeType, storageKey, scope.userId]
+      );
 
-    await rawExecute(
-      `INSERT INTO document_versions ("documentId", "versionNumber", "fileName", "fileSize", "mimeType", "storageKey", "uploadedBy")
-       VALUES ($1, 1, $2, $3, $4, $5, $6)`,
-      [docId, fileName, fileSize, mimeType, storageKey, scope.userId]
-    );
-
-    if (entityLinks && Array.isArray(entityLinks)) {
-      for (const link of entityLinks) {
-        await rawExecute(
-          `INSERT INTO document_entity_links ("documentId", "entityType", "entityId") VALUES ($1, $2, $3)
-           ON CONFLICT ("documentId", "entityType", "entityId") DO NOTHING`,
-          [docId, link.entityType, link.entityId]
-        );
+      if (entityLinks && Array.isArray(entityLinks)) {
+        for (const link of entityLinks) {
+          await client.query(
+            `INSERT INTO document_entity_links ("documentId", "entityType", "entityId") VALUES ($1, $2, $3)
+             ON CONFLICT ("documentId", "entityType", "entityId") DO NOTHING`,
+            [docId, link.entityType, link.entityId]
+          );
+        }
       }
-    }
+    });
 
     const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [docId, scope.companyId]);
     createAuditLog({
@@ -335,16 +337,18 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
 
     const newVersion = (doc.currentVersion || 1) + 1;
 
-    await rawExecute(
-      `INSERT INTO document_versions ("documentId", "versionNumber", "fileName", "fileSize", "mimeType", "storageKey", "uploadedBy", notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [docId, newVersion, fileName, fileSize, mimeType, storageKey, scope.userId, notes || null]
-    );
+    await withTransaction(async (client) => {
+      await client.query(
+        `INSERT INTO document_versions ("documentId", "versionNumber", "fileName", "fileSize", "mimeType", "storageKey", "uploadedBy", notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [docId, newVersion, fileName, fileSize, mimeType, storageKey, scope.userId, notes || null]
+      );
 
-    await rawExecute(
-      `UPDATE documents SET "currentVersion"=$1, "fileName"=$2, "fileSize"=$3, "mimeType"=$4, "storageKey"=$5, "updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7`,
-      [newVersion, fileName, fileSize, mimeType, storageKey, docId, scope.companyId]
-    );
+      await client.query(
+        `UPDATE documents SET "currentVersion"=$1, "fileName"=$2, "fileSize"=$3, "mimeType"=$4, "storageKey"=$5, "updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7`,
+        [newVersion, fileName, fileSize, mimeType, storageKey, docId, scope.companyId]
+      );
+    });
 
     const [updated] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [docId, scope.companyId]);
     if (!updated) throw new NotFoundError("فشل في استرجاع المستند");

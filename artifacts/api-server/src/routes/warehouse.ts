@@ -814,7 +814,7 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
   const ref = generateTimeRef("PR-AUTO");
 
   const { insertId: prId } = await rawExecute(
-    `INSERT INTO purchase_requests ("companyId","supplierId",ref,status,"totalAmount","requestedBy",notes) VALUES ($1,$2,$3,'pending_approval',$4,$5,$6)`,
+    `INSERT INTO purchase_requests ("companyId","supplierId",ref,status,"totalAmount","requestedBy",notes) VALUES ($1,$2,$3,'pending',$4,$5,$6)`,
     [companyId, supplierId, ref, estimatedTotal, userId, `طلب شراء تلقائي - مخزون منخفض: ${product.name}`]
   );
   if (prId) {

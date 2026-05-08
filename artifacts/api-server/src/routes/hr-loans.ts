@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { LOAN_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   handleRouteError,
@@ -421,31 +421,32 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
       return;
     }
 
-    // ── الموافقة النهائية: تفعيل السلفة ──
-    const { affectedRows } = await rawExecute(
-      `UPDATE hr_employee_loans
-       SET status = 'active', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW()
-       WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
-      [scope.userId, loan.id, scope.companyId]
-    );
-    if (!affectedRows) throw new ConflictError("تم تحديث السلفة مسبقاً — أعد التحميل");
-
-    // توليد جدول الأقساط
-    let period = loan.startDeductionPeriod || nextPeriod();
-    for (let i = 1; i <= loan.installmentCount; i++) {
-      const isLast = i === loan.installmentCount;
-      const amt = isLast
-        ? roundTo2(Number(loan.amount) - Number(loan.installmentAmount) * (loan.installmentCount - 1))
-        : Number(loan.installmentAmount);
-
-      await rawExecute(
-        `INSERT INTO hr_loan_installments
-           ("loanId","companyId","assignmentId","installmentNumber",amount,period,status)
-         VALUES ($1,$2,$3,$4,$5,$6,'pending')`,
-        [loan.id, scope.companyId, loan.assignmentId, i, amt, period]
+    // ── الموافقة النهائية: تفعيل السلفة + توليد الأقساط ذرياً ──
+    await withTransaction(async (client) => {
+      const upd = await client.query(
+        `UPDATE hr_employee_loans
+         SET status = 'active', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW()
+         WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
+        [scope.userId, loan.id, scope.companyId]
       );
-      period = advancePeriod(period);
-    }
+      if (!upd.rowCount) throw new ConflictError("تم تحديث السلفة مسبقاً — أعد التحميل");
+
+      let period = loan.startDeductionPeriod || nextPeriod();
+      for (let i = 1; i <= loan.installmentCount; i++) {
+        const isLast = i === loan.installmentCount;
+        const amt = isLast
+          ? roundTo2(Number(loan.amount) - Number(loan.installmentAmount) * (loan.installmentCount - 1))
+          : Number(loan.installmentAmount);
+
+        await client.query(
+          `INSERT INTO hr_loan_installments
+             ("loanId","companyId","assignmentId","installmentNumber",amount,period,status)
+           VALUES ($1,$2,$3,$4,$5,$6,'pending')`,
+          [loan.id, scope.companyId, loan.assignmentId, i, amt, period]
+        );
+        period = advancePeriod(period);
+      }
+    });
 
     const { hrEngine } = await import("../lib/engines/index.js");
     hrEngine.postLoanDisbursementGL(
@@ -511,10 +512,11 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
       reason: b.reason,
     }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
-    await rawExecute(
+    const { affectedRows } = await rawExecute(
       `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
       [b.reason || null, loan.id, scope.companyId]
     );
+    if (!affectedRows) throw new ConflictError("تم تحديث حالة السلفة بالفعل من مستخدم آخر");
 
     createNotification({
       companyId: scope.companyId, assignmentId: loan.assignmentId,

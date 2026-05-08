@@ -977,11 +977,11 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
             [scope.companyId, `JE-${inv.ref}`]
           );
           const je = jeRes.rows[0];
-          if (je && je.status !== "cancelled" && je.status !== "reversed") {
+          if (je && je.status !== "cancelled") {
             try {
               await reverseAccountBalances(scope.companyId, Number(je.id));
               await client.query(
-                `UPDATE journal_entries SET status = 'reversed' WHERE id = $1 AND "companyId" = $2 AND status IN ('posted', 'partial')`,
+                `UPDATE journal_entries SET status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND status IN ('posted', 'approved')`,
                 [Number(je.id), scope.companyId]
               );
             } catch (e) { logger.error(e, "Failed to reverse invoice GL on rejection:"); }
@@ -1061,21 +1061,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
     const id = parseId(req.params.id, "id");
     const { amount, reason, vatIncluded = true, memoDate } = zodParse(createCreditMemoSchema.safeParse(req.body));
 
-    const [invoice] = await rawQuery<any>(
-      `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatAmount",
-              "paidAmount", "vatRate"
-         FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    if (!invoice) {
-      throw new NotFoundError("الفاتورة غير موجودة");
-    }
     const creditAmount = roundTo2(Number(amount));
-    const openBalance = roundTo2(Number(invoice.total) - Number(invoice.paidAmount));
-    if (creditAmount > openBalance + 0.01) {
-      throw new ValidationError(`المبلغ (${creditAmount}) يتجاوز الرصيد المفتوح (${openBalance})`);
-    }
-
     const memoDateStr = memoDate
       ? toDateISO(memoDate)
       : todayISO();
@@ -1084,13 +1070,6 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
       throw new ConflictError(`لا يمكن إصدار إشعار دائن في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
     }
 
-    // If vatIncluded, split the amount into net + VAT based on invoice vatRate
-    const vatRate = Number(invoice.vatRate ?? 15);
-    const net = vatIncluded
-      ? extractBaseFromGross(creditAmount, vatRate)
-      : creditAmount;
-    const vat = roundTo2(creditAmount - net);
-
     const { financialEngine } = await import("../lib/engines/index.js");
     const [salesReturnsCode, vatPayableCode, arCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "invoice_sales_returns", "debit", "4100"),
@@ -1098,11 +1077,32 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
       financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1200"),
     ]);
 
-    // Persist credit memo + reduce invoice.total (soft reduce via notes + new line)
-    // We store the memo as a negative invoice-adjacent row in a dedicated table
-    // if present, else as a journal + notes update.
     let memoId: number | null = null;
+    let invoice: any;
+    let net!: number;
+    let vat!: number;
     await withTransaction(async (client) => {
+      const invRes = await client.query(
+        `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatAmount",
+                "paidAmount", "vatRate"
+           FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
+        [id, scope.companyId]
+      );
+      invoice = invRes.rows[0];
+      if (!invoice) {
+        throw new NotFoundError("الفاتورة غير موجودة");
+      }
+      const openBalance = roundTo2(Number(invoice.total) - Number(invoice.paidAmount));
+      if (creditAmount > openBalance + 0.01) {
+        throw new ValidationError(`المبلغ (${creditAmount}) يتجاوز الرصيد المفتوح (${openBalance})`);
+      }
+
+      const vatRate = Number(invoice.vatRate ?? 15);
+      net = vatIncluded
+        ? extractBaseFromGross(creditAmount, vatRate)
+        : creditAmount;
+      vat = roundTo2(creditAmount - net);
+
       try {
         const ins = await client.query(
           `INSERT INTO credit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy")
@@ -1634,45 +1634,49 @@ invoicesRouter.post("/customer-advances/:id/apply", requirePermission("finance:c
 
     const applyAmt = roundTo2(Number(amount));
 
-    let advance: any;
-    try {
-      [advance] = await rawQuery<any>(
-        `SELECT id, "clientId", amount, "appliedAmount", "branchId", status
-           FROM customer_advances WHERE id = $1 AND "companyId" = $2`,
-        [advanceId, scope.companyId]
-      );
-    } catch (e) {
-      logger.error(e, "failed to query customer_advances");
-      throw new NotFoundError("الدفعة المقدمة غير موجودة");
-    }
-    if (!advance) throw new NotFoundError("الدفعة المقدمة غير موجودة");
-
-    const remaining = Number(advance.amount) - Number(advance.appliedAmount);
-    if (applyAmt > remaining + 0.01) {
-      throw new ValidationError(`المبلغ يتجاوز المتبقي من الدفعة المقدمة (${remaining})`);
-    }
-
-    const [invoice] = await rawQuery<any>(
-      `SELECT id, ref, "clientId", total, "paidAmount" FROM invoices
-        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(invoiceId), scope.companyId]
-    );
-    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
-    if (invoice.clientId !== advance.clientId) {
-      throw new ValidationError("العميل في الفاتورة لا يطابق العميل في الدفعة المقدمة");
-    }
-    const invoiceOpen = Number(invoice.total) - Number(invoice.paidAmount);
-    if (applyAmt > invoiceOpen + 0.01) {
-      throw new ValidationError(`المبلغ يتجاوز الرصيد المفتوح للفاتورة (${invoiceOpen})`);
-    }
-
     const { financialEngine } = await import("../lib/engines/index.js");
     const [advLiabCode, arCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "debit", "2400"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1200"),
     ]);
 
+    let advance: any;
+    let invoice: any;
     await withTransaction(async (client: any) => {
+      let advRes;
+      try {
+        advRes = await client.query(
+          `SELECT id, "clientId", amount, "appliedAmount", "branchId", status
+             FROM customer_advances WHERE id = $1 AND "companyId" = $2 FOR UPDATE`,
+          [advanceId, scope.companyId]
+        );
+      } catch (e) {
+        logger.error(e, "failed to query customer_advances");
+        throw new NotFoundError("الدفعة المقدمة غير موجودة");
+      }
+      advance = advRes.rows[0];
+      if (!advance) throw new NotFoundError("الدفعة المقدمة غير موجودة");
+
+      const remaining = Number(advance.amount) - Number(advance.appliedAmount);
+      if (applyAmt > remaining + 0.01) {
+        throw new ValidationError(`المبلغ يتجاوز المتبقي من الدفعة المقدمة (${remaining})`);
+      }
+
+      const invRes = await client.query(
+        `SELECT id, ref, "clientId", total, "paidAmount" FROM invoices
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
+        [Number(invoiceId), scope.companyId]
+      );
+      invoice = invRes.rows[0];
+      if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
+      if (invoice.clientId !== advance.clientId) {
+        throw new ValidationError("العميل في الفاتورة لا يطابق العميل في الدفعة المقدمة");
+      }
+      const invoiceOpen = Number(invoice.total) - Number(invoice.paidAmount);
+      if (applyAmt > invoiceOpen + 0.01) {
+        throw new ValidationError(`المبلغ يتجاوز الرصيد المفتوح للفاتورة (${invoiceOpen})`);
+      }
+
       await client.query(
         `UPDATE customer_advances SET "appliedAmount" = COALESCE("appliedAmount",0) + $1,
            status = CASE WHEN COALESCE("appliedAmount",0) + $1 >= amount THEN 'applied' ELSE status END
