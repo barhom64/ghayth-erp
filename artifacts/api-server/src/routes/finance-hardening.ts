@@ -58,6 +58,7 @@ const createManualJournalSchema = z.object({
   lines: z.array(journalLineSchema).min(2),
   costCenter: z.string().optional(),
   notes: z.string().optional(),
+  date: z.string().optional(),
 });
 
 const reviewJournalSchema = z.object({

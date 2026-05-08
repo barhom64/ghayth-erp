@@ -22,9 +22,11 @@ export const CONTRACT_TYPES: Record<string, string> = {
 // ── حالات الوحدات ─────────────────────────────────────────────────
 export const UNIT_STATUS: Record<string, string> = {
   available: "متاح",
-  occupied: "مشغول",
+  rented: "مؤجر",
   maintenance: "صيانة",
   reserved: "محجوز",
+  under_maintenance: "تحت الصيانة",
+  out_of_service: "خارج الخدمة",
 };
 
 // ── حالات الدفع ───────────────────────────────────────────────────

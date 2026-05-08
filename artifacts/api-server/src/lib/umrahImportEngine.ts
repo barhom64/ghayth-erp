@@ -77,12 +77,12 @@ const STATUS_MAP: Record<string, string> = {
   "داخل المملكة": "arrived",
   "خرج": "departed",
   "متجاوز": "overstayed",
-  "تم التبليغ": "absconded",
-  "هارب": "absconded",
-  "متوفي": "deceased",
-  "متوفى": "deceased",
-  "مرفوض": "visa_rejected",
-  "تأشيرة مطبوعة": "visa_printed",
+  "تم التبليغ": "violated",
+  "هارب": "violated",
+  "متوفي": "departed",
+  "متوفى": "departed",
+  "مرفوض": "cancelled",
+  "تأشيرة مطبوعة": "active",
   "معلق": "pending",
   "نشط": "active",
   "ملغي": "cancelled",
@@ -423,7 +423,7 @@ export async function confirmMutamersImport(
                 "actualStayDays","programDuration","overstayDays",
                 "borderNumber","borderNumber_hash","mofaNumber","mofaNumber_hash",
                 "isInsideKingdom","hasUmrahPermit","createdBy","createdAt","updatedAt")
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,NOW(),NOW())
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,NOW(),NOW())
                RETURNING id`,
               [
                 scope.companyId, scope.branchId, scope.seasonId,
@@ -442,7 +442,7 @@ export async function confirmMutamersImport(
             await logChange(client, batchId, "mutamer", res.rows[0].id, "created");
             newCount++;
 
-            if (row.status === "overstayed" || row.status === "absconded") {
+            if (row.status === "overstayed" || row.status === "violated") {
               await detectViolation(client, scope, row, res.rows[0].id, groupId, subAgentId, agentId);
             }
           } else {
@@ -468,8 +468,6 @@ export async function confirmMutamersImport(
             if (agentId) { vals.push(agentId); changes.push(`"agentId"=$${vals.length}`); }
 
             if (changes.length > 0) {
-              vals.push(scope.userId);
-              changes.push(`"updatedBy"=$${vals.length}`);
               changes.push(`"updatedAt"=NOW()`);
               vals.push(ex.id);
               vals.push(scope.companyId);
@@ -480,7 +478,7 @@ export async function confirmMutamersImport(
               updatedCount++;
               if (hasFinancial) financialImpactCount++;
 
-              if ((row.status === "overstayed" || row.status === "absconded") && ex.status !== row.status) {
+              if ((row.status === "overstayed" || row.status === "violated") && ex.status !== row.status) {
                 await detectViolation(client, scope, row, ex.id, groupId, subAgentId, agentId);
               }
             } else {
@@ -684,17 +682,22 @@ async function resolveAgent(client: pg.PoolClient, scope: ImportScope, row: Pars
   if (!row.nuskAgentNumber && !row.agentName) return null;
   if (row.nuskAgentNumber) {
     const [ex] = (await client.query(
-      `SELECT id FROM umrah_agents WHERE "companyId"=$1 AND "nuskAgentNumber"=$2 AND "deletedAt" IS NULL`,
+      `SELECT id FROM umrah_agents WHERE "companyId"=$1 AND "contractRef"=$2 AND "deletedAt" IS NULL`,
       [scope.companyId, row.nuskAgentNumber]
     )).rows;
     if (ex) return ex.id;
   }
+  const agentName = row.agentName || `وكيل ${row.nuskAgentNumber}`;
+  const [exByName] = (await client.query(
+    `SELECT id FROM umrah_agents WHERE "companyId"=$1 AND name=$2 AND "deletedAt" IS NULL`,
+    [scope.companyId, agentName]
+  )).rows;
+  if (exByName) return exByName.id;
   const res = await client.query(
-    `INSERT INTO umrah_agents ("companyId","branchId",name,"nuskAgentNumber","seasonId","createdBy","createdAt","updatedAt")
-     VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())
-     ON CONFLICT ("companyId","nuskAgentNumber") WHERE "deletedAt" IS NULL DO UPDATE SET "updatedAt"=NOW()
+    `INSERT INTO umrah_agents ("companyId",name,"contractRef","createdAt","updatedAt")
+     VALUES ($1,$2,$3,NOW(),NOW())
      RETURNING id`,
-    [scope.companyId, scope.branchId, row.agentName || `وكيل ${row.nuskAgentNumber}`, row.nuskAgentNumber, scope.seasonId, scope.userId]
+    [scope.companyId, agentName, row.nuskAgentNumber || null]
   );
   return res.rows[0]?.id ?? null;
 }
@@ -737,7 +740,7 @@ async function detectViolation(
   client: pg.PoolClient, scope: ImportScope, row: ParsedRow,
   mutamerId: number, groupId: number | null, subAgentId: number | null, agentId: number | null,
 ) {
-  const type = row.status === "absconded" ? "absconded" : "overstay";
+  const type = row.status === "violated" ? "absconded" : "overstay";
   const [exists] = (await client.query(
     `SELECT id FROM umrah_violations
      WHERE "companyId"=$1 AND "mutamerId"=$2 AND type=$3 AND "deletedAt" IS NULL`,

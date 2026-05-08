@@ -32,8 +32,6 @@ export const STATUSES: Record<string, string> = {
   defaulted: "متعثر",
   expired: "منتهي",
   in_use: "قيد الاستخدام",
-  "in-use": "قيد الاستخدام",
-  accident: "حادث",
   arrived: "وصل",
   departed: "غادر",
   overstayed: "متأخر",
@@ -115,7 +113,6 @@ export const getStatusColor = (status: string) => {
     case "rejected":
     case "defaulted":
     case "violated":
-    case "accident":
     case "overstayed":
     case "high":
     case "urgent":
@@ -124,7 +121,6 @@ export const getStatusColor = (status: string) => {
       return "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400";
     case "rented":
     case "in_use":
-    case "in-use":
     case "sent":
     case "departed":
     case "lead":

@@ -459,10 +459,8 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
       // totalRevenue update deferred to approval (POST /invoices/:id/approve)
       // to prevent unapproved drafts from inflating client revenue.
 
-      await client.query(
-        `UPDATE budgets SET used = used + $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4`,
-        [baseAmount, effectiveCompanyId, invRevenueCode, currentPeriod()]
-      ).catch((e) => logger.error(e, "finance-invoices background task failed"));
+      // Budget consumption deferred to approval (POST /invoices/:id/approve)
+      // to prevent unapproved drafts from inflating budget usage.
 
       if (finalDueDate) {
         const collectionDate = new Date(finalDueDate);
@@ -526,7 +524,7 @@ invoicesRouter.post("/invoices/:id/send", requirePermission("finance:create"), a
           userId: scope.userId,
         },
         action: "invoice.sent",
-        fromStates: ["draft"],
+        fromStates: ["draft", "approved"],
         toState: "sent",
         setExtras: { sentAt: { raw: "NOW()" } },
         extraWhere: `"deletedAt" IS NULL`,
@@ -607,10 +605,17 @@ invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"
     // Update client totalRevenue upon approval (revenue recognition)
     if (invoice.clientId) {
       await rawQuery<any>(
-        `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) + $1 WHERE id = $2 AND "companyId" = $3`,
-        [Number(invoice.total), invoice.clientId, scope.companyId]
+        `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [Number(invoice.total) - Number(invoice.vatAmount || 0), invoice.clientId, scope.companyId]
       );
     }
+
+    // Budget consumption at approval (not at draft creation)
+    const baseAmount = Number(invoice.total) - Number(invoice.vatAmount || 0);
+    await rawExecute(
+      `UPDATE budgets SET used = used + $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
+      [baseAmount, scope.companyId, invRevenueCode, currentPeriod()]
+    ).catch((e) => logger.error(e, "Budget update on approval failed"));
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.approved", entity: "invoices", entityId: id, details: JSON.stringify({ ref: invoice.ref, total: invoice.total }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
@@ -690,7 +695,7 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
       const invoice = invRes.rows[0];
       if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
 
-      const lockedStatuses = ["paid", "closed", "posted", "cancelled"];
+      const lockedStatuses = ["paid", "closed", "cancelled"];
       if (lockedStatuses.includes(invoice.status)) {
         throw new ConflictError(
           `لا يمكن تسجيل دفعة على فاتورة بحالة "${invoice.status}" — الفاتورة مُقفلة`,
@@ -713,12 +718,12 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
 
       if (paidAt) {
         await client.query(
-          `UPDATE invoices SET "paidAmount" = $1, status = $2, "paidAt" = $3 WHERE id = $4 AND "companyId" = $5`,
+          `UPDATE invoices SET "paidAmount" = $1, status = $2, "paidAt" = $3 WHERE id = $4 AND "companyId" = $5 AND "deletedAt" IS NULL`,
           [newPaid, newStatus, paidAt, id, scope.companyId]
         );
       } else {
         await client.query(
-          `UPDATE invoices SET "paidAmount" = $1, status = $2 WHERE id = $3 AND "companyId" = $4`,
+          `UPDATE invoices SET "paidAmount" = $1, status = $2 WHERE id = $3 AND "companyId" = $4 AND "deletedAt" IS NULL`,
           [newPaid, newStatus, id, scope.companyId]
         );
       }
@@ -972,11 +977,11 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
             [scope.companyId, `JE-${inv.ref}`]
           );
           const je = jeRes.rows[0];
-          if (je && je.status !== "cancelled" && je.status !== "reversed") {
+          if (je && je.status !== "cancelled") {
             try {
               await reverseAccountBalances(scope.companyId, Number(je.id));
               await client.query(
-                `UPDATE journal_entries SET status = 'reversed' WHERE id = $1 AND "companyId" = $2 AND status IN ('posted', 'partial')`,
+                `UPDATE journal_entries SET status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND status IN ('posted', 'approved')`,
                 [Number(je.id), scope.companyId]
               );
             } catch (e) { logger.error(e, "Failed to reverse invoice GL on rejection:"); }
@@ -1025,7 +1030,7 @@ invoicesRouter.get("/tax/summary", requirePermission("finance:read"), async (req
     const { period } = req.query as any;
     const targetPeriod = period ?? currentPeriod();
     const [outputVat] = await rawQuery<any>(`SELECT COALESCE(SUM("vatAmount"), 0) AS total FROM invoices WHERE "companyId" = $1 AND to_char("createdAt", 'YYYY-MM') = $2 AND "deletedAt" IS NULL`, [scope.companyId, targetPeriod]);
-    const [inputVat] = await rawQuery<any>(`SELECT COALESCE(SUM(jl.debit), 0) AS total FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je.status = 'posted' WHERE je."companyId" = $1 AND jl."accountCode" = '2310' AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, targetPeriod]);
+    const [inputVat] = await rawQuery<any>(`SELECT COALESCE(SUM(jl.debit), 0) AS total FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je.status = 'posted' WHERE je."companyId" = $1 AND jl."accountCode" = '1400' AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, targetPeriod]);
     const outputTotal = Number(outputVat?.total ?? 0);
     const inputTotal = Number(inputVat?.total ?? 0);
     res.json({ period: targetPeriod, outputVat: outputTotal, inputVat: inputTotal, netVat: outputTotal - inputTotal, vatRate: 15, status: outputTotal - inputTotal > 0 ? "payable" : "refundable" });
@@ -1056,21 +1061,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
     const id = parseId(req.params.id, "id");
     const { amount, reason, vatIncluded = true, memoDate } = zodParse(createCreditMemoSchema.safeParse(req.body));
 
-    const [invoice] = await rawQuery<any>(
-      `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatAmount",
-              "paidAmount", "vatRate"
-         FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    if (!invoice) {
-      throw new NotFoundError("الفاتورة غير موجودة");
-    }
     const creditAmount = roundTo2(Number(amount));
-    const openBalance = roundTo2(Number(invoice.total) - Number(invoice.paidAmount));
-    if (creditAmount > openBalance + 0.01) {
-      throw new ValidationError(`المبلغ (${creditAmount}) يتجاوز الرصيد المفتوح (${openBalance})`);
-    }
-
     const memoDateStr = memoDate
       ? toDateISO(memoDate)
       : todayISO();
@@ -1079,13 +1070,6 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
       throw new ConflictError(`لا يمكن إصدار إشعار دائن في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
     }
 
-    // If vatIncluded, split the amount into net + VAT based on invoice vatRate
-    const vatRate = Number(invoice.vatRate ?? 15);
-    const net = vatIncluded
-      ? extractBaseFromGross(creditAmount, vatRate)
-      : creditAmount;
-    const vat = roundTo2(creditAmount - net);
-
     const { financialEngine } = await import("../lib/engines/index.js");
     const [salesReturnsCode, vatPayableCode, arCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "invoice_sales_returns", "debit", "4100"),
@@ -1093,11 +1077,32 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
       financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1200"),
     ]);
 
-    // Persist credit memo + reduce invoice.total (soft reduce via notes + new line)
-    // We store the memo as a negative invoice-adjacent row in a dedicated table
-    // if present, else as a journal + notes update.
     let memoId: number | null = null;
+    let invoice: any;
+    let net!: number;
+    let vat!: number;
     await withTransaction(async (client) => {
+      const invRes = await client.query(
+        `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatAmount",
+                "paidAmount", "vatRate"
+           FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
+        [id, scope.companyId]
+      );
+      invoice = invRes.rows[0];
+      if (!invoice) {
+        throw new NotFoundError("الفاتورة غير موجودة");
+      }
+      const openBalance = roundTo2(Number(invoice.total) - Number(invoice.paidAmount));
+      if (creditAmount > openBalance + 0.01) {
+        throw new ValidationError(`المبلغ (${creditAmount}) يتجاوز الرصيد المفتوح (${openBalance})`);
+      }
+
+      const vatRate = Number(invoice.vatRate ?? 15);
+      net = vatIncluded
+        ? extractBaseFromGross(creditAmount, vatRate)
+        : creditAmount;
+      vat = roundTo2(creditAmount - net);
+
       try {
         const ins = await client.query(
           `INSERT INTO credit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy")
@@ -1298,7 +1303,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
       guardId: memoId ?? 0,
     }));
     if (journalId && memoId) {
-      await rawExecute(`UPDATE debit_memos SET "journalId" = $1 WHERE id = $2`, [journalId, memoId]);
+      await rawExecute(`UPDATE debit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
     }
 
     emitEvent({
@@ -1629,45 +1634,49 @@ invoicesRouter.post("/customer-advances/:id/apply", requirePermission("finance:c
 
     const applyAmt = roundTo2(Number(amount));
 
-    let advance: any;
-    try {
-      [advance] = await rawQuery<any>(
-        `SELECT id, "clientId", amount, "appliedAmount", "branchId", status
-           FROM customer_advances WHERE id = $1 AND "companyId" = $2`,
-        [advanceId, scope.companyId]
-      );
-    } catch (e) {
-      logger.error(e, "failed to query customer_advances");
-      throw new NotFoundError("الدفعة المقدمة غير موجودة");
-    }
-    if (!advance) throw new NotFoundError("الدفعة المقدمة غير موجودة");
-
-    const remaining = Number(advance.amount) - Number(advance.appliedAmount);
-    if (applyAmt > remaining + 0.01) {
-      throw new ValidationError(`المبلغ يتجاوز المتبقي من الدفعة المقدمة (${remaining})`);
-    }
-
-    const [invoice] = await rawQuery<any>(
-      `SELECT id, ref, "clientId", total, "paidAmount" FROM invoices
-        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(invoiceId), scope.companyId]
-    );
-    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
-    if (invoice.clientId !== advance.clientId) {
-      throw new ValidationError("العميل في الفاتورة لا يطابق العميل في الدفعة المقدمة");
-    }
-    const invoiceOpen = Number(invoice.total) - Number(invoice.paidAmount);
-    if (applyAmt > invoiceOpen + 0.01) {
-      throw new ValidationError(`المبلغ يتجاوز الرصيد المفتوح للفاتورة (${invoiceOpen})`);
-    }
-
     const { financialEngine } = await import("../lib/engines/index.js");
     const [advLiabCode, arCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "debit", "2400"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1200"),
     ]);
 
+    let advance: any;
+    let invoice: any;
     await withTransaction(async (client: any) => {
+      let advRes;
+      try {
+        advRes = await client.query(
+          `SELECT id, "clientId", amount, "appliedAmount", "branchId", status
+             FROM customer_advances WHERE id = $1 AND "companyId" = $2 FOR UPDATE`,
+          [advanceId, scope.companyId]
+        );
+      } catch (e) {
+        logger.error(e, "failed to query customer_advances");
+        throw new NotFoundError("الدفعة المقدمة غير موجودة");
+      }
+      advance = advRes.rows[0];
+      if (!advance) throw new NotFoundError("الدفعة المقدمة غير موجودة");
+
+      const remaining = Number(advance.amount) - Number(advance.appliedAmount);
+      if (applyAmt > remaining + 0.01) {
+        throw new ValidationError(`المبلغ يتجاوز المتبقي من الدفعة المقدمة (${remaining})`);
+      }
+
+      const invRes = await client.query(
+        `SELECT id, ref, "clientId", total, "paidAmount" FROM invoices
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
+        [Number(invoiceId), scope.companyId]
+      );
+      invoice = invRes.rows[0];
+      if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
+      if (invoice.clientId !== advance.clientId) {
+        throw new ValidationError("العميل في الفاتورة لا يطابق العميل في الدفعة المقدمة");
+      }
+      const invoiceOpen = Number(invoice.total) - Number(invoice.paidAmount);
+      if (applyAmt > invoiceOpen + 0.01) {
+        throw new ValidationError(`المبلغ يتجاوز الرصيد المفتوح للفاتورة (${invoiceOpen})`);
+      }
+
       await client.query(
         `UPDATE customer_advances SET "appliedAmount" = COALESCE("appliedAmount",0) + $1,
            status = CASE WHEN COALESCE("appliedAmount",0) + $1 >= amount THEN 'applied' ELSE status END

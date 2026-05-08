@@ -331,9 +331,9 @@ router.delete("/applications/:id", requirePermission("hr:write"), async (req, re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [before] = await rawQuery<any>(`SELECT a.* FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2`, [id, scope.companyId]);
+    const [before] = await rawQuery<any>(`SELECT a.* FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2 AND a."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!before) throw new NotFoundError("طلب التوظيف غير موجود");
-    await rawExecute(`UPDATE job_applications SET "deletedAt" = NOW() WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
+    await rawExecute(`UPDATE job_applications SET "deletedAt" = NOW() WHERE id=$1 AND "deletedAt" IS NULL AND "postingId" IN (SELECT id FROM job_postings WHERE "companyId"=$2)`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_applications", entityId: id, before }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,

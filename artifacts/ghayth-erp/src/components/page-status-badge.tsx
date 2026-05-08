@@ -137,6 +137,7 @@ export const STATUS_MAP = {
     excused:              { label: "مستأذن",          tone: "info"     },
     weekend:              { label: "عطلة أسبوعية",    tone: "muted"    },
     holiday:              { label: "عطلة رسمية",      tone: "muted"    },
+    present_holiday:      { label: "حضور عطلة رسمية", tone: "info"     },
   },
   memo: {
     pending_employee:     { label: "بانتظار الموظف",  tone: "warning"  },
@@ -150,11 +151,16 @@ export const STATUS_MAP = {
   // ── Finance ────────────────────────────────────────────────────────
   invoice: {
     draft:                { label: "مسودة",           tone: "muted"    },
+    pending_approval:     { label: "بانتظار الاعتماد", tone: "warning"  },
+    approved:             { label: "معتمدة",          tone: "success"  },
     sent:                 { label: "مُرسَلة",          tone: "info"     },
     partially_paid:       { label: "مدفوعة جزئياً",   tone: "progress" },
+    partial:              { label: "مدفوعة جزئياً",   tone: "progress" },
     paid:                 { label: "مدفوعة",          tone: "success"  },
     overdue:              { label: "متأخرة",          tone: "danger"   },
     void:                 { label: "ملغاة",           tone: "neutral"  },
+    cancelled:            { label: "ملغية",           tone: "neutral"  },
+    rejected:             { label: "مرفوضة",          tone: "danger"   },
     credit_memo:          { label: "إشعار دائن",      tone: "info"     },
     debit_memo:           { label: "إشعار مدين",      tone: "info"     },
   },
@@ -313,6 +319,9 @@ export const STATUS_MAP = {
     active:               { label: "نشط",             tone: "success"  },
     inactive:             { label: "غير نشط",         tone: "muted"    },
     suspended:            { label: "مُوقَف",           tone: "danger"   },
+    available:            { label: "متاح",            tone: "success"  },
+    on_trip:              { label: "في رحلة",         tone: "info"     },
+    off_duty:             { label: "خارج الخدمة",     tone: "neutral"  },
   },
 
   // ── Projects ───────────────────────────────────────────────────────
@@ -331,9 +340,11 @@ export const STATUS_MAP = {
 
   // ── Property units ─────────────────────────────────────────────────
   property: {
-    vacant:               { label: "شاغر",             tone: "info"     },
-    occupied:             { label: "مشغول",            tone: "success"  },
+    available:            { label: "شاغر",             tone: "info"     },
+    rented:               { label: "مؤجرة",            tone: "success"  },
     maintenance:          { label: "تحت الصيانة",      tone: "warning"  },
+    under_maintenance:    { label: "تحت الصيانة",      tone: "warning"  },
+    out_of_service:       { label: "خارج الخدمة",      tone: "danger"   },
     reserved:             { label: "محجوز",            tone: "info"     },
   },
 

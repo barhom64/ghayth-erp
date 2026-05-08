@@ -10,7 +10,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { criticalPathLength } from "../lib/algorithms.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
@@ -396,7 +396,7 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
     if (!isFullAccess(scope) && scope.role !== "projects_manager") {
       throw new ForbiddenError("لا تملك صلاحية إنشاء مشاريع", { fix: "راجع مدير الحساب للحصول على صلاحية projects_manager" });
     }
-    const b = req.body;
+    const b = parsed;
     if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
       throw new ValidationError("اسم المشروع مطلوب", { field: "name", fix: "أدخل اسماً واضحاً للمشروع" });
     }
@@ -442,20 +442,24 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
       }
     }
     const managerId = scope.role === "projects_manager" ? scope.employeeId : b.managerId;
-    const { insertId } = await rawExecute(
-      `INSERT INTO projects ("companyId",name,description,"clientId","managerId","startDate","endDate",budget,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, b.name.trim(), b.description, b.clientId || null, managerId, b.startDate, b.endDate, b.budget || 0, b.status || 'planning']
-    );
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO projects ("companyId",name,description,"clientId","managerId","startDate","endDate",budget,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [scope.companyId, b.name.trim(), b.description, b.clientId || null, managerId, b.startDate, b.endDate, b.budget || 0, b.status || 'planning']
+      );
+      insertId = ins.rows[0].id;
 
-    if (b.phases && Array.isArray(b.phases)) {
-      for (let i = 0; i < b.phases.length; i++) {
-        const phase = b.phases[i];
-        await rawExecute(
-          `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
-          [insertId, phase.name, i, phase.startDate, phase.endDate]
-        );
+      if (b.phases && Array.isArray(b.phases)) {
+        for (let i = 0; i < b.phases.length; i++) {
+          const phase = b.phases[i];
+          await client.query(
+            `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
+            [insertId, phase.name, i, phase.startDate, phase.endDate]
+          );
+        }
       }
-    }
+    });
 
     const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
@@ -664,7 +668,7 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
     }
     if (Object.keys(after).length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE projects SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    await rawExecute(`UPDATE projects SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
@@ -748,7 +752,7 @@ router.post("/:id/phases", requirePermission("projects:create"), async (req, res
     const parsed = zodParse(createPhaseSchema.safeParse(req.body));
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = parsed;
     if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
       throw new ValidationError("اسم المرحلة مطلوب", { field: "name", fix: "أدخل اسم المرحلة" });
     }
@@ -869,7 +873,7 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
   try {
     const parsed = zodParse(createTaskSchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const projectId = parseId(req.params.id, "id");
 
     if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
@@ -897,38 +901,42 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
       }
     }
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO project_tasks ("projectId","phaseId",title,description,"assigneeId",priority,status,"startDate","dueDate","estimatedHours") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [projectId, b.phaseId || null, b.title.trim(), b.description || null, b.assigneeId || null, b.priority || 'medium', 'todo', b.startDate || null, b.dueDate || null, b.estimatedHours || null]
-    );
-
-    if (Array.isArray(b.dependsOn) && b.dependsOn.length > 0) {
-      const valuesSql: string[] = [];
-      const params: any[] = [];
-      for (const depId of b.dependsOn) {
-        const base = params.length;
-        valuesSql.push(`($${base + 1},$${base + 2})`);
-        params.push(insertId, depId);
-      }
-      try {
-        await rawExecute(
-          `INSERT INTO project_task_dependencies ("taskId","dependsOnId") VALUES ${valuesSql.join(",")} ON CONFLICT DO NOTHING`,
-          params
-        );
-      } catch (depErr) {
-        logger.error(depErr, `Failed to create task dependencies for ${insertId}:`);
-      }
-
-      const placeholders = b.dependsOn.map((_: any, i: number) => `$${i + 1}`).join(',');
-      const blockedDeps = await rawQuery<any>(
-        `SELECT pt.status FROM project_tasks pt WHERE pt.id IN (${placeholders})`,
-        b.dependsOn
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO project_tasks ("projectId","phaseId",title,description,"assigneeId",priority,status,"startDate","dueDate","estimatedHours") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+        [projectId, b.phaseId || null, b.title.trim(), b.description || null, b.assigneeId || null, b.priority || 'medium', 'todo', b.startDate || null, b.dueDate || null, b.estimatedHours || null]
       );
-      const allDepsDone = blockedDeps.every((d: any) => d.status === 'done');
-      if (!allDepsDone) {
-        await rawExecute(`UPDATE project_tasks SET status='blocked' WHERE id=$1 AND status='todo'`, [insertId]);
+      insertId = ins.rows[0].id;
+
+      if (Array.isArray(b.dependsOn) && b.dependsOn.length > 0) {
+        const valuesSql: string[] = [];
+        const params: any[] = [];
+        for (const depId of b.dependsOn) {
+          const base = params.length;
+          valuesSql.push(`($${base + 1},$${base + 2})`);
+          params.push(insertId, depId);
+        }
+        try {
+          await client.query(
+            `INSERT INTO project_task_dependencies ("taskId","dependsOnId") VALUES ${valuesSql.join(",")} ON CONFLICT DO NOTHING`,
+            params
+          );
+        } catch (depErr) {
+          logger.error(depErr, `Failed to create task dependencies for ${insertId}:`);
+        }
+
+        const placeholders = b.dependsOn.map((_: any, i: number) => `$${i + 1}`).join(',');
+        const blockedRes = await client.query(
+          `SELECT pt.status FROM project_tasks pt WHERE pt.id IN (${placeholders})`,
+          b.dependsOn
+        );
+        const allDepsDone = blockedRes.rows.every((d: any) => d.status === 'done');
+        if (!allDepsDone) {
+          await client.query(`UPDATE project_tasks SET status='blocked' WHERE id=$1 AND status='todo' AND "deletedAt" IS NULL`, [insertId]);
+        }
       }
-    }
+    });
 
     const [row] = await rawQuery<any>(`SELECT * FROM project_tasks WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
@@ -993,7 +1001,7 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
     const parsed = zodParse(updateTaskSchema.safeParse(req.body));
     const scope = req.scope!;
     const taskId = parseId(req.params.taskId, "taskId");
-    const b = req.body;
+    const b = parsed;
 
     const [existingTask] = await rawQuery<any>(
       `SELECT pt.* FROM project_tasks pt
@@ -1006,7 +1014,7 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
 
     // State machine for task status transitions
     if (b.status !== undefined && b.status !== existingTask.status) {
-      if (!TASK_STATUSES.includes(b.status)) {
+      if (!(TASK_STATUSES as readonly string[]).includes(b.status)) {
         throw new ValidationError(
           `حالة مهمة غير صالحة: ${b.status}`,
           { field: "status", fix: `اختر من: ${TASK_STATUSES.join(", ")}` }
@@ -1045,7 +1053,48 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
       params.push(existingTask.status ?? "todo");
       taskWhere += ` AND status=$${params.length}`;
     }
-    await rawExecute(`UPDATE project_tasks SET ${sets.join(",")} WHERE ${taskWhere}`, params);
+    // Wrap task update + unblock dependents + project progress in a single transaction
+    const { task, unlockedTasks, progressPct } = await withTransaction(async (client) => {
+      await client.query(`UPDATE project_tasks SET ${sets.join(",")} WHERE ${taskWhere} AND "deletedAt" IS NULL`, params);
+
+      const taskRes = await client.query(`SELECT * FROM project_tasks WHERE id=$1 AND "deletedAt" IS NULL`, [taskId]);
+      const tsk = taskRes.rows[0];
+
+      let unlocked: any[] = [];
+      if (b.status === 'done' && tsk?.projectId) {
+        const candidateRes = await client.query(
+          `SELECT ptd."taskId",
+                  COUNT(*) FILTER (WHERE pt2.status != 'done') AS "pendingDeps"
+           FROM project_task_dependencies ptd
+           JOIN project_task_dependencies all_deps ON all_deps."taskId" = ptd."taskId"
+           JOIN project_tasks pt2 ON pt2.id = all_deps."dependsOnId"
+           WHERE ptd."dependsOnId" = $1
+           GROUP BY ptd."taskId"
+           HAVING COUNT(*) FILTER (WHERE pt2.status != 'done') = 0`,
+          [taskId]
+        );
+        const candidateIds = candidateRes.rows.map((d: any) => Number(d.taskId));
+        if (candidateIds.length > 0) {
+          const unblockRes = await client.query(
+            `UPDATE project_tasks SET status='todo'
+             WHERE id = ANY($1) AND status='blocked' AND "deletedAt" IS NULL
+             RETURNING *`,
+            [candidateIds]
+          );
+          unlocked = unblockRes.rows;
+        }
+      }
+
+      let pPct = 0;
+      if (tsk?.projectId) {
+        const allRes = await client.query(`SELECT status FROM project_tasks WHERE "projectId"=$1 AND "deletedAt" IS NULL LIMIT 500`, [tsk.projectId]);
+        const doneCount = allRes.rows.filter((t: any) => t.status === 'done').length;
+        pPct = allRes.rows.length > 0 ? Math.round((doneCount / allRes.rows.length) * 100) : 0;
+        await client.query(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [pPct, tsk.projectId, scope.companyId]);
+      }
+
+      return { task: tsk, unlockedTasks: unlocked, progressPct: pPct };
+    });
 
     createAuditLog({
       companyId: scope.companyId,
@@ -1069,73 +1118,41 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
       after,
     }).catch((e) => logger.error(e, "projects background task failed"));
 
-    const [task] = await rawQuery<any>(`SELECT * FROM project_tasks WHERE id=$1 AND "deletedAt" IS NULL`, [taskId]);
-
-    let unlockedTasks: any[] = [];
-    if (b.status === 'done' && task?.projectId) {
-      const candidateTasks = await rawQuery<any>(
-        `SELECT ptd."taskId",
-                COUNT(*) FILTER (WHERE pt2.status != 'done') AS "pendingDeps"
-         FROM project_task_dependencies ptd
-         JOIN project_task_dependencies all_deps ON all_deps."taskId" = ptd."taskId"
-         JOIN project_tasks pt2 ON pt2.id = all_deps."dependsOnId"
-         WHERE ptd."dependsOnId" = $1
-         GROUP BY ptd."taskId"
-         HAVING COUNT(*) FILTER (WHERE pt2.status != 'done') = 0`,
-        [taskId]
+    // Notify assignees of unblocked tasks (fire-and-forget, outside transaction)
+    if (unlockedTasks.length > 0) {
+      const assigneeIds = Array.from(
+        new Set(unlockedTasks.map((t: any) => t.assigneeId).filter((x: any) => x != null))
       );
-
-      const candidateIds = candidateTasks.map((d: any) => Number(d.taskId));
-      if (candidateIds.length > 0) {
-        // 1) Single UPDATE that returns the rows that actually moved from
-        //    blocked -> todo, so we don't need a follow-up SELECT per row.
-        unlockedTasks = await rawQuery<any>(
-          `UPDATE project_tasks SET status='todo'
-           WHERE id = ANY($1) AND status='blocked'
-           RETURNING *`,
-          [candidateIds]
-        );
-
-        // 2) Resolve all assignment ids in one query, then notify.
-        const assigneeIds = Array.from(
-          new Set(unlockedTasks.map((t: any) => t.assigneeId).filter((x: any) => x != null))
-        );
-        if (assigneeIds.length > 0) {
-          try {
-            const asgnRows = await rawQuery<{ id: number; employeeId: number }>(
-              `SELECT DISTINCT ON ("employeeId") id, "employeeId"
-               FROM employee_assignments
-               WHERE "employeeId" = ANY($1) AND status='active'
-               ORDER BY "employeeId", id`,
-              [assigneeIds]
-            );
-            const empToAssignment = new Map<number, number>();
-            for (const r of asgnRows) empToAssignment.set(Number(r.employeeId), Number(r.id));
-
-            for (const t of unlockedTasks) {
-              const aid = empToAssignment.get(Number(t.assigneeId));
-              if (!aid) continue;
-              createNotification({
-                companyId: scope.companyId,
-                assignmentId: aid,
-                type: "task_unblocked",
-                title: "مهمة أصبحت متاحة للعمل",
-                body: `المهمة "${t.title}" أصبحت جاهزة — جميع المهام المعتمد عليها مكتملة`,
-                priority: "normal",
-                refType: "project_tasks",
-                refId: t.id,
-              }).catch((e) => logger.error(e, "projects background task failed"));
-            }
-          } catch (e) { logger.error(e, "Unlock notification error:"); }
-        }
+      if (assigneeIds.length > 0) {
+        try {
+          const asgnRows = await rawQuery<{ id: number; employeeId: number }>(
+            `SELECT DISTINCT ON ("employeeId") id, "employeeId"
+             FROM employee_assignments
+             WHERE "employeeId" = ANY($1) AND status='active'
+             ORDER BY "employeeId", id`,
+            [assigneeIds]
+          );
+          const empToAssignment = new Map<number, number>();
+          for (const r of asgnRows) empToAssignment.set(Number(r.employeeId), Number(r.id));
+          for (const t of unlockedTasks) {
+            const aid = empToAssignment.get(Number(t.assigneeId));
+            if (!aid) continue;
+            createNotification({
+              companyId: scope.companyId,
+              assignmentId: aid,
+              type: "task_unblocked",
+              title: "مهمة أصبحت متاحة للعمل",
+              body: `المهمة "${t.title}" أصبحت جاهزة — جميع المهام المعتمد عليها مكتملة`,
+              priority: "normal",
+              refType: "project_tasks",
+              refId: t.id,
+            }).catch((e) => logger.error(e, "projects background task failed"));
+          }
+        } catch (e) { logger.error(e, "Unlock notification error:"); }
       }
     }
 
     if (task?.projectId) {
-      const allTasks = await rawQuery<any>(`SELECT * FROM project_tasks WHERE "projectId"=$1 AND "deletedAt" IS NULL LIMIT 500`, [task.projectId]);
-      const doneTasks = allTasks.filter((t: any) => t.status === 'done').length;
-      const progressPct = allTasks.length > 0 ? Math.round((doneTasks / allTasks.length) * 100) : 0;
-      await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [progressPct, task.projectId, scope.companyId]);
 
       const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "deletedAt" IS NULL`, [task.projectId]);
 
@@ -1372,7 +1389,7 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
   try {
     const parsed = zodParse(createMilestoneSchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
@@ -1539,7 +1556,7 @@ router.post("/:id/risks", requirePermission("projects:create"), async (req, res)
   try {
     const parsed = zodParse(createRiskSchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
@@ -1696,7 +1713,7 @@ router.post("/:id/resources", requirePermission("projects:create"), async (req, 
   try {
     const parsed = zodParse(createResourceSchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     assertProjectMutable(project);
@@ -1767,7 +1784,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
   try {
     const parsed = zodParse(createCostSchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     assertProjectMutable(project);
@@ -1782,18 +1799,21 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
       throw new ValidationError("المبلغ يجب أن يكون أكبر من صفر", { field: "amount", fix: "أدخل قيمة موجبة" });
     }
     const costDate = b.costDate || todayISO();
-    const { insertId } = await rawExecute(
-      `INSERT INTO project_costs ("projectId","companyId",description,amount,category,"costDate","enteredBy",notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [projectId, scope.companyId, b.description, b.amount,
-       b.category || 'other', costDate,
-       scope.employeeId || null, b.notes || null]
-    );
-    // Update project spentAmount
-    await rawExecute(
-      `UPDATE projects SET "spentAmount"=COALESCE("spentAmount",0)+$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
-      [b.amount, projectId, scope.companyId]
-    );
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO project_costs ("projectId","companyId",description,amount,category,"costDate","enteredBy",notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+        [projectId, scope.companyId, b.description, b.amount,
+         b.category || 'other', costDate,
+         scope.employeeId || null, b.notes || null]
+      );
+      insertId = ins.rows[0].id;
+      await client.query(
+        `UPDATE projects SET "spentAmount"=COALESCE("spentAmount",0)+$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+        [b.amount, projectId, scope.companyId]
+      );
+    });
 
     // ─── GL POSTING: project cost → WIP ──────────────────────────────────
     // DR WIP (1350) / CR Cash|AP|Inventory depending on source.

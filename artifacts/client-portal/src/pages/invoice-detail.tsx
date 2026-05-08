@@ -6,11 +6,16 @@ import { useRoute, Link } from "wouter";
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     paid: { label: "مدفوعة", cls: "bg-green-100 text-green-700 border-green-200" },
-    partial: { label: "جزئية", cls: "bg-blue-100 text-blue-700 border-blue-200" },
-    pending: { label: "معلقة", cls: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+    partial: { label: "مدفوعة جزئياً", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+    partially_paid: { label: "مدفوعة جزئياً", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+    pending_approval: { label: "بانتظار الموافقة", cls: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+    approved: { label: "معتمدة", cls: "bg-teal-100 text-teal-700 border-teal-200" },
+    sent: { label: "مُرسلة", cls: "bg-indigo-100 text-indigo-700 border-indigo-200" },
     overdue: { label: "متأخرة", cls: "bg-red-100 text-red-700 border-red-200" },
     cancelled: { label: "ملغية", cls: "bg-gray-100 text-gray-600 border-gray-200" },
     draft: { label: "مسودة", cls: "bg-gray-100 text-gray-600 border-gray-200" },
+    void: { label: "ملغية", cls: "bg-gray-100 text-gray-600 border-gray-200" },
+    rejected: { label: "مرفوضة", cls: "bg-red-100 text-red-700 border-red-200" },
   };
   const s = map[status] || { label: status, cls: "bg-gray-100 text-gray-600 border-gray-200" };
   return <span className={`text-sm font-medium px-3 py-1 rounded-full border ${s.cls}`}>{s.label}</span>;

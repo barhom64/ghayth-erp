@@ -203,17 +203,17 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     invoiceId = invRes.rows[0].id;
 
     if (lineItems.length > 0) {
-      const cols = 7;
+      const cols = 8;
       const valuesSql: string[] = [];
       const params: any[] = [];
       for (const li of lineItems) {
         const base = params.length;
         valuesSql.push(`(${Array.from({ length: cols }, (_, i) => `$${base + i + 1}`).join(",")})`);
-        params.push(invoiceId, li.itemType, li.groupId, li.violationId, li.description, li.quantity, li.lineTotal);
+        params.push(invoiceId, li.itemType, li.groupId, li.violationId, li.description, li.quantity, li.unitPrice, li.lineTotal);
       }
       await client.query(
         `INSERT INTO umrah_sales_invoice_items
-         ("invoiceId","itemType","groupId","violationId",description,quantity,"lineTotal")
+         ("invoiceId","itemType","groupId","violationId",description,quantity,"unitPrice","lineTotal")
          VALUES ${valuesSql.join(",")}`,
         params
       );
@@ -580,7 +580,7 @@ export async function getDashboard(scope: Scope, seasonId: number) {
        COUNT(*)::int AS "totalMutamers",
        COUNT(*) FILTER (WHERE "isInsideKingdom" = TRUE)::int AS "insideKingdom",
        COUNT(*) FILTER (WHERE status = 'overstayed')::int AS "overstayCount",
-       COUNT(*) FILTER (WHERE status = 'absconded')::int AS "abscondedCount"
+       COUNT(*) FILTER (WHERE status = 'violated')::int AS "abscondedCount"
      FROM umrah_pilgrims
      WHERE "companyId" = $1 AND "seasonId" = $2 AND "deletedAt" IS NULL`,
     [scope.companyId, seasonId]

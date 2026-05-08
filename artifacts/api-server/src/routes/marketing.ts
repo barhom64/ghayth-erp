@@ -55,7 +55,7 @@ const router = Router();
 router.get("/campaigns", requirePermission("marketing:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM marketing_campaigns WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
@@ -64,16 +64,15 @@ router.post("/campaigns", requirePermission("marketing:create"), async (req, res
   try {
     const parsed = zodParse(createCampaignSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { name, description, type, channel, status, budget, spent, startDate, endDate, targetAudience } = req.body;
+    const { name, description, type, channel, status, budget, spent, startDate, endDate, targetAudience } = parsed;
     if (!name || !String(name).trim()) {
       throw new ValidationError("اسم الحملة مطلوب", {
         field: "name",
         fix: "أدخل اسماً للحملة التسويقية",
       });
     }
-    if (budget !== undefined && budget !== null && budget !== "") {
-      const bn = Number(budget);
-      if (!Number.isFinite(bn) || bn < 0) {
+    if (budget != null) {
+      if (!Number.isFinite(budget) || budget < 0) {
         throw new ValidationError("الميزانية غير صالحة", {
           field: "budget",
           fix: "أدخل قيمة غير سالبة",
@@ -104,7 +103,7 @@ router.get("/campaigns/:id", requirePermission("marketing:read"), async (req, re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الحملة غير موجودة");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "marketing"); }
@@ -115,9 +114,9 @@ router.patch("/campaigns/:id", requirePermission("marketing:update"), async (req
     const parsed = zodParse(updateCampaignSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT id FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT id FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الحملة غير موجودة");
-    const b = req.body;
+    const b = parsed;
     const sets: string[] = [];
     const params: any[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
@@ -132,10 +131,10 @@ router.patch("/campaigns/:id", requirePermission("marketing:update"), async (req
     if (b.targetAudience !== undefined) { params.push(b.targetAudience); sets.push(`"targetAudience"=$${params.length}`); }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE marketing_campaigns SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    await rawExecute(`UPDATE marketing_campaigns SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.updated", entity: "marketing_campaigns", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "marketing background task failed"));
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "marketing_campaigns", entityId: id, after: b }).catch((e) => logger.error(e, "marketing background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
@@ -157,11 +156,11 @@ router.get("/stats", requirePermission("marketing:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [total] = await rawQuery(`SELECT COUNT(*) as count FROM marketing_campaigns WHERE "companyId"=$1`, [cid]);
-    const [active] = await rawQuery(`SELECT COUNT(*) as count FROM marketing_campaigns WHERE status='active' AND "companyId"=$1`, [cid]);
-    const [budget] = await rawQuery(`SELECT COALESCE(SUM(budget),0) as total FROM marketing_campaigns WHERE "companyId"=$1`, [cid]);
-    const [spent] = await rawQuery(`SELECT COALESCE(SUM(spent),0) as total FROM marketing_campaigns WHERE "companyId"=$1`, [cid]);
-    const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM(revenue),0) as total FROM marketing_campaigns WHERE "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "marketing query failed"); return [{ total: 0 }]; });
+    const [total] = await rawQuery(`SELECT COUNT(*) as count FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [active] = await rawQuery(`SELECT COUNT(*) as count FROM marketing_campaigns WHERE status='active' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [budget] = await rawQuery(`SELECT COALESCE(SUM(budget),0) as total FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [spent] = await rawQuery(`SELECT COALESCE(SUM(spent),0) as total FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM(revenue),0) as total FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]).catch((e) => { logger.error(e, "marketing query failed"); return [{ total: 0 }]; });
     const totalSpent = Number(spent.total);
     const totalRevenue = Number(revenue?.total || 0);
     const roas = totalSpent > 0 ? (totalRevenue / totalSpent).toFixed(2) : null;
@@ -185,7 +184,7 @@ router.get("/campaigns/:id/roas", requirePermission("marketing:read"), async (re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [campaign] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [campaign] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!campaign) throw new NotFoundError("الحملة غير موجودة");
     const spent = Number(campaign.spent || 0);
     const revenue = Number(campaign.revenue || 0);
@@ -236,11 +235,11 @@ router.patch("/campaigns/:id/revenue", requirePermission("marketing:update"), as
     const parsed = zodParse(updateRevenueSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { revenue } = req.body;
-    await rawExecute(`UPDATE marketing_campaigns SET revenue=$1 WHERE id=$2 AND "companyId"=$3`, [revenue || 0, id, scope.companyId]);
+    const { revenue } = parsed;
+    await rawExecute(`UPDATE marketing_campaigns SET revenue=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [revenue || 0, id, scope.companyId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.revenue_updated", entity: "marketing_campaigns", entityId: id, details: JSON.stringify({ revenue: revenue || 0 }) }).catch((e) => logger.error(e, "marketing background task failed"));
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "marketing_campaigns", entityId: id, after: { revenue: revenue || 0 } }).catch((e) => logger.error(e, "marketing background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });

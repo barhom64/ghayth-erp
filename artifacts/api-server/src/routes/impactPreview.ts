@@ -39,16 +39,15 @@ router.post("/", requirePermission("admin:write"), async (req, res): Promise<voi
         [entityId, scope.companyId]
       );
       if (request) {
-        if (request.requestType === "salary_advance" || request.requestType === "financial") {
-          const amount = request.amount || request.metadata?.amount;
-          if (amount) {
-            impacts.push({
-              type: "financial",
-              icon: "💰",
-              label: "أثر مالي",
-              detail: `خصم/إضافة مبلغ ${Number(amount).toLocaleString("ar-SA")} ر.س`,
-            });
-          }
+        const requestData = typeof request.data === "string" ? JSON.parse(request.data) : (request.data || {});
+        const amount = requestData.amount;
+        if (amount) {
+          impacts.push({
+            type: "financial",
+            icon: "💰",
+            label: "أثر مالي",
+            detail: `خصم/إضافة مبلغ ${Number(amount).toLocaleString("ar-SA")} ر.س`,
+          });
         }
         impacts.push({
           type: "administrative",
@@ -229,8 +228,8 @@ router.post("/", requirePermission("admin:write"), async (req, res): Promise<voi
       );
       if (proj) {
         const [[taskCount], [phaseCount]] = await Promise.all([
-          rawQuery<any>(`SELECT COUNT(*) AS c FROM project_tasks WHERE "projectId" = $1 AND "companyId" = $2`, [entityId, scope.companyId]),
-          rawQuery<any>(`SELECT COUNT(*) AS c FROM project_phases WHERE "projectId" = $1 AND "companyId" = $2`, [entityId, scope.companyId]),
+          rawQuery<any>(`SELECT COUNT(*) AS c FROM project_tasks WHERE "projectId" = $1`, [entityId]),
+          rawQuery<any>(`SELECT COUNT(*) AS c FROM project_phases WHERE "projectId" = $1`, [entityId]),
         ]);
         const tasks = Number(taskCount?.c || 0);
         const phases = Number(phaseCount?.c || 0);

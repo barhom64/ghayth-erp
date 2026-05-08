@@ -57,7 +57,7 @@ describe("clientPortal — customer features", () => {
   });
 
   it("CSAT feedback endpoint", () => {
-    expect(CLIENT_PORTAL).toContain('"/invoices/:id/csat"');
+    expect(CLIENT_PORTAL).toContain('"/tickets/:id/csat"');
   });
 
   it("knowledge base endpoints", () => {

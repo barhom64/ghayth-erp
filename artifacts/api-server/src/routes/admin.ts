@@ -323,6 +323,10 @@ router.delete("/users/:id", requirePermission("admin:write"), async (req, res) =
            AND ea."companyId"=$2`,
         [id, scope.companyId]
       );
+      await tx.query(
+        `UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`,
+        [id]
+      );
     });
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
@@ -360,6 +364,7 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
     const hashed = await hashPassword(newPassword);
     const result = await rawExecute(`UPDATE users SET "passwordHash"=$1 WHERE id=$2`, [hashed, id]);
     if (result.affectedRows === 0) { throw new NotFoundError("المستخدم غير موجود"); }
+    await rawExecute(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`, [id]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "password_reset", entity: "users", entityId: id,
@@ -711,7 +716,7 @@ router.get("/integration-logs", requirePermission("admin:read"), async (req, res
     const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM integration_logs WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
     const rows = await rawQuery(
-      `SELECT * FROM integration_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      `SELECT id, "integrationId", channel, status, "errorMessage", "createdAt" FROM integration_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
     res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
@@ -1184,7 +1189,7 @@ router.get("/governance/domain-registry", requirePermission("admin:read"), async
 
 router.get("/governance/gl-reconciliation", requirePermission("admin:read"), async (req, res) => {
   try {
-    const companyId = (req as any).companyId;
+    const companyId = req.scope!.companyId;
     const mismatches = await rawQuery<any>(
       `SELECT
          coa.code,
@@ -1241,10 +1246,11 @@ router.get("/governance/event-dlq", requirePermission("admin:read"), async (req,
 
 router.post("/governance/event-dlq/:id/replay", requirePermission("admin:write"), async (req, res) => {
   try {
+    const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [entry] = await rawQuery<any>(
-      `SELECT id, "eventName", payload, "retryCount" FROM event_dlq WHERE id=$1 AND "resolvedAt" IS NULL`,
-      [id]
+      `SELECT id, "eventName", payload, "retryCount" FROM event_dlq WHERE id=$1 AND "resolvedAt" IS NULL AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      [id, scope.companyId]
     );
     if (!entry) throw new NotFoundError("لم يتم العثور على عنصر في قائمة الفشل");
     if (!entry.eventName) throw new ValidationError("الحدث الأصلي غير معروف، لا يمكن إعادة المحاولة");
@@ -1253,8 +1259,8 @@ router.post("/governance/event-dlq/:id/replay", requirePermission("admin:write")
     const payload = typeof entry.payload === "string" ? JSON.parse(entry.payload) : entry.payload;
     eventBus.emit(entry.eventName, payload);
     await rawExecute(
-      `UPDATE event_dlq SET "retryCount"="retryCount"+1, "resolvedAt"=NOW() WHERE id=$1`,
-      [id]
+      `UPDATE event_dlq SET "retryCount"="retryCount"+1, "resolvedAt"=NOW() WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      [id, scope.companyId]
     );
     res.json({ replayed: true, eventName: entry.eventName });
   } catch (err) { handleRouteError(err, res, "DLQ replay error:"); }
@@ -1262,8 +1268,9 @@ router.post("/governance/event-dlq/:id/replay", requirePermission("admin:write")
 
 router.delete("/governance/event-dlq/:id", requirePermission("admin:write"), async (req, res) => {
   try {
+    const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    await rawExecute(`UPDATE event_dlq SET "resolvedAt"=NOW() WHERE id=$1`, [id]);
+    await rawExecute(`UPDATE event_dlq SET "resolvedAt"=NOW() WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
     res.json({ resolved: true });
   } catch (err) { handleRouteError(err, res, "DLQ resolve error:"); }
 });
@@ -1667,13 +1674,15 @@ router.get("/system-stops", requirePermission("admin:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "List system stops"); }
 });
 
+const systemStopSchema = z.object({
+  scope: z.enum(["financial", "hr", "operational", "all"]).optional().default("all"),
+  reason: z.string().min(1, "سبب الإيقاف مطلوب"),
+});
+
 router.post("/system-stops", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { scope: stopScope, reason } = req.body;
-    if (!reason || typeof reason !== "string") throw new ValidationError("سبب الإيقاف مطلوب");
-    const validScopes = ["financial", "hr", "operational", "all"];
-    const s = validScopes.includes(stopScope) ? stopScope : "all";
+    const { scope: s, reason } = zodParse(systemStopSchema.safeParse(req.body));
     const [row] = await rawQuery<{ id: number }>(
       `INSERT INTO system_stops ("companyId", scope, reason, "activatedBy")
        VALUES ($1, $2, $3, $4) RETURNING id`,

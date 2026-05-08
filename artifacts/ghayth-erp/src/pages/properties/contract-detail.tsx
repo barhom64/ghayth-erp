@@ -280,10 +280,12 @@ export default function ContractDetailPage() {
           variant: "outline",
           onClick: async () => {
             try {
-              await apiFetch(`/properties/contracts/${id}`, {
-                method: "PATCH",
+              const reason = window.prompt("سبب إنهاء العقد:");
+              if (!reason) return;
+              await apiFetch(`/properties/contracts/${id}/terminate`, {
+                method: "POST",
                 body: JSON.stringify({
-                  status: "terminated",
+                  reason,
                   terminationDate: todayLocal(),
                 }),
               });

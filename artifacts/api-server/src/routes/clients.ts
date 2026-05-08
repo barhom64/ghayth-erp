@@ -129,7 +129,7 @@ router.post("/", requirePermission("crm:create"), async (req, res) => {
       if (phoneExists) throw new ConflictError("رقم الهاتف مستخدم لعميل آخر", { field: "phone", fix: "استخدم رقم هاتف مختلفاً أو ابحث عن العميل الموجود" });
     }
 
-    const attachments = (req.body as any).attachments ?? null;
+    const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments : null;
     const { insertId } = await rawExecute(
       `INSERT INTO clients (name, phone, email, classification, source, notes, "type", nationality, language, "companyId", "isBlacklisted", attachments)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11)`,
@@ -275,7 +275,7 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
   }
 });
 
-router.patch("/:id", requirePermission("crm:write"), async (req, res) => {
+router.patch("/:id", requirePermission("crm:update"), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -365,6 +365,25 @@ router.delete("/:id", requirePermission("crm:delete"), async (req, res) => {
       [id, scope.companyId]
     );
     if (!existing) { throw new NotFoundError("العميل غير موجود"); }
+
+    const [deps] = await rawQuery<any>(
+      `SELECT
+        (SELECT COUNT(*)::int FROM invoices WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status NOT IN ('cancelled','closed')) AS invoices,
+        (SELECT COUNT(*)::int FROM crm_opportunities WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND stage NOT IN ('closed_won','closed_lost')) AS opportunities,
+        (SELECT COUNT(*)::int FROM support_tickets WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status NOT IN ('closed','resolved')) AS tickets`,
+      [id, scope.companyId]
+    );
+    const blocking = [];
+    if (deps?.invoices > 0) blocking.push(`${deps.invoices} فاتورة نشطة`);
+    if (deps?.opportunities > 0) blocking.push(`${deps.opportunities} فرصة مفتوحة`);
+    if (deps?.tickets > 0) blocking.push(`${deps.tickets} تذكرة مفتوحة`);
+    if (blocking.length > 0) {
+      throw new ConflictError(
+        `لا يمكن حذف العميل — يوجد سجلات مرتبطة: ${blocking.join("، ")}`,
+        { field: "id", fix: "أغلق أو ألغِ السجلات المرتبطة أولاً" }
+      );
+    }
+
     await rawExecute(`UPDATE clients SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.deleted", entity: "clients", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "clients background task failed"));

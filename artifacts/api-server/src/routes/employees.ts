@@ -349,8 +349,8 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
 
     if (email) {
       const emailRows = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE email = $1 AND "deletedAt" IS NULL LIMIT 1`,
-        [email]
+        `SELECT id FROM employees WHERE email = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+        [email, effectiveCompanyId]
       );
       if (emailRows.length > 0) {
         throw new ConflictError("البريد الإلكتروني مستخدم مسبقاً", {
@@ -362,8 +362,8 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
 
     if (nationalId) {
       const nidRows = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE "nationalId" = $1 AND "deletedAt" IS NULL LIMIT 1`,
-        [nationalId]
+        `SELECT id FROM employees WHERE "nationalId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+        [nationalId, effectiveCompanyId]
       );
       if (nidRows.length > 0) {
         throw new ConflictError("الرقم مرتبط بموظف آخر", {
@@ -389,17 +389,17 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
          "iqamaNumber","iqamaExpiry","passportNumber","passportExpiry",
          "borderNumber","visaNumber","visaType","visaExpiry",
          "sponsorNumber","workPermitNumber","workPermitExpiry","iqamaStatus",
-         "bankName","bankAccount",iban,"emergencyContact","emergencyPhone",attachments)
+         "bankName","bankAccount",iban,"emergencyContact","emergencyPhone",attachments,"companyId")
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active',
          $9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-         $21,$22,$23,$24,$25,$26)
+         $21,$22,$23,$24,$25,$26,$27)
          RETURNING id`,
         [name, phone || null, email || null, finalEmpNumber, nationalId || null, gender || null, nationality || null, dateOfBirth || null,
          iqamaNumber || null, iqamaExpiry || null, passportNumber || null, passportExpiry || null,
          borderNumber || null, visaNumber || null, visaType || null, visaExpiry || null,
          sponsorNumber || null, workPermitNumber || null, workPermitExpiry || null, iqamaStatus || 'active',
          bankName || null, bankAccount || null, iban || null, emergencyContact || null, emergencyPhone || null,
-         (body as any).attachments ? JSON.stringify((body as any).attachments) : null]
+         (body as any).attachments ? JSON.stringify((body as any).attachments) : null, effectiveCompanyId]
       );
       const empId = empRes.rows[0].id;
 
@@ -918,8 +918,8 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     // round-trip on every PATCH that only touches unrelated fields.
     if (email !== undefined && email && email !== before.email) {
       const [clash] = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE email = $1 AND id <> $2 AND "deletedAt" IS NULL LIMIT 1`,
-        [email, id]
+        `SELECT id FROM employees WHERE email = $1 AND id <> $2 AND "companyId" = $3 AND "deletedAt" IS NULL LIMIT 1`,
+        [email, id, scope.companyId]
       );
       if (clash) {
         throw new ConflictError("البريد الإلكتروني مستخدم لموظف آخر", {
@@ -933,8 +933,8 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     // Pre-check: changing nationalId to one already registered.
     if (nationalId !== undefined && nationalId && nationalId !== before.nationalId) {
       const [clash] = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE "nationalId" = $1 AND id <> $2 AND "deletedAt" IS NULL LIMIT 1`,
-        [nationalId, id]
+        `SELECT id FROM employees WHERE "nationalId" = $1 AND id <> $2 AND "companyId" = $3 AND "deletedAt" IS NULL LIMIT 1`,
+        [nationalId, id, scope.companyId]
       );
       if (clash) {
         throw new ConflictError("رقم الهوية مستخدم لموظف آخر", {
@@ -999,7 +999,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       if (iqamaStatus !== undefined) { empVals.push(iqamaStatus); empFields.push(`"iqamaStatus" = $${empVals.length}`); }
       if (empFields.length) {
         empVals.push(id, scope.companyId);
-        await client.query(`UPDATE employees SET ${empFields.join(",")} WHERE id = $${empVals.length - 1} AND "companyId" = $${empVals.length}`, empVals);
+        await client.query(`UPDATE employees SET ${empFields.join(",")} WHERE id = $${empVals.length - 1} AND "companyId" = $${empVals.length} AND "deletedAt" IS NULL`, empVals);
       }
 
       if (status === "active" && before.status !== "active") {
@@ -1173,7 +1173,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
         [employee.assignmentId, scope.companyId]
       );
       await tx.query(
-        `UPDATE employees SET status = 'terminated' WHERE id = $1 AND "companyId" = $2 AND status = 'active'`,
+        `UPDATE employees SET status = 'terminated' WHERE id = $1 AND "companyId" = $2 AND status = 'active' AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
 
@@ -1182,7 +1182,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       await tx.query(
         `UPDATE employee_contracts
            SET status = 'terminated', "probationStatus" = 'ended'
-         WHERE "employeeId" = $1 AND "companyId" = $2 AND status <> 'terminated'`,
+         WHERE "employeeId" = $1 AND "companyId" = $2 AND status <> 'terminated' AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
 
@@ -1191,7 +1191,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       await tx.query(
         `UPDATE hr_leave_requests
            SET status = 'cancelled'
-         WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'pending'`,
+         WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
       await tx.query(
@@ -1210,7 +1210,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       await tx.query(
         `UPDATE tasks
            SET status = 'cancelled', notes = COALESCE(notes || E'\n', '') || 'ألغي تلقائياً: إنهاء خدمة الموظف'
-         WHERE "assignedTo" = $1 AND status IN ('pending', 'in_progress')`,
+         WHERE "assignedTo" = $1 AND status IN ('pending', 'in_progress') AND "deletedAt" IS NULL`,
         [employee.assignmentId]
       );
 
@@ -1224,7 +1224,15 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
         [employee.assignmentId]
       );
 
-      // 5. Deactivate the associated user account so the terminated
+      // 5. Cancel active/pending loans
+      await tx.query(
+        `UPDATE hr_employee_loans
+           SET status = 'cancelled', "updatedAt" = NOW()
+         WHERE "employeeId" = $1 AND "companyId" = $2 AND status IN ('active', 'pending') AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      );
+
+      // 6. Deactivate the associated user account so the terminated
       //    employee can no longer log in.
       if (employee.userId) {
         await tx.query(

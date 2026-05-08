@@ -1322,6 +1322,7 @@ DROP SEQUENCE IF EXISTS public.invoices_id_seq;
 DROP TABLE IF EXISTS public.invoices;
 DROP SEQUENCE IF EXISTS public.invoice_payments_id_seq;
 DROP TABLE IF EXISTS public.invoice_payments;
+DROP SEQUENCE IF EXISTS public.journal_number_seq;
 DROP SEQUENCE IF EXISTS public.invoice_number_seq;
 DROP SEQUENCE IF EXISTS public.invoice_lines_id_seq;
 DROP TABLE IF EXISTS public.invoice_lines;
@@ -6216,6 +6217,18 @@ CREATE SEQUENCE public.invoice_number_seq
 
 
 --
+-- Name: journal_number_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.journal_number_seq
+    START WITH 1000
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
 -- Name: invoice_payments; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -9189,7 +9202,7 @@ CREATE TABLE public.purchase_orders (
     "glStatus" character varying(20) DEFAULT 'pending',
     "paidAt" timestamp with time zone,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT chk_purchase_orders_status CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('returned'::character varying)::text, ('received'::character varying)::text, ('partially_received'::character varying)::text, ('partial_received'::character varying)::text, ('cancelled'::character varying)::text, ('completed'::character varying)::text, ('paid'::character varying)::text, ('confirmed'::character varying)::text, ('ordered'::character varying)::text, ('delivered'::character varying)::text, ('sent'::character varying)::text, ('invoice_matched'::character varying)::text])))
+    CONSTRAINT chk_purchase_orders_status CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('returned'::character varying)::text, ('received'::character varying)::text, ('partially_received'::character varying)::text, ('partial_received'::character varying)::text, ('cancelled'::character varying)::text, ('completed'::character varying)::text, ('paid'::character varying)::text, ('confirmed'::character varying)::text, ('ordered'::character varying)::text, ('delivered'::character varying)::text, ('sent'::character varying)::text, ('invoice_matched'::character varying)::text, ('invoice_mismatch'::character varying)::text, ('payment_scheduled'::character varying)::text])))
 );
 
 

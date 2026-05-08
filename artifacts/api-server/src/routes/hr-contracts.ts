@@ -47,6 +47,8 @@ const renewContractSchema = z.object({
   newSalary: z.coerce.number().optional(),
 });
 
+const updateContractSchema = createContractSchema.partial();
+
 // ── List all contracts ──
 contractsRouter.get("/", requirePermission("hr:read"), async (req, res) => {
   try {
@@ -186,9 +188,10 @@ contractsRouter.patch("/:id", requirePermission("hr:update"), async (req, res) =
     ];
     const sets: string[] = [];
     const params: any[] = [];
+    const body = zodParse(updateContractSchema.safeParse(req.body));
     for (const key of allowed) {
-      if (req.body[key] !== undefined) {
-        params.push(key === "otherAllowances" ? JSON.stringify(req.body[key]) : req.body[key]);
+      if ((body as any)[key] !== undefined) {
+        params.push(key === "otherAllowances" ? JSON.stringify((body as any)[key]) : (body as any)[key]);
         sets.push(`"${key}" = $${params.length}`);
       }
     }
@@ -412,7 +415,7 @@ contractsRouter.post("/:id/terminate", requirePermission("hr:update"), async (re
     const [updated] = await rawQuery<any>(
       `UPDATE employee_contracts
        SET status = 'terminated', "approvalStatus" = 'terminated',
-           "terminatedAt" = NOW(), "terminatedBy" = $2, "terminationReason" = $3, "updatedAt" = NOW()
+           notes = COALESCE($3, notes), "updatedBy" = $2, "updatedAt" = NOW()
        WHERE id = $1 AND "companyId" = $4 RETURNING *`,
       [id, scope.userId, reason || null, scope.companyId]
     );
@@ -462,8 +465,8 @@ contractsRouter.post("/:id/renew", requirePermission("hr:create"), async (req, r
       );
 
       await client.query(
-        `UPDATE employee_contracts SET "renewalDate" = $2, "updatedAt" = NOW() WHERE id = $1`,
-        [id, newStart]
+        `UPDATE employee_contracts SET "renewalDate" = $2, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [id, newStart, scope.companyId]
       );
 
       return insertRes.rows[0];

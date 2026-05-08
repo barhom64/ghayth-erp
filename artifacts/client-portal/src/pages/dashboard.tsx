@@ -23,9 +23,15 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     paid: { label: "مدفوعة", cls: "bg-green-100 text-green-700" },
-    pending: { label: "معلقة", cls: "bg-yellow-100 text-yellow-700" },
+    partial: { label: "مدفوعة جزئياً", cls: "bg-blue-100 text-blue-700" },
+    partially_paid: { label: "مدفوعة جزئياً", cls: "bg-blue-100 text-blue-700" },
+    pending_approval: { label: "بانتظار الموافقة", cls: "bg-yellow-100 text-yellow-700" },
+    approved: { label: "معتمدة", cls: "bg-teal-100 text-teal-700" },
+    sent: { label: "مُرسلة", cls: "bg-indigo-100 text-indigo-700" },
     overdue: { label: "متأخرة", cls: "bg-red-100 text-red-700" },
     cancelled: { label: "ملغية", cls: "bg-gray-100 text-gray-600" },
+    draft: { label: "مسودة", cls: "bg-gray-100 text-gray-600" },
+    rejected: { label: "مرفوضة", cls: "bg-red-100 text-red-700" },
     open: { label: "مفتوح", cls: "bg-blue-100 text-blue-700" },
     in_progress: { label: "قيد التنفيذ", cls: "bg-indigo-100 text-indigo-700" },
     closed: { label: "مغلق", cls: "bg-gray-100 text-gray-600" },

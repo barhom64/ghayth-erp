@@ -581,14 +581,14 @@ router.get("/webhooks", requirePermission("admin:write"), async (req: Request, r
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT id, name, url, events, headers, "isActive",
+      `SELECT id, name, url, secret, events, headers, "isActive",
               "lastSuccessAt", "lastFailureAt", "lastError", "failCount", "updatedAt"
        FROM notification_webhooks
        WHERE "companyId" = $1
        ORDER BY name`,
       [scope.companyId]
     );
-    const masked = rows.map((r) => ({ ...r, secret: r.secret ? "__configured__" : null }));
+    const masked = rows.map((r) => ({ ...r, secret: r.secret ? "__configured__" : null, headers: r.headers ? "__configured__" : null }));
     res.json({ data: masked });
   } catch (err) {
     handleRouteError(err, res, "Notification engine error:");

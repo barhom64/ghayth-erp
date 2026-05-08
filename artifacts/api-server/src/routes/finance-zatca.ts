@@ -577,8 +577,8 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
 
     await rawExecute(
       `UPDATE invoices SET "zatcaUuid" = $1::uuid, "zatcaHash" = $2, "zatcaStatus" = $3, "zatcaQrCode" = $4
-       WHERE id = $5`,
-      [uuid, hash, submissionStatus, qrCode, id]
+       WHERE id = $5 AND "companyId" = $6`,
+      [uuid, hash, submissionStatus, qrCode, id, scope.companyId]
     );
 
     const [logRow] = await rawQuery<any>(
@@ -627,7 +627,11 @@ zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"
     }
 
     const [expense] = await rawQuery<any>(
-      `SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND type = 'expense' AND "deletedAt" IS NULL`,
+      `SELECT je.*, COALESCE(SUM(jl.debit), 0) AS amount
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
+       WHERE je.id = $1 AND je."companyId" = $2 AND je.type = 'expense' AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
       [id, scope.companyId]
     );
 
@@ -661,8 +665,8 @@ zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"
 
     await rawExecute(
       `UPDATE journal_entries SET "zatcaUuid" = $1::uuid, "zatcaHash" = $2, "zatcaStatus" = $3, "zatcaQrCode" = $4
-       WHERE id = $5`,
-      [uuid, hash, submissionStatus, qrCode, id]
+       WHERE id = $5 AND "companyId" = $6`,
+      [uuid, hash, submissionStatus, qrCode, id, scope.companyId]
     );
 
     await rawQuery<any>(

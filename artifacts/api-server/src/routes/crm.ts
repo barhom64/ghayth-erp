@@ -20,6 +20,15 @@ const router = Router();
 
 const STAGE_ORDER = ['lead', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost'];
 
+const CRM_TRANSITIONS: Record<string, readonly string[]> = {
+  lead:        ["qualified", "closed_lost"],
+  qualified:   ["proposal", "negotiation", "closed_lost"],
+  proposal:    ["negotiation", "closed_won", "closed_lost"],
+  negotiation: ["proposal", "closed_won", "closed_lost"],
+  closed_won:  [],
+  closed_lost: ["qualified"],
+};
+
 // ── Zod validation schemas ──────────────────────────────────────────
 const createOpportunitySchema = z.object({
   title: z.string({ required_error: "عنوان الفرصة مطلوب" }).min(1, "عنوان الفرصة مطلوب"),
@@ -120,7 +129,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
   try {
     const parsed = zodParse(createOpportunitySchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
 
     const title = (b.title ?? "").toString().trim();
     if (!title) {
@@ -340,14 +349,6 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
         });
       }
 
-      const CRM_TRANSITIONS: Record<string, readonly string[]> = {
-        lead:        ["qualified", "closed_lost"],
-        qualified:   ["proposal", "negotiation", "closed_lost"],
-        proposal:    ["negotiation", "closed_won", "closed_lost"],
-        negotiation: ["proposal", "closed_won", "closed_lost"],
-        closed_won:  [],
-        closed_lost: ["qualified"],
-      };
       const allowed = CRM_TRANSITIONS[existing.stage] ?? [];
       if (!allowed.includes(b.stage)) {
         throw new ConflictError(
@@ -753,7 +754,7 @@ router.get("/opportunities/:id", requirePermission("crm:read"), async (req, res)
     res.json({
       ...row, activities, overdueActivities,
       stageConfig: STAGE_AUTO_ACTIONS[row.stage],
-      nextStages: row.stage === 'closed_won' || row.stage === 'closed_lost' ? [] : STAGE_ORDER.slice(STAGE_ORDER.indexOf(row.stage) + 1),
+      nextStages: CRM_TRANSITIONS[row.stage] ?? [],
     });
   } catch (err) { handleRouteError(err, res, "Get opportunity error:"); }
 });
@@ -780,7 +781,7 @@ router.post("/opportunities/:id/convert", requirePermission("crm:update"), async
       });
     }
 
-    const dealValue = (req.body?.value as number | undefined) ?? existing.value ?? 0;
+    const dealValue = (parsed.value as number | undefined) ?? existing.value ?? 0;
 
     // handleDealWon creates / resolves the client and writes a contract +
     // invoice using the global pool. It is idempotent enough for first-call
@@ -801,7 +802,7 @@ router.post("/opportunities/:id/convert", requirePermission("crm:update"), async
       scope,
       action: "crm.opportunity.converted",
       toState: "won",
-      reason: (req.body?.notes as string | undefined)?.trim(),
+      reason: (parsed.notes as string | undefined)?.trim(),
       setExtras: {
         stage: "closed_won",
         convertedAt: { raw: "NOW()" },
@@ -937,7 +938,7 @@ router.post("/opportunities/:id/activities", requirePermission("crm:create"), as
   try {
     const parsed = zodParse(createActivitySchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const oppId = parseId(req.params.id, "id");
     const [opp] = await rawQuery<any>(
       `SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,

@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { Readable } from "stream";
@@ -192,29 +192,31 @@ router.post("/upload", requirePermission("documents:create"), async (req: Reques
       }
     }
 
-    const r = await rawExecute(
-      `INSERT INTO documents (title, description, "fileName", "fileSize", "mimeType", category, status, "storageKey", "currentVersion", "uploadedBy", "companyId")
-       VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,1,$8,$9)`,
-      [title, description, fileName, fileSize, mimeType, category || null, storageKey, scope.userId, scope.companyId]
-    );
+    let docId!: number;
+    await withTransaction(async (client) => {
+      const r = await client.query(
+        `INSERT INTO documents (title, description, "fileName", "fileSize", "mimeType", category, status, "storageKey", "currentVersion", "uploadedBy", "companyId")
+         VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,1,$8,$9) RETURNING id`,
+        [title, description, fileName, fileSize, mimeType, category || null, storageKey, scope.userId, scope.companyId]
+      );
+      docId = r.rows[0].id;
 
-    const docId = r.insertId;
+      await client.query(
+        `INSERT INTO document_versions ("documentId", "versionNumber", "fileName", "fileSize", "mimeType", "storageKey", "uploadedBy")
+         VALUES ($1, 1, $2, $3, $4, $5, $6)`,
+        [docId, fileName, fileSize, mimeType, storageKey, scope.userId]
+      );
 
-    await rawExecute(
-      `INSERT INTO document_versions ("documentId", "versionNumber", "fileName", "fileSize", "mimeType", "storageKey", "uploadedBy")
-       VALUES ($1, 1, $2, $3, $4, $5, $6)`,
-      [docId, fileName, fileSize, mimeType, storageKey, scope.userId]
-    );
-
-    if (entityLinks && Array.isArray(entityLinks)) {
-      for (const link of entityLinks) {
-        await rawExecute(
-          `INSERT INTO document_entity_links ("documentId", "entityType", "entityId") VALUES ($1, $2, $3)
-           ON CONFLICT ("documentId", "entityType", "entityId") DO NOTHING`,
-          [docId, link.entityType, link.entityId]
-        );
+      if (entityLinks && Array.isArray(entityLinks)) {
+        for (const link of entityLinks) {
+          await client.query(
+            `INSERT INTO document_entity_links ("documentId", "entityType", "entityId") VALUES ($1, $2, $3)
+             ON CONFLICT ("documentId", "entityType", "entityId") DO NOTHING`,
+            [docId, link.entityType, link.entityId]
+          );
+        }
       }
-    }
+    });
 
     const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [docId, scope.companyId]);
     createAuditLog({
@@ -335,16 +337,18 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
 
     const newVersion = (doc.currentVersion || 1) + 1;
 
-    await rawExecute(
-      `INSERT INTO document_versions ("documentId", "versionNumber", "fileName", "fileSize", "mimeType", "storageKey", "uploadedBy", notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [docId, newVersion, fileName, fileSize, mimeType, storageKey, scope.userId, notes || null]
-    );
+    await withTransaction(async (client) => {
+      await client.query(
+        `INSERT INTO document_versions ("documentId", "versionNumber", "fileName", "fileSize", "mimeType", "storageKey", "uploadedBy", notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [docId, newVersion, fileName, fileSize, mimeType, storageKey, scope.userId, notes || null]
+      );
 
-    await rawExecute(
-      `UPDATE documents SET "currentVersion"=$1, "fileName"=$2, "fileSize"=$3, "mimeType"=$4, "storageKey"=$5, "updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7`,
-      [newVersion, fileName, fileSize, mimeType, storageKey, docId, scope.companyId]
-    );
+      await client.query(
+        `UPDATE documents SET "currentVersion"=$1, "fileName"=$2, "fileSize"=$3, "mimeType"=$4, "storageKey"=$5, "updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7 AND "deletedAt" IS NULL`,
+        [newVersion, fileName, fileSize, mimeType, storageKey, docId, scope.companyId]
+      );
+    });
 
     const [updated] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [docId, scope.companyId]);
     if (!updated) throw new NotFoundError("فشل في استرجاع المستند");
@@ -398,7 +402,7 @@ router.patch("/:id/status", requirePermission("documents:update"), async (req: R
     if (!beforeDoc) throw new NotFoundError("المستند غير موجود");
 
     const result = await rawExecute(
-      `UPDATE documents SET status=$1, "updatedAt"=NOW() WHERE id=$2 AND ("companyId"=$3 OR "companyId" IS NULL) AND status != $1`,
+      `UPDATE documents SET status=$1, "updatedAt"=NOW() WHERE id=$2 AND ("companyId"=$3 OR "companyId" IS NULL) AND status != $1 AND "deletedAt" IS NULL`,
       [status, docId, scope.companyId]
     );
     if (result.affectedRows === 0 && beforeDoc.status === status) throw new ConflictError("المستند في هذه الحالة مسبقاً");
@@ -555,7 +559,7 @@ router.get("/templates/:id", requirePermission("documents:read"), async (req, re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("القالب غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "documents"); }
@@ -621,7 +625,7 @@ router.put("/templates/:id", requirePermission("documents:update"), async (req, 
     const id = parseId(req.params.id, "id");
     if (isNaN(id) || id <= 0) throw new ValidationError("معرف القالب غير صالح");
     const { name, description, content, category, type, variables, htmlContent, branchId, signatureUrl, isActive } = body;
-    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("القالب غير موجود");
     await rawExecute(
       `UPDATE document_templates SET name=$1, description=$2, content=$3, category=$4, "type"=$5, "variables"=$6, "htmlContent"=$7, "branchId"=$8, "signatureUrl"=$9, "isActive"=$10, "updatedAt"=NOW() WHERE id=$11 AND "companyId"=$12`,
@@ -650,7 +654,7 @@ router.delete("/templates/:id", requirePermission("documents:delete"), async (re
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     if (isNaN(id) || id <= 0) throw new ValidationError("معرف القالب غير صالح");
-    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("القالب غير موجود");
     await rawExecute(`UPDATE document_templates SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
@@ -704,7 +708,7 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [template] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    const [template] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!template) throw new NotFoundError("القالب غير موجود");
 
     const generateBody = zodParse(generateTemplateSchema.safeParse(req.body));
@@ -723,13 +727,16 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
       // actually employs (matches the invoice branch below which already
       // filters by `i."companyId"=$2`).
       const [emp] = await rawQuery<any>(`
-        SELECT e.*, d.name as "departmentName", b.name as "branchName"
+        SELECT e.*, ea."jobTitle", ea."hireDate", ea."endDate",
+               ec.salary, ec."housingAllowance", ec."transportAllowance",
+               d.name as "departmentName", b.name as "branchName"
         FROM employees e
         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active' AND ea."companyId" = $2
+        LEFT JOIN employee_contracts ec ON ec."assignmentId" = ea.id AND ec."deletedAt" IS NULL AND ec.status = 'active'
         LEFT JOIN departments d ON d.id = ea."departmentId"
         LEFT JOIN branches b ON b.id = ea."branchId"
         WHERE e.id=$1
-        LIMIT 1
+        ORDER BY ea."hireDate" DESC LIMIT 1
       `, [Number(entityId), scope.companyId]);
       if (emp) {
         entityData.employee = {
@@ -739,7 +746,7 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
           departmentName: emp.departmentName || "",
           branchName: emp.branchName || "",
           nationality: emp.nationality || "",
-          idNumber: emp.idNumber || "",
+          idNumber: emp.nationalId || "",
           phone: emp.phone || "",
           email: emp.email || "",
           hireDate: emp.hireDate ? new Date(emp.hireDate).toLocaleDateString("ar-SA") : "",
@@ -849,7 +856,7 @@ router.get("/templates/:id/variables", requirePermission("documents:read"), asyn
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [template] = await rawQuery<any>(`SELECT variables FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    const [template] = await rawQuery<any>(`SELECT variables FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!template) throw new NotFoundError("القالب غير موجود");
     let variables = [];
     try { variables = typeof template.variables === "string" ? JSON.parse(template.variables) : (template.variables || []); } catch (e) { logger.warn(e, "failed to parse template variables JSON"); variables = []; }
@@ -902,7 +909,7 @@ router.patch("/:id", requirePermission("documents:update"), async (req, res) => 
     if (b.tags !== undefined) { params.push(b.tags); sets.push(`tags=$${params.length}`); }
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id); params.push(scope.companyId);
-    const result = await rawExecute(`UPDATE documents SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const result = await rawExecute(`UPDATE documents SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (result.affectedRows === 0) throw new NotFoundError("المستند غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({

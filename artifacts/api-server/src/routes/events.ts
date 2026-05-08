@@ -59,12 +59,13 @@ eventsRouter.get("/log", async (req, res) => {
     if (to) { params.push(to); where += ` AND "createdAt" <= $${params.length}::timestamp`; }
 
     const lim = Math.min(500, Math.max(1, Number(limit) || 100));
+    params.push(lim);
     const rows = await rawQuery<any>(
       `SELECT id, action, entity, "entityId", details, "userId", "createdAt"
        FROM event_logs
        WHERE ${where}
        ORDER BY "createdAt" DESC
-       LIMIT ${lim}`,
+       LIMIT $${params.length}`,
       params
     );
 

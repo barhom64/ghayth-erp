@@ -60,6 +60,8 @@ const leaveRequestSchema = z.object({
   endDate: z.string().min(1, "تاريخ النهاية مطلوب"),
   reason: z.string().optional(),
   documentUrl: z.string().optional(),
+  reliefOfficer: z.string().optional(),
+  contactDuringLeave: z.string().optional(),
 });
 
 const violationSchema = z.object({
@@ -71,6 +73,9 @@ const violationSchema = z.object({
   period: z.string().optional(),
   incidentDate: z.string().optional(),
   regulationId: z.coerce.number().optional(),
+  witness: z.string().optional(),
+  location: z.string().optional(),
+  actionTaken: z.string().optional(),
 });
 
 const shiftSchema = z.object({
@@ -86,6 +91,8 @@ const shiftSchema = z.object({
   splitBreakEnd: z.string().optional(),
   flexStartEarliest: z.string().optional(),
   flexStartLatest: z.string().optional(),
+  breakMinutes: z.coerce.number().optional(),
+  gracePeriod: z.coerce.number().optional(),
 });
 
 const performanceSchema = z.object({
@@ -560,11 +567,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     }
 
     if (isOutOfRange) {
-      await rawExecute(
-        `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
-         VALUES ($1,$2,'gps_out_of_range',$3,'low',0,$4)`,
-        [scope.companyId, scope.activeAssignmentId, `تسجيل حضور خارج نطاق الفرع بمسافة ${distanceMeters}م`, period]
-      );
+      // GPS violation will be recorded inside the transaction below
     }
 
     // ── Step 7: Late detection ──
@@ -616,43 +619,107 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
       deductionAmount = roundTo2(minuteRate * lateMinutes);
     }
 
-    const insertResult = await rawQuery<any>(
-      `INSERT INTO attendance ("assignmentId","companyId","branchId",date,"checkIn","lateMinutes",status,notes,"checkInLat","checkInLon","workType","contractId")
-       SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
-       WHERE NOT EXISTS (SELECT 1 FROM attendance WHERE "assignmentId"=$1 AND date=$4 AND "deletedAt" IS NULL)
-       RETURNING id`,
-      [scope.activeAssignmentId, scope.companyId, assignment?.branchId ?? scope.branchId,
-        today, now.toISOString(), lateMinutes, checkInStatus, notes ?? null,
-        lat !== undefined && lat !== null ? Number(lat) : null, lon !== undefined && lon !== null ? Number(lon) : null,
-        isRemoteShift ? 'remote' : (workType || 'office'), activeContract.id]
-    );
-    if (!insertResult || insertResult.length === 0) {
-      throw new ConflictError("لقد سجلت الحضور اليوم. استخدم نقطة الانصراف لتسجيل المغادرة", {
-        field: "attendance",
-        fix: "افتح صفحة الحضور واستخدم زر الانصراف لإكمال الدوام.",
-      });
-    }
-    const attendanceId = insertResult[0].id;
+    // ── Wrap all writes in a single atomic transaction ──
+    const txResult = await withTransaction(async (client) => {
+      // GPS violation
+      if (isOutOfRange) {
+        await client.query(
+          `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
+           VALUES ($1,$2,'gps_out_of_range',$3,'low',0,$4)`,
+          [scope.companyId, scope.activeAssignmentId, `تسجيل حضور خارج نطاق الفرع بمسافة ${distanceMeters}م`, period]
+        );
+      }
 
-    // ── Step 11: Auto violation if late > threshold ──
-    let violationId: number | null = null;
-    if (exceedsThreshold) {
-      const { insertId: vId } = await rawExecute(
-        `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
-         VALUES ($1,$2,'late_arrival',$3,'medium',$4,$5)`,
-        [scope.companyId, scope.activeAssignmentId, `تأخر ${lateMinutes} دقيقة عن وقت البداية (تجاوز الحد ${lateThreshold} دقيقة)`, deductionAmount, period]
+      // Attendance INSERT with idempotency guard
+      const insertRes = await client.query(
+        `INSERT INTO attendance ("assignmentId","companyId","branchId",date,"checkIn","lateMinutes",status,notes,"checkInLat","checkInLon","workType","contractId")
+         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
+         WHERE NOT EXISTS (SELECT 1 FROM attendance WHERE "assignmentId"=$1 AND date=$4 AND "deletedAt" IS NULL)
+         RETURNING id`,
+        [scope.activeAssignmentId, scope.companyId, assignment?.branchId ?? scope.branchId,
+          today, now.toISOString(), lateMinutes, checkInStatus, notes ?? null,
+          lat !== undefined && lat !== null ? Number(lat) : null, lon !== undefined && lon !== null ? Number(lon) : null,
+          isRemoteShift ? 'remote' : (workType || 'office'), activeContract.id]
       );
-      violationId = vId;
+      if (!insertRes.rows.length) {
+        throw new ConflictError("لقد سجلت الحضور اليوم. استخدم نقطة الانصراف لتسجيل المغادرة", {
+          field: "attendance",
+          fix: "افتح صفحة الحضور واستخدم زر الانصراف لإكمال الدوام.",
+        });
+      }
+      const attId = insertRes.rows[0].id;
 
-      // ── Step 12: Record pending payroll deduction ──
-      await rawExecute(
-        `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
-         VALUES ($1,$2,$3,'late',$4,$5,$6,'pending_payroll')`,
-        [scope.companyId, scope.activeAssignmentId, attendanceId, lateMinutes, deductionAmount, period]
+      // Late violation + deduction + penalty
+      let vId: number | null = null;
+      let pLevel = 0, pLabel = "", pDeduction = 0;
+
+      if (exceedsThreshold) {
+        const violRes = await client.query(
+          `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
+           VALUES ($1,$2,'late_arrival',$3,'medium',$4,$5) RETURNING id`,
+          [scope.companyId, scope.activeAssignmentId, `تأخر ${lateMinutes} دقيقة عن وقت البداية (تجاوز الحد ${lateThreshold} دقيقة)`, deductionAmount, period]
+        );
+        vId = violRes.rows[0]?.id ?? null;
+
+        await client.query(
+          `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
+           VALUES ($1,$2,$3,'late',$4,$5,$6,'pending_payroll')`,
+          [scope.companyId, scope.activeAssignmentId, attId, lateMinutes, deductionAmount, period]
+        );
+
+        // Monthly violation count for penalty escalation
+        const monthCountRes = await client.query(
+          `SELECT COUNT(*) AS cnt FROM employee_violations
+           WHERE "assignmentId" = $1 AND period = $2 AND type = 'late_arrival' AND "deletedAt" IS NULL`,
+          [scope.activeAssignmentId, period]
+        );
+        const count = Number(monthCountRes.rows[0]?.cnt ?? 1);
+
+        if (count >= 10) {
+          pLevel = 5; pDeduction = Number(policy?.penaltyLevel5 ?? 500);
+          pLabel = policy?.penaltyLevel5Label ?? "خصم ثلاثة أيام + إنذار نهائي";
+        } else if (count >= 7) {
+          pLevel = 4; pDeduction = Number(policy?.penaltyLevel4 ?? 200);
+          pLabel = policy?.penaltyLevel4Label ?? "خصم يومين";
+        } else if (count >= 5) {
+          pLevel = 3; pDeduction = Number(policy?.penaltyLevel3 ?? 100);
+          pLabel = policy?.penaltyLevel3Label ?? "خصم يوم";
+        } else if (count >= 3) {
+          pLevel = 2; pDeduction = Number(policy?.penaltyLevel2 ?? 50);
+          pLabel = policy?.penaltyLevel2Label ?? "إنذار كتابي";
+        } else {
+          pLevel = 1; pDeduction = Number(policy?.penaltyLevel1 ?? 0);
+          pLabel = policy?.penaltyLevel1Label ?? "إنذار شفهي";
+        }
+
+        if (pDeduction > 0) {
+          await client.query(
+            `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
+             VALUES ($1,$2,$3,'penalty',0,$4,$5,'pending_payroll')`,
+            [scope.companyId, scope.activeAssignmentId, attId, pDeduction, period]
+          );
+        }
+      }
+
+      // Monthly stats UPSERT
+      await client.query(
+        `INSERT INTO employee_monthly_attendance ("companyId","assignmentId",period,"presentDays","lateDays","totalLateMinutes","totalDeduction")
+         VALUES ($1,$2,$3,1,$4,$5,$6)
+         ON CONFLICT ("assignmentId",period) DO UPDATE
+         SET "presentDays" = employee_monthly_attendance."presentDays" + 1,
+             "lateDays" = employee_monthly_attendance."lateDays" + $4,
+             "totalLateMinutes" = employee_monthly_attendance."totalLateMinutes" + $5,
+             "totalDeduction" = employee_monthly_attendance."totalDeduction" + $6`,
+        [scope.companyId, scope.activeAssignmentId, period, isLate ? 1 : 0, lateMinutes, deductionAmount + pDeduction]
       );
 
-      // ── Step 12b: Auto-create an inquiry memo (محضر استفسار) for the lateness ──
-      // يخضع لسياسة اللائحة الحية — idempotent، لا يُنشئ محضراً جديداً إن كان موجوداً
+      return { attendanceId: attId, violationId: vId, penaltyLevel: pLevel, penaltyLabel: pLabel, penaltyDeduction: pDeduction };
+    });
+
+    const { attendanceId, violationId, penaltyLevel, penaltyLabel, penaltyDeduction } = txResult;
+
+    // Fire-and-forget: inquiry memo (outside transaction — idempotent)
+    if (exceedsThreshold && violationId) {
       ensureInquiryMemoForViolation({
         companyId: scope.companyId,
         branchId: assignment?.branchId ?? scope.branchId,
@@ -667,62 +734,6 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
         createdBy: scope.userId,
       }).catch((err) => logger.error(err, "ensureInquiryMemoForViolation (check-in) error:"));
     }
-
-    // ── Step 13: Count monthly violations for penalty escalation ──
-    let penaltyLevel = 0;
-    let penaltyLabel = "";
-    let penaltyDeduction = 0;
-    if (exceedsThreshold) {
-      const [monthCount] = await rawQuery<any>(
-        `SELECT COUNT(*) AS cnt FROM employee_violations
-         WHERE "assignmentId" = $1 AND period = $2 AND type = 'late_arrival' AND "deletedAt" IS NULL`,
-        [scope.activeAssignmentId, period]
-      );
-      const count = Number(monthCount?.cnt ?? 1);
-
-      // ── Step 14: 5-level penalty escalation ──
-      if (count >= 10) {
-        penaltyLevel = 5;
-        penaltyDeduction = Number(policy?.penaltyLevel5 ?? 500);
-        penaltyLabel = policy?.penaltyLevel5Label ?? "خصم ثلاثة أيام + إنذار نهائي";
-      } else if (count >= 7) {
-        penaltyLevel = 4;
-        penaltyDeduction = Number(policy?.penaltyLevel4 ?? 200);
-        penaltyLabel = policy?.penaltyLevel4Label ?? "خصم يومين";
-      } else if (count >= 5) {
-        penaltyLevel = 3;
-        penaltyDeduction = Number(policy?.penaltyLevel3 ?? 100);
-        penaltyLabel = policy?.penaltyLevel3Label ?? "خصم يوم";
-      } else if (count >= 3) {
-        penaltyLevel = 2;
-        penaltyDeduction = Number(policy?.penaltyLevel2 ?? 50);
-        penaltyLabel = policy?.penaltyLevel2Label ?? "إنذار كتابي";
-      } else {
-        penaltyLevel = 1;
-        penaltyDeduction = Number(policy?.penaltyLevel1 ?? 0);
-        penaltyLabel = policy?.penaltyLevel1Label ?? "إنذار شفهي";
-      }
-
-      if (penaltyDeduction > 0) {
-        await rawExecute(
-          `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
-           VALUES ($1,$2,$3,'penalty',0,$4,$5,'pending_payroll')`,
-          [scope.companyId, scope.activeAssignmentId, attendanceId, penaltyDeduction, period]
-        );
-      }
-    }
-
-    // ── Step 15: Update monthly stats ──
-    await rawExecute(
-      `INSERT INTO employee_monthly_attendance ("companyId","assignmentId",period,"presentDays","lateDays","totalLateMinutes","totalDeduction")
-       VALUES ($1,$2,$3,1,$4,$5,$6)
-       ON CONFLICT ("assignmentId",period) DO UPDATE
-       SET "presentDays" = employee_monthly_attendance."presentDays" + 1,
-           "lateDays" = employee_monthly_attendance."lateDays" + $4,
-           "totalLateMinutes" = employee_monthly_attendance."totalLateMinutes" + $5,
-           "totalDeduction" = employee_monthly_attendance."totalDeduction" + $6`,
-      [scope.companyId, scope.activeAssignmentId, period, isLate ? 1 : 0, lateMinutes, deductionAmount + penaltyDeduction]
-    );
 
     // ── Step 16: Notify employee about late ──
     if (exceedsThreshold) {
@@ -1229,7 +1240,8 @@ router.get("/leaves/:id", requirePermission("hr:read"), async (req, res) => {
        FROM hr_leave_requests lr
        JOIN employees e ON e.id = lr."employeeId"
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-       LEFT JOIN employees approver ON approver.id = lr."approvedBy"
+       LEFT JOIN employee_assignments aa ON aa.id = lr."approvedBy"
+       LEFT JOIN employees approver ON approver.id = aa."employeeId"
        WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -2766,7 +2778,7 @@ router.post("/payroll/:id/approve", requirePermission("hr:create"), async (req, 
       throw new ForbiddenError("لا يمكن للشخص الذي أنشأ المسير أن يوافق عليه (maker-checker)");
     }
     await rawExecute(
-      `UPDATE payroll_runs SET status='completed', "approvedBy"=$1, "approvedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+      `UPDATE payroll_runs SET status='completed', "approvedBy"=$1, "approvedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
       [scope.activeAssignmentId, id, scope.companyId]
     );
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "payroll.approved", entity: "payroll_runs", entityId: id, details: JSON.stringify({ approvedBy: scope.activeAssignmentId }) }).catch((e) => logger.error(e, "hr background task failed"));
@@ -3001,7 +3013,7 @@ router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
     const effectiveRemote = remoteAllowed ?? (effectiveShiftType === 'remote');
 
     if (isDefault) {
-      await rawExecute(`UPDATE shifts SET "isDefault" = false WHERE "companyId" = $1`, [scope.companyId]);
+      await rawExecute(`UPDATE shifts SET "isDefault" = false WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [scope.companyId]);
     }
     const { insertId } = await rawExecute(
       `INSERT INTO shifts ("companyId","branchId",name,"startTime","endTime",days,"isDefault",status,"shiftType","remoteAllowed","splitBreakStart","splitBreakEnd","flexStartEarliest","flexStartLatest")
@@ -3144,15 +3156,15 @@ router.get("/attendance-stats", requirePermission("hr:read"), async (req, res) =
     const scope = req.scope!;
     const month = (req.query.month as string) ?? currentPeriod();
     const [present] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='present'`,
+      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='present' AND "deletedAt" IS NULL`,
       [scope.companyId, month]
     );
     const [absent] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='absent'`,
+      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='absent' AND "deletedAt" IS NULL`,
       [scope.companyId, month]
     );
     const [late] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND "lateMinutes">0`,
+      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND "lateMinutes">0 AND "deletedAt" IS NULL`,
       [scope.companyId, month]
     );
     const [totalEmp] = await rawQuery<any>(
@@ -3273,21 +3285,25 @@ router.post("/approval-chain-definitions", requirePermission("hr:create"), async
     }
     const { name, chainType, minAmount, maxAmount, steps } = zodParse(approvalChainSchema.safeParse(req.body));
 
-    const { insertId: chainId } = await rawExecute(
-      `INSERT INTO approval_chains ("companyId",name,"chainType","minAmount","maxAmount")
-       VALUES ($1,$2,$3,$4,$5)`,
-      [scope.companyId, name, chainType, minAmount ?? 0, maxAmount ?? 999999999]
-    );
-
-    if (Array.isArray(steps) && steps.length > 0) {
-      const values = steps.map((_, i) => `($${i * 5 + 1},$${i * 5 + 2},$${i * 5 + 3},$${i * 5 + 4},$${i * 5 + 5})`).join(",");
-      const params = steps.flatMap((step, i) => [chainId, i + 1, step.requiredRole ?? "branch_manager", step.timeoutHours ?? 48, step.autoApproveOnTimeout ?? false]);
-      await rawExecute(
-        `INSERT INTO approval_chain_steps ("chainId","stepOrder","requiredRole","timeoutHours","autoApproveOnTimeout")
-         VALUES ${values}`,
-        params
+    let chainId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO approval_chains ("companyId",name,"chainType","minAmount","maxAmount")
+         VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+        [scope.companyId, name, chainType, minAmount ?? 0, maxAmount ?? 999999999]
       );
-    }
+      chainId = ins.rows[0].id;
+
+      if (Array.isArray(steps) && steps.length > 0) {
+        const values = steps.map((_, i) => `($${i * 5 + 1},$${i * 5 + 2},$${i * 5 + 3},$${i * 5 + 4},$${i * 5 + 5})`).join(",");
+        const params = steps.flatMap((step, i) => [chainId, i + 1, step.requiredRole ?? "branch_manager", step.timeoutHours ?? 48, step.autoApproveOnTimeout ?? false]);
+        await client.query(
+          `INSERT INTO approval_chain_steps ("chainId","stepOrder","requiredRole","timeoutHours","autoApproveOnTimeout")
+           VALUES ${values}`,
+          params
+        );
+      }
+    });
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -3622,7 +3638,7 @@ router.patch("/violations/:id", requirePermission("hr:update"), async (req, res)
     }
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE employee_violations SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
+    await rawExecute(`UPDATE employee_violations SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [updated] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -3692,7 +3708,7 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
     if (b.flexStartEarliest !== undefined) { params.push(b.flexStartEarliest); sets.push(`"flexStartEarliest"=$${params.length}`); }
     if (b.flexStartLatest !== undefined) { params.push(b.flexStartLatest); sets.push(`"flexStartLatest"=$${params.length}`); }
     if (b.isDefault !== undefined) {
-      if (b.isDefault) await rawExecute(`UPDATE shifts SET "isDefault"=false WHERE "companyId"=$1`, [scope.companyId]);
+      if (b.isDefault) await rawExecute(`UPDATE shifts SET "isDefault"=false WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]);
       params.push(b.isDefault); sets.push(`"isDefault"=$${params.length}`);
     }
     if (sets.length === 0) {
@@ -3700,7 +3716,7 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
     }
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
+    await rawExecute(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -3834,11 +3850,15 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
     const [seqRow] = await rawQuery<any>(`SELECT nextval('letter_number_seq') AS seq`).catch((e) => { logger.error(e, "letter sequence query failed"); return [{ seq: Date.now() % 1000000 }]; });
     const letterRef = generateRef("LTR", seqRow.seq);
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO official_letters ("companyId","employeeId",type,subject,content,status,"createdByAssignmentId",ref,"branchId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, Number(employeeId), type ?? "general", String(subject).trim(), String(content).trim(), status ?? "draft", scope.activeAssignmentId, letterRef, scope.branchId || null]
-    );
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO official_letters ("companyId","employeeId",type,subject,content,status,"createdByAssignmentId",ref,"branchId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [scope.companyId, Number(employeeId), type ?? "general", String(subject).trim(), String(content).trim(), status ?? "draft", scope.activeAssignmentId, letterRef, scope.branchId || null]
+      );
+      insertId = ins.rows[0].id;
+    });
 
     const approvalResult = await initiateApprovalChain({
       companyId: scope.companyId, branchId: scope.branchId,
@@ -3891,7 +3911,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
       after: { employeeId, type: type ?? "general", subject },
     }).catch((e) => logger.error(e, "hr background task failed"));
 
-    res.status(201).json({ id: insertId, ...req.body, approval: approvalResult });
+    res.status(201).json({ id: insertId, employeeId: Number(employeeId), type: type ?? "general", subject, status: approvalResult?.requiresApproval ? "pending_approval" : (status ?? "draft"), ref: letterRef, approval: approvalResult });
   } catch (err) { handleRouteError(err, res, "Create official letter error:"); }
 });
 
@@ -5053,18 +5073,14 @@ router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, re
       throw new ValidationError("الموظف لا ينتمي إلى هذه الشركة", { field: "employeeId" });
     }
 
-    // Create the cycle
-    const { insertId: cycleId } = await rawExecute(
-      `INSERT INTO evaluation_cycles ("companyId","employeeId","initiatorId",period,status,notes,"startDate")
-       VALUES ($1,$2,$3,$4,'open',$5,CURRENT_DATE)`,
-      [scope.companyId, employeeId, scope.employeeId ?? null, period, notes ?? null]
-    );
+    // Compute system evaluation before transaction (read-only)
+    const evalData = await computeSystemEvaluation(scope.companyId, employeeId);
 
-    // Register participants — validate each belongs to this company before inserting
-    // validRoles must match the DB CHECK constraint: ('manager','peer')
+    // Validate participants before transaction (read-only)
     const validRoles = new Set(["manager", "peer"]);
     const candidateParticipants = (participants as Array<{ evaluatorId: number; evaluatorRole: string }>)
       .filter(p => p.evaluatorId && validRoles.has(p.evaluatorRole));
+    let validParticipants: Array<{ evaluatorId: number; evaluatorRole: string }> = [];
     if (candidateParticipants.length > 0) {
       const evalIds = candidateParticipants.map(p => p.evaluatorId);
       const idPlaceholders = evalIds.map((_, i) => `$${i + 2}`).join(",");
@@ -5073,28 +5089,39 @@ router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, re
         [scope.companyId, ...evalIds]
       );
       const validIdSet = new Set(validAssignments.map((a: any) => a.employeeId));
-      const validParticipants = candidateParticipants.filter(p => validIdSet.has(p.evaluatorId));
+      validParticipants = candidateParticipants.filter(p => validIdSet.has(p.evaluatorId));
+    }
+
+    // Wrap all inserts in a single atomic transaction
+    const cycleId = await withTransaction(async (client) => {
+      const cycleRes = await client.query(
+        `INSERT INTO evaluation_cycles ("companyId","employeeId","initiatorId",period,status,notes,"startDate")
+         VALUES ($1,$2,$3,$4,'open',$5,CURRENT_DATE) RETURNING id`,
+        [scope.companyId, employeeId, scope.employeeId ?? null, period, notes ?? null]
+      );
+      const cId = cycleRes.rows[0].id;
+
       if (validParticipants.length > 0) {
         const values = validParticipants.map((_, i) => `($${i * 4 + 1},$${i * 4 + 2},$${i * 4 + 3},$${i * 4 + 4})`).join(",");
-        const params = validParticipants.flatMap(p => [cycleId, scope.companyId, p.evaluatorId, p.evaluatorRole]);
-        await rawExecute(
+        const params = validParticipants.flatMap(p => [cId, scope.companyId, p.evaluatorId, p.evaluatorRole]);
+        await client.query(
           `INSERT INTO evaluation_participants ("cycleId","companyId","evaluatorId","evaluatorRole")
            VALUES ${values} ON CONFLICT DO NOTHING`,
           params
         );
       }
-    }
 
-    // Auto-generate system evaluation
-    const evalData = await computeSystemEvaluation(scope.companyId, employeeId);
-    await rawExecute(
-      `INSERT INTO system_evaluations ("cycleId","companyId","employeeId","attendanceScore","taskCompletionScore","onTimeScore","clientSatScore","docQualityScore","overallScore",metrics)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [cycleId, scope.companyId, employeeId,
-       evalData.attendanceScore, evalData.taskCompletionScore,
-       evalData.onTimeScore, evalData.clientSatScore, evalData.docQualityScore,
-       evalData.overallScore, JSON.stringify(evalData.metrics)]
-    );
+      await client.query(
+        `INSERT INTO system_evaluations ("cycleId","companyId","employeeId","attendanceScore","taskCompletionScore","onTimeScore","clientSatScore","docQualityScore","overallScore",metrics)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [cId, scope.companyId, employeeId,
+         evalData.attendanceScore, evalData.taskCompletionScore,
+         evalData.onTimeScore, evalData.clientSatScore, evalData.docQualityScore,
+         evalData.overallScore, JSON.stringify(evalData.metrics)]
+      );
+
+      return cId;
+    });
 
     // Initialize summary
     await recomputeSummary(cycleId, scope.companyId, employeeId);

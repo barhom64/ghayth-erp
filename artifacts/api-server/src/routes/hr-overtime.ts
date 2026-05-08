@@ -366,8 +366,8 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
     const rejectionReason = reason || notes;
     if (!approved) {
       const { affectedRows } = await rawExecute(
-        `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND status = 'pending'`,
-        [rejectionReason || null, item.id]
+        `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
+        [rejectionReason || null, item.id, scope.companyId]
       );
       if (!affectedRows) throw new ConflictError("تم تحديث الطلب مسبقاً — أعد التحميل");
       processApprovalStep({
@@ -416,8 +416,8 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
     const { affectedRows } = await rawExecute(
       `UPDATE hr_overtime_requests
        SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW()
-       WHERE id = $2 AND status = 'pending'`,
-      [scope.userId, item.id]
+       WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
+      [scope.userId, item.id, scope.companyId]
     );
     if (!affectedRows) throw new ConflictError("تم تحديث الطلب مسبقاً — أعد التحميل");
 
@@ -475,8 +475,8 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
     }).catch((e) => logger.error(e, "hr-overtime background task failed"));
 
     const { affectedRows } = await rawExecute(
-      `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND status = 'pending'`,
-      [b.reason || null, item.id]
+      `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
+      [b.reason || null, item.id, scope.companyId]
     );
     if (!affectedRows) throw new ConflictError("تم تحديث الطلب مسبقاً — أعد التحميل");
 

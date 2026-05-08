@@ -160,7 +160,7 @@ accountsRouter.patch("/accounts/:id", requirePermission("finance:update"), async
       });
     }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE chart_of_accounts SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE chart_of_accounts SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("الحساب غير موجود");
 
     emitEvent({

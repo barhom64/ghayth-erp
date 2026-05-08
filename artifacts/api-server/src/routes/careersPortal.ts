@@ -42,7 +42,7 @@ const careersProfileUpdateSchema = z.object({
 });
 
 const careersResumeUpdateSchema = z.object({
-  resumeUrl: z.string().min(1, "رابط السيرة الذاتية مطلوب"),
+  resumeUrl: z.string().url("رابط السيرة الذاتية غير صالح"),
 });
 
 const careersApplySchema = z.object({

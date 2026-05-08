@@ -473,12 +473,12 @@ async function buildChecklistItems(scope: any, where: string, params: any[], com
     try {
       const [receipts] = await rawQuery<any>(
         `SELECT COALESCE(SUM(amount),0) AS total FROM vouchers
-         WHERE "companyId" = ANY($1::int[]) AND type='receipt' AND date = $2`,
+         WHERE "companyId" = ANY($1::int[]) AND type='receipt' AND "createdAt"::date = $2`,
         [companies, today]
       );
       const [payments] = await rawQuery<any>(
         `SELECT COALESCE(SUM(amount),0) AS total FROM vouchers
-         WHERE "companyId" = ANY($1::int[]) AND type='payment' AND date = $2`,
+         WHERE "companyId" = ANY($1::int[]) AND type='payment' AND "createdAt"::date = $2`,
         [companies, today]
       );
       const receiptTotal = Number(receipts?.total ?? 0);

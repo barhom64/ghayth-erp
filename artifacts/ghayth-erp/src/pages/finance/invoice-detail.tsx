@@ -424,7 +424,7 @@ export default function InvoiceDetailPage() {
         </CardContent>
       </Card>
 
-      {invoice.status === "pending" && (
+      {invoice.status === "draft" && (
         <Card>
           <CardHeader><CardTitle>إجراءات الاعتماد</CardTitle></CardHeader>
           <CardContent>

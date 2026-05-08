@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
@@ -11,6 +11,7 @@ import { z } from "zod";
 import { logger } from "../lib/logger.js";
 
 const VALID_PROGRAM_TRANSITIONS: Record<string, string[]> = {
+  upcoming: ["draft", "active", "cancelled"],
   draft: ["pending", "cancelled"],
   pending: ["approved", "rejected"],
   approved: ["active", "cancelled"],
@@ -38,6 +39,8 @@ const createProgramSchema = z.object({
   durationUnit: z.string().optional(),
   cost: z.coerce.number().optional(),
   maxParticipants: z.coerce.number().optional(),
+  objectives: z.string().optional(),
+  targetAudience: z.string().optional(),
 });
 
 const patchProgramSchema = z.object({
@@ -154,7 +157,7 @@ router.patch("/programs/:id", requirePermission("hr:update"), async (req, res) =
       params.push(existing.status);
       updateWhere += ` AND status=$${params.length}`;
     }
-    await rawExecute(`UPDATE training_programs SET ${sets.join(",")} WHERE ${updateWhere}`, params);
+    await rawExecute(`UPDATE training_programs SET ${sets.join(",")} WHERE ${updateWhere} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -289,11 +292,16 @@ router.post("/enrollments", requirePermission("hr:create"), async (req, res) => 
         });
       }
     }
-    const r = await rawExecute(
-      `INSERT INTO training_enrollments ("programId", "employeeId", "employeeName", status) VALUES ($1,$2,$3,$4)`,
-      [Number(programId), employeeId ? Number(employeeId) : null, employeeName ?? null, status ?? "enrolled"]
-    );
-    await rawExecute(`UPDATE training_programs SET enrolled = enrolled + 1 WHERE id=$1`, [Number(programId)]);
+    let enrollId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO training_enrollments ("programId", "employeeId", "employeeName", status) VALUES ($1,$2,$3,$4) RETURNING id`,
+        [Number(programId), employeeId ? Number(employeeId) : null, employeeName ?? null, status ?? "enrolled"]
+      );
+      enrollId = ins.rows[0].id;
+      await client.query(`UPDATE training_programs SET enrolled = enrolled + 1 WHERE id=$1 AND "deletedAt" IS NULL`, [Number(programId)]);
+    });
+    const r = { insertId: enrollId };
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "training_enrollments", entityId: r.insertId,
@@ -327,7 +335,7 @@ router.patch("/enrollments/:id", requirePermission("hr:update"), async (req, res
     if (b.score !== undefined) { params.push(b.score); sets.push(`score=$${params.length}`); }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id);
-    await rawExecute(`UPDATE training_enrollments SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    await rawExecute(`UPDATE training_enrollments SET ${sets.join(",")} WHERE id=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM training_enrollments WHERE id=$1`, [id]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -345,8 +353,10 @@ router.delete("/enrollments/:id", requirePermission("hr:delete"), async (req, re
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT e.id, e."programId" FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("التسجيل غير موجود");
-    await rawExecute(`UPDATE training_enrollments SET "deletedAt" = NOW() WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
-    await rawExecute(`UPDATE training_programs SET enrolled = GREATEST(0, enrolled - 1) WHERE id=$1 AND "companyId"=$2`, [existing.programId, scope.companyId]);
+    await withTransaction(async (client) => {
+      await client.query(`UPDATE training_enrollments SET "deletedAt" = NOW() WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
+      await client.query(`UPDATE training_programs SET enrolled = GREATEST(0, enrolled - 1) WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [existing.programId, scope.companyId]);
+    });
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "training_enrollments", entityId: id,

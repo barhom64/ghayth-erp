@@ -188,7 +188,7 @@ router.post("/", requirePermission("requests:write"), async (req, res) => {
   try {
     const parsed = zodParse(createRequestSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { typeId, requesterName, requester, title, description, priority, data, attachments } = req.body;
+    const { typeId, requesterName, requester, title, description, priority, data, attachments } = parsed as any;
     const resolvedRequesterName = requesterName || requester;
 
     if (!title || !String(title).trim()) {
@@ -335,7 +335,7 @@ router.post("/types", requirePermission("requests:write"), async (req, res) => {
   try {
     const parsed = zodParse(createRequestTypeSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { name, description, category, requiredFields, approvalFlow, isActive } = req.body;
+    const { name, description, category, requiredFields, approvalFlow, isActive } = parsed as any;
     const r = await rawExecute(
       `INSERT INTO request_types (name, description, category, "requiredFields", "approvalFlow", "isActive", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [name, description, category, requiredFields ? JSON.stringify(requiredFields) : '[]', approvalFlow ? JSON.stringify(approvalFlow) : '[]', isActive !== false, scope.companyId]
@@ -358,7 +358,7 @@ router.post("/workflows", requirePermission("requests:write"), async (req, res) 
   try {
     const parsed = zodParse(createWorkflowSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { name, description, steps } = req.body;
+    const { name, description, steps } = parsed as any;
     const r = await rawExecute(
       `INSERT INTO workflows (name, description, steps, "companyId") VALUES ($1,$2,$3,$4)`,
       [name, description, steps ? JSON.stringify(steps) : '[]', scope.companyId]
@@ -401,7 +401,7 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
     const parsed = zodParse(updateRequestSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = parsed as any;
 
     const [existing] = await rawQuery<any>(
       `SELECT id, status FROM requests WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,

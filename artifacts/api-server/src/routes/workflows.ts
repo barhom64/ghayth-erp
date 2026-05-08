@@ -250,7 +250,7 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, requestType } = req.query as any;
-    let where = `wi."companyId" = $1`;
+    let where = `wi."companyId" = $1 AND wi."deletedAt" IS NULL`;
     const params: any[] = [scope.companyId];
 
     if (status) {
@@ -284,6 +284,7 @@ router.get("/pending", requirePermission("admin:read"), async (req, res) => {
       `SELECT wi.*
        FROM workflow_instances wi
        WHERE wi."companyId" = $1
+         AND wi."deletedAt" IS NULL
          AND wi.status IN ('pending', 'in_review')
          AND wi."currentAssignee" = $2
        ORDER BY
@@ -399,7 +400,7 @@ router.put("/definitions/:id", requirePermission("admin:write"), async (req, res
       }
     });
 
-    const [def] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1`, [id]);
+    const [def] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     const updatedSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" LIMIT 500`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_definitions", entityId: id, after: { requestTypeLabel } }).catch((e) => logger.error(e, "workflows background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.updated", entity: "workflow_definitions", entityId: id, details: JSON.stringify({ requestTypeLabel }) }).catch((e) => logger.error(e, "workflows background task failed"));
@@ -461,10 +462,10 @@ router.post("/sla-definitions", requirePermission("admin:write"), async (req, re
 router.get("/stats", requirePermission("admin:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [total] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1`, [scope.companyId]);
-    const [pending] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND status IN ('pending','in_review')`, [scope.companyId]);
-    const [slaWarning] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "slaStatus" IN ('warning','exceeded') AND status IN ('pending','in_review')`, [scope.companyId]);
-    const [escalated] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "slaStatus" = 'escalated' AND status IN ('pending','in_review')`, [scope.companyId]);
+    const [total] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [scope.companyId]);
+    const [pending] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('pending','in_review')`, [scope.companyId]);
+    const [slaWarning] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "slaStatus" IN ('warning','exceeded') AND status IN ('pending','in_review')`, [scope.companyId]);
+    const [escalated] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "slaStatus" = 'escalated' AND status IN ('pending','in_review')`, [scope.companyId]);
     res.json({
       total: Number(total.count),
       pending: Number(pending.count),

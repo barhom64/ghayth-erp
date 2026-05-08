@@ -359,14 +359,13 @@ export async function createJournalEntry(params: {
         `INSERT INTO journal_lines (
           "journalId","accountCode","accountId",debit,credit,description,"costCenter",
           "departmentId","projectId","employeeId","vehicleId","propertyId","contractId",
-          "productId","clientId","vendorId","driverId","activityType","templateId"
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+          "activityType","templateId"
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
         [
           jId, line.accountCode, accountId, line.debit, line.credit,
           line.description ?? null, line.costCenter ?? null,
           line.departmentId ?? null, line.projectId ?? null, line.employeeId ?? null,
           line.vehicleId ?? null, line.propertyId ?? null, line.contractId ?? null,
-          line.productId ?? null, line.clientId ?? null, line.vendorId ?? null, line.driverId ?? null,
           line.activityType ?? null, line.templateId ?? null,
         ]
       );
@@ -522,6 +521,7 @@ export async function initiateApprovalChain(params: {
   const chains = await rawQuery<any>(
     `SELECT * FROM approval_chains
      WHERE "companyId" = $1 AND "chainType" = $2 AND "isActive" = true
+     AND "deletedAt" IS NULL
      ${amountFilter}
      ORDER BY "minAmount" DESC LIMIT 1`,
     queryParams
@@ -621,16 +621,16 @@ export async function processApprovalStep(params: {
   if (!params.approved) {
     await rawExecute(
       `UPDATE approval_requests SET status = 'rejected', "decidedBy" = $1, "decidedAt" = NOW()
-       WHERE id = $2`,
-      [params.decidedBy, request.id]
+       WHERE id = $2 AND "companyId" = $3`,
+      [params.decidedBy, request.id, params.companyId]
     );
     return { status: "rejected", message: "تم الرفض" };
   }
 
   await rawExecute(
     `UPDATE approval_requests SET status = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
-     WHERE id = $2`,
-    [params.decidedBy, request.id]
+     WHERE id = $2 AND "companyId" = $3`,
+    [params.decidedBy, request.id, params.companyId]
   );
 
   const chainId = request.chainId;
@@ -793,7 +793,8 @@ export async function getDirectorAssignmentId(companyId: number, branchId: numbe
 export async function getCfoAssignmentId(companyId: number, branchId: number): Promise<number | null> {
   const [row] = await rawQuery<any>(
     `SELECT ea.id FROM employee_assignments ea
-     JOIN user_roles ur ON ur."userId" = (SELECT "employeeId" FROM employee_assignments WHERE id = ea.id)
+     JOIN users u ON u."employeeId" = ea."employeeId"
+     JOIN user_roles ur ON ur."userId" = u.id
      WHERE ea."companyId" = $1 AND ea."branchId" = $2
        AND ur."roleKey" = 'finance_manager' AND ea.status = 'active'
      LIMIT 1`,

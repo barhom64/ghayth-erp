@@ -160,11 +160,11 @@ describe("Exit clearance flow", () => {
     expect(EXIT_ROUTE).toContain("updateClearanceSchema");
   });
 
-  it("clearance marks items as cleared or issue", () => {
+  it("clearance marks items as cleared or rejected", () => {
     const idx = EXIT_ROUTE.indexOf('"/exit/clearance/:id"');
     const section = EXIT_ROUTE.slice(idx, idx + 1500);
     expect(section).toContain('"cleared"');
-    expect(section).toContain('"issue"');
+    expect(section).toContain('"rejected"');
   });
 
   it("auto-completes clearance when all items are done", () => {

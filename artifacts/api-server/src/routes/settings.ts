@@ -360,7 +360,7 @@ router.post("/branches", requirePermission("settings:write"), async (req, res) =
       after: { name, nameEn, city, phone, companyId: targetCompanyId },
     }).catch((e) => logger.error(e, "settings background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "branch" }) }).catch((e) => logger.error(e, "settings background task failed"));
-    res.status(201).json({ id: r.insertId, companyId: targetCompanyId, ...req.body });
+    res.status(201).json({ id: r.insertId, companyId: targetCompanyId, ...body });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
@@ -387,12 +387,13 @@ router.put("/branches/:id", requirePermission("settings:write"), async (req, res
     if (footerText !== undefined) { params.push(footerText); sets.push(`"footerText"=$${params.length}`); }
     if (sets.length === 0) { res.json({ message: "لا توجد تحديثات" }); return; }
     params.push(id);
-    await rawExecute(`UPDATE branches SET ${sets.join(",")} WHERE id=$${params.length}`, params);
-    const [updated] = await rawQuery(`SELECT * FROM branches WHERE id=$1`, [id]);
+    params.push(existing.companyId);
+    await rawExecute(`UPDATE branches SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const [updated] = await rawQuery(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [id, existing.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_branch",
       entity: "branches", entityId: id,
-      before: existing, after: req.body,
+      before: existing, after: body,
     }).catch((e) => logger.error(e, "settings background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: id, details: JSON.stringify({ key: "branch" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json(updated);
@@ -405,8 +406,8 @@ router.delete("/branches/:id", requirePermission("settings:write"), async (req, 
     const scope = req.scope!;
 
     const [activeEmployees] = await rawQuery<any>(
-      `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "branchId" = $1 AND status = 'active'`,
-      [branchId]
+      `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "branchId" = $1 AND status = 'active' AND "companyId" = $2`,
+      [branchId, scope.companyId]
     );
     const [openOrders] = await rawQuery<any>(
       `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "branchId" = $1 AND status NOT IN ('cancelled','received','closed') AND "companyId" = $2`,
@@ -448,7 +449,7 @@ router.post("/departments", requirePermission("settings:write"), async (req, res
       after: { name, nameEn, manager },
     }).catch((e) => logger.error(e, "settings background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "department" }) }).catch((e) => logger.error(e, "settings background task failed"));
-    res.status(201).json({ id: r.insertId, ...req.body });
+    res.status(201).json({ id: r.insertId, ...body });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
@@ -458,7 +459,7 @@ router.put("/departments/:id", requirePermission("settings:write"), async (req, 
     const id = parseId(req.params.id, "id");
     const { name, manager } = body;
     const scope = req.scope!;
-    await rawExecute(`UPDATE departments SET name=$1, "managerId"=$2 WHERE id=$3 RETURNING id`, [name, manager || null, id]);
+    await rawExecute(`UPDATE departments SET name=$1, "managerId"=$2 WHERE id=$3 AND "companyId"=$4 RETURNING id`, [name, manager || null, id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_department",
       entity: "departments", entityId: id,
@@ -472,14 +473,14 @@ router.put("/departments/:id", requirePermission("settings:write"), async (req, 
 router.delete("/departments/:id", requirePermission("settings:write"), async (req, res) => {
   try {
     const id = parseId(req.params.id, "id");
+    const scope = req.scope!;
     const [empCheck] = await rawQuery<any>(
-      `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "departmentId" = $1 AND status = 'active'`,
-      [id]
+      `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "departmentId" = $1 AND status = 'active' AND "companyId" = $2`,
+      [id, scope.companyId]
     );
     if (empCheck && Number(empCheck.cnt) > 0) {
       throw new ValidationError("لا يمكن حذف القسم لأن هناك موظفين مرتبطين به");
     }
-    const scope = req.scope!;
     const [beforeDept] = await rawQuery(`SELECT * FROM departments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!beforeDept) throw new NotFoundError("القسم غير موجود");
     await rawExecute(`DELETE FROM departments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
@@ -549,7 +550,7 @@ router.post("/companies", requirePermission("settings:write"), async (req, res) 
         "سلم عقوبات تدريجي (9 مستويات)",
         "120+ إعداد افتراضي",
       ],
-      ...req.body,
+      ...body,
     });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -560,6 +561,9 @@ router.put("/companies/:id", requirePermission("settings:write"), async (req, re
     const id = parseId(req.params.id, "id");
     const { name, nameEn, taxNumber, crNumber } = body;
     const scope = req.scope!;
+    if (!scope.allowedCompanies?.includes(id) && scope.companyId !== id) {
+      throw new ForbiddenError("لا يمكنك تعديل شركة لا تملك صلاحية عليها");
+    }
     await rawExecute(`UPDATE companies SET name=$1, "nameEn"=$2, "vatNumber"=$3, "crNumber"=$4 WHERE id=$5 RETURNING id`, [name, nameEn || null, taxNumber || null, crNumber || null, id]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_company",
@@ -575,6 +579,12 @@ router.delete("/companies/:id", requirePermission("settings:write"), async (req,
   try {
     const id = parseId(req.params.id, "id");
     const scope = req.scope!;
+    if (!scope.allowedCompanies?.includes(id) && scope.companyId !== id) {
+      throw new ForbiddenError("لا يمكنك حذف شركة لا تملك صلاحية عليها");
+    }
+    if (id === scope.companyId) {
+      throw new ValidationError("لا يمكنك حذف الشركة الحالية");
+    }
     const [beforeCompany] = await rawQuery(`SELECT * FROM companies WHERE id=$1`, [id]);
     await rawExecute(`DELETE FROM companies WHERE id=$1 RETURNING id`, [id]);
     createAuditLog({
@@ -681,7 +691,7 @@ router.get("/approval-config", requirePermission("settings:read"), async (req, r
   try {
     const scope = req.scope!;
     const chains = await rawQuery(
-      `SELECT * FROM approval_chains WHERE "companyId"=$1 ORDER BY "chainType", "name"`,
+      `SELECT * FROM approval_chains WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "chainType", "name"`,
       [scope.companyId]
     );
     res.json({ data: chains });
@@ -711,7 +721,7 @@ router.delete("/approval-config/:id", requirePermission("settings:write"), async
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [beforeChain] = await rawQuery(`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [beforeChain] = await rawQuery(`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!beforeChain) throw new NotFoundError("سلسلة الاعتماد غير موجودة");
     await rawExecute(`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
@@ -752,7 +762,7 @@ router.get("/channels", requirePermission("settings:read"), async (req, res) => 
     const settings: Record<string, string> = {};
     for (const r of rows) settings[r.key] = r.value;
 
-    const SECRET_KEYS = ["sms_auth_token", "whatsapp_access_token"];
+    const SECRET_KEYS = ["sms_auth_token", "whatsapp_access_token", "whatsapp_verify_token"];
     const result: Record<string, string> = { ...settings };
     for (const key of SECRET_KEYS) {
       if (result[key]) {

@@ -80,10 +80,10 @@ class SupportEngineImpl implements DomainEngine {
     return { insertId };
   }
 
-  async markTicketInProgress(ticketId: number): Promise<void> {
+  async markTicketInProgress(ticketId: number, companyId: number): Promise<void> {
     await rawExecute(
-      `UPDATE support_tickets SET status = 'in_progress', "updatedAt" = NOW() WHERE id = $1 AND status = 'open'`,
-      [ticketId]
+      `UPDATE support_tickets SET status = 'in_progress', "updatedAt" = NOW() WHERE id = $1 AND status = 'open' AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [ticketId, companyId]
     );
   }
 }

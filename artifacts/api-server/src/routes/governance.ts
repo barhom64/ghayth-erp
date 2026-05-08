@@ -169,7 +169,7 @@ router.get("/policies", requirePermission("governance:read"), async (req, res) =
   try {
     const scope = req.scope!;
     const { status, module: mod } = req.query as any;
-    const conditions = [`("companyId"=$1 OR "companyId" IS NULL)`];
+    const conditions = [`("companyId"=$1 OR "companyId" IS NULL)`, `"deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status=$${params.length}`); }
     if (mod) {
@@ -224,7 +224,7 @@ router.get("/policies/:id", requirePermission("governance:read"), async (req, re
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
-      `SELECT * FROM governance_policies WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      `SELECT * FROM governance_policies WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("السياسة غير موجودة");
@@ -234,7 +234,7 @@ router.get("/policies/:id", requirePermission("governance:read"), async (req, re
     );
     row.modules = links.map((l: any) => l.module);
     const versions = await rawQuery<any>(
-      `SELECT id, version, title, status, "createdAt" FROM governance_policies WHERE "parentId"=$1 OR id=$1 ORDER BY version DESC`,
+      `SELECT id, version, title, status, "createdAt" FROM governance_policies WHERE ("parentId"=$1 OR id=$1) AND "deletedAt" IS NULL ORDER BY version DESC`,
       [row.id]
     );
     row.versions = versions;
@@ -259,7 +259,7 @@ router.patch("/policies/:id", requirePermission("governance:write"), async (req,
     params.push(id); params.push(scope.companyId);
     const row = await withTransaction(async (client) => {
       const updateRes = await client.query(
-        `UPDATE governance_policies SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`,
+        `UPDATE governance_policies SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`,
         params
       );
       if ((updateRes.rowCount ?? 0) === 0) throw new NotFoundError("السياسة غير موجودة");
@@ -294,13 +294,13 @@ router.post("/policies/:id/new-version", requirePermission("governance:write"), 
     const scope = req.scope!;
     const parentId = parseId(req.params.id, "id");
     const [parent] = await rawQuery<any>(
-      `SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`,
+      `SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [parentId, scope.companyId]
     );
     if (!parent) throw new NotFoundError("السياسة غير موجودة");
 
     const [maxVersion] = await rawQuery<any>(
-      `SELECT COALESCE(MAX(version), 0) + 1 as next FROM governance_policies WHERE "parentId"=$1 OR id=$1`,
+      `SELECT COALESCE(MAX(version), 0) + 1 as next FROM governance_policies WHERE ("parentId"=$1 OR id=$1) AND "deletedAt" IS NULL`,
       [parentId]
     );
     const nextVersion = Number(maxVersion?.next || parent.version + 1);
@@ -308,38 +308,37 @@ router.post("/policies/:id/new-version", requirePermission("governance:write"), 
     const b = zodParse(newPolicyVersionSchema.safeParse(req.body));
     const existingLinks = await rawQuery<any>(`SELECT module FROM policy_module_links WHERE "policyId"=$1`, [parentId]);
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO governance_policies (title, description, category, status, "effectiveDate", "expiryDate", version, "parentId", "companyId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [
-        b.title || parent.title,
-        b.description || parent.description,
-        b.category || parent.category,
-        "draft",
-        b.effectiveDate || null,
-        b.expiryDate || null,
-        nextVersion,
-        parentId,
-        scope.companyId,
-      ]
-    );
-
-    await applyTransition({
-      entity: "governance_policies",
-      id: parentId,
-      scope,
-      action: "governance.policy.archived",
-      fromStates: ["draft", "active"],
-      toState: "archived",
-      reason: `أرشفة تلقائية — إصدار جديد v${nextVersion}`,
-    });
-
-    for (const link of existingLinks) {
-      await rawExecute(
-        `INSERT INTO policy_module_links ("policyId", module, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
-        [insertId, link.module, scope.companyId]
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO governance_policies (title, description, category, status, "effectiveDate", "expiryDate", version, "parentId", "companyId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [
+          b.title || parent.title,
+          b.description || parent.description,
+          b.category || parent.category,
+          "draft",
+          b.effectiveDate || null,
+          b.expiryDate || null,
+          nextVersion,
+          parentId,
+          scope.companyId,
+        ]
       );
-    }
+      insertId = ins.rows[0].id;
+
+      await client.query(
+        `UPDATE governance_policies SET status='archived', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status IN ('draft','active') AND "deletedAt" IS NULL`,
+        [parentId, scope.companyId]
+      );
+
+      for (const link of existingLinks) {
+        await client.query(
+          `INSERT INTO policy_module_links ("policyId", module, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+          [insertId, link.module, scope.companyId]
+        );
+      }
+    });
 
     const [row] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "governance_policies", entityId: insertId, after: { version: nextVersion, parentId } }).catch((e) => logger.error(e, "governance background task failed"));
@@ -364,7 +363,7 @@ router.get("/policies/:id/module-links", requirePermission("governance:read"), a
     const scope = req.scope!;
     const policyId = parseId(req.params.id, "id");
     const [policy] = await rawQuery<any>(
-      `SELECT id FROM governance_policies WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      `SELECT id FROM governance_policies WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [policyId, scope.companyId]
     );
     if (!policy) throw new NotFoundError("السياسة غير موجودة");
@@ -384,6 +383,7 @@ router.get("/module-policies/:module", requirePermission("governance:read"), asy
       `SELECT gp.* FROM governance_policies gp
        JOIN policy_module_links pml ON pml."policyId" = gp.id
        WHERE pml.module = $1 AND (gp."companyId" = $2 OR gp."companyId" IS NULL)
+         AND gp."deletedAt" IS NULL
          AND gp.status = 'active'
          AND (gp."effectiveDate" IS NULL OR gp."effectiveDate" <= CURRENT_DATE)
          AND (gp."expiryDate" IS NULL OR gp."expiryDate" >= CURRENT_DATE)
@@ -398,7 +398,7 @@ router.delete("/policies/:id", requirePermission("governance:write"), async (req
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [before] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [before] = await rawQuery<any>(`SELECT * FROM governance_policies WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     const result = await rawExecute(`UPDATE governance_policies SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) throw new NotFoundError("السياسة غير موجودة");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_policies", entityId: id, before }).catch((e) => logger.error(e, "governance background task failed"));
@@ -416,7 +416,7 @@ router.delete("/policies/:id", requirePermission("governance:write"), async (req
 router.get("/risks", requirePermission("governance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM governance_risks WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM governance_risks WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -450,7 +450,7 @@ router.get("/risks/:id", requirePermission("governance:read"), async (req, res) 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المخاطرة غير موجودة");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
@@ -474,7 +474,7 @@ router.patch("/risks/:id", requirePermission("governance:write"), async (req, re
     params.push(id); params.push(scope.companyId);
     const result = await rawExecute(`UPDATE governance_risks SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (result.affectedRows === 0) throw new NotFoundError("المخاطرة غير موجودة");
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_risks", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
@@ -491,7 +491,7 @@ router.delete("/risks/:id", requirePermission("governance:write"), async (req, r
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [before] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [before] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     const result = await rawExecute(`UPDATE governance_risks SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) throw new NotFoundError("المخاطرة غير موجودة");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_risks", entityId: id, before }).catch((e) => logger.error(e, "governance background task failed"));
@@ -509,7 +509,7 @@ router.delete("/risks/:id", requirePermission("governance:write"), async (req, r
 router.get("/audits", requirePermission("governance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM governance_audits WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM governance_audits WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -539,7 +539,7 @@ router.get("/audits/:id", requirePermission("governance:read"), async (req, res)
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المراجعة غير موجودة");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
@@ -561,7 +561,7 @@ router.patch("/audits/:id", requirePermission("governance:write"), async (req, r
     params.push(id); params.push(scope.companyId);
     const result = await rawExecute(`UPDATE governance_audits SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (result.affectedRows === 0) throw new NotFoundError("المراجعة غير موجودة");
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_audits", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
@@ -578,7 +578,7 @@ router.delete("/audits/:id", requirePermission("governance:write"), async (req, 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [before] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [before] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     const result = await rawExecute(`UPDATE governance_audits SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) throw new NotFoundError("المراجعة غير موجودة");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_audits", entityId: id, before }).catch((e) => logger.error(e, "governance background task failed"));
@@ -596,7 +596,7 @@ router.delete("/audits/:id", requirePermission("governance:write"), async (req, 
 router.get("/compliance", requirePermission("governance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM governance_compliance WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM governance_compliance WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -626,7 +626,7 @@ router.get("/compliance/:id", requirePermission("governance:read"), async (req, 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("بند الامتثال غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "governance"); }
@@ -649,7 +649,7 @@ router.patch("/compliance/:id", requirePermission("governance:write"), async (re
     params.push(id); params.push(scope.companyId);
     const result = await rawExecute(`UPDATE governance_compliance SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (result.affectedRows === 0) throw new NotFoundError("بند الامتثال غير موجود");
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_compliance", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
@@ -666,7 +666,7 @@ router.delete("/compliance/:id", requirePermission("governance:write"), async (r
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [before] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [before] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     const result = await rawExecute(`UPDATE governance_compliance SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (result.affectedRows === 0) throw new NotFoundError("بند الامتثال غير موجود");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "governance_compliance", entityId: id, before }).catch((e) => logger.error(e, "governance background task failed"));
@@ -685,12 +685,12 @@ router.get("/stats", requirePermission("governance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [policies] = await rawQuery(`SELECT COUNT(*) as count FROM governance_policies WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]);
-    const [risks] = await rawQuery(`SELECT COUNT(*) as count FROM governance_risks WHERE status='open' AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
-    const [audits] = await rawQuery(`SELECT COUNT(*) as count FROM governance_audits WHERE status IN ('planned','in_progress') AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
-    const [compliance] = await rawQuery(`SELECT COUNT(*) as count FROM governance_compliance WHERE status='non_compliant' AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
-    const [complianceActions] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='done') AS implemented, COUNT(*) AS total FROM policy_compliance_actions WHERE "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "governance query failed"); return [{ implemented: 0, total: 0 }]; });
-    const [risksNoTreatment] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM governance_risks WHERE status='open' AND "treatmentPlan" IS NULL AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]).catch((e) => { logger.error(e, "governance query failed"); return [{ count: 0 }]; });
+    const [policies] = await rawQuery(`SELECT COUNT(*) as count FROM governance_policies WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
+    const [risks] = await rawQuery(`SELECT COUNT(*) as count FROM governance_risks WHERE status='open' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
+    const [audits] = await rawQuery(`SELECT COUNT(*) as count FROM governance_audits WHERE status IN ('planned','in_progress') AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
+    const [compliance] = await rawQuery(`SELECT COUNT(*) as count FROM governance_compliance WHERE status='non_compliant' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
+    const [complianceActions] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='done') AS implemented, COUNT(*) AS total FROM policy_compliance_actions WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]).catch((e) => { logger.error(e, "governance query failed"); return [{ implemented: 0, total: 0 }]; });
+    const [risksNoTreatment] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM governance_risks WHERE status='open' AND "treatmentPlan" IS NULL AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]).catch((e) => { logger.error(e, "governance query failed"); return [{ count: 0 }]; });
     const [openCapas] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM governance_capa WHERE status IN ('open','in_progress') AND "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "governance query failed"); return [{ count: 0 }]; });
     const implementedPct = Number(complianceActions?.total) > 0 ? Math.round(Number(complianceActions?.implemented) / Number(complianceActions?.total) * 100) : 100;
     res.json({
@@ -712,10 +712,10 @@ router.get("/compliance-dashboard", requirePermission("governance:read"), async 
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [actions] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='done') AS implemented, COUNT(*) FILTER (WHERE status IN ('open','in_progress')) AS "notImplemented", COUNT(*) AS total FROM policy_compliance_actions WHERE "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "governance query failed"); return [{ implemented: 0, notImplemented: 0, total: 0 }]; });
-    const [risks] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='open' AND "treatmentPlan" IS NOT NULL) AS "withTreatment", COUNT(*) FILTER (WHERE status='open' AND "treatmentPlan" IS NULL) AS "withoutTreatment", COUNT(*) FILTER (WHERE status='open') AS open FROM governance_risks WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]).catch((e) => { logger.error(e, "governance query failed"); return [{ withTreatment: 0, withoutTreatment: 0, open: 0 }]; });
+    const [actions] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='done') AS implemented, COUNT(*) FILTER (WHERE status IN ('open','in_progress')) AS "notImplemented", COUNT(*) AS total FROM policy_compliance_actions WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]).catch((e) => { logger.error(e, "governance query failed"); return [{ implemented: 0, notImplemented: 0, total: 0 }]; });
+    const [risks] = await rawQuery<any>(`SELECT COUNT(*) FILTER (WHERE status='open' AND "treatmentPlan" IS NOT NULL) AS "withTreatment", COUNT(*) FILTER (WHERE status='open' AND "treatmentPlan" IS NULL) AS "withoutTreatment", COUNT(*) FILTER (WHERE status='open') AS open FROM governance_risks WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]).catch((e) => { logger.error(e, "governance query failed"); return [{ withTreatment: 0, withoutTreatment: 0, open: 0 }]; });
     const [policiesNoActions] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM governance_policies gp WHERE ("companyId"=$1 OR "companyId" IS NULL) AND status='active' AND NOT EXISTS (SELECT 1 FROM policy_compliance_actions pca WHERE pca."policyId"=gp.id AND pca."companyId"=$1)`,
+      `SELECT COUNT(*) AS count FROM governance_policies gp WHERE ("companyId"=$1 OR "companyId" IS NULL) AND status='active' AND gp."deletedAt" IS NULL AND NOT EXISTS (SELECT 1 FROM policy_compliance_actions pca WHERE pca."policyId"=gp.id AND pca."companyId"=$1 AND pca."deletedAt" IS NULL)`,
       [cid]
     ).catch((e) => { logger.error(e, "governance query failed"); return [{ count: 0 }]; });
     const capas = await rawQuery<any>(`SELECT * FROM governance_capa WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`, [cid]).catch((e) => { logger.error(e, "governance query failed"); return []; });
@@ -737,7 +737,7 @@ router.get("/compliance-dashboard", requirePermission("governance:read"), async 
 router.get("/compliance-actions", requirePermission("governance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE "companyId"=$1 ORDER BY "dueDate" ASC NULLS LAST, "createdAt" DESC LIMIT 500`, [scope.companyId]);
+    const rows = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "dueDate" ASC NULLS LAST, "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -795,7 +795,7 @@ router.delete("/compliance-actions/:actionId", requirePermission("governance:wri
   try {
     const scope = req.scope!;
     const id = parseId(req.params.actionId, "actionId");
-    const [before] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [before] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     await rawExecute(`UPDATE policy_compliance_actions SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "policy_compliance_actions", entityId: id, before }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
@@ -813,7 +813,7 @@ router.get("/policies/:id/compliance-actions", requirePermission("governance:rea
   try {
     const scope = req.scope!;
     const policyId = parseId(req.params.id, "id");
-    const rows = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE "policyId"=$1 AND "companyId"=$2 ORDER BY "createdAt" LIMIT 500`, [policyId, scope.companyId]);
+    const rows = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE "policyId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY "createdAt" LIMIT 500`, [policyId, scope.companyId]);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
@@ -881,7 +881,7 @@ router.patch("/risks/:id/treatment", requirePermission("governance:write"), asyn
     if (b.treatmentStatus !== undefined) { params.push(b.treatmentStatus); sets.push(`"treatmentStatus"=$${params.length}`); }
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE governance_risks SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_risks", entityId: id, after: { treatmentPlan: b.treatmentPlan } }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,

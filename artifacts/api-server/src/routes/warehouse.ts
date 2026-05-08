@@ -169,13 +169,13 @@ async function updateWeightedAverageCost(
           ? roundTo4(newTotalValue / newTotalQty)
           : movCost;
       await rawExecute(
-        `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2`,
+        `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2 AND "deletedAt" IS NULL`,
         [newWa, productId]
       );
     } else {
       // "out": weighted-average stays the same; just refresh lastWaCost snapshot
       await rawExecute(
-        `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1`,
+        `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1 AND "deletedAt" IS NULL`,
         [productId]
       );
     }
@@ -468,7 +468,7 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
         sets.push(`${colMap[f]}=$${params.length}`);
       }
       params.push(id);
-      await rawExecute(`UPDATE warehouse_products SET ${sets.join(",")} WHERE id=$${params.length} AND "companyId"=$${params.length + 1}`, [...params, scope.companyId]);
+      await rawExecute(`UPDATE warehouse_products SET ${sets.join(",")} WHERE id=$${params.length} AND "companyId"=$${params.length + 1} AND "deletedAt" IS NULL`, [...params, scope.companyId]);
       const [fetched] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
       row = fetched;
 
@@ -661,7 +661,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
       insertId = movRes.rows[0]?.id ?? 0;
 
       const newStock = Number(product.currentStock) + sign * Math.abs(Number(b.quantity));
-      await client.query(`UPDATE warehouse_products SET "currentStock" = "currentStock" + $1, "updatedAt" = NOW() WHERE id = $2`, [sign * Math.abs(b.quantity), b.productId]);
+      await client.query(`UPDATE warehouse_products SET "currentStock" = "currentStock" + $1, "updatedAt" = NOW() WHERE id = $2 AND "deletedAt" IS NULL`, [sign * Math.abs(b.quantity), b.productId]);
 
       if (b.type === 'in' || b.type === 'return' || b.type === 'transfer_in') {
         const incomingQty = Math.abs(Number(b.quantity));
@@ -672,12 +672,12 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
         const newTotalQty = prevStock + incomingQty;
         const newWaCost = newTotalQty > 0 ? roundTo4(newTotalValue / newTotalQty) : incomingCost;
         await client.query(
-          `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2`,
+          `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2 AND "deletedAt" IS NULL`,
           [newWaCost, b.productId]
         );
       } else if ((b.type === 'out' || b.type === 'transfer_out') && newStock <= 0) {
         await client.query(
-          `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1`,
+          `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1 AND "deletedAt" IS NULL`,
           [b.productId]
         );
       }
@@ -814,7 +814,7 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
   const ref = generateTimeRef("PR-AUTO");
 
   const { insertId: prId } = await rawExecute(
-    `INSERT INTO purchase_requests ("companyId","supplierId",ref,status,"totalAmount","requestedBy",notes) VALUES ($1,$2,$3,'pending_approval',$4,$5,$6)`,
+    `INSERT INTO purchase_requests ("companyId","supplierId",ref,status,"totalAmount","requestedBy",notes) VALUES ($1,$2,$3,'pending',$4,$5,$6)`,
     [companyId, supplierId, ref, estimatedTotal, userId, `طلب شراء تلقائي - مخزون منخفض: ${product.name}`]
   );
   if (prId) {
@@ -870,6 +870,12 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
         [scope.companyId, b.productId, b.quantity, unitCost, transferRef, fromLocation, toLocation, `استلام تحويل من ${fromLocation} في ${toLocation}`, scope.userId]
       );
       inId = inRes.rows[0].id;
+
+      // Decrement source product stock (transfer_out)
+      await client.query(
+        `UPDATE warehouse_products SET "currentStock" = "currentStock" - $1, "updatedAt" = NOW() WHERE id = $2 AND "deletedAt" IS NULL`,
+        [qtyNum, b.productId]
+      );
     });
 
     emitEvent({
@@ -1026,7 +1032,7 @@ router.post("/suppliers", requirePermission("warehouse:create"), async (req, res
       `INSERT INTO suppliers ("companyId",name,"contactPerson",phone,email,address,"taxNumber","paymentTerms") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [scope.companyId, b.name.trim(), b.contactPerson, b.phone, b.email, b.address, b.taxNumber, b.paymentTerms || 30]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM suppliers WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1056,7 +1062,7 @@ router.patch("/categories/:id", requirePermission("warehouse:update"), async (re
     if (b.parentId !== undefined) { params.push(b.parentId); fields.push(`"parentId" = $${params.length}`); }
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE warehouse_categories SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE warehouse_categories SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("الفئة غير موجودة");
     emitEvent({
       companyId: scope.companyId,
@@ -1143,7 +1149,7 @@ router.patch("/suppliers/:id", requirePermission("warehouse:update"), async (req
     addField("paymentTerms", b.paymentTerms);
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE suppliers SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE suppliers SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("المورد غير موجود");
     emitEvent({
       companyId: scope.companyId,
@@ -1234,7 +1240,7 @@ router.post("/inventory-counts", requirePermission("warehouse:create"), async (r
        scope.employeeId || null,
        b.notes || null, b.warehouseLocation || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM inventory_counts WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1419,7 +1425,7 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
             : 0;
 
           await client.query(
-            `UPDATE warehouse_products SET "currentStock"="currentStock"+$1, "updatedAt"=NOW() WHERE id=$2`,
+            `UPDATE warehouse_products SET "currentStock"="currentStock"+$1, "updatedAt"=NOW() WHERE id=$2 AND "deletedAt" IS NULL`,
             [variance, item.productId]
           );
 

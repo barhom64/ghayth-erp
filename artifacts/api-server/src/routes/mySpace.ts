@@ -17,7 +17,7 @@ router.get("/", async (req, res) => {
     const [attendance] = await rawQuery<any>(
       `SELECT id, date, "checkIn", "checkOut", "lateMinutes", status
        FROM attendance
-       WHERE "assignmentId" = $1 AND date = $2`,
+       WHERE "assignmentId" = $1 AND date = $2 AND "deletedAt" IS NULL`,
       [scope.activeAssignmentId, today]
     ).catch((e) => { logger.error(e, "my-space attendance error:"); return [null]; });
 
@@ -68,7 +68,7 @@ router.get("/", async (req, res) => {
         `SELECT lr.id, 'leave' AS type, lt.name AS title, lr.status, lr."createdAt"
          FROM hr_leave_requests lr
          JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-         WHERE lr."employeeId" = $1 AND lr.status IN ('pending','under_review') AND lr."deletedAt" IS NULL
+         WHERE lr."employeeId" = $1 AND lr.status = 'pending' AND lr."deletedAt" IS NULL
          ORDER BY lr."createdAt" DESC LIMIT 10`,
         [scope.employeeId]
       ).catch((e) => { logger.error(e, "my-space leaveReqs error:"); return []; });
@@ -79,7 +79,7 @@ router.get("/", async (req, res) => {
           `SELECT je.id, 'salary_advance' AS type, 'سلفة راتب' AS title, je.status, je."createdAt"
            FROM journal_entries je
            WHERE je."createdBy" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%'
-             AND je.status IN ('pending','pending_approval')
+             AND je.status IN ('draft','pending_approval')
            ORDER BY je."createdAt" DESC LIMIT 5`,
           [scope.activeAssignmentId]
         );
@@ -92,7 +92,7 @@ router.get("/", async (req, res) => {
         letterReqs = await rawQuery<any>(
           `SELECT ol.id, 'letter' AS type, ol.type AS title, ol.status, ol."createdAt"
            FROM official_letters ol
-           WHERE ol."employeeId" = $1 AND ol.status IN ('pending','pending_approval')
+           WHERE ol."employeeId" = $1 AND ol.status IN ('pending','pending_approval') AND ol."deletedAt" IS NULL
            ORDER BY ol."createdAt" DESC LIMIT 5`,
           [scope.employeeId]
         );
@@ -106,7 +106,7 @@ router.get("/", async (req, res) => {
           `SELECT je.id, 'custody' AS type, je.description AS title, je.status, je."createdAt"
            FROM journal_entries je
            WHERE je."createdBy" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%'
-             AND je.status IN ('pending','pending_approval')
+             AND je.status IN ('draft','pending_approval')
            ORDER BY je."createdAt" DESC LIMIT 5`,
           [scope.activeAssignmentId]
         );
@@ -145,7 +145,7 @@ router.get("/", async (req, res) => {
         exitReqs = await rawQuery<any>(
           `SELECT id, 'exit' AS type, CONCAT('نهاية خدمة #', id) AS title, status, "createdAt"
            FROM hr_exit_requests
-           WHERE "assignmentId" = $1 AND status IN ('pending','in_progress') AND "deletedAt" IS NULL
+           WHERE "assignmentId" = $1 AND status = 'pending' AND "deletedAt" IS NULL
            ORDER BY "createdAt" DESC LIMIT 5`,
           [scope.activeAssignmentId]
         );
@@ -266,6 +266,7 @@ router.get("/", async (req, res) => {
         `SELECT id, title, status, priority, "scheduledDate"
          FROM tasks
          WHERE "assignedTo" = $1 AND "scheduledDate" = $2 AND status NOT IN ('completed','cancelled')
+           AND "deletedAt" IS NULL
          ORDER BY priority DESC LIMIT 10`,
         [scope.activeAssignmentId, today]
       );
@@ -294,7 +295,7 @@ router.get("/", async (req, res) => {
                 je.status, je."createdAt"
          FROM journal_entries je
          WHERE je."createdBy" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%'
-           AND je.status IN ('approved','pending','pending_approval')
+           AND je.status IN ('approved','draft','pending_approval')
          ORDER BY je."createdAt" DESC LIMIT 10`,
         [scope.activeAssignmentId]
       );
@@ -387,7 +388,7 @@ router.get("/", async (req, res) => {
         `SELECT pr.id, pr.period, pr."overallScore", pr.status, e.name AS "reviewerName", pr."createdAt"
          FROM performance_reviews pr
          LEFT JOIN employees e ON e.id = pr."reviewerId"
-         WHERE pr."employeeId" = $1
+         WHERE pr."employeeId" = $1 AND pr."deletedAt" IS NULL
          ORDER BY pr."createdAt" DESC LIMIT 5`,
         [scope.employeeId]
       );
@@ -401,7 +402,7 @@ router.get("/", async (req, res) => {
         `SELECT id, title, 'task' AS "itemType", "scheduledDate" AS deadline, status
          FROM tasks
          WHERE "assignedTo" = $1 AND status NOT IN ('completed','cancelled')
-           AND "scheduledDate" < $2
+           AND "scheduledDate" < $2 AND "deletedAt" IS NULL
          ORDER BY "scheduledDate" ASC LIMIT 10`,
         [scope.activeAssignmentId, today]
       );
@@ -599,6 +600,7 @@ router.get("/attendance", async (req, res) => {
        ) v ON TRUE
        WHERE a."assignmentId" = $1
          AND TO_CHAR(a.date, 'YYYY-MM') = $2
+         AND a."deletedAt" IS NULL
        ORDER BY a.date DESC`,
       [scope.activeAssignmentId, monthStr]
     );

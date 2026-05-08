@@ -43,8 +43,7 @@ const VEHICLE_STATUS_OPTIONS = [
   { value: "available", label: "متاحة" },
   { value: "in_use", label: "قيد الاستخدام" },
   { value: "maintenance", label: "في الصيانة" },
-  { value: "reserved", label: "محجوزة" },
-  { value: "accident", label: "حادث" },
+  { value: "out_of_service", label: "خارج الخدمة" },
 ];
 
 const IMPACT_ICONS = {
@@ -86,8 +85,7 @@ export default function VehicleDetail() {
       case "available": return "success";
       case "in_use": return "info";
       case "maintenance": return "warning";
-      case "reserved": return "muted";
-      case "accident": return "destructive";
+      case "out_of_service": return "destructive";
       default: return "default";
     }
   };

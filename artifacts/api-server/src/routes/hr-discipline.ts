@@ -158,7 +158,7 @@ router.get("/regulation/:id", requirePermission("hr:read"), async (req, res) => 
 
 const createRegulationSchema = z.object({
   section: z.enum(["work_time", "work_organization", "conduct"], { message: "القسم غير صحيح" }),
-  articleNumber: z.string().min(1, "رقم المادة مطلوب"),
+  articleNumber: z.coerce.number({ message: "رقم المادة مطلوب" }),
   title: z.string().min(1, "العنوان مطلوب"),
   description: z.string().optional(),
   penalty1: z.string().optional(),
@@ -259,7 +259,7 @@ const appealDecisionSchema = z.object({
 });
 
 const closeMemoSchema = z.object({
-  closureNote: z.string().optional().nullable(),
+  note: z.string().optional().nullable(),
 });
 
 router.post("/regulation", requirePermission("hr:create"), async (req, res) => {
@@ -459,8 +459,8 @@ router.get("/memos/:id", requirePermission("hr:read"), async (req, res) => {
     if (!memo) throw new NotFoundError("المحضر غير موجود");
     const events = await rawQuery<any>(
       `SELECT * FROM hr_inquiry_memo_events
-        WHERE "memoId" = $1 ORDER BY "createdAt" ASC`,
-      [id]
+        WHERE "memoId" = $1 AND "companyId" = $2 ORDER BY "createdAt" ASC`,
+      [id, scope.companyId]
     );
     res.json({ memo, events });
   } catch (err) {
@@ -993,6 +993,7 @@ router.post("/memos/:id/close", requirePermission("hr:update"), async (req, res)
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    const body = zodParse(closeMemoSchema.safeParse(req.body));
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
 
@@ -1016,7 +1017,7 @@ router.post("/memos/:id/close", requirePermission("hr:update"), async (req, res)
         }
         await logMemoEvent({
           memoId: id, companyId: scope.companyId, actorId: scope.userId,
-          actorRole: "hr", action: "closed", note: req.body.note ?? undefined,
+          actorRole: "hr", action: "closed", note: body.note ?? undefined,
         });
       },
     });

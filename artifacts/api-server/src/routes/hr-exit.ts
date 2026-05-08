@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   handleRouteError,
@@ -249,8 +249,8 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
 
     // رصيد الإجازات
     const [lb] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(balance), 0) AS balance FROM leave_balances
-       WHERE "assignmentId" = $1 AND "companyId" = $2`,
+      `SELECT COALESCE(SUM(entitled - used - pending + carried), 0) AS balance FROM leave_balances
+       WHERE "employeeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1 LIMIT 1) AND "companyId" = $2`,
       [b.assignmentId, scope.companyId]
     ).catch((e) => { logger.error(e, "hr exit query failed"); return [{ balance: 0 }]; });
     const leaveBalance = Number(lb?.balance ?? 0);
@@ -271,32 +271,35 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
 
     const exitNumber = await generateExitNumber(scope.companyId);
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO hr_exit_requests
-         ("companyId","branchId","assignmentId","employeeId","exitNumber","exitType",
-          "lastWorkingDay","exitReason",status,"gratuityAmount","leaveBalance",
-          "leaveCompensation","loanDeductions","otherDeductions","netSettlement",
-          "settlementAmount","createdAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12,$13,$14,$15,NOW())
-       RETURNING id`,
-      [
-        scope.companyId, emp.branchId, b.assignmentId, emp.employeeId,
-        exitNumber, b.exitType, b.lastWorkingDay || null,
-        b.exitReason || null, gratuity, leaveBalance,
-        leaveCompensation, loanDeductions, otherDeductions, netSettlement,
-        netSettlement,
-      ]
-    );
-
-    // إنشاء قائمة إخلاء الطرف
-    for (const dept of DEFAULT_CLEARANCE_DEPARTMENTS) {
-      await rawExecute(
-        `INSERT INTO hr_exit_clearance
-           ("exitRequestId","companyId",department,"departmentLabel",status)
-         VALUES ($1,$2,$3,$4,'pending')`,
-        [insertId, scope.companyId, dept.department, dept.departmentLabel]
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO hr_exit_requests
+           ("companyId","branchId","assignmentId","employeeId","exitNumber","exitType",
+            "lastWorkingDay","exitReason",status,"gratuityAmount","leaveBalance",
+            "leaveCompensation","loanDeductions","otherDeductions","netSettlement",
+            "settlementAmount","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12,$13,$14,$15,NOW())
+         RETURNING id`,
+        [
+          scope.companyId, emp.branchId, b.assignmentId, emp.employeeId,
+          exitNumber, b.exitType, b.lastWorkingDay || null,
+          b.exitReason || null, gratuity, leaveBalance,
+          leaveCompensation, loanDeductions, otherDeductions, netSettlement,
+          netSettlement,
+        ]
       );
-    }
+      insertId = ins.rows[0].id;
+
+      for (const dept of DEFAULT_CLEARANCE_DEPARTMENTS) {
+        await client.query(
+          `INSERT INTO hr_exit_clearance
+             ("exitRequestId","companyId",department,"departmentLabel",status)
+           VALUES ($1,$2,$3,$4,'pending')`,
+          [insertId, scope.companyId, dept.department, dept.departmentLabel]
+        );
+      }
+    });
 
     // ── سلسلة الموافقات — نهاية الخدمة تحتاج موافقة HR + المدير العام ──
     const approvalResult = await initiateApprovalChain({
@@ -481,7 +484,7 @@ router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, 
     );
     if (!item) throw new NotFoundError("عنصر إخلاء الطرف غير موجود");
 
-    const newStatus = b.status === "cleared" ? "cleared" : "issue";
+    const newStatus = b.status === "cleared" ? "cleared" : "rejected";
     await rawExecute(
       `UPDATE hr_exit_clearance
        SET status = $1, "clearedBy" = $2, "clearedAt" = NOW(), notes = $3
@@ -497,7 +500,7 @@ router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, 
     );
     if (Number(remaining[0]?.cnt) === 0) {
       await rawExecute(
-        `UPDATE hr_exit_requests SET "clearanceCompleted" = TRUE, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status NOT IN ('cancelled','rejected')`,
+        `UPDATE hr_exit_requests SET "clearanceCompleted" = TRUE, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status NOT IN ('cancelled','rejected') AND "deletedAt" IS NULL`,
         [item.exitRequestId, scope.companyId]
       );
     }

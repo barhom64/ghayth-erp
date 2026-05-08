@@ -775,7 +775,7 @@ router.post("/cases/:id/close", requirePermission("legal:write"), async (req, re
       id,
       scope,
       action: "legal.case.closed",
-      fromStates: ["open", "in_progress", "on_hold"],
+      fromStates: ["open", "in_progress", "on_hold", "judgment", "execution"],
       toState: "closed",
       reason: b.closureReason,
       extraWhere: '"deletedAt" IS NULL',
@@ -1097,7 +1097,7 @@ router.get("/cases/:caseId/judgments", requirePermission("legal:read"), async (r
     const caseId = parseId(req.params.caseId, "caseId");
     const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
-    const rows = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE "caseId"=$1 ORDER BY "judgmentDate" DESC LIMIT 500`, [caseId]);
+    const rows = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE "caseId"=$1 AND "companyId"=$2 ORDER BY "judgmentDate" DESC LIMIT 500`, [caseId, scope.companyId]);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal judgments error:"); }
 });
@@ -1192,7 +1192,7 @@ router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async
       after: { caseId, judgmentDate: b.judgmentDate, judgmentType: b.judgmentType, verdict: b.verdict, amount: b.amount },
     }).catch((e) => logger.error(e, "legal background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create judgment error:"); }
 });
@@ -1229,9 +1229,9 @@ router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), a
     if (b.verdict !== undefined) { params.push(b.verdict); sets.push(`verdict=$${params.length}`); }
     if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
     if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
-    params.push(id); params.push(caseId);
-    await rawExecute(`UPDATE legal_judgments SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "caseId"=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1`, [id]);
+    params.push(id); params.push(caseId); params.push(scope.companyId);
+    await rawExecute(`UPDATE legal_judgments SET ${sets.join(",")} WHERE id=$${params.length - 2} AND "caseId"=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
     // Mark payment obligation met if fully paid
     if (row && Number(row.paidAmount || 0) >= Number(row.amount || 0) && Number(row.amount || 0) > 0) {

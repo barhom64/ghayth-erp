@@ -101,8 +101,8 @@ async function createTaskForAssignment(params: {
 }): Promise<number | null> {
   try {
     const [row] = await rawQuery<any>(
-      `INSERT INTO tasks ("companyId","branchId",title,description,priority,status,"assignedTo","scheduledDate","createdAt")
-       VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,NOW()) RETURNING id`,
+      `INSERT INTO tasks ("companyId","branchId",type,title,description,priority,status,"assignedTo","scheduledDate","createdAt")
+       VALUES ($1,$2,'follow_up',$3,$4,$5,'pending',$6,$7,NOW()) RETURNING id`,
       [params.companyId, params.branchId ?? null, params.title, params.description, params.priority, params.assignedTo, params.dueDate ?? null]
     );
     return row?.id ?? null;
