@@ -1416,8 +1416,8 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
           // Snapshot avg cost BEFORE applying the adjustment so the GL
           // entry uses the pre-adjustment weighted-average.
           const prodBeforeRes = await client.query(
-            `SELECT id, name, "costPrice", "lastWaCost" FROM warehouse_products WHERE id=$1 FOR UPDATE`,
-            [item.productId]
+            `SELECT id, name, "costPrice", "lastWaCost" FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL FOR UPDATE`,
+            [item.productId, scope.companyId]
           );
           const prodBefore = prodBeforeRes.rows[0];
           const preCost = prodBefore
@@ -1425,8 +1425,8 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
             : 0;
 
           await client.query(
-            `UPDATE warehouse_products SET "currentStock"="currentStock"+$1, "updatedAt"=NOW() WHERE id=$2 AND "deletedAt" IS NULL`,
-            [variance, item.productId]
+            `UPDATE warehouse_products SET "currentStock"="currentStock"+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+            [variance, item.productId, scope.companyId]
           );
 
           const movRes = await client.query(

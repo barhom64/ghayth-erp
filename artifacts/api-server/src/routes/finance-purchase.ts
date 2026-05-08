@@ -431,26 +431,31 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
     const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch((e) => { logger.error(e, "finance purchase query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const poRef = generateRef("PO", seqRow.seq, 5);
 
-    const { insertId: poId } = await rawExecute(
-      `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"createdBy")
-       VALUES ($1,$2,$3,'pending',$4,$5,$6,$7)`,
-      [scope.companyId, scope.branchId, poRef, totalAmount, pr.supplierId ?? null, pr.notes ?? null, scope.userId]
-    );
+    const poId = await withTransaction(async (client) => {
+      const poRes = await client.query(
+        `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"createdBy")
+         VALUES ($1,$2,$3,'pending',$4,$5,$6,$7) RETURNING id`,
+        [scope.companyId, scope.branchId, poRef, totalAmount, pr.supplierId ?? null, pr.notes ?? null, scope.userId]
+      );
+      const newPoId = poRes.rows[0].id;
 
-    if (Array.isArray(items) && items.length > 0) {
-      const valuesSql: string[] = [];
-      const params: any[] = [];
-      for (const item of items) {
-        const base = params.length;
-        valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5})`);
-        params.push(poId, item.name, item.quantity, item.unitPrice, item.totalPrice);
+      if (Array.isArray(items) && items.length > 0) {
+        const valuesSql: string[] = [];
+        const params: any[] = [];
+        for (const item of items) {
+          const base = params.length;
+          valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5})`);
+          params.push(newPoId, item.name, item.quantity, item.unitPrice, item.totalPrice);
+        }
+        await client.query(
+          `INSERT INTO purchase_order_items ("orderId","itemName",quantity,"unitPrice","lineTotal")
+           VALUES ${valuesSql.join(",")}`,
+          params
+        );
       }
-      await rawExecute(
-        `INSERT INTO purchase_order_items ("orderId","itemName",quantity,"unitPrice","lineTotal")
-         VALUES ${valuesSql.join(",")}`,
-        params
-      ).catch((e) => logger.error(e, "finance-purchase background task failed"));
-    }
+
+      return newPoId;
+    });
 
     await applyTransition({
       entity: "purchase_requests",
@@ -698,33 +703,37 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
     const vatAmount = roundTo2(subtotal * vatRatio);
     const grnTotal = roundTo2(subtotal + vatAmount);
 
-    // Create GRN header
+    // Create GRN header + lines + update PO items atomically
     const [grnSeq] = await rawQuery<any>(
       `SELECT COALESCE(MAX(id),0)+1 AS seq FROM goods_receipts WHERE "companyId" = $1`,
       [scope.companyId]
     );
     const grnRef = generateRef("GRN", grnSeq?.seq ?? Date.now(), 5);
 
-    const { insertId: grnId } = await rawExecute(
-      `INSERT INTO goods_receipts ("companyId","branchId","poId",ref,"receivedAt","receivedBy",notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [scope.companyId, scope.branchId, id, grnRef, receiptDate, scope.activeAssignmentId, qualityNotes ?? null]
-    );
+    const grnId = await withTransaction(async (client) => {
+      const grnRes = await client.query(
+        `INSERT INTO goods_receipts ("companyId","branchId","poId",ref,"receivedAt","receivedBy",notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+        [scope.companyId, scope.branchId, id, grnRef, receiptDate, scope.activeAssignmentId, qualityNotes ?? null]
+      );
+      const newGrnId = grnRes.rows[0].id;
 
-    // Insert GRN lines + update PO items cumulative receivedQty
-    for (const l of inputLines) {
-      const item = poItemMap.get(l.poItemId)!;
-      const lineTotal = roundTo2(l.receivedQty * Number(item.unitPrice));
-      await rawExecute(
-        `INSERT INTO goods_receipt_items ("grnId","poItemId","itemName","receivedQty","unitPrice","lineTotal",notes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [grnId, l.poItemId, item.itemName, l.receivedQty, Number(item.unitPrice), lineTotal, l.notes ?? null]
-      );
-      await rawExecute(
-        `UPDATE purchase_order_items SET "receivedQty" = COALESCE("receivedQty",0) + $1 WHERE id = $2`,
-        [l.receivedQty, l.poItemId]
-      );
-    }
+      for (const l of inputLines) {
+        const item = poItemMap.get(l.poItemId)!;
+        const lineTotal = roundTo2(l.receivedQty * Number(item.unitPrice));
+        await client.query(
+          `INSERT INTO goods_receipt_items ("grnId","poItemId","itemName","receivedQty","unitPrice","lineTotal",notes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [newGrnId, l.poItemId, item.itemName, l.receivedQty, Number(item.unitPrice), lineTotal, l.notes ?? null]
+        );
+        await client.query(
+          `UPDATE purchase_order_items SET "receivedQty" = COALESCE("receivedQty",0) + $1 WHERE id = $2`,
+          [l.receivedQty, l.poItemId]
+        );
+      }
+
+      return newGrnId;
+    });
 
     // Post GRN journal: DR inventory (ex-VAT) + DR VAT receivable, CR GRNI
     const { financialEngine } = await import("../lib/engines/index.js");
@@ -754,7 +763,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
     });
     journalId = grnJournalResult.journalId;
     if (journalId) {
-      await rawExecute(`UPDATE goods_receipts SET "journalId" = $1 WHERE id = $2 AND "deletedAt" IS NULL`, [journalId, grnId]);
+      await rawExecute(`UPDATE goods_receipts SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [journalId, grnId, scope.companyId]);
     }
 
     // Update PO header status — partial vs fully received
@@ -1097,7 +1106,7 @@ purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"),
     });
     journalId = paymentRunJournalResult.journalId;
     if (journalId && runId) {
-      await rawExecute(`UPDATE payment_runs SET "journalId" = $1 WHERE id = $2`, [journalId, runId]);
+      await rawExecute(`UPDATE payment_runs SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, runId, scope.companyId]);
     }
 
     emitEvent({

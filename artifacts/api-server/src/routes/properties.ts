@@ -765,7 +765,8 @@ router.patch("/units/:id", requirePermission("property:update"), async (req, res
       return;
     }
     params.push(id);
-    await rawExecute(`UPDATE property_units SET ${sets.join(",")} WHERE id=$${params.length} AND "deletedAt" IS NULL`, params);
+    params.push(scope.companyId);
+    await rawExecute(`UPDATE property_units SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
 
     createAuditLog({
@@ -2460,7 +2461,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
           [mr.assignedTo, scope.companyId]
         );
         const newRating = Math.min(5, 3 + Math.log10(Number(completedCount[0]?.cnt || 1) + 1));
-        await rawExecute(`UPDATE technicians SET rating=$1 WHERE id=$2`, [parseFloat(newRating.toFixed(2)), mr.assignedTo]);
+        await rawExecute(`UPDATE technicians SET rating=$1 WHERE id=$2 AND "companyId"=$3`, [parseFloat(newRating.toFixed(2)), mr.assignedTo, scope.companyId]);
       } catch (ratingErr) {
         logger.error(ratingErr, "Failed to update technician rating:");
       }
@@ -2830,7 +2831,8 @@ router.patch("/buildings/:id", requirePermission("property:update"), async (req,
     params.push(id);
     // sets already starts with `"updatedAt"=NOW()` — do not append a second
     // assignment or PostgreSQL raises 42601 "multiple assignments to same column".
-    await rawExecute(`UPDATE property_buildings SET ${sets.join(",")} WHERE id=$${params.length} AND "deletedAt" IS NULL`, params);
+    params.push(scope.companyId);
+    await rawExecute(`UPDATE property_buildings SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
 
     createAuditLog({
@@ -3091,7 +3093,8 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
       }
     }
     params.push(id);
-    await rawExecute(`UPDATE maintenance_requests SET ${sets.join(",")} WHERE id=$${params.length} AND "deletedAt" IS NULL`, params);
+    params.push(scope.companyId);
+    await rawExecute(`UPDATE maintenance_requests SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (b.status && b.status !== existing.status) {
       await createAuditLog({
         userId: scope.userId, entity: "maintenance_requests", entityId: id,
@@ -3443,8 +3446,8 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
     const newStatus = newPaid >= Number(existing.amount) ? 'paid' : 'partial';
     const receiptNumber = b.receiptNumber || generateTimeRef("RCP");
     await rawExecute(
-      `UPDATE contract_payment_schedule SET "paidAmount"=$1, "paidDate"=$2, method=$3, status=$4, "receiptNumber"=$5, "updatedAt"=NOW() WHERE id=$6`,
-      [newPaid, b.paidDate || todayISO(), b.method || 'bank_transfer', newStatus, receiptNumber, installmentId]
+      `UPDATE contract_payment_schedule SET "paidAmount"=$1, "paidDate"=$2, method=$3, status=$4, "receiptNumber"=$5, "updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7`,
+      [newPaid, b.paidDate || todayISO(), b.method || 'bank_transfer', newStatus, receiptNumber, installmentId, scope.companyId]
     );
     if (paidAmount > 0) {
       const { propertiesEngine } = await import("../lib/engines/index.js");

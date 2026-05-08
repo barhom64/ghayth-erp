@@ -909,14 +909,14 @@ invoicesRouter.delete("/invoices/:id", requirePermission("finance:delete"), asyn
       try {
         await reverseAccountBalances(scope.companyId, Number(je.id));
         await rawExecute(
-          `UPDATE journal_entries SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2`,
+          `UPDATE journal_entries SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
           [Number(je.id), scope.companyId]
         );
       } catch (e) { logger.error(e, "Failed to reverse invoice GL on delete:"); }
     }
 
     await rawExecute(
-      `UPDATE invoices SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2`,
+      `UPDATE invoices SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     rawExecute(
@@ -1149,8 +1149,8 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
                                WHEN COALESCE("paidAmount",0) + $1 >= total THEN 'paid'
                                WHEN COALESCE("paidAmount",0) + $1 > 0 THEN 'partial'
                                ELSE status END
-         WHERE id = $2`,
-        [creditAmount, id]
+         WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [creditAmount, id, scope.companyId]
       );
     });
 
@@ -1279,7 +1279,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
 
       // Increase invoice total to reflect additional charge
       await client.query(
-        `UPDATE invoices SET total = total + $1, "vatAmount" = "vatAmount" + $2 WHERE id = $3 AND "companyId" = $4`,
+        `UPDATE invoices SET total = total + $1, "vatAmount" = "vatAmount" + $2 WHERE id = $3 AND "companyId" = $4 AND "deletedAt" IS NULL`,
         [chargeAmount, vat, id, scope.companyId]
       );
     });
@@ -1616,7 +1616,7 @@ invoicesRouter.post("/customer-advances", requirePermission("finance:create"), a
       guardId: advanceId ?? 0,
     }));
     if (journalId && advanceId) {
-      await rawExecute(`UPDATE customer_advances SET "journalId" = $1 WHERE id = $2`, [journalId, advanceId]);
+      await rawExecute(`UPDATE customer_advances SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, advanceId, scope.companyId]);
     }
 
     res.status(201).json({ advanceId, ref: advRef, clientId, amount: amt, journalId, status: "open" });
@@ -1689,8 +1689,8 @@ invoicesRouter.post("/customer-advances/:id/apply", requirePermission("finance:c
              WHEN COALESCE("paidAmount",0) + $1 >= total THEN 'paid'
              WHEN COALESCE("paidAmount",0) + $1 > 0 THEN 'partial'
              ELSE status END
-         WHERE id = $2`,
-        [applyAmt, Number(invoiceId)]
+         WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [applyAmt, Number(invoiceId), scope.companyId]
       );
     });
 
