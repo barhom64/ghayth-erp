@@ -299,6 +299,8 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
        JOIN fleet_vehicles fv ON fv.id = fm."vehicleId"
        WHERE fm."companyId" = $1
          AND fm."createdAt" >= NOW() - INTERVAL '12 months'
+         AND fm."deletedAt" IS NULL
+         AND fv."deletedAt" IS NULL
        GROUP BY fv.id, fv."plateNumber"
        ORDER BY "maintenanceCost" DESC LIMIT 3`,
       [cid]
@@ -308,7 +310,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
       suggestions.push({
         id: `vehicle-${v.id}`, type: "vehicle_costly", severity: "warning",
         title: `مركبة ${v.plateNumber} تكلفة صيانتها مرتفعة`,
-        description: `تكلفة الصيانة ${Number(v.maintenanceCost).toLocaleString()} مقابل قيمة ${Number(v.vehicleValue).toLocaleString()} — يُقترح استبدال المركبة`,
+        description: `تكلفة الصيانة ${Number(v.maintenanceCost).toLocaleString()} — يُقترح استبدال المركبة`,
         action: "مراجعة المركبة", actionLink: "/fleet",
       });
     }

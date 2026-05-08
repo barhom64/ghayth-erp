@@ -581,7 +581,7 @@ router.get("/webhooks", requirePermission("admin:write"), async (req: Request, r
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT id, name, url, events, headers, "isActive",
+      `SELECT id, name, url, secret, events, headers, "isActive",
               "lastSuccessAt", "lastFailureAt", "lastError", "failCount", "updatedAt"
        FROM notification_webhooks
        WHERE "companyId" = $1
