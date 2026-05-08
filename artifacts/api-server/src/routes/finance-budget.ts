@@ -349,7 +349,7 @@ budgetRouter.post("/budget/approval-requests", requirePermission("finance:create
     await ensureBudgetApprovalTable();
 
     const [budget] = await rawQuery<any>(
-      `SELECT amount, used FROM budgets WHERE "companyId"=$1 AND "accountCode"=$2 AND period=$3`,
+      `SELECT amount, used FROM budgets WHERE "companyId"=$1 AND "accountCode"=$2 AND period=$3 AND "deletedAt" IS NULL`,
       [scope.companyId, accountCode, period]
     );
     if (!budget) throw new NotFoundError("لا توجد ميزانية محددة لهذا الحساب");

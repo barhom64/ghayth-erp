@@ -99,7 +99,8 @@ async function matchSenderToEntity(phone: string, companyId: number): Promise<{ 
   const employees = await rawQuery<{ id: number; name: string }>(
     `SELECT e.id, e.name FROM employees e
      JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-     WHERE REPLACE(REPLACE(e.phone,'+',''),'-','') LIKE $2`,
+     WHERE REPLACE(REPLACE(e.phone,'+',''),'-','') LIKE $2
+     LIMIT 5`,
     [companyId, `%${normalizedPhone}`]
   );
   if (employees.length > 0) {
@@ -395,17 +396,21 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
   try {
     const { callId, status, answeredBy } = zodParse(pbxStatusSchema.safeParse(req.body ?? {}));
 
-    const updateRes = await rawExecute(
-      `UPDATE pbx_calls SET status=$1, "answeredBy"=$2, "updatedAt"=NOW() WHERE "callId"=$3 AND status != 'completed'`,
-      [status ?? "in_progress", answeredBy ?? null, callId]
+    const [call] = await rawQuery<any>(
+      `SELECT id, "companyId" FROM pbx_calls WHERE "callId"=$1 AND status != 'completed' LIMIT 1`,
+      [callId]
     );
-    if (!updateRes.affectedRows) {
+    if (!call) {
       res.status(404).json({ error: "Call not found or already completed" });
       return;
     }
+    await rawExecute(
+      `UPDATE pbx_calls SET status=$1, "answeredBy"=$2, "updatedAt"=NOW() WHERE id=$3`,
+      [status ?? "in_progress", answeredBy ?? null, call.id]
+    );
 
-    emitEvent({ companyId: 0, userId: 0, action: "communication.pbx.status", entity: "communication_logs", entityId: 0, details: JSON.stringify({ callId, status: status ?? "in_progress", answeredBy }) }).catch((e) => logger.error(e, "communications background task failed"));
-    createAuditLog({ companyId: 0, userId: 0, action: "create", entity: "communication_logs", entityId: 0, after: { channel: "pbx", callId, status: status ?? "in_progress", answeredBy } }).catch((e) => logger.error(e, "communications background task failed"));
+    emitEvent({ companyId: call.companyId ?? 0, userId: 0, action: "communication.pbx.status", entity: "communication_logs", entityId: call.id, details: JSON.stringify({ callId, status: status ?? "in_progress", answeredBy }) }).catch((e) => logger.error(e, "communications background task failed"));
+    createAuditLog({ companyId: call.companyId ?? 0, userId: 0, action: "create", entity: "communication_logs", entityId: call.id, after: { channel: "pbx", callId, status: status ?? "in_progress", answeredBy } }).catch((e) => logger.error(e, "communications background task failed"));
 
     res.status(200).json({ status: "ok" });
   } catch (err) {
