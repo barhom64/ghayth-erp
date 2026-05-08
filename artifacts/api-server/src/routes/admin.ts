@@ -1246,10 +1246,11 @@ router.get("/governance/event-dlq", requirePermission("admin:read"), async (req,
 
 router.post("/governance/event-dlq/:id/replay", requirePermission("admin:write"), async (req, res) => {
   try {
+    const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [entry] = await rawQuery<any>(
-      `SELECT id, "eventName", payload, "retryCount" FROM event_dlq WHERE id=$1 AND "resolvedAt" IS NULL`,
-      [id]
+      `SELECT id, "eventName", payload, "retryCount" FROM event_dlq WHERE id=$1 AND "resolvedAt" IS NULL AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      [id, scope.companyId]
     );
     if (!entry) throw new NotFoundError("لم يتم العثور على عنصر في قائمة الفشل");
     if (!entry.eventName) throw new ValidationError("الحدث الأصلي غير معروف، لا يمكن إعادة المحاولة");
@@ -1258,8 +1259,8 @@ router.post("/governance/event-dlq/:id/replay", requirePermission("admin:write")
     const payload = typeof entry.payload === "string" ? JSON.parse(entry.payload) : entry.payload;
     eventBus.emit(entry.eventName, payload);
     await rawExecute(
-      `UPDATE event_dlq SET "retryCount"="retryCount"+1, "resolvedAt"=NOW() WHERE id=$1`,
-      [id]
+      `UPDATE event_dlq SET "retryCount"="retryCount"+1, "resolvedAt"=NOW() WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      [id, scope.companyId]
     );
     res.json({ replayed: true, eventName: entry.eventName });
   } catch (err) { handleRouteError(err, res, "DLQ replay error:"); }
@@ -1267,8 +1268,9 @@ router.post("/governance/event-dlq/:id/replay", requirePermission("admin:write")
 
 router.delete("/governance/event-dlq/:id", requirePermission("admin:write"), async (req, res) => {
   try {
+    const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    await rawExecute(`UPDATE event_dlq SET "resolvedAt"=NOW() WHERE id=$1`, [id]);
+    await rawExecute(`UPDATE event_dlq SET "resolvedAt"=NOW() WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
     res.json({ resolved: true });
   } catch (err) { handleRouteError(err, res, "DLQ resolve error:"); }
 });
@@ -1672,13 +1674,15 @@ router.get("/system-stops", requirePermission("admin:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "List system stops"); }
 });
 
+const systemStopSchema = z.object({
+  scope: z.enum(["financial", "hr", "operational", "all"]).optional().default("all"),
+  reason: z.string().min(1, "سبب الإيقاف مطلوب"),
+});
+
 router.post("/system-stops", requirePermission("admin:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { scope: stopScope, reason } = req.body;
-    if (!reason || typeof reason !== "string") throw new ValidationError("سبب الإيقاف مطلوب");
-    const validScopes = ["financial", "hr", "operational", "all"];
-    const s = validScopes.includes(stopScope) ? stopScope : "all";
+    const { scope: s, reason } = zodParse(systemStopSchema.safeParse(req.body));
     const [row] = await rawQuery<{ id: number }>(
       `INSERT INTO system_stops ("companyId", scope, reason, "activatedBy")
        VALUES ($1, $2, $3, $4) RETURNING id`,

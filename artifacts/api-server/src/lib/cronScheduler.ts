@@ -2835,7 +2835,7 @@ async function umrahDailyAbsconderCheck(): Promise<string> {
       `SELECT p.id, p."fullName", p."passportNumber", p."groupId", p."subAgentId"
        FROM umrah_pilgrims p
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
-         AND p.status = 'absconded'
+         AND p.status = 'violated'
          AND NOT EXISTS (
            SELECT 1 FROM umrah_violations v
            WHERE v."companyId"=$1 AND v."mutamerId"=p.id AND v.type='absconded' AND v."deletedAt" IS NULL

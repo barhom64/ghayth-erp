@@ -77,7 +77,7 @@ function VehiclesTab() {
     { key: "make", label: "الشركة المصنعة" },
     { key: "model", label: "الموديل" },
     { key: "color", label: "اللون" },
-    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "available", label: "متاحة" }, { value: "in_use", label: "قيد الاستخدام" }, { value: "maintenance", label: "في الصيانة" }] },
+    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "available", label: "متاحة" }, { value: "in_use", label: "قيد الاستخدام" }, { value: "maintenance", label: "في الصيانة" }, { value: "out_of_service", label: "خارج الخدمة" }] },
   ];
 
   const previewFields: PreviewField[] = [
@@ -168,6 +168,7 @@ function VehiclesTab() {
                 { value: "available", label: "متاحة" },
                 { value: "in_use", label: "قيد الاستخدام" },
                 { value: "maintenance", label: "في الصيانة" },
+                { value: "out_of_service", label: "خارج الخدمة" },
               ],
               showDateRange: true,
             }}
@@ -245,7 +246,7 @@ function DriversTab() {
     { key: "name", label: "الاسم" },
     { key: "phone", label: "الهاتف" },
     { key: "licenseNumber", label: "رقم الرخصة" },
-    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "active", label: "نشط" }, { value: "inactive", label: "غير نشط" }] },
+    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "available", label: "متاح" }, { value: "on_trip", label: "في رحلة" }, { value: "off_duty", label: "خارج الخدمة" }, { value: "suspended", label: "موقف" }] },
   ];
 
   const columns: DataTableColumn<any>[] = [
@@ -262,7 +263,7 @@ function DriversTab() {
         <div onClick={(e) => e.stopPropagation()}>
           <RowActions
             canEdit={canManage}
-            onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "active" })}
+            onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "available" })}
             onDelete={() => startDelete(d.id)}
           />
         </div>
@@ -278,8 +279,10 @@ function DriversTab() {
             config={{
               searchPlaceholder: "بحث بالاسم أو الهاتف أو الرخصة...",
               statuses: [
-                { value: "active", label: "نشط" },
-                { value: "inactive", label: "غير نشط" },
+                { value: "available", label: "متاح" },
+                { value: "on_trip", label: "في رحلة" },
+                { value: "off_duty", label: "خارج الخدمة" },
+                { value: "suspended", label: "موقف" },
               ],
               showDateRange: false,
             }}
