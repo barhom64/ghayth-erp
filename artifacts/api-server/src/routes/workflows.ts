@@ -383,7 +383,7 @@ router.put("/definitions/:id", requirePermission("admin:write"), async (req, res
          description = COALESCE($2, description), "isReturnable" = COALESCE($3, "isReturnable"),
          "enableEscalation" = COALESCE($4, "enableEscalation"), "defaultSlaHours" = COALESCE($5, "defaultSlaHours"),
          "isActive" = COALESCE($6, "isActive"), "updatedAt" = NOW()
-         WHERE id = $7 AND "companyId" = $8`,
+         WHERE id = $7 AND "companyId" = $8 AND "deletedAt" IS NULL`,
         [requestTypeLabel ?? null, description ?? null, isReturnable ?? null, enableEscalation ?? null, defaultSlaHours ?? null, isActive ?? null, id, scope.companyId]
       );
 

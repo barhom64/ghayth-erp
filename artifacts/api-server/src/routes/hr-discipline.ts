@@ -328,7 +328,7 @@ router.patch("/regulation/:id", requirePermission("hr:update"), async (req, res)
     params.push(id, scope.companyId);
     await rawExecute(
       `UPDATE hr_discipline_regulation SET ${sets.join(", ")}
-        WHERE id = $${params.length - 1} AND "companyId" = $${params.length}`,
+        WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`,
       params
     );
     await createAuditLog({

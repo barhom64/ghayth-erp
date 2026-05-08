@@ -4562,8 +4562,8 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
       await rawExecute(
         `UPDATE official_letters
            SET status = $1, "approvedAt" = NOW(), "approvedBy" = $3
-         WHERE id = $2 AND status = 'pending_approval'`,
-        [newStatus, Number(id), scope.userId]
+         WHERE id = $2 AND "companyId" = $4 AND status = 'pending_approval'`,
+        [newStatus, Number(id), scope.userId, scope.companyId]
       );
     } else {
       await rawExecute(
@@ -4577,13 +4577,13 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
     if (newStatus === "rejected" || newStatus === "returned") {
       await rawExecute(
         `UPDATE email_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
-          WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
-        [Number(id)]
+          WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
+        [Number(id), scope.companyId]
       ).catch((e) => logger.error(e, "cancel email_queue for rejected letter failed:"));
       await rawExecute(
         `UPDATE whatsapp_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
-          WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
-        [Number(id)]
+          WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
+        [Number(id), scope.companyId]
       ).catch((e) => { logger.warn(e, "hr whatsapp_queue insert failed (table may not exist)"); });
 
       // Notify whoever filed the letter about the rejection/return so they
