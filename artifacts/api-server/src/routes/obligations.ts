@@ -95,7 +95,8 @@ obligationsRouter.post("/", requirePermission("operations:write"), async (req, r
       dedupeKey,
     });
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.created", entity: "obligations", entityId: id, details: JSON.stringify({ entityType, entityId, obligationType, title, dueAt }) }).catch((e) => logger.error(e, "obligations background task failed"));
-    res.status(201).json({ id });
+    const [row] = await rawQuery<any>(`SELECT * FROM obligations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    res.status(201).json(row || { id });
   } catch (err) {
     handleRouteError(err, res, "Create obligation error:");
   }

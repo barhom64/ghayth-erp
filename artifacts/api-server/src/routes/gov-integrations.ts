@@ -14,7 +14,7 @@ import { GOV_ADMIN_ROLES, GOV_READ_ROLES } from "../lib/rbacCatalog.js";
 const updateIntegrationSchema = z.object({
   config: z.record(z.unknown()).optional(),
   enabled: z.boolean().optional(),
-  status: z.string().optional(),
+  status: z.enum(["active", "inactive", "error"]).optional(),
 });
 
 const createLinkSchema = z.object({
@@ -29,7 +29,7 @@ const createLinkSchema = z.object({
 const patchLinkSchema = z.object({
   enabled: z.boolean().optional(),
   externalRef: z.string().optional().nullable(),
-  syncStatus: z.string().optional(),
+  syncStatus: z.enum(["pending", "synced", "failed", "skipped"]).optional(),
   notes: z.string().optional().nullable(),
 });
 
@@ -151,7 +151,7 @@ router.put("/:id", requirePermission("admin:write"), async (req, res) => {
     params.push(id);
     params.push(scope.companyId);
     await rawExecute(
-      `UPDATE gov_integrations SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`,
+      `UPDATE gov_integrations SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`,
       params
     );
 
@@ -163,7 +163,7 @@ router.put("/:id", requirePermission("admin:write"), async (req, res) => {
     }).catch((e) => logger.error(e, "gov-integrations background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.integration.updated", entity: "gov_integrations", entityId: id, details: JSON.stringify({ enabled, status, configUpdated: config !== undefined }) }).catch((e) => logger.error(e, "gov-integrations background task failed"));
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM gov_integrations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [updated] = await rawQuery<any>(`SELECT * FROM gov_integrations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ ...updated, config: maskConfig(updated.config) });
   } catch (err) { handleRouteError(err, res, "Gov integration update error:"); }
 });
@@ -203,7 +203,7 @@ router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
         checkStatus = "error";
         checkMessage = "رابط الخدمة غير صالح — يجب أن يبدأ بـ https://";
         await rawExecute(
-          `UPDATE gov_integrations SET "lastCheckedAt"=NOW(), "lastCheckStatus"=$2, "lastCheckMessage"=$3, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$4`,
+          `UPDATE gov_integrations SET "lastCheckedAt"=NOW(), "lastCheckStatus"=$2, "lastCheckMessage"=$3, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$4 AND "deletedAt" IS NULL`,
           [id, checkStatus, checkMessage, scope.companyId]
         );
         res.status(400).json({ success: false, status: checkStatus, message: checkMessage, checkedAt: new Date().toISOString() });
@@ -258,7 +258,7 @@ router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
     }
 
     await rawExecute(
-      `UPDATE gov_integrations SET "lastCheckedAt"=NOW(), "lastCheckStatus"=$2, "lastCheckMessage"=$3, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$4`,
+      `UPDATE gov_integrations SET "lastCheckedAt"=NOW(), "lastCheckStatus"=$2, "lastCheckMessage"=$3, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$4 AND "deletedAt" IS NULL`,
       [id, checkStatus, checkMessage, scope.companyId]
     );
 
@@ -416,7 +416,7 @@ router.patch("/links/:id", requirePermission("admin:write"), async (req, res) =>
     if (notes !== undefined) { params.push(notes); sets.push(`notes=$${params.length}`); }
 
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE gov_integration_links SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    await rawExecute(`UPDATE gov_integration_links SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_gov_link",

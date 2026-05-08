@@ -453,7 +453,7 @@ export function buildErrorToast(err: unknown): { title: string; description?: st
   if (err instanceof ApiError) {
     return {
       title: err.message,
-      description: err.fix ?? err.field ? `الحقل: ${err.field}` : undefined,
+      description: err.fix ?? (err.field ? `الحقل: ${err.field}` : undefined),
       variant: "destructive",
     };
   }

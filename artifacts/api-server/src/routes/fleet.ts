@@ -432,11 +432,11 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
       throw new ConflictError("رقم الرخصة مسجل مسبقاً لسائق آخر", { field: "licenseNumber", fix: "استخدم رقم رخصة صحيح أو راجع السجل الموجود" });
     }
 
-    // FK pre-check on employeeId if provided
+    // FK pre-check on employeeId if provided (verify employee belongs to same company)
     if (b.employeeId !== undefined && b.employeeId !== null && b.employeeId !== "") {
       const [emp] = await rawQuery<any>(
-        `SELECT id FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
-        [b.employeeId]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
+        [b.employeeId, scope.companyId]
       );
       if (!emp) {
         throw new ValidationError("الموظف المرتبط غير موجود", { field: "employeeId", fix: "اختر موظفاً مسجلاً في النظام أو اترك الحقل فارغاً" });
@@ -1064,8 +1064,8 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       try {
         const [driverEmp] = await rawQuery<any>(
           `SELECT d."employeeId", ea.id AS "assignmentId" FROM fleet_drivers d
-           LEFT JOIN employee_assignments ea ON ea."employeeId"=d."employeeId" AND ea.status='active'
-           WHERE d.id=$1 AND d."deletedAt" IS NULL`, [selectedDriverId]);
+           LEFT JOIN employee_assignments ea ON ea."employeeId"=d."employeeId" AND ea.status='active' AND ea."companyId"=$2
+           WHERE d.id=$1 AND d."companyId"=$2 AND d."deletedAt" IS NULL`, [selectedDriverId, scope.companyId]);
         if (driverEmp?.assignmentId) {
           createNotification({
             companyId: scope.companyId,
@@ -1292,7 +1292,8 @@ router.post("/trips/:id/waypoints", requirePermission("fleet:update"), async (re
       after: { tripId, lat, lon, speed: b.speed || 0 },
     }).catch((e) => logger.error(e, "fleet background task failed"));
 
-    res.status(201).json({ id: insertId, tripId, lat, lon });
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_trip_waypoints WHERE id=$1`, [insertId]);
+    res.status(201).json(row || { id: insertId, tripId, lat, lon });
   } catch (err) { handleRouteError(err, res, "Waypoint error:"); }
 });
 
@@ -1696,7 +1697,8 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
 
     const lowRatingDrivers = await rawQuery<any>(
       `SELECT d.name, d.rating, d.id FROM fleet_drivers d
-       WHERE d."companyId"=$1 AND d.rating IS NOT NULL AND d.rating < 3 AND d."deletedAt" IS NULL`,
+       WHERE d."companyId"=$1 AND d.rating IS NOT NULL AND d.rating < 3 AND d."deletedAt" IS NULL
+       LIMIT 500`,
       [cid]
     );
     for (const d of lowRatingDrivers) {
@@ -2631,7 +2633,7 @@ router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (
     if (sets.length === 1) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(
-      `UPDATE fleet_preventive_plans SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
+      `UPDATE fleet_preventive_plans SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!rows[0]) throw new NotFoundError("الخطة غير موجودة");

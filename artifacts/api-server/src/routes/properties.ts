@@ -111,7 +111,7 @@ const updateContractSchema = z.object({
   depositAmount: z.coerce.number().optional().nullable(),
   paymentDay: z.coerce.number().optional().nullable(),
   notes: z.string().optional().nullable(),
-  status: z.string().optional(),
+  status: z.enum(["active", "expired", "cancelled"]).optional(),
   contractNumber: z.string().optional().nullable(),
   ejarNumber: z.string().optional().nullable(),
   contractType: z.string().optional().nullable(),
@@ -163,7 +163,7 @@ const createContractSchema = z.object({
   depositAmount: z.coerce.number().optional().nullable(),
   paymentDay: z.coerce.number().optional().nullable(),
   notes: z.string().optional().nullable(),
-  status: z.string().optional().nullable(),
+  status: z.enum(["active", "expired", "cancelled"]).optional().nullable(),
   contractNumber: z.string().optional().nullable(),
   ejarNumber: z.string().optional().nullable(),
   contractType: z.string().optional().nullable(),
@@ -589,7 +589,7 @@ router.post("/units", requirePermission("property:create"), async (req, res) => 
        b.ownerId || null, b.parkingSpaces || 0, b.acType || null,
        b.hasKitchen || false, b.yearlyRent || null, b.insurancePolicy || null, b.insuranceExpiry || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     // The GET /units/:id handler renders a timeline straight from audit_logs
     // where entity='property_units', so without this write the unit would
@@ -767,7 +767,7 @@ router.patch("/units/:id", requirePermission("property:update"), async (req, res
     params.push(id);
     params.push(scope.companyId);
     await rawExecute(`UPDATE property_units SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -2466,7 +2466,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
           [mr.assignedTo, scope.companyId]
         );
         const newRating = Math.min(5, 3 + Math.log10(Number(completedCount[0]?.cnt || 1) + 1));
-        await rawExecute(`UPDATE technicians SET rating=$1 WHERE id=$2 AND "companyId"=$3`, [parseFloat(newRating.toFixed(2)), mr.assignedTo, scope.companyId]);
+        await rawExecute(`UPDATE technicians SET rating=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [parseFloat(newRating.toFixed(2)), mr.assignedTo, scope.companyId]);
       } catch (ratingErr) {
         logger.error(ratingErr, "Failed to update technician rating:");
       }
@@ -2585,7 +2585,7 @@ router.post("/tenants", requirePermission("property:create"), async (req, res) =
        b.emergencyContact || null, b.emergencyName || null, b.maritalStatus || null, b.occupation || null,
        b.monthlyIncome || null, b.previousAddress || null, b.previousLandlord || null, b.previousLandlordPhone || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM tenants WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM tenants WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "tenants", entityId: insertId,
@@ -2744,7 +2744,7 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
        b.deedNumber || null, b.deedDate || null, b.buildingPermitNumber || null, nationalAddress, b.latitude || null, b.longitude || null,
        b.totalUnits || 0, b.totalArea || null, b.yearBuilt || null, b.ownerId || null, b.managerId || null, b.description || b.notes || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "property_buildings", entityId: insertId,
@@ -2842,7 +2842,7 @@ router.patch("/buildings/:id", requirePermission("property:update"), async (req,
     // assignment or PostgreSQL raises 42601 "multiple assignments to same column".
     params.push(scope.companyId);
     await rawExecute(`UPDATE property_buildings SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -3170,7 +3170,7 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
         });
       } catch (taskErr) { logger.error(taskErr, "PATCH completion follow-up task error:"); }
     }
-    const [row] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update maintenance request error:"); }
 });
@@ -3298,7 +3298,7 @@ router.post("/owners", requirePermission("property:create"), async (req, res) =>
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
       [scope.companyId, b.ownerType || 'individual', b.name, b.nationalId || null, b.crNumber || null, b.phone || null, b.email || null, b.iban || null, b.bankName || null, b.address || null, b.city || null, b.authorizationNumber || null, b.authorizationDate || null, b.authorizationExpiry || null, b.notes || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM property_owners WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_owners WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "property_owners", entityId: insertId,
@@ -3472,7 +3472,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
         }
       ).catch((e) => logger.error(e, "properties background task failed"));
     }
-    const [row] = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE id=$1`, [installmentId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE id=$1 AND "companyId"=$2`, [installmentId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -3545,7 +3545,7 @@ router.post("/inspections", requirePermission("property:create"), async (req, re
        b.findings ? JSON.stringify(b.findings) : null,
        b.conditionRating || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM property_inspections WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_inspections WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -3624,7 +3624,7 @@ router.patch("/inspections/:id", requirePermission("property:update"), async (re
       }
       params.push(id); params.push(scope.companyId);
       await rawQuery<any>(
-        `UPDATE property_inspections SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
+        `UPDATE property_inspections SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
         params
       );
 
@@ -3749,7 +3749,7 @@ router.post("/deposits", requirePermission("property:create"), async (req, res) 
       details: `وديعة عقد #${b.contractId} بقيمة ${b.amount}`,
     }).catch((e) => logger.error(e, "properties background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create deposit error:"); }
 });
@@ -3813,7 +3813,7 @@ router.patch("/deposits/:id/refund", requirePermission("property:update"), async
       skipUpdatedAt: true,
     });
 
-    const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);

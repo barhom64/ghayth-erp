@@ -10,7 +10,8 @@ const router = Router();
 
 router.get("/cron-jobs", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
-    const rows = await rawQuery<any>(`SELECT * FROM cron_jobs ORDER BY name LIMIT 500`);
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE "companyId" = $1 ORDER BY name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Cron jobs error:"); }
 });
@@ -19,8 +20,8 @@ router.post("/cron-jobs/:id/toggle", requirePermission("admin:write"), async (re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    await rawExecute(`UPDATE cron_jobs SET "isActive" = NOT "isActive" WHERE id=$1`, [id]);
-    const [row] = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE id=$1`, [id]);
+    await rawExecute(`UPDATE cron_jobs SET "isActive" = NOT "isActive" WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "cron_jobs", entityId: id, after: { isActive: row?.isActive } }).catch((e) => logger.error(e, "automation background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "automation.cron_job.toggled", entity: "cron_jobs", entityId: id, details: JSON.stringify({ isActive: row?.isActive }) }).catch((e) => logger.error(e, "automation background task failed"));
     res.json(row);
@@ -31,7 +32,7 @@ router.post("/cron-jobs/:id/trigger", requirePermission("admin:write"), async (r
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [job] = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE id=$1`, [id]);
+    const [job] = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!job) throw new NotFoundError("المهمة غير موجودة");
 
     const result = await triggerJobByName(job.name);
@@ -48,12 +49,13 @@ router.post("/cron-jobs/:id/trigger", requirePermission("admin:write"), async (r
 
 router.get("/cron-logs", requirePermission("admin:read"), async (req, res): Promise<void> => {
   try {
+    const scope = req.scope!;
     const { jobId } = req.query as any;
-    const conditions: string[] = [];
-    const params: any[] = [];
+    const conditions: string[] = [`"companyId" = $1`];
+    const params: any[] = [scope.companyId];
     if (jobId) { params.push(Number(jobId) || 0); conditions.push(`"jobId" = $${params.length}`); }
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : '';
-    const rows = await rawQuery<any>(`SELECT * FROM cron_logs ${where} ORDER BY "createdAt" DESC LIMIT 100`, params);
+    const where = conditions.join(" AND ");
+    const rows = await rawQuery<any>(`SELECT * FROM cron_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT 100`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Cron logs error:"); }
 });

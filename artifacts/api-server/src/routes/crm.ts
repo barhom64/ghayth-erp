@@ -8,7 +8,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, currentMonthPadded, generateTimeRef, roundTo2 } from "../lib/businessHelpers.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
@@ -634,20 +634,22 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
     let clientId = opp.clientId;
 
     if (!clientId && opp.contactName?.trim()) {
-      const existing = await rawQuery<any>(
-        `SELECT id FROM clients WHERE "companyId"=$1 AND "deletedAt" IS NULL AND (name=$2 OR phone=$3 OR email=$4) LIMIT 1`,
-        [scope.companyId, opp.contactName.trim(), opp.contactPhone || '', opp.contactEmail || '']
-      );
-      if (existing.length > 0) {
-        clientId = existing[0].id;
-      } else {
-        const { insertId: newClientId } = await rawExecute(
-          `INSERT INTO clients ("companyId",name,phone,email,source,classification) VALUES ($1,$2,$3,$4,'crm','regular')`,
-          [scope.companyId, opp.contactName, opp.contactPhone || null, opp.contactEmail || null]
+      await withTransaction(async (txClient: any) => {
+        const { rows: existing } = await txClient.query(
+          `SELECT id FROM clients WHERE "companyId"=$1 AND "deletedAt" IS NULL AND (name=$2 OR phone=$3 OR email=$4) LIMIT 1 FOR UPDATE`,
+          [scope.companyId, opp.contactName.trim(), opp.contactPhone || '', opp.contactEmail || '']
         );
-        clientId = newClientId;
-      }
-      await rawExecute(`UPDATE crm_opportunities SET "clientId"=$1 WHERE id=$2 AND "companyId"=$3`, [clientId, opp.id, scope.companyId]);
+        if (existing.length > 0) {
+          clientId = existing[0].id;
+        } else {
+          const { rows: [newRow] } = await txClient.query(
+            `INSERT INTO clients ("companyId",name,phone,email,source,classification) VALUES ($1,$2,$3,$4,'crm','regular') RETURNING id`,
+            [scope.companyId, opp.contactName, opp.contactPhone || null, opp.contactEmail || null]
+          );
+          clientId = newRow.id;
+        }
+        await txClient.query(`UPDATE crm_opportunities SET "clientId"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [clientId, opp.id, scope.companyId]);
+      });
     }
 
     try {
@@ -707,7 +709,7 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
 
     if (clientId) {
       try {
-        await rawExecute(`UPDATE clients SET "totalRevenue"=COALESCE("totalRevenue",0)+$1 WHERE id=$2 AND "companyId"=$3`, [dealValue, clientId, scope.companyId]);
+        await rawExecute(`UPDATE clients SET "totalRevenue"=COALESCE("totalRevenue",0)+$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [dealValue, clientId, scope.companyId]);
       } catch (revenueErr) {
         logger.error(revenueErr, "Failed to update client totalRevenue:");
       }

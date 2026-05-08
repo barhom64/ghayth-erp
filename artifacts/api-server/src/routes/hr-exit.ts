@@ -111,7 +111,7 @@ const createExitSchema = z.object({
 });
 
 const updateClearanceSchema = z.object({
-  status: z.string().min(1, "حالة إخلاء الطرف مطلوبة"),
+  status: z.enum(["pending", "cleared", "rejected"]),
   notes: z.string().optional(),
 });
 
@@ -348,10 +348,8 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
       action: "hr.exit.created", entity: "hr_exit_requests", entityId: insertId,
     });
 
-    res.status(201).json({
-      id: insertId, exitNumber, netSettlement, gratuityAmount: gratuity,
-      approval: approvalResult ?? { requiresApproval: false },
-    });
+    const [row] = await rawQuery<any>(`SELECT * FROM hr_exit_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json({ ...row, approval: approvalResult ?? { requiresApproval: false } });
   } catch (err) {
     handleRouteError(err, res, "خطأ في إنشاء طلب نهاية الخدمة");
   }

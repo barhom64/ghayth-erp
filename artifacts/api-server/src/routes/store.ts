@@ -142,7 +142,7 @@ router.patch("/products/:id", requirePermission("store:write"), async (req, res)
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE store_products SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "store_products", entityId: id, after: b }).catch((e) => logger.error(e, "store background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.product.updated", entity: "store_products", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "store background task failed"));
     res.json(row);

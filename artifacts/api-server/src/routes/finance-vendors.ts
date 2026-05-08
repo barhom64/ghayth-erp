@@ -52,7 +52,7 @@ vendorsRouter.get("/vendors", requirePermission("finance:read"), async (req, res
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters, { softDeleteColumn: '"deletedAt"' });
     const rows = await rawQuery<any>(
-      `SELECT * FROM suppliers WHERE ${where} ORDER BY name`,
+      `SELECT * FROM suppliers WHERE ${where} ORDER BY name LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -89,7 +89,8 @@ vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, 
       after: { name },
     }).catch((err) => logger.error(err, "[audit] vendor.created:"));
 
-    res.status(201).json({ id: insertId, name, contactPerson, phone, email, taxNumber, category });
+    const [row] = await rawQuery<any>(`SELECT * FROM vendors WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId, name, contactPerson, phone, email, taxNumber, category });
   } catch (err) {
     handleRouteError(err, res, "Create vendor error:");
   }

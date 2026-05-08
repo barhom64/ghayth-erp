@@ -173,7 +173,8 @@ router.post("/", requirePermission("documents:create"), async (req: Request, res
       entityId: r.insertId,
       details: JSON.stringify({ title, type: type || "document" }),
     }).catch((e) => logger.error(e, "documents background task failed"));
-    res.status(201).json({ id: r.insertId, title, type, department });
+    const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, title, type, department });
   } catch (err) { handleRouteError(err, res, "Create document error:"); }
 });
 
@@ -540,7 +541,8 @@ router.post("/folders", requirePermission("documents:create"), async (req, res) 
       entityId: r.insertId,
       details: JSON.stringify({ name }),
     }).catch((e) => logger.error(e, "documents background task failed"));
-    res.status(201).json({ id: r.insertId, name, parentId: parentId ? Number(parentId) : null });
+    const [row] = await rawQuery<any>(`SELECT * FROM document_folders WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, name, parentId: parentId ? Number(parentId) : null });
   } catch (err) { handleRouteError(err, res, "Create folder error:"); }
 });
 
@@ -599,7 +601,8 @@ router.post("/templates", requirePermission("documents:create"), async (req, res
       entityId: r.insertId,
       details: JSON.stringify({ name, type: type || "letter" }),
     }).catch((e) => logger.error(e, "documents background task failed"));
-    res.status(201).json({ id: r.insertId, name, type: type || "letter" });
+    const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, name, type: type || "letter" });
   } catch (err) { handleRouteError(err, res, "Create template error:"); }
 });
 
@@ -631,7 +634,7 @@ router.put("/templates/:id", requirePermission("documents:update"), async (req, 
       `UPDATE document_templates SET name=$1, description=$2, content=$3, category=$4, "type"=$5, "variables"=$6, "htmlContent"=$7, "branchId"=$8, "signatureUrl"=$9, "isActive"=$10, "updatedAt"=NOW() WHERE id=$11 AND "companyId"=$12 AND "deletedAt" IS NULL`,
       [name, description, content, category, type, JSON.stringify(variables || []), htmlContent, branchId || null, signatureUrl || null, isActive !== false, id, scope.companyId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "document_templates", entityId: id,

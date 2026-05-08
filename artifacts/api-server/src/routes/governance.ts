@@ -442,7 +442,8 @@ router.post("/risks", requirePermission("governance:write"), async (req, res) =>
       entityId: r.insertId,
       details: JSON.stringify({ title, severity: severity ?? "medium" }),
     }).catch((e) => logger.error(e, "governance background task failed"));
-    res.status(201).json({ id: r.insertId, title, severity: severity ?? "medium", status: status || "open" });
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, title, severity: severity ?? "medium", status: status || "open" });
   } catch (err) { handleRouteError(err, res, "Create risk error:"); }
 });
 
@@ -472,7 +473,7 @@ router.patch("/risks/:id", requirePermission("governance:write"), async (req, re
     if (b.mitigationPlan !== undefined) { params.push(b.mitigationPlan); sets.push(`"mitigationPlan"=$${params.length}`); }
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id); params.push(scope.companyId);
-    const result = await rawExecute(`UPDATE governance_risks SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const result = await rawExecute(`UPDATE governance_risks SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (result.affectedRows === 0) throw new NotFoundError("المخاطرة غير موجودة");
     const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_risks", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
@@ -531,7 +532,8 @@ router.post("/audits", requirePermission("governance:write"), async (req, res) =
       entityId: r.insertId,
       details: JSON.stringify({ title }),
     }).catch((e) => logger.error(e, "governance background task failed"));
-    res.status(201).json({ id: r.insertId });
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
@@ -559,7 +561,7 @@ router.patch("/audits/:id", requirePermission("governance:write"), async (req, r
     if (b.findings !== undefined) { params.push(b.findings); sets.push(`findings=$${params.length}`); }
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id); params.push(scope.companyId);
-    const result = await rawExecute(`UPDATE governance_audits SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const result = await rawExecute(`UPDATE governance_audits SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (result.affectedRows === 0) throw new NotFoundError("المراجعة غير موجودة");
     const [row] = await rawQuery<any>(`SELECT * FROM governance_audits WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_audits", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
@@ -618,7 +620,8 @@ router.post("/compliance", requirePermission("governance:write"), async (req, re
       entityId: r.insertId,
       details: JSON.stringify({ regulation }),
     }).catch((e) => logger.error(e, "governance background task failed"));
-    res.status(201).json({ id: r.insertId });
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
@@ -647,7 +650,7 @@ router.patch("/compliance/:id", requirePermission("governance:write"), async (re
     if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id); params.push(scope.companyId);
-    const result = await rawExecute(`UPDATE governance_compliance SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const result = await rawExecute(`UPDATE governance_compliance SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (result.affectedRows === 0) throw new NotFoundError("بند الامتثال غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM governance_compliance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_compliance", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
@@ -750,7 +753,7 @@ router.post("/compliance-actions", requirePermission("governance:write"), async 
       `INSERT INTO policy_compliance_actions ("companyId",title,regulation,description,owner,"dueDate",status) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [scope.companyId, b.title, b.regulation || null, b.description || null, b.owner || null, b.dueDate || null, b.status || 'open']
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [r.insertId, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "policy_compliance_actions", entityId: r.insertId, after: { title: b.title } }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
@@ -777,8 +780,8 @@ router.patch("/compliance-actions/:actionId", requirePermission("governance:writ
     if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "policy_compliance_actions", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
@@ -827,7 +830,7 @@ router.post("/policies/:id/compliance-actions", requirePermission("governance:wr
       `INSERT INTO policy_compliance_actions ("policyId","companyId",title,status,owner,"dueDate",description) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [policyId, scope.companyId, b.action || b.title, b.status || 'open', b.responsiblePerson || b.owner || null, b.dueDate || null, b.notes || b.description || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [r.insertId, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "policy_compliance_actions", entityId: r.insertId, after: { policyId, action: b.action } }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
@@ -854,8 +857,8 @@ router.patch("/compliance-actions/:id", requirePermission("governance:write"), a
     if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
     if (b.notes !== undefined || b.description !== undefined) { params.push(b.notes ?? b.description); sets.push(`description=$${params.length}`); }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "policy_compliance_actions", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
@@ -880,7 +883,7 @@ router.patch("/risks/:id/treatment", requirePermission("governance:write"), asyn
     if (b.treatmentDueDate !== undefined) { params.push(b.treatmentDueDate); sets.push(`"treatmentDueDate"=$${params.length}`); }
     if (b.treatmentStatus !== undefined) { params.push(b.treatmentStatus); sets.push(`"treatmentStatus"=$${params.length}`); }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE governance_risks SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    await rawExecute(`UPDATE governance_risks SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM governance_risks WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_risks", entityId: id, after: { treatmentPlan: b.treatmentPlan } }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
@@ -939,8 +942,8 @@ router.patch("/capa/:id", requirePermission("governance:write"), async (req, res
     if (b.responsiblePerson !== undefined) { params.push(b.responsiblePerson); sets.push(`"responsiblePerson"=$${params.length}`); }
     if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE governance_capa SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_capa WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE governance_capa SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_capa WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_capa", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,

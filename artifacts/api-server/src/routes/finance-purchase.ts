@@ -486,7 +486,8 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
       after: { status: "converted", purchaseOrderId: poId, poRef, totalAmount },
     }).catch((e) => logger.error(e, "finance-purchase background task failed"));
 
-    res.status(201).json({ message: "تم تحويل طلب الشراء إلى أمر شراء", purchaseOrderId: poId, poRef, totalAmount });
+    const [po] = await rawQuery<any>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`, [poId, scope.companyId]);
+    res.status(201).json({ message: "تم تحويل طلب الشراء إلى أمر شراء", ...(po || { purchaseOrderId: poId, poRef, totalAmount }) });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
     if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
@@ -869,7 +870,7 @@ purchaseRouter.get("/purchase-orders/:id/receipts", requirePermission("finance:r
        LEFT JOIN goods_receipt_items gri ON gri."grnId" = gr.id
        WHERE gr."poId" = $1 AND gr."companyId" = $2 AND gr."deletedAt" IS NULL
        GROUP BY gr.id
-       ORDER BY gr."receivedAt" DESC`,
+       ORDER BY gr."receivedAt" DESC LIMIT 500`,
       [poId, scope.companyId]
     );
     res.json({ data: rows });
@@ -953,7 +954,7 @@ purchaseRouter.get("/payment-run/pending", requirePermission("finance:read"), as
          FROM purchase_orders po
          LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
         WHERE ${where}
-        ORDER BY po."expectedDelivery" ASC NULLS LAST, po."createdAt" ASC`,
+        ORDER BY po."expectedDelivery" ASC NULLS LAST, po."createdAt" ASC LIMIT 500`,
       params
     );
     const totalDue = rows.reduce((sum: number, r: any) => sum + Number(r.totalAmount), 0);
@@ -1133,15 +1134,8 @@ purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"),
       details: JSON.stringify({ runRef, poCount: pos.length, totalPayment, journalId }),
     }).catch((e) => logger.error(e, "finance-purchase background task failed"));
 
-    res.status(201).json({
-      runId,
-      runRef,
-      paymentDate: payDate,
-      method,
-      poCount: pos.length,
-      totalPayment,
-      journalId,
-    });
+    const [run] = await rawQuery<any>(`SELECT * FROM payment_runs WHERE id=$1 AND "companyId"=$2`, [runId, scope.companyId]);
+    res.status(201).json(run || { runId, runRef, paymentDate: payDate, method, poCount: pos.length, totalPayment, journalId });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
     if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
@@ -1157,7 +1151,7 @@ purchaseRouter.get("/payment-run", requirePermission("finance:read"), async (req
     try {
       rows = await rawQuery<any>(
         `SELECT id, ref, "paymentDate", method, "totalAmount", "poCount", status, "journalId", "createdAt"
-           FROM payment_runs WHERE "companyId" = $1 ORDER BY "paymentDate" DESC, id DESC`,
+           FROM payment_runs WHERE "companyId" = $1 ORDER BY "paymentDate" DESC, id DESC LIMIT 500`,
         [scope.companyId]
       );
     } catch (e) { logger.warn(e, "payment_runs table not created yet"); }
@@ -1284,7 +1278,7 @@ purchaseRouter.get("/purchase-orders/pending-grn", requirePermission("finance:re
        LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
        WHERE po."companyId" = $1 AND po.status IN ('approved','sent','partially_received')
          AND po."deletedAt" IS NULL
-       ORDER BY po."createdAt" DESC`,
+       ORDER BY po."createdAt" DESC LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });

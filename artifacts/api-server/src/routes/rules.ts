@@ -221,7 +221,7 @@ router.patch("/:id/toggle", requirePermission("admin:write"), async (req, res) =
       throw new NotFoundError("القاعدة غير موجودة");
     }
     const newActive = !existing.isActive;
-    await rawExecute(`UPDATE business_rules SET "isActive" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3`, [newActive, id, scope.companyId]);
+    await rawExecute(`UPDATE business_rules SET "isActive" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [newActive, id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "toggle_business_rule",

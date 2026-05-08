@@ -57,10 +57,10 @@ const bulkRolePermissionsSchema = z.object({
 
 const createIntegrationSchema = z.object({
   name: z.string().min(1, "اسم التكامل مطلوب"),
-  type: z.string().min(1, "نوع التكامل مطلوب"),
+  type: z.enum(["email", "sms", "whatsapp", "webhook"]),
   config: z.any().optional(),
   enabled: z.boolean().optional(),
-  status: z.string().optional(),
+  status: z.enum(["active", "inactive", "error"]).optional(),
   maxRetries: z.coerce.number().int().min(0).optional(),
 });
 
@@ -74,9 +74,9 @@ const createCustomRoleSchema = z.object({
 
 const updateIntegrationSchema = z.object({
   name: z.string().min(1, "اسم التكامل مطلوب").optional(),
-  type: z.string().min(1, "نوع التكامل مطلوب").optional(),
+  type: z.enum(["email", "sms", "whatsapp", "webhook"]).optional(),
   config: z.any().optional(),
-  status: z.string().optional(),
+  status: z.enum(["active", "inactive", "error"]).optional(),
   maxRetries: z.coerce.number().int().min(0).optional(),
 });
 
@@ -383,7 +383,8 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
 router.get("/roles", requirePermission("admin:read"), async (req, res) => {
   try {
     await assertAdmin(req);
-    const rows = await rawQuery(`SELECT * FROM roles ORDER BY name LIMIT 500`);
+    const scope = req.scope!;
+    const rows = await rawQuery(`SELECT * FROM roles WHERE "companyId" = $1 ORDER BY name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (e: any) { logger.error(e, "Get roles error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
@@ -427,7 +428,8 @@ router.post("/roles", requirePermission("admin:write"), async (req, res) => {
       entityId: 0,
       details: JSON.stringify({ roleKey, label, level: roleLevel }),
     }).catch((e) => logger.error(e, "admin background task failed"));
-    res.status(201).json({ success: true, roleKey, label, level: roleLevel, modules: mods });
+    const [row] = await rawQuery<any>(`SELECT * FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2`, [scope.companyId, roleKey]);
+    res.status(201).json(row || { roleKey, label, level: roleLevel, modules: mods });
   } catch (e: any) { logger.error(e, "Create role error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
@@ -532,7 +534,8 @@ router.post("/user-roles", requirePermission("admin:write"), async (req, res) =>
       entityId: userId,
       details: JSON.stringify({ roleKey: def.roleKey, label: def.label }),
     }).catch((e) => logger.error(e, "admin background task failed"));
-    res.status(201).json({ success: true, roleKey: def.roleKey });
+    const [row] = await rawQuery<any>(`SELECT * FROM user_roles WHERE "userId"=$1 AND "roleKey"=$2 AND "companyId"=$3`, [userId, def.roleKey, scope.companyId]);
+    res.status(201).json(row || { userId, roleKey: def.roleKey });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -621,7 +624,7 @@ router.patch("/integrations/:id", requirePermission("admin:write"), async (req, 
     if (sets.length === 1) { throw new ValidationError("لا توجد بيانات"); }
     params.push(id); params.push(scope.companyId);
     await rawExecute(
-      `UPDATE integrations SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`,
+      `UPDATE integrations SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`,
       params
     );
     const [row] = await rawQuery(`SELECT id, "companyId", type, name, status, "lastSuccessAt", "lastFailureAt", "retryCount", "maxRetries", "createdAt", "updatedAt" FROM integrations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
@@ -1077,7 +1080,8 @@ router.post("/role-permissions", requirePermission("admin:write"), async (req, r
       entityId: r.insertId,
       details: JSON.stringify({ role, permission }),
     }).catch((e) => logger.error(e, "admin background task failed"));
-    res.status(201).json({ success: true, id: r.insertId, role, permission });
+    const [row] = await rawQuery<any>(`SELECT * FROM role_permissions WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 

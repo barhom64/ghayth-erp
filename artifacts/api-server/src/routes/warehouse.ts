@@ -752,7 +752,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
       logger.error(glOuterErr, `[warehouse-gl] unexpected error posting GL for movement ${insertId}:`);
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     if (row) (row as any).journalEntryId = journalEntryId;
 
     // Bus emission — closes the dead listener in eventListeners.ts:261 so the
@@ -899,10 +899,12 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
       after: { transferRef, fromLocation, toLocation, quantity: b.quantity, productId: b.productId, unitCost },
     }).catch((e) => logger.error(e, "warehouse background task failed"));
 
+    const [outRow] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [outId, scope.companyId]);
+    const [inRow] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [inId, scope.companyId]);
     res.status(201).json({
       transferRef,
-      outMovementId: outId,
-      inMovementId: inId,
+      outMovement: outRow || { id: outId },
+      inMovement: inRow || { id: inId },
       fromLocation,
       toLocation,
       quantity: b.quantity,
@@ -965,7 +967,7 @@ router.post("/categories", requirePermission("warehouse:create"), async (req, re
       `INSERT INTO warehouse_categories ("companyId",name,"parentId") VALUES ($1,$2,$3)`,
       [scope.companyId, b.name.trim(), b.parentId || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_categories WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_categories WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1377,7 +1379,7 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
     // Pre-fetch count items so we can use them inside onApply and for
     // GL posting after the transition commits.
     const items = await rawQuery<any>(
-      `SELECT ici.*, wp."currentStock" FROM inventory_count_items ici JOIN warehouse_products wp ON wp.id=ici."productId" WHERE ici."countId"=$1`,
+      `SELECT ici.*, wp."currentStock" FROM inventory_count_items ici JOIN warehouse_products wp ON wp.id=ici."productId" WHERE ici."countId"=$1 LIMIT 10000`,
       [countId]
     );
 

@@ -300,7 +300,8 @@ router.post("/regulation", requirePermission("hr:create"), async (req, res) => {
       entityId: insertId,
       details: JSON.stringify({ section, articleNumber, title, severity: severity ?? "medium" }),
     }).catch((e) => logger.error(e, "hr-discipline background task failed"));
-    res.status(201).json({ id: insertId });
+    const [row] = await rawQuery<any>(`SELECT * FROM hr_discipline_regulation WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId });
   } catch (err) {
     handleRouteError(err, res, "Create regulation article error:");
   }
@@ -576,7 +577,8 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
       after: { memoNumber, incidentType, incidentDate, assignmentId, regulationId: resolvedRegulationId, source: "manual" },
     }).catch((e) => logger.error(e, "hr-discipline background task failed"));
 
-    res.status(201).json({ id: memoId, memoNumber, regulationId: resolvedRegulationId, penaltyPreview });
+    const [row] = await rawQuery<any>(`SELECT * FROM hr_inquiry_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
+    res.status(201).json({ ...row, penaltyPreview });
   } catch (err) {
     handleRouteError(err, res, "Create memo error:");
   }
@@ -766,7 +768,7 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
         if (decision === "rejected") {
           if (memo.violationId) {
             await client.query(
-              `UPDATE employee_violations SET status = 'rejected' WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
+              `UPDATE employee_violations SET status = 'rejected' WHERE id = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL`,
               [memo.violationId, scope.companyId]
             );
           }
@@ -796,7 +798,7 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
                       "regulationId" = COALESCE("regulationId", $1),
                       "occurrenceCount" = $2,
                       deduction = $3
-                WHERE id = $4 AND "companyId" = $5`,
+                WHERE id = $4 AND "companyId" = $5 AND "deletedAt" IS NULL`,
               [memo.regulationId, occurrenceCount, baseAmount + extraAmount, memo.violationId, scope.companyId]
             );
           }
@@ -861,7 +863,7 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
         if (memo.violationId) {
           await rawExecute(
             `UPDATE employee_violations SET status = 'cancelled'
-              WHERE id = $1 AND "companyId" = $2 AND status IN ('pending', 'under_review')`,
+              WHERE id = $1 AND "companyId" = $2 AND status IN ('pending', 'under_review') AND "deletedAt" IS NULL`,
             [memo.violationId, scope.companyId]
           );
         }
@@ -956,7 +958,7 @@ router.post("/memos/:id/appeal-decision", requirePermission("hr:discipline:appro
       onApply: async (_row, _client) => {
         if (decision === "accepted" && memo.violationId) {
           await rawExecute(
-            `UPDATE employee_violations SET status = 'appeal_accepted' WHERE id = $1 AND "companyId" = $2 AND status = 'approved'`,
+            `UPDATE employee_violations SET status = 'appeal_accepted' WHERE id = $1 AND "companyId" = $2 AND status = 'approved' AND "deletedAt" IS NULL`,
             [memo.violationId, scope.companyId]
           );
         }
@@ -1011,7 +1013,7 @@ router.post("/memos/:id/close", requirePermission("hr:update"), async (req, res)
       onApply: async (_row, _client) => {
         if (memo.violationId) {
           await rawExecute(
-            `UPDATE employee_violations SET status = 'closed' WHERE id = $1 AND "companyId" = $2 AND status IN ('approved', 'rejected', 'appeal_accepted', 'cancelled')`,
+            `UPDATE employee_violations SET status = 'closed' WHERE id = $1 AND "companyId" = $2 AND status IN ('approved', 'rejected', 'appeal_accepted', 'cancelled') AND "deletedAt" IS NULL`,
             [memo.violationId, scope.companyId]
           );
         }

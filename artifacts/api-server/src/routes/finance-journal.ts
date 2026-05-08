@@ -64,7 +64,7 @@ const createExpenseSchema = z.object({
   vatRate: z.any().optional(),
   vatAmount: z.any().optional(),
   reference: z.string().optional(),
-  status: z.string().optional(),
+  status: z.enum(["draft", "posted", "pending_approval", "approved", "rejected", "returned", "cancelled"]).optional(),
   isPaid: z.any().optional(),
   attachmentUrl: z.string().optional(),
   attachmentType: z.string().optional(),
@@ -511,7 +511,15 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
 
     emitEvent({ companyId: effectiveCompanyId, userId: scope.userId, action: "expense.created", entity: "expenses", entityId: journalId, details: JSON.stringify({ ref, accountCode, amount: baseAmount, vatAmount: computedVat, totalWithVat, sourceAccountCode: sourceAcct, approvalRequired: approvalResult.requiresApproval, operationType, expenseType, relatedEntityType, relatedEntityId }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
-    res.status(201).json({ id: journalId, ref, amount: baseAmount, vatAmount: computedVat, totalWithVat, description: finalDescription, accountCode, sourceAccountCode: sourceAcct, operationType, expenseType, relatedEntityType, relatedEntityId, relatedEntityName, paymentMethod, costCenter, departmentId, branchId: branchId ?? scope.branchId, attachmentUrl, attachmentType, reference, isPaid, period: targetPeriod, approval: approvalResult });
+    const [createdExpense] = await rawQuery<any>(
+      `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [journalId, effectiveCompanyId]
+    );
+    res.status(201).json(createdExpense || { id: journalId });
   } catch (err) {
     handleRouteError(err, res, "Create expense error:");
   }
@@ -774,7 +782,15 @@ journalRouter.post("/vouchers", requirePermission("finance:create"), async (req,
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `voucher.${type}`, entity: "vouchers", entityId: journalId, details: JSON.stringify({ ref, type, amount: baseAmount, vatAmount: computedVat, totalWithVat, accountCode, payee, method }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
-    res.status(201).json({ id: journalId, ref, type, amount: baseAmount, vatAmount: computedVat, totalWithVat, description: finalDescription, accountCode, paymentMethod: method, reference, attachmentUrl, relatedEntityType, relatedEntityId, relatedEntityName, contractId, invoiceId, branchId: branchId ?? scope.branchId });
+    const [createdVoucher] = await rawQuery<any>(
+      `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [journalId, scope.companyId]
+    );
+    res.status(201).json(createdVoucher || { id: journalId });
   } catch (err) {
     handleRouteError(err, res, "Create voucher error:");
   }
@@ -859,7 +875,15 @@ journalRouter.post("/salary-advances", requirePermission("finance:create"), asyn
     const { journalId } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: description ?? `سلفة راتب ${employeeName} – خصم على ${deductMonths} شهر`, type: "salary_advance", sourceType: "salary_advance", sourceId: 0, sourceKey: `finance:salary_advance:${Date.now()}`, lines: [{ accountCode: advanceAccountCode, debit: Number(amount), credit: 0, employeeId: employeeId ? Number(employeeId) : undefined }, { accountCode: sourceAcct, debit: 0, credit: Number(amount) }] });
     const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "advances", refType: "salary_advance", refId: journalId, amount: Number(amount) });
     if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`, [journalId, scope.companyId]); }
-    res.status(201).json({ id: journalId, ref, employeeName, amount, deductMonths, description, approval: approvalResult });
+    const [createdAdvance] = await rawQuery<any>(
+      `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [journalId, scope.companyId]
+    );
+    res.status(201).json(createdAdvance || { id: journalId });
   } catch (err) {
     handleRouteError(err, res, "Finance journal error:");
   }
@@ -979,7 +1003,15 @@ journalRouter.post("/journal", requirePermission("finance:create"), async (req, 
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "journal_entries", entityId: insertId, after: { ref, description, totalDebit } }).catch((e) => logger.error(e, "finance-journal background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "finance.journal.created", entity: "journal_entries", entityId: insertId, details: JSON.stringify({ ref }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
-    res.status(201).json({ id: insertId, ref });
+    const [createdJournal] = await rawQuery<any>(
+      `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [insertId, scope.companyId]
+    );
+    res.status(201).json(createdJournal || { id: insertId });
   } catch (err) { handleRouteError(err, res, "Create journal entry error:"); }
 });
 
@@ -1083,22 +1115,24 @@ journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), 
       lines: reversedLines,
     });
 
-    await rawExecute(
-      `UPDATE journal_entries
-         SET "reversalOfId" = $1,
-             "reversalReason" = $2
-       WHERE id = $3 AND "companyId" = $4`,
-      [id, reason, newJournalId, scope.companyId]
-    );
-    await rawExecute(
-      `UPDATE journal_entries
-         SET "reversedById" = $1,
-             "reversedAt" = NOW(),
-             "reversalReason" = $2,
-             status = 'reversed'
-       WHERE id = $3 AND "companyId" = $4`,
-      [newJournalId, reason, id, scope.companyId]
-    );
+    await withTransaction(async (client: any) => {
+      await client.query(
+        `UPDATE journal_entries
+           SET "reversalOfId" = $1,
+               "reversalReason" = $2
+         WHERE id = $3 AND "companyId" = $4`,
+        [id, reason, newJournalId, scope.companyId]
+      );
+      await client.query(
+        `UPDATE journal_entries
+           SET "reversedById" = $1,
+               "reversedAt" = NOW(),
+               "reversalReason" = $2,
+               status = 'reversed'
+         WHERE id = $3 AND "companyId" = $4`,
+        [newJournalId, reason, id, scope.companyId]
+      );
+    });
 
     await createAuditLog({
       companyId: scope.companyId,
@@ -1119,15 +1153,15 @@ journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), 
       details: JSON.stringify({ reason, newJournalId, newRef }),
     }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
-    res.status(201).json({
-      id: newJournalId,
-      ref: newRef,
-      description: newDescription,
-      originalId: id,
-      originalRef: original.ref,
-      reason,
-      lines: reversedLines,
-    });
+    const [createdReversal] = await rawQuery<any>(
+      `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [newJournalId, scope.companyId]
+    );
+    res.status(201).json({ ...(createdReversal || { id: newJournalId }), originalId: id, originalRef: original.ref, reason });
   } catch (err) {
     handleRouteError(err, res, "Reverse journal error:");
   }
@@ -1266,31 +1300,37 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", requirePermission("
       return;
     }
 
-    // force-close any missing periods
     if (force && missing.length > 0) {
-      for (const p of missing) {
-        const startDate = `${p}-01`;
-        const endDate = toDateISO(new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)), 0));
-        const [existing] = await rawQuery<any>(
-          `SELECT id FROM financial_periods WHERE "companyId"=$1 AND to_char("startDate",'YYYY-MM')=$2 AND "deletedAt" IS NULL LIMIT 1`,
-          [scope.companyId, p]
-        );
-        if (existing) {
-          await rawExecute(
-            `UPDATE financial_periods SET status='closed', "closedAt"=NOW(), "closedBy"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status = 'open'`,
-            [scope.activeAssignmentId, existing.id, scope.companyId]
+      await withTransaction(async (client: any) => {
+        for (const p of missing) {
+          const startDate = `${p}-01`;
+          const endDate = toDateISO(new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)), 0));
+          const { rows: [existing] } = await client.query(
+            `SELECT id FROM financial_periods WHERE "companyId"=$1 AND to_char("startDate",'YYYY-MM')=$2 AND "deletedAt" IS NULL LIMIT 1`,
+            [scope.companyId, p]
           );
-        } else {
-          await rawExecute(
-            `INSERT INTO financial_periods ("companyId",name,"startDate","endDate",status,"closedAt","closedBy")
-             VALUES ($1,$2,$3,$4,'closed',NOW(),$5)`,
-            [scope.companyId, `فترة ${p}`, startDate, endDate, scope.activeAssignmentId]
-          );
+          if (existing) {
+            await client.query(
+              `UPDATE financial_periods SET status='closed', "closedAt"=NOW(), "closedBy"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status = 'open' AND "deletedAt" IS NULL`,
+              [scope.activeAssignmentId, existing.id, scope.companyId]
+            );
+          } else {
+            await client.query(
+              `INSERT INTO financial_periods ("companyId",name,"startDate","endDate",status,"closedAt","closedBy")
+               VALUES ($1,$2,$3,$4,'closed',NOW(),$5)`,
+              [scope.companyId, `فترة ${p}`, startDate, endDate, scope.activeAssignmentId]
+            );
+          }
         }
-      }
+      });
     }
 
     const ref = `YE-${year}`;
+    const [existingYE] = await rawQuery<any>(
+      `SELECT id FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [scope.companyId, ref]
+    );
+    if (existingYE) throw new ConflictError(`قيد إقفال السنة ${year} موجود مسبقاً`);
     const description = `قيد إقفال السنة المالية ${year} — صافي الدخل ${netIncome.toFixed(2)}`;
     const { financialEngine } = await import("../lib/engines/index.js");
     const { journalId } = await financialEngine.postJournalEntry({
@@ -1326,17 +1366,15 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", requirePermission("
       details: JSON.stringify({ year, netIncome, totalRevenue, totalExpense, journalId, ref }),
     }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
-    res.status(201).json({
-      id: journalId,
-      ref,
-      description,
-      year,
-      netIncome,
-      totalRevenue,
-      totalExpense,
-      retainedEarningsAccountCode,
-      lines,
-    });
+    const [createdYearEnd] = await rawQuery<any>(
+      `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [journalId, scope.companyId]
+    );
+    res.status(201).json({ ...(createdYearEnd || { id: journalId }), year, netIncome, totalRevenue, totalExpense, retainedEarningsAccountCode });
   } catch (err) {
     handleRouteError(err, res, "Year-end close error:");
   }

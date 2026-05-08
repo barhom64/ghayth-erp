@@ -147,7 +147,7 @@ const createPilgrimSchema = z.object({
   departureDate: z.string().optional(),
   hotelName: z.string().optional(),
   roomNumber: z.string().optional(),
-  status: z.string().optional(),
+  status: z.enum(["pending", "arrived", "active", "overstayed", "departed", "violated", "cancelled"]).optional(),
   notes: z.string().optional(),
 });
 
@@ -168,7 +168,7 @@ const patchSeasonSchema = z.object({
   title: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
-  status: z.string().optional(),
+  status: z.enum(["open", "closed", "archived"]).optional(),
   notes: z.string().optional(),
 });
 
@@ -181,7 +181,7 @@ const patchAgentSchema = z.object({
   profitMargin: z.coerce.number().optional(),
   contractRef: z.string().optional(),
   currency: z.string().optional(),
-  status: z.string().optional(),
+  status: z.enum(["active", "inactive", "suspended", "blocked"]).optional(),
   notes: z.string().optional(),
 });
 
@@ -199,7 +199,7 @@ const patchPackageSchema = z.object({
 });
 
 const patchPilgrimSchema = z.object({
-  status: z.string().optional(),
+  status: z.enum(["pending", "arrived", "active", "overstayed", "departed", "violated", "cancelled"]).optional(),
   agentId: z.coerce.number().optional().nullable(),
   packageId: z.coerce.number().optional().nullable(),
   fullName: z.string().optional(),
@@ -263,7 +263,7 @@ const generateInvoiceSchema = z.object({
 });
 
 const patchTransportSchema = z.object({
-  status: z.string().optional(),
+  status: z.enum(["scheduled", "in_progress", "completed", "cancelled"]).optional(),
   seasonId: z.coerce.number().optional(),
   tripDate: z.string().optional(),
   fromLocation: z.string().optional(),

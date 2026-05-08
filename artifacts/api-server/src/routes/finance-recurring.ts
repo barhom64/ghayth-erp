@@ -42,7 +42,7 @@ const recurringJournalLineSchema = z.object({
 const createRecurringJournalSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
-  frequency: z.string(),
+  frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "yearly"]),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   active: z.boolean().default(true),
   templateLines: z.array(recurringJournalLineSchema),
@@ -53,7 +53,7 @@ const createRecurringJournalSchema = z.object({
 const updateRecurringJournalSchema = z.object({
   name: z.string().optional(),
   description: z.string().optional(),
-  frequency: z.string().optional(),
+  frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "yearly"]).optional(),
   startDate: z.string().optional(),
   nextRunDate: z.string().optional(),
   active: z.boolean().optional(),
@@ -263,7 +263,7 @@ recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:upda
     params.push(id);
     params.push(scope.companyId);
     await rawExecute(
-      `UPDATE recurring_journals SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length}`,
+      `UPDATE recurring_journals SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`,
       params
     );
 

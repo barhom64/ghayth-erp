@@ -112,7 +112,8 @@ router.post("/programs", requirePermission("hr:create"), async (req, res) => {
       after: { title, category: category ?? null, startDate: startDate ?? null, endDate: endDate ?? null, capacity: Number(capacity ?? 0) },
     }).catch((e) => logger.error(e, "training background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.program.created", entity: "training_programs", entityId: r.insertId, details: JSON.stringify({ title, category }) }).catch((e) => logger.error(e, "training background task failed"));
-    res.status(201).json({ id: r.insertId, title, status: status ?? "upcoming" });
+    const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, title, status: status ?? "upcoming" });
   } catch (err) { handleRouteError(err, res, "Create training program error:"); }
 });
 
@@ -282,8 +283,8 @@ router.post("/enrollments", requirePermission("hr:create"), async (req, res) => 
     if (!prog) throw new NotFoundError("البرنامج التدريبي غير موجود");
     if (employeeId) {
       const [emp] = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE id=$1 AND "deletedAt" IS NULL LIMIT 1`,
-        [Number(employeeId)]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
+        [Number(employeeId), scope.companyId]
       );
       if (!emp) {
         throw new ValidationError(`الموظف رقم ${employeeId} غير موجود`, {
@@ -308,7 +309,8 @@ router.post("/enrollments", requirePermission("hr:create"), async (req, res) => 
       after: { programId: Number(programId), employeeId: employeeId ? Number(employeeId) : null, employeeName: employeeName ?? null, status: status ?? "enrolled" },
     }).catch((e) => logger.error(e, "training background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.enrollment.created", entity: "training_enrollments", entityId: r.insertId, details: JSON.stringify({ programId, employeeId }) }).catch((e) => logger.error(e, "training background task failed"));
-    res.status(201).json({ id: r.insertId, programId: Number(programId), employeeId: employeeId ?? null, status: status ?? "enrolled" });
+    const [row] = await rawQuery<any>(`SELECT * FROM training_enrollments WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, programId: Number(programId), employeeId: employeeId ?? null, status: status ?? "enrolled" });
   } catch (err) { handleRouteError(err, res, "Create training enrollment error:"); }
 });
 
@@ -336,7 +338,7 @@ router.patch("/enrollments/:id", requirePermission("hr:update"), async (req, res
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id);
     await rawExecute(`UPDATE training_enrollments SET ${sets.join(",")} WHERE id=$${params.length} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM training_enrollments WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM training_enrollments WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "training_enrollments", entityId: id,
@@ -373,8 +375,8 @@ router.get("/stats", requirePermission("hr:read"), async (req, res) => {
     const cid = scope.companyId;
     const [programs] = await rawQuery(`SELECT COUNT(*) as count FROM training_programs WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [active] = await rawQuery(`SELECT COUNT(*) as count FROM training_programs WHERE status='active' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [enrollments] = await rawQuery(`SELECT COUNT(*) as count FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE tp."companyId"=$1 AND tp."deletedAt" IS NULL`, [cid]);
-    const [completed] = await rawQuery(`SELECT COUNT(*) as count FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.status='completed' AND tp."companyId"=$1 AND tp."deletedAt" IS NULL`, [cid]);
+    const [enrollments] = await rawQuery(`SELECT COUNT(*) as count FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE tp."companyId"=$1 AND tp."deletedAt" IS NULL AND e."deletedAt" IS NULL`, [cid]);
+    const [completed] = await rawQuery(`SELECT COUNT(*) as count FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.status='completed' AND tp."companyId"=$1 AND tp."deletedAt" IS NULL AND e."deletedAt" IS NULL`, [cid]);
     res.json({
       totalPrograms: Number(programs.count),
       activePrograms: Number(active.count),

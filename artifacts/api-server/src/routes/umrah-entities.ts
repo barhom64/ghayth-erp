@@ -1013,7 +1013,7 @@ router.get("/commission-calculations", requirePermission("umrah:read"), async (r
        FROM employee_commission_calculations cc
        LEFT JOIN employee_commission_plans cp ON cc."planId" = cp.id
        WHERE ${where}
-       ORDER BY cc.year DESC, cc.month DESC`,
+       ORDER BY cc.year DESC, cc.month DESC LIMIT 500`,
       params
     );
     res.json({ data: rows });
@@ -1032,7 +1032,7 @@ router.get("/import/batches", requirePermission("umrah:read"), async (req, res) 
     const params: any[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND b."seasonId" = $${params.length}`; }
     const rows = await rawQuery(
-      `SELECT b.* FROM umrah_import_batches b WHERE ${where} ORDER BY b."createdAt" DESC`,
+      `SELECT b.* FROM umrah_import_batches b WHERE ${where} ORDER BY b."createdAt" DESC LIMIT 500`,
       params
     );
     res.json({ data: rows });
@@ -1049,7 +1049,7 @@ router.get("/import/batches/:id/changes", requirePermission("umrah:read"), async
     );
     if (!batch) throw new NotFoundError("الدفعة غير موجودة");
     const rows = await rawQuery(
-      `SELECT * FROM umrah_import_changes WHERE "batchId" = $1 ORDER BY id`,
+      `SELECT * FROM umrah_import_changes WHERE "batchId" = $1 ORDER BY id LIMIT 1000`,
       [id]
     );
     res.json({ data: rows });
@@ -1075,10 +1075,11 @@ router.get("/invoices", requirePermission("umrah:read"), async (req, res) => {
        LEFT JOIN umrah_sub_agents sa ON sa.id = si."subAgentId"
        LEFT JOIN clients c ON c.id = si."clientId" AND c."deletedAt" IS NULL
        WHERE ${where}
-       ORDER BY si."createdAt" DESC`,
+       ORDER BY si."createdAt" DESC
+       LIMIT 500`,
       params
     );
-    res.json({ data: rows });
+    res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "List umrah invoices"); }
 });
 
@@ -1142,10 +1143,11 @@ router.get("/payments", requirePermission("umrah:read"), async (req, res) => {
        FROM umrah_payments p
        LEFT JOIN umrah_sub_agents sa ON sa.id = p."subAgentId"
        WHERE ${where}
-       ORDER BY p."paymentDate" DESC, p.id DESC`,
+       ORDER BY p."paymentDate" DESC, p.id DESC
+       LIMIT 500`,
       params
     );
-    res.json({ data: rows });
+    res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "List umrah payments"); }
 });
 

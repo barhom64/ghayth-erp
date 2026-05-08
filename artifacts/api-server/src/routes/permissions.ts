@@ -9,14 +9,16 @@ import { logger } from "../lib/logger.js";
 
 const router = Router();
 
+const PERMISSION_PATTERN = /^[a-zA-Z0-9_]+:[a-zA-Z0-9_]+$/;
+
 const rolePermissionSchema = z.object({
   role: z.string().min(1, "الدور مطلوب"),
-  permission: z.string().min(1, "الصلاحية مطلوبة"),
+  permission: z.string().min(1, "الصلاحية مطلوبة").regex(PERMISSION_PATTERN, "صيغة الصلاحية غير صالحة — يجب أن تكون module:action"),
 });
 
 const userPermissionCreateSchema = z.object({
   userId: z.coerce.number().int().positive("معرف المستخدم مطلوب"),
-  permission: z.string().min(1, "الصلاحية مطلوبة"),
+  permission: z.string().min(1, "الصلاحية مطلوبة").regex(PERMISSION_PATTERN, "صيغة الصلاحية غير صالحة — يجب أن تكون module:action"),
   type: z.enum(["grant", "revoke"]).optional(),
 });
 
@@ -203,6 +205,18 @@ router.post("/user-permissions", requirePermission("admin:write"), requirePermis
   try {
     const scope = req.scope!;
     const { userId, permission, type = "grant" } = zodParse(userPermissionCreateSchema.safeParse(req.body));
+
+    const [targetUser] = await rawQuery<any>(
+      `SELECT u.id FROM users u
+       JOIN employees e ON e.id = u."employeeId"
+       JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $2
+       WHERE u.id = $1 LIMIT 1`,
+      [userId, scope.companyId]
+    );
+    if (!targetUser) {
+      res.status(403).json({ error: "المستخدم لا ينتمي لهذه الشركة", code: "CROSS_TENANT" });
+      return;
+    }
 
     await rawExecute(
       `INSERT INTO permissions ("userId", permission, type, "companyId", "grantedBy")

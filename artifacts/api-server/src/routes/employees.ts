@@ -950,8 +950,8 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     // always carry "managerId".
     if (bodyManagerId !== undefined && bodyManagerId) {
       const [mgr] = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE id = $1 AND "deletedAt" IS NULL LIMIT 1`,
-        [Number(bodyManagerId)]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
+        [Number(bodyManagerId), scope.companyId]
       );
       if (!mgr) {
         throw new ValidationError(`المدير رقم ${bodyManagerId} غير موجود`, {

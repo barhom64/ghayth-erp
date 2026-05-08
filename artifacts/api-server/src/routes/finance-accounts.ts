@@ -135,7 +135,7 @@ accountsRouter.post("/accounts", requirePermission("finance:create"), async (req
       after: { code: b.code, name: b.name, type: b.type },
     }).catch((err) => logger.error(err, "[audit] account.created:"));
 
-    res.status(201).json({ id: row.id, ...b });
+    res.status(201).json(row);
   } catch (err) {
     handleRouteError(err, res, "Create account error:");
   }
@@ -313,7 +313,15 @@ accountsRouter.post("/journal", requirePermission("finance:create"), async (req,
       after: { ref, lineCount: lines.length, date: journalDate },
     }).catch((err) => logger.error(err, "[audit] journal.created:"));
 
-    res.status(201).json({ id: journalId, ref, description, lines });
+    const [createdJournal] = await rawQuery<any>(
+      `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [journalId, scope.companyId]
+    );
+    res.status(201).json(createdJournal || { id: journalId });
   } catch (err) {
     handleRouteError(err, res, "Create journal error:");
   }

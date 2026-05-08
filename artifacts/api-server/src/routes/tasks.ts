@@ -100,7 +100,7 @@ router.get("/", requirePermission("tasks:read"), async (req, res) => {
       }
     }
     if (relatedUnitId && linkedEntityType === "maintenance_request") {
-      where += ` AND t."linkedEntityId" IN (SELECT mr2.id FROM maintenance_requests mr2 WHERE mr2."unitId" = $${paramIdx})`;
+      where += ` AND t."linkedEntityId" IN (SELECT mr2.id FROM maintenance_requests mr2 WHERE mr2."unitId" = $${paramIdx} AND mr2."deletedAt" IS NULL)`;
       params.push(Number(relatedUnitId));
       paramIdx++;
     }
@@ -179,7 +179,7 @@ router.get("/entity-search", requirePermission("tasks:read"), async (req, res) =
       project: `SELECT id, name FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL AND name ILIKE $2 ORDER BY id DESC LIMIT 10`,
       contract: `SELECT id, COALESCE("contractNumber", 'عقد #' || id::text) AS name FROM rental_contracts WHERE "companyId"=$1 AND "deletedAt" IS NULL AND ("contractNumber" ILIKE $2 OR "tenantName" ILIKE $2) ORDER BY id DESC LIMIT 10`,
       legal_case: `SELECT id, COALESCE(title, "caseNumber", 'قضية #' || id::text) AS name FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL AND (title ILIKE $2 OR "caseNumber" ILIKE $2) ORDER BY id DESC LIMIT 10`,
-      maintenance_request: `SELECT id, COALESCE(description, category, 'طلب #' || id) AS name FROM maintenance_requests WHERE "companyId"=$1 AND (description ILIKE $2 OR category ILIKE $2) ORDER BY id DESC LIMIT 10`,
+      maintenance_request: `SELECT id, COALESCE(description, category, 'طلب #' || id) AS name FROM maintenance_requests WHERE "companyId"=$1 AND "deletedAt" IS NULL AND (description ILIKE $2 OR category ILIKE $2) ORDER BY id DESC LIMIT 10`,
     };
 
     const query = searchMap[type];

@@ -147,7 +147,8 @@ budgetRouter.post("/budget", requirePermission("finance:create"), async (req, re
       after: { accountCode, period, amount: Number(amount) },
     }).catch((err) => logger.error(err, "[audit] budget.created:"));
 
-    res.status(201).json({ id: insertId, accountCode, period, amount: Number(amount), branchId: branchId ?? scope.branchId });
+    const [row] = await rawQuery<any>(`SELECT * FROM budgets WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId, accountCode, period, amount: Number(amount), branchId: branchId ?? scope.branchId });
   } catch (err) {
     handleRouteError(err, res, "Create budget error:");
   }
@@ -348,7 +349,7 @@ budgetRouter.post("/budget/approval-requests", requirePermission("finance:create
     await ensureBudgetApprovalTable();
 
     const [budget] = await rawQuery<any>(
-      `SELECT amount, used FROM budgets WHERE "companyId"=$1 AND "accountCode"=$2 AND period=$3`,
+      `SELECT amount, used FROM budgets WHERE "companyId"=$1 AND "accountCode"=$2 AND period=$3 AND "deletedAt" IS NULL`,
       [scope.companyId, accountCode, period]
     );
     if (!budget) throw new NotFoundError("لا توجد ميزانية محددة لهذا الحساب");

@@ -250,7 +250,8 @@ router.post("/", requirePermission("requests:write"), async (req, res) => {
       after: { typeId: typeId ? Number(typeId) : null, title, description, priority: priority || "medium", ref },
     }).catch((e) => logger.error(e, "requests background task failed"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.created", entity: "approval_requests", entityId: r.insertId }).catch((e) => logger.error(e, "requests background task failed"));
-    res.status(201).json({ id: r.insertId, ref, title, description, priority: priority || "medium", status: "pending" });
+    const [row] = await rawQuery<any>(`SELECT * FROM requests WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, ref, title, priority: priority || "medium", status: "pending" });
   } catch (err) { handleRouteError(err, res, "Create request error:"); }
 });
 
@@ -342,7 +343,8 @@ router.post("/types", requirePermission("requests:write"), async (req, res) => {
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "request_types", entityId: r.insertId, after: { name, category, isActive: isActive !== false } }).catch((e) => logger.error(e, "requests background task failed"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request_type.created", entity: "request_types", entityId: r.insertId }).catch((e) => logger.error(e, "requests background task failed"));
-    res.status(201).json({ id: r.insertId });
+    const [row] = await rawQuery<any>(`SELECT * FROM request_types WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
@@ -365,7 +367,8 @@ router.post("/workflows", requirePermission("requests:write"), async (req, res) 
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflows", entityId: r.insertId, after: { name, description } }).catch((e) => logger.error(e, "requests background task failed"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "workflow.created", entity: "workflow_definitions", entityId: r.insertId }).catch((e) => logger.error(e, "requests background task failed"));
-    res.status(201).json({ id: r.insertId });
+    const [row] = await rawQuery<any>(`SELECT * FROM workflows WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 

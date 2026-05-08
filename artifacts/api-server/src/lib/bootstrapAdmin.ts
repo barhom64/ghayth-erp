@@ -10,6 +10,13 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "Admin@123456";
 const FLEET_EMAIL = "fleet@ghayth.com";
 const FLEET_PASSWORD = process.env.FLEET_PASSWORD || "Fleet@123456";
 
+if (!process.env.ADMIN_PASSWORD) {
+  logger.warn("ADMIN_PASSWORD not set — using default credentials. Change immediately in production!");
+}
+if (!process.env.FLEET_PASSWORD) {
+  logger.warn("FLEET_PASSWORD not set — using default credentials. Change immediately in production!");
+}
+
 interface BootstrapUser {
   email: string;
   password: string;

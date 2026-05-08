@@ -95,7 +95,8 @@ router.post("/campaigns", requirePermission("marketing:create"), async (req, res
       after: { name, channel, status: status || "draft", budget: Number(budget ?? 0) },
     }).catch((e) => logger.error(e, "marketing background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.created", entity: "marketing_campaigns", entityId: r.insertId, details: JSON.stringify({ name, channel, status: status || "draft" }) }).catch((e) => logger.error(e, "marketing background task failed"));
-    res.status(201).json({ id: r.insertId, name, status: status || "draft", budget: Number(budget ?? 0) });
+    const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, name, status: status || "draft", budget: Number(budget ?? 0) });
   } catch (err) { handleRouteError(err, res, "Create campaign error:"); }
 });
 
@@ -248,7 +249,7 @@ router.get("/templates", requirePermission("marketing:read"), async (req, res) =
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
-      `SELECT * FROM document_templates WHERE "companyId" = $1 AND category = 'marketing' ORDER BY "createdAt" DESC`,
+      `SELECT * FROM document_templates WHERE "companyId" = $1 AND category = 'marketing' ORDER BY "createdAt" DESC LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows });

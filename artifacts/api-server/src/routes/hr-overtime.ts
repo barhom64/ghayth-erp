@@ -326,10 +326,8 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
       details: JSON.stringify({ requestNumber, hours, totalAmount, overtimeDate: b.overtimeDate, assignmentId: b.assignmentId }),
     }).catch((e) => logger.error(e, "hr-overtime background task failed"));
 
-    res.status(201).json({
-      id: insertId, requestNumber, totalAmount,
-      approval: approvalResult ?? { requiresApproval: false },
-    });
+    const [row] = await rawQuery<any>(`SELECT * FROM hr_overtime_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json({ ...row, approval: approvalResult ?? { requiresApproval: false } });
   } catch (err) {
     handleRouteError(err, res, "خطأ في إنشاء طلب الوقت الإضافي");
   }
@@ -366,7 +364,7 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
     const rejectionReason = reason || notes;
     if (!approved) {
       const { affectedRows } = await rawExecute(
-        `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
+        `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL`,
         [rejectionReason || null, item.id, scope.companyId]
       );
       if (!affectedRows) throw new ConflictError("تم تحديث الطلب مسبقاً — أعد التحميل");
@@ -416,7 +414,7 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
     const { affectedRows } = await rawExecute(
       `UPDATE hr_overtime_requests
        SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW()
-       WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
+       WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL`,
       [scope.userId, item.id, scope.companyId]
     );
     if (!affectedRows) throw new ConflictError("تم تحديث الطلب مسبقاً — أعد التحميل");
@@ -475,7 +473,7 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
     }).catch((e) => logger.error(e, "hr-overtime background task failed"));
 
     const { affectedRows } = await rawExecute(
-      `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
+      `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL`,
       [b.reason || null, item.id, scope.companyId]
     );
     if (!affectedRows) throw new ConflictError("تم تحديث الطلب مسبقاً — أعد التحميل");

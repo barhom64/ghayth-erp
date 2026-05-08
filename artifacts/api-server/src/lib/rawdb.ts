@@ -1,4 +1,5 @@
 import pg from "pg";
+import { logger } from "./logger.js";
 
 const { Pool } = pg;
 
@@ -65,7 +66,11 @@ export async function withTransaction<T>(
     await client.query("COMMIT");
     return result;
   } catch (err) {
-    await client.query("ROLLBACK");
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackErr) {
+      logger.error(rollbackErr, "[withTransaction] ROLLBACK failed — original error follows");
+    }
     throw err;
   } finally {
     client.release();
