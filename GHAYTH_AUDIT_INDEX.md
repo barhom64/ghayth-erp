@@ -3,7 +3,7 @@
 
 > آخر تحديث: 2026-05-08
 > الفرع: `claude/hr-smoke-testing-6DRib`
-> إجمالي الأخطاء المصلحة: **~926** عبر 19 جولة
+> إجمالي الأخطاء المصلحة: **~940** عبر 20 جولة
 
 ---
 
@@ -11,8 +11,8 @@
 
 | المقياس | القيمة |
 |---------|--------|
-| إجمالي الأخطاء المصلحة | ~926 |
-| عدد الجولات | 19 |
+| إجمالي الأخطاء المصلحة | ~940 |
+| عدد الجولات | 20 |
 | عدد الملفات المعدّلة | 90+ |
 | إجمالي ملفات الـ Routes | 80 |
 | نسبة التغطية | 100% |
@@ -143,6 +143,16 @@
   - store.ts: product re-fetch missing companyId
   - tasks.ts: maintenance_requests subqueries missing deletedAt (2)
 
+### Round 20 — 14 خطأ — Finance + Dashboards + Portals Deep Scan
+- finance-algorithms.ts: CRITICAL missing companyId on depreciation_entries + HIGH div-by-zero in SYD + MEDIUM unrounded WA cost
+- accounting-engine.ts: CRITICAL subsidiary_accounts re-fetch without companyId + deletedAt on pre-delete
+- finance-reports.ts: 3 CRITICAL journal_lines queries missing deletedAt (expenses, revenue, cash-bank)
+- moduleDashboards.ts: maintenance_requests count missing deletedAt
+- operationsCenter.ts: employee_violations count missing deletedAt
+- mySpace.ts: 3 CRITICAL — employee_documents + performance_reviews missing companyId
+- execDashboard.ts: employees doc expiry count missing deletedAt
+- Seed migrations 126-136: 11 critical reference tables populated (leave types, holidays, attendance policies, financial periods, CRM stages, umrah packages, notification templates, approval chains, ZATCA settings, cost centers, roles)
+
 ---
 
 ## حالة كل ملف
@@ -156,7 +166,7 @@
 | fleet.ts | 2988 | ~18 | FK validation, response-data, soft-delete, driver scoping |
 | projects.ts | 2129 | ~13 | FK validation, column fix, soft-delete, re-fetch |
 | finance-invoices.ts | 2014 | ~18 | soft-delete, auth, response-data, FK |
-| finance-algorithms.ts | 1731 | ~10 | SQL injection whitelist, column fixes |
+| finance-algorithms.ts | 1731 | ~13 | SQL injection whitelist, column fixes, companyId, div-by-zero, rounding |
 | umrah.ts | 1729 | ~8 | column fixes, INSERT |
 | admin.ts | 1712 | ~10 | soft-delete, NaN pagination, auth |
 | finance-purchase.ts | 1548 | ~20 | column fix, FK validation, response-data |
@@ -217,21 +227,21 @@
 | export.ts | Data export — سليم |
 | calendar.ts | Calendar view — سليم |
 | dashboard.ts | Main dashboard — سليم |
-| execDashboard.ts | Executive dashboard — سليم |
-| moduleDashboards.ts | Module dashboards — سليم |
+| execDashboard.ts | Executive dashboard — fixed (deletedAt on employees) |
+| moduleDashboards.ts | Module dashboards — fixed (deletedAt on maintenance_requests) |
 | activityLog.ts | Activity log — سليم |
 | activityIngest.ts | Activity ingestion — سليم |
 | auditLogs.ts | Audit trail — سليم |
 | impactPreview.ts | Preview calculations — سليم |
-| mySpace.ts | Employee self-service — سليم |
+| mySpace.ts | Employee self-service — fixed (companyId scoping) |
 | obligations.ts | Obligation tracking — سليم |
-| operationsCenter.ts | Operations dashboard — سليم |
+| operationsCenter.ts | Operations dashboard — fixed (deletedAt on violations) |
 | actionCenter.ts | Action center — سليم |
 | intelligence.ts | Smart alerts — سليم (no deletedAt) |
 | automation.ts | Cron jobs — سليم (no deletedAt) |
 | approvalActions.ts | Approval handling — سليم |
 | finance-collection.ts | Collection — سليم |
-| finance-reports.ts | Reports — سليم |
+| finance-reports.ts | Reports — fixed (journal_lines deletedAt) |
 
 ---
 
