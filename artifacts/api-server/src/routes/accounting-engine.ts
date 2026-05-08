@@ -509,8 +509,8 @@ router.post("/subsidiary-accounts", requirePermission("finance:write"), async (r
     const [row] = await rawQuery<any>(
       `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM subsidiary_accounts sa JOIN chart_of_accounts ca ON ca.id = sa."accountId"
-       WHERE sa.id = $1`,
-      [insertId]
+       WHERE sa.id = $1 AND sa."companyId" = $2`,
+      [insertId, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "subsidiary_accounts", entityId: insertId, after: row }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.subsidiary_account.created", entity: "subsidiary_accounts", entityId: insertId, details: JSON.stringify({ entityType, entityId, accountType }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
@@ -526,7 +526,7 @@ router.delete("/subsidiary-accounts/:id", requirePermission("finance:write"), as
     const id = parseId(req.params.id, "id");
     requireFinance(scope);
     const [before] = await rawQuery<any>(
-      `SELECT * FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     await rawExecute(

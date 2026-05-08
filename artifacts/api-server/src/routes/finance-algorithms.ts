@@ -711,8 +711,7 @@ function calcDepreciationAmount(asset: any, _period: string, opts?: { unitsThisP
     const annualRate = 1.5 / usefulLife;
     monthlyAmount = roundTo2(currentBookValue * (annualRate / 12));
   } else if (method === "sum_of_years_digits") {
-    // SYD: weight of year n = (life - n + 1) / (life*(life+1)/2)
-    // We need to know which year of the asset's life we're in.
+    if (depreciable === 0) return 0;
     const monthsElapsed = Math.max(0,
       Math.round((Number(asset.accumulatedDepreciation) / depreciable) * (usefulLife * 12))
     );
@@ -822,8 +821,8 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", requirePermission("
     if (!asset) { throw new NotFoundError("الأصل غير موجود أو غير نشط"); return; }
 
     const [existing] = await rawQuery<any>(
-      `SELECT id FROM depreciation_entries WHERE "assetId"=$1 AND period=$2`,
-      [id, targetPeriod]
+      `SELECT id FROM depreciation_entries WHERE "assetId"=$1 AND period=$2 AND "companyId"=$3`,
+      [id, targetPeriod, scope.companyId]
     );
     if (existing) {
       throw new ConflictError(`تم إهلاك هذا الأصل لفترة ${targetPeriod} مسبقاً`);
@@ -1015,9 +1014,9 @@ financeAlgorithmsRouter.get("/inventory-costing/:productId", requirePermission("
       const isOut = ["out", "transfer_out"].includes(mv.type);
 
       if (isIn) {
-        const addValue = qty * cost;
+        const addValue = roundTo2(qty * cost);
         runningQty += qty;
-        runningValue += addValue;
+        runningValue = roundTo2(runningValue + addValue);
         const waCost = runningQty > 0 ? runningValue / runningQty : cost;
         waHistory.push({
           date: mv.date, type: mv.type, quantity: qty, unitCost: cost,
@@ -1025,9 +1024,9 @@ financeAlgorithmsRouter.get("/inventory-costing/:productId", requirePermission("
         });
       } else if (isOut) {
         const waCost = runningQty > 0 ? runningValue / runningQty : 0;
-        const cogsValue = qty * waCost;
+        const cogsValue = roundTo2(qty * waCost);
         runningQty = Math.max(0, runningQty - qty);
-        runningValue = runningQty * waCost;
+        runningValue = roundTo2(runningQty * waCost);
         waHistory.push({
           date: mv.date, type: mv.type, quantity: -qty, unitCost: waCost,
           totalCost: -cogsValue, runningQty, runningValue, waCost: roundTo4(waCost),
