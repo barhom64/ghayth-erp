@@ -625,7 +625,8 @@ router.get("/replies", requirePermission("support:read"), async (req, res) => {
        FROM ticket_replies tr
        JOIN support_tickets t ON t.id = tr."ticketId"
        WHERE ${baseWhere}
-       ORDER BY tr."createdAt" DESC`,
+       ORDER BY tr."createdAt" DESC
+       LIMIT 500`,
       params
     );
     const total = rows.length;

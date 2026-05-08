@@ -1052,7 +1052,7 @@ router.post("/cases/:caseId/costs", requirePermission("legal:create"), async (re
 
     // Update the case's financialRisk to accumulate costs
     await rawExecute(
-      `UPDATE legal_cases SET "financialRisk"=COALESCE("financialRisk",0)+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+      `UPDATE legal_cases SET "financialRisk"=COALESCE("financialRisk",0)+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
       [b.amount, caseId, scope.companyId]
     );
 
@@ -1122,7 +1122,7 @@ router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async
       );
       const insertId = insertRes.rows[0]?.id ?? 0;
       if (b.amount && Number(b.amount) > 0) {
-        await client.query(`UPDATE legal_cases SET "financialRisk"=COALESCE("financialRisk",0)+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`, [Number(b.amount), caseId, scope.companyId]);
+        await client.query(`UPDATE legal_cases SET "financialRisk"=COALESCE("financialRisk",0)+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [Number(b.amount), caseId, scope.companyId]);
       }
       return { insertId };
     });
@@ -1230,7 +1230,7 @@ router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), a
     if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
     if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
     params.push(id); params.push(caseId); params.push(scope.companyId);
-    await rawExecute(`UPDATE legal_judgments SET ${sets.join(",")} WHERE id=$${params.length - 2} AND "caseId"=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    await rawExecute(`UPDATE legal_judgments SET ${sets.join(",")} WHERE id=$${params.length - 2} AND "caseId"=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
     // Mark payment obligation met if fully paid
@@ -1287,7 +1287,7 @@ router.patch("/cases/:id/financial-risk", requirePermission("legal:write"), asyn
     }
 
     await rawExecute(
-      `UPDATE legal_cases SET "financialRisk"=$1, "riskLevel"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
+      `UPDATE legal_cases SET "financialRisk"=$1, "riskLevel"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
       [financialRisk || 0, riskLevel || 'medium', id, scope.companyId]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);

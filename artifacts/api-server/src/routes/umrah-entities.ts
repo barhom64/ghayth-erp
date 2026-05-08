@@ -1075,10 +1075,11 @@ router.get("/invoices", requirePermission("umrah:read"), async (req, res) => {
        LEFT JOIN umrah_sub_agents sa ON sa.id = si."subAgentId"
        LEFT JOIN clients c ON c.id = si."clientId" AND c."deletedAt" IS NULL
        WHERE ${where}
-       ORDER BY si."createdAt" DESC`,
+       ORDER BY si."createdAt" DESC
+       LIMIT 500`,
       params
     );
-    res.json({ data: rows });
+    res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "List umrah invoices"); }
 });
 
@@ -1142,10 +1143,11 @@ router.get("/payments", requirePermission("umrah:read"), async (req, res) => {
        FROM umrah_payments p
        LEFT JOIN umrah_sub_agents sa ON sa.id = p."subAgentId"
        WHERE ${where}
-       ORDER BY p."paymentDate" DESC, p.id DESC`,
+       ORDER BY p."paymentDate" DESC, p.id DESC
+       LIMIT 500`,
       params
     );
-    res.json({ data: rows });
+    res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "List umrah payments"); }
 });
 

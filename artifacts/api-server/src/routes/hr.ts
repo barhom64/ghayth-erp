@@ -1068,7 +1068,8 @@ router.get("/attendance", requirePermission("hr:read"), async (req, res) => {
        ) v ON TRUE
        WHERE ${where}
          AND TO_CHAR(a.date, 'YYYY-MM') = $${nextParamIndex}
-       ORDER BY a.date DESC`,
+       ORDER BY a.date DESC
+       LIMIT 5000`,
       params
     );
 
@@ -1089,7 +1090,8 @@ router.get("/attendance/today-summary", requirePermission("hr:read"), async (req
        JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN attendance a ON a."assignmentId" = ea.id AND a.date = $2
        WHERE ea."companyId" = $1 AND ea.status = 'active'
-       ORDER BY e.name`,
+       ORDER BY e.name
+       LIMIT 1000`,
       [scope.companyId, today]
     );
     const data = rows.map((r: any) => ({
@@ -3875,7 +3877,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
 
     if (approvalResult.requiresApproval) {
       await rawExecute(
-        `UPDATE official_letters SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft'`,
+        `UPDATE official_letters SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`,
         [insertId, scope.companyId]
       );
     }
@@ -3963,7 +3965,7 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
     }
     params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
-      `UPDATE hr_leave_requests SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
+      `UPDATE hr_leave_requests SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!row) {
@@ -4300,12 +4302,12 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
       );
       if (paidInstallments.length > 0) {
         await client.query(
-          `UPDATE hr_loan_installments SET status = 'pending' WHERE "payrollLineId" IN (SELECT id FROM payroll_lines WHERE "runId" = $1) AND "companyId" = $2 AND status = 'paid'`,
+          `UPDATE hr_loan_installments SET status = 'pending' WHERE "payrollLineId" IN (SELECT id FROM payroll_lines WHERE "runId" = $1) AND "companyId" = $2 AND status = 'paid' AND "deletedAt" IS NULL`,
           [id, scope.companyId]
         );
         for (const inst of paidInstallments) {
           await client.query(
-            `UPDATE loan_accounts SET "remainingAmount" = "remainingAmount" + $1 WHERE id = $2 AND "companyId" = $3`,
+            `UPDATE loan_accounts SET "remainingAmount" = "remainingAmount" + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
             [inst.amount, inst.loanId, scope.companyId]
           );
         }
@@ -4313,7 +4315,7 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
 
       // Revert overtime requests (payrollLineId → payroll_lines.runId)
       await client.query(
-        `UPDATE hr_overtime_requests SET status = 'approved' WHERE "payrollLineId" IN (SELECT id FROM payroll_lines WHERE "runId" = $1) AND "companyId" = $2 AND status = 'paid'`,
+        `UPDATE hr_overtime_requests SET status = 'approved' WHERE "payrollLineId" IN (SELECT id FROM payroll_lines WHERE "runId" = $1) AND "companyId" = $2 AND status = 'paid' AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
 
@@ -4486,7 +4488,7 @@ router.patch("/official-letters/:id", requirePermission("hr:update"), async (req
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [letterId, scope.companyId]);
     params.push(letterId, scope.companyId);
     const [row] = await rawQuery<any>(
-      `UPDATE official_letters SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
+      `UPDATE official_letters SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!row) throw new NotFoundError("الخطاب غير موجود");
@@ -4548,12 +4550,12 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
       await rawExecute(
         `UPDATE official_letters
            SET status = $1, "approvedAt" = NOW(), "approvedBy" = $3
-         WHERE id = $2 AND "companyId" = $4 AND status = 'pending_approval'`,
+         WHERE id = $2 AND "companyId" = $4 AND status = 'pending_approval' AND "deletedAt" IS NULL`,
         [newStatus, Number(id), scope.userId, scope.companyId]
       );
     } else {
       await rawExecute(
-        `UPDATE official_letters SET status = $1 WHERE id = $2 AND "companyId" = $3 AND status = 'pending_approval'`,
+        `UPDATE official_letters SET status = $1 WHERE id = $2 AND "companyId" = $3 AND status = 'pending_approval' AND "deletedAt" IS NULL`,
         [newStatus, Number(id), scope.companyId]
       );
     }
@@ -4838,7 +4840,8 @@ router.get("/employees-status", requirePermission("hr:read"), async (req, res) =
       `SELECT e.id AS "employeeId", ea.id AS "assignmentId"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
-       WHERE e.status = 'active'`,
+       WHERE e.status = 'active'
+       LIMIT 500`,
       [scope.companyId]
     );
 
@@ -5820,7 +5823,7 @@ router.patch("/public-holidays/:id", requirePermission("hr:update"), async (req,
     params.push(id); params.push(scope.companyId);
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const rows = await rawQuery<any>(
-      `UPDATE public_holidays SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} RETURNING *`,
+      `UPDATE public_holidays SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!rows[0]) throw new NotFoundError("العطلة غير موجودة");
@@ -6300,7 +6303,7 @@ router.patch("/idp/:id", requirePermission("hr:update"), async (req, res) => {
     params.push(id); params.push(scope.companyId);
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const rows = await rawQuery<any>(
-      `UPDATE employee_development_plans SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} RETURNING *`,
+      `UPDATE employee_development_plans SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!rows[0]) throw new NotFoundError("خطة التطوير غير موجودة");

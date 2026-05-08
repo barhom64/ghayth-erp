@@ -2632,7 +2632,7 @@ router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (
     if (sets.length === 1) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(
-      `UPDATE fleet_preventive_plans SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
+      `UPDATE fleet_preventive_plans SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!rows[0]) throw new NotFoundError("الخطة غير موجودة");

@@ -294,7 +294,8 @@ router.get("/pending", requirePermission("admin:read"), async (req, res) => {
            WHEN 'warning' THEN 2
            ELSE 3
          END,
-         wi."createdAt" ASC`,
+         wi."createdAt" ASC
+       LIMIT 200`,
       [scope.companyId, scope.activeAssignmentId]
     );
     res.json({ data: rows, total: rows.length });

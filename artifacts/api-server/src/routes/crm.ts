@@ -647,7 +647,7 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
         );
         clientId = newClientId;
       }
-      await rawExecute(`UPDATE crm_opportunities SET "clientId"=$1 WHERE id=$2 AND "companyId"=$3`, [clientId, opp.id, scope.companyId]);
+      await rawExecute(`UPDATE crm_opportunities SET "clientId"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [clientId, opp.id, scope.companyId]);
     }
 
     try {
@@ -707,7 +707,7 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
 
     if (clientId) {
       try {
-        await rawExecute(`UPDATE clients SET "totalRevenue"=COALESCE("totalRevenue",0)+$1 WHERE id=$2 AND "companyId"=$3`, [dealValue, clientId, scope.companyId]);
+        await rawExecute(`UPDATE clients SET "totalRevenue"=COALESCE("totalRevenue",0)+$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [dealValue, clientId, scope.companyId]);
       } catch (revenueErr) {
         logger.error(revenueErr, "Failed to update client totalRevenue:");
       }
