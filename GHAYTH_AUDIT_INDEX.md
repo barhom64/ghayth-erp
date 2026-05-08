@@ -20,7 +20,7 @@
 | صفحات منفصلة (بدون API) | 0 |
 | الاختبارات | 3,092 اختبار (80 ملف) — كلها ناجحة |
 | فحوصات CI | 9 فحوصات — كلها ناجحة |
-| إجمالي الأخطاء المُصلحة | ~433 خطأ عبر 10 جولات |
+| إجمالي الأخطاء المُصلحة | ~444 خطأ عبر 10 جولات |
 | تغطية الراوتات | 80/80 ملف (100%) |
 | تغطية المكتبات | 74/74 ملف (100%) |
 | تغطية الـ Middleware | 6/6 ملف (100%) |
@@ -511,7 +511,15 @@
 | LOW | 2 | ✅ مُصلح |
 | **المجموع** | **~26** | **✅ مُصلح** |
 
-### **الإجمالي الكلي: ~433 خطأ مُصلح عبر 10 جولات — 160/160 ملف backend + 3 بوابات frontend**
+### الجولة العاشرة ب (تم إصلاحها — commit 364ddd6):
+
+| الخطورة | العدد | الحالة |
+|---------|-------|--------|
+| HIGH | 2 | ✅ مُصلح |
+| MEDIUM | 9 | ✅ مُصلح |
+| **المجموع** | **11** | **✅ مُصلح** |
+
+### **الإجمالي الكلي: ~444 خطأ مُصلح عبر 10 جولات — 160/160 ملف backend + 3 بوابات frontend**
 
 ### أخطاء مكتشفة لم تُصلح (تحتاج تعديلات أعمق):
 
@@ -992,9 +1000,30 @@ kpiEngine, notificationService, clientAnalytics, journeyEngine, recurringJournal
 | 8 | MEDIUM | `projects.ts` | project create: project + phases |
 | 9 | MEDIUM | `umrah.ts` | agent-invoices generate: invoice + penalty status update |
 
+### و. Zod schema silent data loss (9 إصلاحات — commit 364ddd6):
+
+| الملف | الحقول المفقودة | التأثير |
+|-------|-----------------|---------|
+| `finance-purchase.ts` | `productId` في items | اختيار المنتج لا يعمل |
+| `fleet.ts` | `cost`, `endTime`, `status` | بيانات الرحلة مفقودة |
+| `hr.ts` | `reliefOfficer`, `contactDuringLeave` | بيانات الإجازة مفقودة |
+| `hr.ts` | `witness`, `location`, `actionTaken` | بيانات المخالفة مفقودة |
+| `hr.ts` | `breakMinutes`, `gracePeriod` | إعدادات الوردية مفقودة |
+| `finance-hardening.ts` | `date` | تاريخ القيد اليدوي مفقود |
+| `finance-journal.ts` | `date`, `isTaxLinked`, ZATCA fields | ربط ZATCA معطل |
+| `finance-journal.ts` | `date`, `costCenter` | تاريخ السند ومركز التكلفة مفقودان |
+| `training.ts` | `objectives`, `targetAudience` | أهداف البرنامج مفقودة |
+
+### ز. Frontend lifecycle method errors (2 إصلاح):
+
+| الملف | الخطأ | الإصلاح |
+|-------|-------|---------|
+| `trip-detail.tsx` | PATCH {status:completed/cancelled} → always 409 | → POST /trips/:id/complete\|cancel |
+| `contract-detail.tsx` | PATCH {status:terminated} → always 409 | → POST /contracts/:id/terminate + reason prompt |
+
 ---
 
 > **✅ الفحص مكتمل — 160/160 ملف backend + 3 بوابات frontend تم فحصها**
-> **~433 خطأ مُصلح عبر 10 جولات — CI أخضر (3,092 اختبار)**
+> **~444 خطأ مُصلح عبر 10 جولات — CI أخضر (3,092 اختبار)**
 
 *تم تحديث هذا الفهرس بواسطة فحص Claude Code الشامل — الجولة العاشرة مكتملة 2026-05-08.*
