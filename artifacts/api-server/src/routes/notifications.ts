@@ -108,7 +108,7 @@ router.post("/preferences", requirePermission("notifications:write"), async (req
        RETURNING id`,
       [scope.userId, scope.companyId, channel || 'in_app', category || 'general', enabled !== false]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM notification_preferences WHERE id = $1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM notification_preferences WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "upsert_notification_preference",

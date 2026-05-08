@@ -3170,7 +3170,7 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
         });
       } catch (taskErr) { logger.error(taskErr, "PATCH completion follow-up task error:"); }
     }
-    const [row] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update maintenance request error:"); }
 });
@@ -3472,7 +3472,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
         }
       ).catch((e) => logger.error(e, "properties background task failed"));
     }
-    const [row] = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE id=$1`, [installmentId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE id=$1 AND "companyId"=$2`, [installmentId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
