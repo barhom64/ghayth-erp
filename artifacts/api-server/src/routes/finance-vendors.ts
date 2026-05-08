@@ -159,7 +159,7 @@ vendorsRouter.delete("/vendors/:id", requirePermission("finance:delete"), async 
     if (!existing) throw new NotFoundError("المورد غير موجود");
 
     const [openOrders] = await rawQuery<any>(
-      `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "supplierId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status NOT IN ('cancelled','received','closed')`,
+      `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "supplierId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status NOT IN ('cancelled','received','completed')`,
       [vendorId, scope.companyId]
     );
     const [openRequests] = await rawQuery<any>(
@@ -307,7 +307,7 @@ vendorsRouter.get("/commitments", requirePermission("finance:read"), async (req,
               s.name AS "supplierName", s.name AS "vendorName"
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
-       WHERE po."companyId" = $1 AND po.status NOT IN ('cancelled','closed','received') AND po."deletedAt" IS NULL
+       WHERE po."companyId" = $1 AND po.status NOT IN ('cancelled','completed','received') AND po."deletedAt" IS NULL
        ORDER BY po."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );

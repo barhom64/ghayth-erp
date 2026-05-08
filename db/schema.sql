@@ -5763,7 +5763,13 @@ CREATE TABLE public.hr_inquiry_memos (
     CONSTRAINT "hr_inquiry_memos_occurrenceCount_check" CHECK ((("occurrenceCount" >= 1) AND ("occurrenceCount" <= 4))),
     CONSTRAINT hr_memo_incident_chk CHECK (("incidentType" = ANY (ARRAY['late'::text, 'absence'::text, 'early_leave'::text, 'behavior'::text, 'organization'::text, 'gps_out_of_range'::text, 'custom'::text]))),
     CONSTRAINT hr_memo_source_chk CHECK ((source = ANY (ARRAY['manual'::text, 'auto'::text, 'manager'::text, 'hr'::text]))),
-    CONSTRAINT hr_memo_status_chk CHECK ((status = ANY (ARRAY['draft'::text, 'pending_employee'::text, 'pending_manager'::text, 'pending_gm'::text, 'approved'::text, 'rejected'::text, 'cancelled'::text, 'expired'::text])))
+    CONSTRAINT hr_memo_status_chk CHECK ((status = ANY (ARRAY['draft'::text, 'pending_employee'::text, 'pending_manager'::text, 'pending_gm'::text, 'approved'::text, 'rejected'::text, 'cancelled'::text, 'expired'::text, 'appeal_pending'::text, 'appeal_accepted'::text, 'closed'::text]))),
+    "appealReason" text,
+    "appealDate" timestamp with time zone,
+    "appealDecision" text,
+    "appealComment" text,
+    "appealDecidedAt" timestamp with time zone,
+    "closedAt" timestamp with time zone
 );
 
 
@@ -11178,7 +11184,7 @@ CREATE TABLE public.umrah_penalties (
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
     CONSTRAINT umrah_penalties_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('invoiced'::character varying)::text, ('paid'::character varying)::text, ('waived'::character varying)::text]))),
-    CONSTRAINT umrah_penalties_type_check CHECK (((type)::text = ANY (ARRAY[('overstay'::character varying)::text, ('violation'::character varying)::text, ('lost'::character varying)::text, ('regulatory'::character varying)::text])))
+    CONSTRAINT umrah_penalties_type_check CHECK (((type)::text = ANY (ARRAY[('overstay'::character varying)::text, ('violation'::character varying)::text, ('lost'::character varying)::text, ('regulatory'::character varying)::text, ('manual'::character varying)::text])))
 );
 
 

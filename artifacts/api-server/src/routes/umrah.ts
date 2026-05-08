@@ -1695,9 +1695,9 @@ router.post("/penalties", requirePermission("umrah:write"), async (req, res) => 
     const b = zodParse(createPenaltySchema.safeParse(req.body));
     if (!b.pilgrimId && !b.agentId) throw new ValidationError("يجب تحديد المعتمر أو الوكيل");
     const rows = await rawQuery(
-      `INSERT INTO umrah_penalties ("companyId","pilgrimId","agentId","seasonId",type,amount,reason,status,"createdBy")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [scope.companyId, b.pilgrimId || null, b.agentId || null, b.seasonId || null, b.type || "manual", b.amount || 0, b.reason || null, b.status || "pending", scope.userId]
+      `INSERT INTO umrah_penalties ("companyId","pilgrimId","agentId","seasonId",type,amount,notes,status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [scope.companyId, b.pilgrimId || null, b.agentId || null, b.seasonId || null, b.type || "manual", b.amount || 0, b.reason || null, b.status || "pending"]
     );
     if (Number(b.amount) > 0) {
       try {

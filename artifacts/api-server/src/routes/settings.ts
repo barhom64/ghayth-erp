@@ -410,7 +410,7 @@ router.delete("/branches/:id", requirePermission("settings:write"), async (req, 
       [branchId, scope.companyId]
     );
     const [openOrders] = await rawQuery<any>(
-      `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "branchId" = $1 AND status NOT IN ('cancelled','received','closed') AND "companyId" = $2`,
+      `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "branchId" = $1 AND status NOT IN ('cancelled','received','completed') AND "companyId" = $2`,
       [branchId, scope.companyId]
     );
 
