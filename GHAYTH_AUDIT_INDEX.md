@@ -20,11 +20,11 @@
 | صفحات منفصلة (بدون API) | 0 |
 | الاختبارات | 3,092 اختبار (80 ملف) — كلها ناجحة |
 | فحوصات CI | 9 فحوصات — كلها ناجحة |
-| إجمالي الأخطاء المُصلحة | ~309 خطأ عبر 6 جولات |
+| إجمالي الأخطاء المُصلحة | ~357 خطأ عبر 7 جولات |
 | تغطية الراوتات | 80/80 ملف (100%) |
-| تغطية المكتبات | 54/54 ملف (100%) |
+| تغطية المكتبات | 74/74 ملف (100%) |
 | تغطية الـ Middleware | 6/6 ملف (100%) |
-| تغطية الفحص الكلية | 140/140 ملف (100%) |
+| تغطية الفحص الكلية | 160/160 ملف (100%) |
 
 ---
 
@@ -475,7 +475,16 @@
 | HIGH | 1 | ✅ مُصلح |
 | **المجموع** | **1** | **✅ مُصلح** |
 
-### **الإجمالي الكلي: ~309 خطأ مُصلح عبر 6 جولات — 140/140 ملف (100%)**
+### الجولة السابعة (تم إصلاحها — commits e27c4df..8c461c6):
+
+| الخطورة | العدد | الحالة |
+|---------|-------|--------|
+| CRITICAL | 19 | ✅ مُصلح |
+| HIGH | 20 | ✅ مُصلح |
+| MEDIUM | 9 | ✅ مُصلح |
+| **المجموع** | **48** | **✅ مُصلح** |
+
+### **الإجمالي الكلي: ~357 خطأ مُصلح عبر 7 جولات — 160/160 ملف (100%)**
 
 ### أخطاء مكتشفة لم تُصلح (تحتاج تعديلات أعمق):
 
@@ -734,7 +743,59 @@ kpiEngine, notificationService, clientAnalytics, journeyEngine, recurringJournal
 
 ---
 
-## 11. الجولة السادسة — ✅ مكتملة (Middleware)
+## 11. الجولة السابعة — ✅ مكتملة (ملفات مكتبة إضافية)
+
+فحص شامل لـ 20 ملف مكتبة/محرك إضافي (~6,300 سطر، 176 استعلام SQL) — اكتشاف 48 خطأ وإصلاحها:
+
+| الملف | الأسطر | الحالة | الأخطاء |
+|-------|--------|--------|---------|
+| `workflowEngine.ts` | 982 | ✅ | 24 |
+| `eventListeners.ts` | 1,656 | ✅ | 10 |
+| `notificationEngine.ts` | 635 | ✅ | 4 |
+| `umrahInvoicingEngine.ts` | 654 | ✅ | 2 |
+| `activityTracker.ts` | 150 | ✅ | 1 |
+| `systemGovernor.ts` | 216 | ✅ | 1 |
+| `integrationService.ts` | 204 | ✅ | 2 |
+| `supportEngine.ts` | 91 | ✅ | 1 |
+| `projectsEngine.ts` | 134 | ✅ | 1 |
+| `hrEnums.ts` | 139 | ✅ | 1 |
+| `hrHelpers.ts` | 89 | ✅ | 1 (لم يُصلح — تحذير فقط) |
+
+**ملفات نظيفة (10):** settings.ts, pushService.ts, scopedQuery.ts, policyEngine.ts, bootstrapAdmin.ts, eventBus.ts, legalEngine.ts, fieldEncryption.ts, audit.ts
+
+**أهم الاكتشافات:**
+
+**workflowEngine.ts (24 خطأ — CRITICAL):**
+- 17 UPDATE بدون companyId — يسمح بالموافقة/الرفض على طلبات شركات أخرى (إجازات، قروض، أوقات إضافية، مشتريات، مصاريف، خروج)
+- حالة `pending` غير صالحة لـ journal_entries (يجب أن تكون `pending_approval`)
+- JOIN خاطئ: users.id مقابل assignment ID في getTimeline
+- 5 استعلامات بدون deletedAt IS NULL
+
+**eventListeners.ts (10 أخطاء):**
+- UPDATE official_letters بدون companyId (CRITICAL)
+- 7 استعلامات بدون deletedAt IS NULL (journal_entries, umrah_sales_invoices, payroll_lines, warehouse_products)
+- SELECT official_letters + JOIN employees بدون deletedAt
+
+**notificationEngine.ts (4 أخطاء):**
+- 5 UPDATEs بدون companyId (notification_delivery_log, notification_webhooks)
+
+**umrahInvoicingEngine.ts (2 خطأ):**
+- حالة `absconded` غير صالحة → `violated`
+- INSERT يفقد عمود `unitPrice`
+
+**activityTracker.ts (1 خطأ):**
+- SQL injection عبر template literal في INTERVAL
+
+**باقي الملفات:**
+- supportEngine: UPDATE بدون companyId + deletedAt (CRITICAL)
+- hrEnums: اسم جدول خاطئ `hr_attendance` → `attendance`
+- systemGovernor: employees بدون deletedAt
+- integrationService: 3 UPDATEs بدون companyId
+- projectsEngine: UPDATE بدون deletedAt
+
+---
+
+## 12. الجولة السادسة — ✅ مكتملة (Middleware)
 
 فحص شامل لـ 6 ملفات middleware (~1,071 سطر):
 
@@ -752,7 +813,7 @@ kpiEngine, notificationService, clientAnalytics, journeyEngine, recurringJournal
 
 ---
 
-> **✅ الفحص مكتمل — 140/140 ملف تم فحصه (100%)**
-> **~309 خطأ مُصلح عبر 6 جولات — CI أخضر (3,092 اختبار)**
+> **✅ الفحص مكتمل — 160/160 ملف تم فحصه (100%)**
+> **~357 خطأ مُصلح عبر 7 جولات — CI أخضر (3,092 اختبار)**
 
-*تم تحديث هذا الفهرس بواسطة فحص Claude Code الشامل — الجولة السادسة مكتملة 2026-05-08.*
+*تم تحديث هذا الفهرس بواسطة فحص Claude Code الشامل — الجولة السابعة مكتملة 2026-05-08.*
