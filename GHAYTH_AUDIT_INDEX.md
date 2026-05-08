@@ -20,7 +20,7 @@
 | صفحات منفصلة (بدون API) | 0 |
 | الاختبارات | 3,092 اختبار (80 ملف) — كلها ناجحة |
 | فحوصات CI | 9 فحوصات — كلها ناجحة |
-| إجمالي الأخطاء المُصلحة | ~536 خطأ عبر 11 جولة |
+| إجمالي الأخطاء المُصلحة | ~539 خطأ عبر 11 جولة |
 | تغطية الراوتات | 80/80 ملف (100%) |
 | تغطية المكتبات | 74/74 ملف (100%) |
 | تغطية الـ Middleware | 6/6 ملف (100%) |
@@ -1113,9 +1113,17 @@ hr_exit_clearance, purchase_order_items, payment_runs, fleet_preventive_plans, u
 | MEDIUM | 35 | ✅ مُصلح |
 | **المجموع** | **80** | **✅ مُصلح** |
 
+### Round 11b — Transaction safety (3 إصلاحات — commit bf80ddf):
+
+| الملف | العملية | عدد الكتابات | الخطر |
+|-------|---------|-------------|-------|
+| `hr.ts` | Check-in: GPS + attendance + violation + deduction + penalty + monthly stats | 6 | حضور يتيم بدون خصومات |
+| `hr.ts` | Evaluation cycles: cycle + participants + system evaluation | 3 | دورة بدون مشاركين |
+| `projects.ts` | Task update: status + unblock dependents + project progress | 3 | تقدم منحرف |
+
 ---
 
-### **الإجمالي الكلي: ~536 خطأ مُصلح عبر 11 جولة — 160/160 ملف backend + 3 بوابات frontend**
+### **الإجمالي الكلي: ~539 خطأ مُصلح عبر 11 جولة — 160/160 ملف backend + 3 بوابات frontend**
 
 ### أخطاء مكتشفة لم تُصلح (تحتاج تعديلات أعمق):
 
@@ -1129,11 +1137,11 @@ hr_exit_clearance, purchase_order_items, payment_runs, fleet_preventive_plans, u
 | 6 | MEDIUM | hr-discipline: rawExecute داخل transaction بدل client | يحتاج refactor |
 | 7 | MEDIUM | hr-exit: إكمال الخروج لا يلغي العقود/القروض | يحتاج refactor |
 | 8 | MEDIUM | ~167 deletedAt filter مفقود في UPDATE/DELETE (معظمها داخل transactions محمية) | إصلاح تدريجي |
-| 9 | HIGH | 9 multi-write operations بدون transaction (hr check-in, evaluation cycles, إلخ) | يحتاج refactor |
+| 9 | HIGH | 6 multi-write operations بدون transaction (hr check-in ✅, evaluation cycles ✅, project task update ✅ — الباقي: hr check-out penalty, hr evaluation submit) | يحتاج refactor |
 | 10 | LOW | الحذف يتجاوز آلة حالة التذاكر | بالتصميم (soft delete) |
 | 11 | LOW | fleet/warehouse/properties: حد ثابت 500 بدون pagination | تصميم |
 
 > **✅ الفحص مكتمل — 160/160 ملف backend + 3 بوابات frontend تم فحصها**
-> **~536 خطأ مُصلح عبر 11 جولة — CI أخضر (3,092 اختبار)**
+> **~539 خطأ مُصلح عبر 11 جولة — CI أخضر (3,092 اختبار)**
 
 *تم تحديث هذا الفهرس بواسطة فحص Claude Code الشامل — الجولة الحادية عشرة مكتملة 2026-05-08.*
