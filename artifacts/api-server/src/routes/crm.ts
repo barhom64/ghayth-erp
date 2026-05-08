@@ -129,7 +129,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
   try {
     const parsed = zodParse(createOpportunitySchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
 
     const title = (b.title ?? "").toString().trim();
     if (!title) {
@@ -781,7 +781,7 @@ router.post("/opportunities/:id/convert", requirePermission("crm:update"), async
       });
     }
 
-    const dealValue = (req.body?.value as number | undefined) ?? existing.value ?? 0;
+    const dealValue = (parsed.value as number | undefined) ?? existing.value ?? 0;
 
     // handleDealWon creates / resolves the client and writes a contract +
     // invoice using the global pool. It is idempotent enough for first-call
@@ -802,7 +802,7 @@ router.post("/opportunities/:id/convert", requirePermission("crm:update"), async
       scope,
       action: "crm.opportunity.converted",
       toState: "won",
-      reason: (req.body?.notes as string | undefined)?.trim(),
+      reason: (parsed.notes as string | undefined)?.trim(),
       setExtras: {
         stage: "closed_won",
         convertedAt: { raw: "NOW()" },
@@ -938,7 +938,7 @@ router.post("/opportunities/:id/activities", requirePermission("crm:create"), as
   try {
     const parsed = zodParse(createActivitySchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const oppId = parseId(req.params.id, "id");
     const [opp] = await rawQuery<any>(
       `SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,

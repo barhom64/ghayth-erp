@@ -12,20 +12,25 @@ import { CreatePageLayout } from "@/components/create-page-layout";
 
 const STATUS_OPTIONS = [
   { value: "available", label: "متاحة" },
-  { value: "occupied", label: "مشغولة" },
+  { value: "rented", label: "مؤجرة" },
   { value: "maintenance", label: "صيانة" },
   { value: "reserved", label: "محجوزة" },
+  { value: "under_maintenance", label: "تحت الصيانة" },
+  { value: "out_of_service", label: "خارج الخدمة" },
 ];
 
 const STATUS_LABELS: Record<string, string> = {
-  available: "متاحة", occupied: "مشغولة", maintenance: "صيانة", reserved: "محجوزة",
+  available: "متاحة", rented: "مؤجرة", maintenance: "صيانة", reserved: "محجوزة",
+  under_maintenance: "تحت الصيانة", out_of_service: "خارج الخدمة",
 };
 
 const STATUS_COLORS: Record<string, string> = {
   available: "border-green-300 text-green-700 bg-green-50",
-  occupied: "border-blue-300 text-blue-700 bg-blue-50",
+  rented: "border-blue-300 text-blue-700 bg-blue-50",
   maintenance: "border-yellow-300 text-yellow-700 bg-yellow-50",
   reserved: "border-purple-300 text-purple-700 bg-purple-50",
+  under_maintenance: "border-orange-300 text-orange-700 bg-orange-50",
+  out_of_service: "border-red-300 text-red-700 bg-red-50",
 };
 
 const SEVERITY_COLORS: Record<string, string> = {

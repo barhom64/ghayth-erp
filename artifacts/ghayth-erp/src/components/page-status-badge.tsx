@@ -153,6 +153,7 @@ export const STATUS_MAP = {
     draft:                { label: "مسودة",           tone: "muted"    },
     sent:                 { label: "مُرسَلة",          tone: "info"     },
     partially_paid:       { label: "مدفوعة جزئياً",   tone: "progress" },
+    partial:              { label: "مدفوعة جزئياً",   tone: "progress" },
     paid:                 { label: "مدفوعة",          tone: "success"  },
     overdue:              { label: "متأخرة",          tone: "danger"   },
     void:                 { label: "ملغاة",           tone: "neutral"  },
@@ -314,6 +315,9 @@ export const STATUS_MAP = {
     active:               { label: "نشط",             tone: "success"  },
     inactive:             { label: "غير نشط",         tone: "muted"    },
     suspended:            { label: "مُوقَف",           tone: "danger"   },
+    available:            { label: "متاح",            tone: "success"  },
+    on_trip:              { label: "في رحلة",         tone: "info"     },
+    off_duty:             { label: "خارج الخدمة",     tone: "neutral"  },
   },
 
   // ── Projects ───────────────────────────────────────────────────────

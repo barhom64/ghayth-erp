@@ -164,7 +164,7 @@ router.put("/:id", requirePermission("admin:write"), async (req, res) => {
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.integration.updated", entity: "gov_integrations", entityId: id, details: JSON.stringify({ enabled, status, configUpdated: config !== undefined }) }).catch((e) => logger.error(e, "gov-integrations background task failed"));
 
     const [updated] = await rawQuery<any>(`SELECT * FROM gov_integrations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    res.json(updated);
+    res.json({ ...updated, config: maskConfig(updated.config) });
   } catch (err) { handleRouteError(err, res, "Gov integration update error:"); }
 });
 

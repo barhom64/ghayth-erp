@@ -129,7 +129,7 @@ router.post("/", requirePermission("crm:create"), async (req, res) => {
       if (phoneExists) throw new ConflictError("رقم الهاتف مستخدم لعميل آخر", { field: "phone", fix: "استخدم رقم هاتف مختلفاً أو ابحث عن العميل الموجود" });
     }
 
-    const attachments = (req.body as any).attachments ?? null;
+    const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments : null;
     const { insertId } = await rawExecute(
       `INSERT INTO clients (name, phone, email, classification, source, notes, "type", nationality, language, "companyId", "isBlacklisted", attachments)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11)`,
