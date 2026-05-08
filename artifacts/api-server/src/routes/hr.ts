@@ -109,8 +109,8 @@ const performanceSchema = z.object({
 
 const salaryComponentSchema = z.object({
   name: z.string().min(1, "اسم مكوّن الراتب مطلوب"),
-  type: z.enum(["fixed", "percentage"]).optional(),
-  category: z.enum(["allowance", "deduction", "bonus"]).optional(),
+  type: z.enum(["earning", "deduction", "benefit"]).optional(),
+  calculationType: z.enum(["fixed", "percentage", "formula"]).optional(),
   value: z.coerce.number().optional(),
   taxable: z.boolean().optional(),
 });
@@ -3226,11 +3226,11 @@ router.get("/salary-components", requirePermission("hr:read"), async (req, res) 
 router.post("/salary-components", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { name, type, category, value, taxable } = zodParse(salaryComponentSchema.safeParse(req.body));
+    const { name, type, calculationType, value, taxable } = zodParse(salaryComponentSchema.safeParse(req.body));
     const { insertId } = await rawExecute(
       `INSERT INTO salary_components ("companyId",name,type,"calculationType",value,"isTaxable","isActive")
        VALUES ($1,$2,$3,$4,$5,$6,true)`,
-      [scope.companyId, String(name).trim(), type ?? "earning", category ?? "fixed", Number(value ?? 0), taxable ?? true]
+      [scope.companyId, String(name).trim(), type ?? "earning", calculationType ?? "fixed", Number(value ?? 0), taxable ?? true]
     );
     await createAuditLog({
       companyId: scope.companyId,
@@ -3238,11 +3238,11 @@ router.post("/salary-components", requirePermission("hr:create"), async (req, re
       action: "create",
       entity: "salary_components",
       entityId: insertId,
-      after: { name, type: type ?? "fixed", category: category ?? "allowance", value: Number(value ?? 0), taxable: taxable ?? true },
+      after: { name, type: type ?? "earning", calculationType: calculationType ?? "fixed", value: Number(value ?? 0), taxable: taxable ?? true },
     });
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "salary_component.created", entity: "hr_salary_components", entityId: insertId, details: JSON.stringify({ name, type: type ?? "fixed", category: category ?? "allowance" }) }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "salary_component.created", entity: "hr_salary_components", entityId: insertId, details: JSON.stringify({ name, type: type ?? "earning", calculationType: calculationType ?? "fixed" }) }).catch((e) => logger.error(e, "hr background task failed"));
     const [row] = await rawQuery<any>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
-    res.status(201).json(row || { id: insertId, name, type: type ?? "fixed", category: category ?? "allowance", value: Number(value ?? 0), taxable: taxable ?? true, status: "active" });
+    res.status(201).json(row || { id: insertId, name, type: type ?? "earning", calculationType: calculationType ?? "fixed", value: Number(value ?? 0), taxable: taxable ?? true, status: "active" });
   } catch (err) { handleRouteError(err, res, "Create salary component error:"); }
 });
 
@@ -4104,26 +4104,25 @@ router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req,
       );
     }
 
-    const [row] = await rawQuery<any>(
-      `UPDATE hr_leave_requests SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL RETURNING id`,
-      [id, scope.companyId]
-    );
-    if (!row) {
-      // Race: the request was either decided or deleted between the SELECT
-      // and the DELETE. Same NotFoundError shape as everywhere else.
+    const year = new Date(leaveReq.startDate).getFullYear();
+    let deleted = false;
+    await withTransaction(async (client: any) => {
+      const { rows } = await client.query(
+        `UPDATE hr_leave_requests SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL RETURNING id`,
+        [id, scope.companyId]
+      );
+      if (!rows[0]) return;
+      deleted = true;
+      await client.query(
+        `UPDATE hr_leave_balances
+         SET reserved = GREATEST(reserved - $1, 0)
+         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+        [leaveReq.days, scope.companyId, leaveReq.employeeId, leaveReq.leaveTypeId, year]
+      );
+    });
+    if (!deleted) {
       throw new NotFoundError("طلب الإجازة غير موجود أو لا يمكن حذفه (تمت معالجته)");
     }
-
-    // Deleting a pending leave request must release the reserved balance so
-    // the employee can use those days again. Previously deletion left orphan
-    // reservations that silently capped leave availability.
-    const year = new Date(leaveReq.startDate).getFullYear();
-    await rawExecute(
-      `UPDATE hr_leave_balances
-       SET reserved = GREATEST(reserved - $1, 0)
-       WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-      [leaveReq.days, scope.companyId, leaveReq.employeeId, leaveReq.leaveTypeId, year]
-    );
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,

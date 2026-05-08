@@ -90,7 +90,7 @@ const impactPreviewSchema = z.object({
 });
 
 const patchInvoiceSchema = z.object({
-  status: z.string().optional(),
+  status: z.enum(["draft", "pending_approval", "approved", "sent", "partial", "partially_paid", "paid", "overdue", "void", "rejected", "cancelled", "returned", "delivered", "ordered", "posted", "closed", "invoiced"]).optional(),
   description: z.string().optional(),
   dueDate: z.string().optional(),
 });
@@ -905,20 +905,30 @@ invoicesRouter.delete("/invoices/:id", requirePermission("finance:delete"), asyn
       `SELECT id FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
       [scope.companyId, `JE-${inv.ref}`]
     );
-    if (je) {
-      try {
-        await reverseAccountBalances(scope.companyId, Number(je.id));
-        await rawExecute(
+    await withTransaction(async (client: any) => {
+      if (je) {
+        const { rows: lines } = await client.query(
+          `SELECT "accountCode", debit, credit FROM journal_lines WHERE "journalId" = $1`,
+          [Number(je.id)]
+        );
+        for (const line of lines) {
+          const delta = -(Number(line.debit) - Number(line.credit));
+          if (Math.abs(delta) < 0.001) continue;
+          await client.query(
+            `UPDATE chart_of_accounts SET "currentBalance" = "currentBalance" + $1 WHERE "companyId" = $2 AND code = $3`,
+            [delta, scope.companyId, line.accountCode]
+          );
+        }
+        await client.query(
           `UPDATE journal_entries SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
           [Number(je.id), scope.companyId]
         );
-      } catch (e) { logger.error(e, "Failed to reverse invoice GL on delete:"); }
-    }
-
-    await rawExecute(
-      `UPDATE invoices SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
+      }
+      await client.query(
+        `UPDATE invoices SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      );
+    });
     rawExecute(
       `INSERT INTO event_logs ("companyId", "userId", action, entity, "entityId", details)
        VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -1602,24 +1612,31 @@ invoicesRouter.post("/customer-advances", requirePermission("finance:create"), a
     ]);
 
     let journalId: number | null = null;
-    ({ journalId } = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref: advRef,
-      description: `دفعة مقدمة من العميل ${clientId}: ${amt}`,
-      sourceType: "customer_advance",
-      sourceId: advanceId ?? 0,
-      sourceKey: `finance:customer_advance:${advanceId}`,
-      lines: [
-        { accountCode: cashCode, debit: amt, credit: 0, clientId: Number(clientId) },
-        { accountCode: advLiabCode, debit: 0, credit: amt, clientId: Number(clientId) },
-      ],
-      guardTable: "customer_advances",
-      guardId: advanceId ?? 0,
-    }));
-    if (journalId && advanceId) {
-      await rawExecute(`UPDATE customer_advances SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, advanceId, scope.companyId]);
+    try {
+      ({ journalId } = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: advRef,
+        description: `دفعة مقدمة من العميل ${clientId}: ${amt}`,
+        sourceType: "customer_advance",
+        sourceId: advanceId ?? 0,
+        sourceKey: `finance:customer_advance:${advanceId}`,
+        lines: [
+          { accountCode: cashCode, debit: amt, credit: 0, clientId: Number(clientId) },
+          { accountCode: advLiabCode, debit: 0, credit: amt, clientId: Number(clientId) },
+        ],
+        guardTable: "customer_advances",
+        guardId: advanceId ?? 0,
+      }));
+      if (journalId && advanceId) {
+        await rawExecute(`UPDATE customer_advances SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, advanceId, scope.companyId]);
+      }
+    } catch (glErr) {
+      if (advanceId) {
+        await rawExecute(`DELETE FROM customer_advances WHERE id = $1 AND "companyId" = $2`, [advanceId, scope.companyId]);
+      }
+      throw glErr;
     }
 
     res.status(201).json({ advanceId, ref: advRef, clientId, amount: amt, journalId, status: "open" });

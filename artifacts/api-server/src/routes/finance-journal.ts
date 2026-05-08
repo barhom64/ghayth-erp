@@ -64,7 +64,7 @@ const createExpenseSchema = z.object({
   vatRate: z.any().optional(),
   vatAmount: z.any().optional(),
   reference: z.string().optional(),
-  status: z.string().optional(),
+  status: z.enum(["draft", "posted", "pending_approval", "approved", "rejected", "returned", "cancelled"]).optional(),
   isPaid: z.any().optional(),
   attachmentUrl: z.string().optional(),
   attachmentType: z.string().optional(),
@@ -1083,22 +1083,24 @@ journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), 
       lines: reversedLines,
     });
 
-    await rawExecute(
-      `UPDATE journal_entries
-         SET "reversalOfId" = $1,
-             "reversalReason" = $2
-       WHERE id = $3 AND "companyId" = $4`,
-      [id, reason, newJournalId, scope.companyId]
-    );
-    await rawExecute(
-      `UPDATE journal_entries
-         SET "reversedById" = $1,
-             "reversedAt" = NOW(),
-             "reversalReason" = $2,
-             status = 'reversed'
-       WHERE id = $3 AND "companyId" = $4`,
-      [newJournalId, reason, id, scope.companyId]
-    );
+    await withTransaction(async (client: any) => {
+      await client.query(
+        `UPDATE journal_entries
+           SET "reversalOfId" = $1,
+               "reversalReason" = $2
+         WHERE id = $3 AND "companyId" = $4`,
+        [id, reason, newJournalId, scope.companyId]
+      );
+      await client.query(
+        `UPDATE journal_entries
+           SET "reversedById" = $1,
+               "reversedAt" = NOW(),
+               "reversalReason" = $2,
+               status = 'reversed'
+         WHERE id = $3 AND "companyId" = $4`,
+        [newJournalId, reason, id, scope.companyId]
+      );
+    });
 
     await createAuditLog({
       companyId: scope.companyId,
@@ -1266,31 +1268,37 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", requirePermission("
       return;
     }
 
-    // force-close any missing periods
     if (force && missing.length > 0) {
-      for (const p of missing) {
-        const startDate = `${p}-01`;
-        const endDate = toDateISO(new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)), 0));
-        const [existing] = await rawQuery<any>(
-          `SELECT id FROM financial_periods WHERE "companyId"=$1 AND to_char("startDate",'YYYY-MM')=$2 AND "deletedAt" IS NULL LIMIT 1`,
-          [scope.companyId, p]
-        );
-        if (existing) {
-          await rawExecute(
-            `UPDATE financial_periods SET status='closed', "closedAt"=NOW(), "closedBy"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status = 'open' AND "deletedAt" IS NULL`,
-            [scope.activeAssignmentId, existing.id, scope.companyId]
+      await withTransaction(async (client: any) => {
+        for (const p of missing) {
+          const startDate = `${p}-01`;
+          const endDate = toDateISO(new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)), 0));
+          const { rows: [existing] } = await client.query(
+            `SELECT id FROM financial_periods WHERE "companyId"=$1 AND to_char("startDate",'YYYY-MM')=$2 AND "deletedAt" IS NULL LIMIT 1`,
+            [scope.companyId, p]
           );
-        } else {
-          await rawExecute(
-            `INSERT INTO financial_periods ("companyId",name,"startDate","endDate",status,"closedAt","closedBy")
-             VALUES ($1,$2,$3,$4,'closed',NOW(),$5)`,
-            [scope.companyId, `فترة ${p}`, startDate, endDate, scope.activeAssignmentId]
-          );
+          if (existing) {
+            await client.query(
+              `UPDATE financial_periods SET status='closed', "closedAt"=NOW(), "closedBy"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status = 'open' AND "deletedAt" IS NULL`,
+              [scope.activeAssignmentId, existing.id, scope.companyId]
+            );
+          } else {
+            await client.query(
+              `INSERT INTO financial_periods ("companyId",name,"startDate","endDate",status,"closedAt","closedBy")
+               VALUES ($1,$2,$3,$4,'closed',NOW(),$5)`,
+              [scope.companyId, `فترة ${p}`, startDate, endDate, scope.activeAssignmentId]
+            );
+          }
         }
-      }
+      });
     }
 
     const ref = `YE-${year}`;
+    const [existingYE] = await rawQuery<any>(
+      `SELECT id FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [scope.companyId, ref]
+    );
+    if (existingYE) throw new ConflictError(`قيد إقفال السنة ${year} موجود مسبقاً`);
     const description = `قيد إقفال السنة المالية ${year} — صافي الدخل ${netIncome.toFixed(2)}`;
     const { financialEngine } = await import("../lib/engines/index.js");
     const { journalId } = await financialEngine.postJournalEntry({

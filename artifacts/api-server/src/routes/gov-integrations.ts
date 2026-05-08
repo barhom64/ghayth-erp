@@ -14,7 +14,7 @@ import { GOV_ADMIN_ROLES, GOV_READ_ROLES } from "../lib/rbacCatalog.js";
 const updateIntegrationSchema = z.object({
   config: z.record(z.unknown()).optional(),
   enabled: z.boolean().optional(),
-  status: z.string().optional(),
+  status: z.enum(["active", "inactive", "error"]).optional(),
 });
 
 const createLinkSchema = z.object({
@@ -29,7 +29,7 @@ const createLinkSchema = z.object({
 const patchLinkSchema = z.object({
   enabled: z.boolean().optional(),
   externalRef: z.string().optional().nullable(),
-  syncStatus: z.string().optional(),
+  syncStatus: z.enum(["pending", "synced", "failed", "skipped"]).optional(),
   notes: z.string().optional().nullable(),
 });
 

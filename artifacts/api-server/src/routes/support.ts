@@ -59,7 +59,7 @@ const updateKbSchema = z.object({
   content: z.string().optional(),
   category: z.string().optional(),
   tags: z.any().optional(),
-  status: z.string().optional(),
+  status: z.enum(["published", "draft", "archived"]).optional(),
 });
 
 const createFieldVisitSchema = z.object({

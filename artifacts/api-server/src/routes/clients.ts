@@ -1,7 +1,7 @@
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, parseId, zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -111,34 +111,34 @@ router.post("/", requirePermission("crm:create"), async (req, res) => {
       language,
     } = parsed;
 
-    // Pre-check: reject duplicate email within same company
-    if (email) {
-      const [emailExists] = await rawQuery<any>(
-        `SELECT id FROM clients WHERE email = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
-        [email, scope.companyId]
-      );
-      if (emailExists) throw new ConflictError("البريد الإلكتروني مستخدم لعميل آخر", { field: "email", fix: "استخدم بريداً إلكترونياً مختلفاً أو ابحث عن العميل الموجود" });
-    }
-
-    // Pre-check: reject duplicate phone within same company
-    if (phone) {
-      const [phoneExists] = await rawQuery<any>(
-        `SELECT id FROM clients WHERE phone = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
-        [phone, scope.companyId]
-      );
-      if (phoneExists) throw new ConflictError("رقم الهاتف مستخدم لعميل آخر", { field: "phone", fix: "استخدم رقم هاتف مختلفاً أو ابحث عن العميل الموجود" });
-    }
-
     const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments : null;
-    const { insertId } = await rawExecute(
-      `INSERT INTO clients (name, phone, email, classification, source, notes, "type", nationality, language, "companyId", "isBlacklisted", attachments)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11)`,
-      [String(name).trim(), phone ?? null, email ?? null, classification, source ?? null, notes ?? null, type, nationality ?? null, language, scope.companyId, attachments ? JSON.stringify(attachments) : null]
-    );
+    let insertedId: number = 0;
+    await withTransaction(async (txClient: any) => {
+      if (email) {
+        const { rows: [emailExists] } = await txClient.query(
+          `SELECT id FROM clients WHERE email = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1 FOR UPDATE`,
+          [email, scope.companyId]
+        );
+        if (emailExists) throw new ConflictError("البريد الإلكتروني مستخدم لعميل آخر", { field: "email", fix: "استخدم بريداً إلكترونياً مختلفاً أو ابحث عن العميل الموجود" });
+      }
+      if (phone) {
+        const { rows: [phoneExists] } = await txClient.query(
+          `SELECT id FROM clients WHERE phone = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1 FOR UPDATE`,
+          [phone, scope.companyId]
+        );
+        if (phoneExists) throw new ConflictError("رقم الهاتف مستخدم لعميل آخر", { field: "phone", fix: "استخدم رقم هاتف مختلفاً أو ابحث عن العميل الموجود" });
+      }
+      const { rows: [newRow] } = await txClient.query(
+        `INSERT INTO clients (name, phone, email, classification, source, notes, "type", nationality, language, "companyId", "isBlacklisted", attachments)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11) RETURNING id`,
+        [String(name).trim(), phone ?? null, email ?? null, classification, source ?? null, notes ?? null, type, nationality ?? null, language, scope.companyId, attachments ? JSON.stringify(attachments) : null]
+      );
+      insertedId = newRow.id;
+    });
 
     const [client] = await rawQuery<any>(
       `SELECT * FROM clients WHERE id = $1 AND "deletedAt" IS NULL`,
-      [insertId]
+      [insertedId]
     );
     if (!client) throw new NotFoundError("فشل في استرجاع العميل");
 

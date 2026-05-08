@@ -57,10 +57,10 @@ const bulkRolePermissionsSchema = z.object({
 
 const createIntegrationSchema = z.object({
   name: z.string().min(1, "اسم التكامل مطلوب"),
-  type: z.string().min(1, "نوع التكامل مطلوب"),
+  type: z.enum(["email", "sms", "whatsapp", "webhook"]),
   config: z.any().optional(),
   enabled: z.boolean().optional(),
-  status: z.string().optional(),
+  status: z.enum(["active", "inactive", "error"]).optional(),
   maxRetries: z.coerce.number().int().min(0).optional(),
 });
 
@@ -74,9 +74,9 @@ const createCustomRoleSchema = z.object({
 
 const updateIntegrationSchema = z.object({
   name: z.string().min(1, "اسم التكامل مطلوب").optional(),
-  type: z.string().min(1, "نوع التكامل مطلوب").optional(),
+  type: z.enum(["email", "sms", "whatsapp", "webhook"]).optional(),
   config: z.any().optional(),
-  status: z.string().optional(),
+  status: z.enum(["active", "inactive", "error"]).optional(),
   maxRetries: z.coerce.number().int().min(0).optional(),
 });
 
@@ -383,7 +383,8 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
 router.get("/roles", requirePermission("admin:read"), async (req, res) => {
   try {
     await assertAdmin(req);
-    const rows = await rawQuery(`SELECT * FROM roles ORDER BY name LIMIT 500`);
+    const scope = req.scope!;
+    const rows = await rawQuery(`SELECT * FROM roles WHERE "companyId" = $1 ORDER BY name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (e: any) { logger.error(e, "Get roles error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });

@@ -111,7 +111,7 @@ const createExitSchema = z.object({
 });
 
 const updateClearanceSchema = z.object({
-  status: z.string().min(1, "حالة إخلاء الطرف مطلوبة"),
+  status: z.enum(["pending", "cleared", "rejected"]),
   notes: z.string().optional(),
 });
 
