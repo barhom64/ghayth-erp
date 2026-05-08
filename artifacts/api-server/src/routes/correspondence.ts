@@ -66,7 +66,7 @@ correspondenceRouter.get("/", requirePermission("communications:read"), async (r
     const scope = req.scope!;
     const { direction, entityType, entityId, search, status } = req.query as Record<string, string>;
     const params: any[] = [scope.companyId];
-    let where = `c."companyId" = $1 AND c."deletedAt" IS NULL`;
+    let where = `c."companyId" = $1`;
 
     if (direction) {
       params.push(direction);
@@ -115,7 +115,7 @@ correspondenceRouter.get("/:id", requirePermission("communications:read"), async
        FROM correspondence c
        LEFT JOIN users u ON u.id = c."createdBy"
        LEFT JOIN employees e ON e.id = u."employeeId"
-       WHERE c.id = $1 AND c."companyId" = $2 AND c."deletedAt" IS NULL`,
+       WHERE c.id = $1 AND c."companyId" = $2`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المراسلة غير موجودة");
@@ -167,7 +167,7 @@ correspondenceRouter.patch("/:id", requirePermission("communications:write"), as
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
-      `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المراسلة غير موجودة");
@@ -212,7 +212,7 @@ correspondenceRouter.post("/:id/send", requirePermission("communications:write")
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
-      `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المراسلة غير موجودة");
@@ -246,7 +246,7 @@ correspondenceRouter.post("/:id/respond", requirePermission("communications:writ
     const { subject, content, notes } = b;
 
     const [original] = await rawQuery<any>(
-      `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
     if (!original) throw new NotFoundError("المراسلة الأصلية غير موجودة");
@@ -301,7 +301,7 @@ correspondenceRouter.get("/stats/summary", requirePermission("communications:rea
         COUNT(*) FILTER (WHERE status = 'sent') AS "totalSent",
         COUNT(*) FILTER (WHERE "respondedAt" IS NOT NULL) AS "totalResponded",
         COUNT(*) FILTER (WHERE "respondedAt" IS NULL AND status = 'sent') AS "totalPending"
-       FROM correspondence WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+       FROM correspondence WHERE "companyId" = $1`,
       [scope.companyId]
     );
     res.json(stats || {});

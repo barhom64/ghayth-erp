@@ -150,7 +150,7 @@ router.get("/logs", requirePermission("documents:write"), async (req, res: Respo
     if (entityType) { params.push(entityType); conditions.push(`dsl."entityType"=$${params.length}`); }
     if (entityId) { params.push(String(entityId)); conditions.push(`dsl."entityId"=$${params.length}`); }
     const rows = await rawQuery<any>(
-      `SELECT dsl.*, e.name AS "userName" FROM digital_signature_logs dsl LEFT JOIN employees e ON e.id=dsl."userId" WHERE ${conditions.join(" AND ")} ORDER BY dsl."createdAt" DESC LIMIT 100`,
+      `SELECT dsl.*, e.name AS "userName" FROM digital_signature_logs dsl LEFT JOIN users u ON u.id=dsl."userId" LEFT JOIN employees e ON e.id=u."employeeId" WHERE ${conditions.join(" AND ")} ORDER BY dsl."createdAt" DESC LIMIT 100`,
       params
     );
     res.json({ data: rows, total: rows.length });

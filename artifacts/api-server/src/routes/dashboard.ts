@@ -41,7 +41,7 @@ router.get("/", async (req, res) => {
           / NULLIF(COUNT(*) FILTER (WHERE "scheduledDate" = $${todayIdx}), 0), 0
         ) AS "completedPct"
        FROM tasks
-       WHERE ${where}`,
+       WHERE ${where} AND "deletedAt" IS NULL`,
       taskParams
     );
 
@@ -52,6 +52,7 @@ router.get("/", async (req, res) => {
        LEFT JOIN employee_assignments ea ON ea.id = t."assignedTo"
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE ${where.replace(/"companyId"/g, 't."companyId"').replace(/"branchId"/g, 't."branchId"')}
+         AND t."deletedAt" IS NULL
          AND t."scheduledDate" = $${todayIdx}
        ORDER BY t.priority DESC, t.status ASC
        LIMIT 15`,
@@ -77,7 +78,7 @@ router.get("/", async (req, res) => {
       pendingFinanceApprovals = await rawQuery<any>(
         `SELECT id, ref, title, status, "createdAt"
          FROM expense_claims
-         WHERE ${fw} AND status = 'pending'
+         WHERE ${fw} AND "deletedAt" IS NULL AND status = 'pending'
          ORDER BY "createdAt" DESC
          LIMIT 5`,
         fp
@@ -161,7 +162,7 @@ router.get("/summary", async (req, res) => {
     const [tasks] = await rawQuery<any>(
       `SELECT COUNT(*) AS active
        FROM tasks
-       WHERE ${where} AND status IN ('in_progress','pending')
+       WHERE ${where} AND "deletedAt" IS NULL AND status IN ('in_progress','pending')
          AND "scheduledDate" = $${nextParamIndex}`,
       [...params, today]
     );
@@ -259,7 +260,7 @@ router.get("/role-data", async (req, res) => {
 
     if (HR_ROLES.includes(role)) {
       const [onboarding] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM tasks WHERE ${where} AND type = 'onboarding' AND status != 'completed'`, params
+        `SELECT COUNT(*) AS total FROM tasks WHERE ${where} AND "deletedAt" IS NULL AND type = 'onboarding' AND status != 'completed'`, params
       ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ total: 0 }]; });
       const probationRows = await rawQuery<any>(
         `SELECT e.name, ec."probationEndDate"
@@ -312,7 +313,7 @@ router.get("/role-data", async (req, res) => {
            COUNT(*) AS total,
            COUNT(*) FILTER (WHERE status = 'completed') AS completed,
            COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "scheduledDate" < CURRENT_DATE) AS overdue
-         FROM tasks WHERE ${where}`, params
+         FROM tasks WHERE ${where} AND "deletedAt" IS NULL`, params
       ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ total: 0, completed: 0, overdue: 0 }]; });
       result.manager = {
         teamTasksTotal: Number(teamTasks?.total ?? 0),
@@ -454,7 +455,7 @@ router.get("/charts/recent-events", async (req, res) => {
         FROM support_tickets WHERE ${companyWhere} AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 3)
        UNION ALL
        (SELECT 'task' AS type, id, 'مهمة: ' || COALESCE(title, '#' || id) AS text, "createdAt"
-        FROM tasks WHERE ${companyWhere} ORDER BY "createdAt" DESC LIMIT 3)
+        FROM tasks WHERE ${companyWhere} AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 3)
        UNION ALL
        (SELECT 'attendance' AS type, id, 'تسجيل حضور - ' || (SELECT name FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE ea.id=a."assignmentId" LIMIT 1) AS text, "createdAt"
         FROM attendance a WHERE a.${companyWhere} ORDER BY "createdAt" DESC LIMIT 3)

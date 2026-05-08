@@ -164,9 +164,10 @@ router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
     if (b.isActive !== undefined) { params.push(b.isActive); sets.push(`"isActive" = $${params.length}`); }
 
     params.push(id);
-    await rawExecute(`UPDATE business_rules SET ${sets.join(",")} WHERE id = $${params.length}`, params);
+    params.push(scope.companyId);
+    await rawExecute(`UPDATE business_rules SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length}`, params);
 
-    const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1`, [id]);
+    const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_business_rule",
@@ -213,14 +214,14 @@ router.patch("/:id/toggle", requirePermission("admin:write"), async (req, res) =
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
-      `SELECT id, "isActive" FROM business_rules WHERE id = $1 AND ("companyId" IS NULL OR "companyId" = $2)`,
+      `SELECT id, "isActive" FROM business_rules WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
     if (!existing) {
       throw new NotFoundError("القاعدة غير موجودة");
     }
     const newActive = !existing.isActive;
-    await rawExecute(`UPDATE business_rules SET "isActive" = $1, "updatedAt" = NOW() WHERE id = $2 AND ("companyId" IS NULL OR "companyId" = $3)`, [newActive, id, scope.companyId]);
+    await rawExecute(`UPDATE business_rules SET "isActive" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3`, [newActive, id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "toggle_business_rule",

@@ -29,6 +29,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
          FROM employees e
          JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
          WHERE ea."companyId" = $1
+           AND e."deletedAt" IS NULL
            AND (e.name ILIKE $2 OR e."empNumber" ILIKE $2 OR e.email ILIKE $2 OR e.phone ILIKE $2
                 OR e."passportNumber" ILIKE $2)
          LIMIT 10`,
@@ -40,6 +41,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
                 'client' AS type
          FROM clients
          WHERE "companyId" = $1
+           AND "deletedAt" IS NULL
            AND (name ILIKE $2 OR phone ILIKE $2 OR email ILIKE $2 OR code ILIKE $2)
          LIMIT 10`,
         [scope.companyId, pattern]
@@ -105,6 +107,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
                 'pilgrim' AS type
          FROM umrah_pilgrims p
          WHERE p."companyId" = $1
+           AND p."deletedAt" IS NULL
            AND (p."fullName" ILIKE $2 OR p."passportNumber" ILIKE $2 OR p.nationality ILIKE $2)
          LIMIT 10`,
         [scope.companyId, pattern]
@@ -130,6 +133,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
          FROM property_buildings b
          LEFT JOIN property_units u ON (u."buildingId"=b.id OR u."buildingName"=b.name) AND u."companyId"=b."companyId"
          WHERE b."companyId" = $1
+           AND b."deletedAt" IS NULL
            AND (b.name ILIKE $2 OR b.city ILIKE $2 OR b.address ILIKE $2)
          GROUP BY b.id
          LIMIT 10`,
@@ -141,6 +145,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
                 'tenant' AS type
          FROM tenants t
          WHERE t."companyId" = $1
+           AND t."deletedAt" IS NULL
            AND (t.name ILIKE $2 OR t.phone ILIKE $2 OR t."nationalId" ILIKE $2 OR t.email ILIKE $2)
          LIMIT 10`,
         [scope.companyId, pattern]

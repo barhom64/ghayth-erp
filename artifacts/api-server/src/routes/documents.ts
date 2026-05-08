@@ -555,7 +555,7 @@ router.get("/templates/:id", requirePermission("documents:read"), async (req, re
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("القالب غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "documents"); }
@@ -621,7 +621,7 @@ router.put("/templates/:id", requirePermission("documents:update"), async (req, 
     const id = parseId(req.params.id, "id");
     if (isNaN(id) || id <= 0) throw new ValidationError("معرف القالب غير صالح");
     const { name, description, content, category, type, variables, htmlContent, branchId, signatureUrl, isActive } = body;
-    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("القالب غير موجود");
     await rawExecute(
       `UPDATE document_templates SET name=$1, description=$2, content=$3, category=$4, "type"=$5, "variables"=$6, "htmlContent"=$7, "branchId"=$8, "signatureUrl"=$9, "isActive"=$10, "updatedAt"=NOW() WHERE id=$11 AND "companyId"=$12`,
@@ -650,7 +650,7 @@ router.delete("/templates/:id", requirePermission("documents:delete"), async (re
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     if (isNaN(id) || id <= 0) throw new ValidationError("معرف القالب غير صالح");
-    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("القالب غير موجود");
     await rawExecute(`UPDATE document_templates SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
@@ -704,7 +704,7 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [template] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    const [template] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!template) throw new NotFoundError("القالب غير موجود");
 
     const generateBody = zodParse(generateTemplateSchema.safeParse(req.body));
@@ -723,13 +723,16 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
       // actually employs (matches the invoice branch below which already
       // filters by `i."companyId"=$2`).
       const [emp] = await rawQuery<any>(`
-        SELECT e.*, d.name as "departmentName", b.name as "branchName"
+        SELECT e.*, ea."jobTitle", ea."hireDate", ea."endDate",
+               ec.salary, ec."housingAllowance", ec."transportAllowance",
+               d.name as "departmentName", b.name as "branchName"
         FROM employees e
         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active' AND ea."companyId" = $2
+        LEFT JOIN employee_contracts ec ON ec."assignmentId" = ea.id AND ec."deletedAt" IS NULL AND ec.status = 'active'
         LEFT JOIN departments d ON d.id = ea."departmentId"
         LEFT JOIN branches b ON b.id = ea."branchId"
         WHERE e.id=$1
-        LIMIT 1
+        ORDER BY ea."hireDate" DESC LIMIT 1
       `, [Number(entityId), scope.companyId]);
       if (emp) {
         entityData.employee = {
@@ -739,7 +742,7 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
           departmentName: emp.departmentName || "",
           branchName: emp.branchName || "",
           nationality: emp.nationality || "",
-          idNumber: emp.idNumber || "",
+          idNumber: emp.nationalId || "",
           phone: emp.phone || "",
           email: emp.email || "",
           hireDate: emp.hireDate ? new Date(emp.hireDate).toLocaleDateString("ar-SA") : "",
@@ -849,7 +852,7 @@ router.get("/templates/:id/variables", requirePermission("documents:read"), asyn
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [template] = await rawQuery<any>(`SELECT variables FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    const [template] = await rawQuery<any>(`SELECT variables FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!template) throw new NotFoundError("القالب غير موجود");
     let variables = [];
     try { variables = typeof template.variables === "string" ? JSON.parse(template.variables) : (template.variables || []); } catch (e) { logger.warn(e, "failed to parse template variables JSON"); variables = []; }

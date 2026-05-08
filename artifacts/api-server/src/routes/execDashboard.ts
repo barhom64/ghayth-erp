@@ -81,7 +81,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
     // ─── 3. AP EXPOSURE (open POs) ────────────────────────────────────────
     const ap = await safe(async () => {
       const [sums] = await rawQuery<any>(
-        `SELECT COALESCE(SUM(total), 0) AS total, COUNT(*)::int AS count
+        `SELECT COALESCE(SUM("totalAmount"), 0) AS total, COUNT(*)::int AS count
          FROM purchase_orders
          WHERE "companyId"=$1 AND status NOT IN ('paid','cancelled','draft') AND "deletedAt" IS NULL`,
         [companyId]
@@ -171,12 +171,13 @@ execDashboardRouter.get("/overview", async (req, res) => {
     // ─── 8. DUNNING PIPELINE ──────────────────────────────────────────────
     const dunning = await safe(async () => {
       const rows = await rawQuery<any>(
-        `SELECT "lastDunningStage" AS stage, COUNT(*)::int AS count,
-                COALESCE(SUM(total - COALESCE("paidAmount",0)), 0) AS amount
-         FROM invoices
-         WHERE "companyId"=$1 AND status NOT IN ('paid','cancelled')
-           AND "deletedAt" IS NULL AND "lastDunningStage" > 0
-         GROUP BY "lastDunningStage" ORDER BY "lastDunningStage"`,
+        `SELECT dl.level AS stage, COUNT(DISTINCT i.id)::int AS count,
+                COALESCE(SUM(i.total - COALESCE(i."paidAmount",0)), 0) AS amount
+         FROM dunning_letters dl
+         JOIN invoices i ON i.id = dl."invoiceId" AND i."deletedAt" IS NULL
+         WHERE dl."companyId"=$1 AND i.status NOT IN ('paid','cancelled')
+           AND dl."deletedAt" IS NULL AND dl.level > 0
+         GROUP BY dl.level ORDER BY dl.level`,
         [companyId]
       );
       return rows;
@@ -310,7 +311,7 @@ execDashboardRouter.get("/overdue-invoices", async (req, res) => {
               i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
               (i.total - COALESCE(i."paidAmount",0)) AS outstanding,
               (CURRENT_DATE - i."dueDate"::date)::int AS "daysPastDue",
-              COALESCE(i."lastDunningStage",0) AS "dunningStage",
+              COALESCE((SELECT MAX(dl.level) FROM dunning_letters dl WHERE dl."invoiceId" = i.id AND dl."deletedAt" IS NULL), 0) AS "dunningStage",
               c.name AS "clientName"
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL

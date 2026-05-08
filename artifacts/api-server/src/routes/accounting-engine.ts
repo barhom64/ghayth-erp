@@ -162,6 +162,8 @@ router.post("/accounting-mappings/batch", requirePermission("finance:write"), as
           "creditAccountId" = EXCLUDED."creditAccountId",
           "debitAccountCode" = EXCLUDED."debitAccountCode",
           "creditAccountCode" = EXCLUDED."creditAccountCode",
+          "operationLabel" = EXCLUDED."operationLabel",
+          "isActive" = EXCLUDED."isActive",
           "updatedAt" = NOW()`,
         [
           scope.companyId, m.operationType, m.operationLabel ?? m.operationType,
@@ -291,6 +293,7 @@ router.get("/journal-templates", requirePermission("finance:read"), async (req, 
       conditions.push(`jt."operationType" = $${params.length}`);
     }
 
+    conditions.push(`jt."deletedAt" IS NULL`);
     const templates = await rawQuery<any>(
       `SELECT jt.*
        FROM journal_entry_templates jt
@@ -374,7 +377,7 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
     const { name, description, branchId, activityType, isActive, lines } = body;
 
     const [existing] = await rawQuery<any>(
-      `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("القالب غير موجود");
