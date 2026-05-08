@@ -3,7 +3,7 @@
 
 > آخر تحديث: 2026-05-08
 > الفرع: `claude/hr-smoke-testing-6DRib`
-> إجمالي الأخطاء المصلحة: **~872** عبر 17 جولة
+> إجمالي الأخطاء المصلحة: **~926** عبر 19 جولة
 
 ---
 
@@ -11,9 +11,9 @@
 
 | المقياس | القيمة |
 |---------|--------|
-| إجمالي الأخطاء المصلحة | ~872 |
-| عدد الجولات | 17 |
-| عدد الملفات المعدّلة | 81+ |
+| إجمالي الأخطاء المصلحة | ~926 |
+| عدد الجولات | 19 |
+| عدد الملفات المعدّلة | 90+ |
 | إجمالي ملفات الـ Routes | 80 |
 | نسبة التغطية | 100% |
 
@@ -101,6 +101,48 @@
   - hr.ts payroll, finance-purchase, vendors, marketing, umrah-entities
 - SQL injection audit: CLEAN — no vulnerabilities found across all 80 route files
 
+### Round 18 — ~15 خطأ — Security Hardening + Middleware + Frontend
+- CRITICAL: contextualRbac.ts fail-open → fail-closed on ownership errors
+- CRITICAL: reverseAccountBalances scoped journal_lines by companyId (cross-tenant GL)
+- CRITICAL: permissions.ts wildcard (*) permission blocked via regex validation
+- CRITICAL: permissions.ts cross-tenant user validation before granting permissions
+- HIGH: JWT algorithm pinning to HS256 only
+- HIGH: withTransaction preserves original error when ROLLBACK fails
+- HIGH: password complexity enforcement (uppercase, lowercase, digit, special char)
+- HIGH: bootstrapAdmin warns when using default credentials
+- HIGH: journal line amounts rounded to 2dp before accumulation (floating-point)
+- HIGH: frontend buildErrorToast operator precedence fix
+- HIGH: AnimatedNumber rAF memory leak on unmount
+- Migration 125: 106 companyId + 35 deletedAt indexes
+
+### Round 19 — ~39 خطأ — Cross-tenant Re-fetch + Soft-delete + LIMIT
+- 19a: 25 bugs
+  - properties.ts: 9 re-fetch fixes (units, buildings, tenants, owners, inspections, deposits)
+  - projects.ts: 3 re-fetch fixes (milestones, resources, costs)
+  - training.ts: enrollment re-fetch + stats soft-delete (3)
+  - support.ts: replies + kb_articles soft-delete + companyId (3)
+  - legal.ts: session count includes deleted sessions
+  - governance.ts: 2 policy_compliance_actions deletedAt
+  - fleet.ts: driver lookup + LIMIT (2)
+  - warehouse.ts: inventory count items LIMIT + movements/categories companyId
+- 19b: 8 bugs
+  - CRITICAL: PBX /status cross-tenant update (companyId=0 → actual companyId)
+  - CRITICAL: hr-discipline.ts wrong table name (hr_discipline_regulations → hr_discipline_regulation)
+  - finance-budget.ts: budget lookup missing deletedAt
+  - finance-cost-centers.ts: department/branch subqueries deletedAt + LIMIT 1000
+  - documents.ts: template re-fetch deletedAt
+  - communications.ts: employee phone lookup LIMIT 5
+- 19c: 6 bugs
+  - properties.ts: maintenance_requests + contract_payment_schedule companyId
+  - warehouse.ts: warehouse_movements + warehouse_categories companyId
+  - notifications.ts: notification_preferences companyId
+- 19d: 10 bugs
+  - CRITICAL: recruitment.ts job_applications has no companyId — queries used JOIN through job_postings
+  - CRITICAL: recruitment.ts UPDATE used non-existent companyId column
+  - bi.ts: employee count included inactive assignments
+  - store.ts: product re-fetch missing companyId
+  - tasks.ts: maintenance_requests subqueries missing deletedAt (2)
+
 ---
 
 ## حالة كل ملف
@@ -110,9 +152,9 @@
 | الملف | السطور | الأخطاء | الفئات الرئيسية |
 |-------|--------|---------|----------------|
 | hr.ts | 7120 | ~120 | soft-delete, response-data, auth, FK, Zod, LIMIT, transaction |
-| properties.ts | 3899 | ~12 | FK validation, soft-delete |
-| fleet.ts | 2988 | ~15 | FK validation, response-data, soft-delete |
-| projects.ts | 2129 | ~10 | FK validation, column fix, soft-delete |
+| properties.ts | 3899 | ~23 | FK validation, soft-delete, re-fetch companyId |
+| fleet.ts | 2988 | ~18 | FK validation, response-data, soft-delete, driver scoping |
+| projects.ts | 2129 | ~13 | FK validation, column fix, soft-delete, re-fetch |
 | finance-invoices.ts | 2014 | ~18 | soft-delete, auth, response-data, FK |
 | finance-algorithms.ts | 1731 | ~10 | SQL injection whitelist, column fixes |
 | umrah.ts | 1729 | ~8 | column fixes, INSERT |
@@ -168,8 +210,8 @@
 | search.ts | Full-text search — سليم |
 | storage.ts | File upload — سليم |
 | publicData.ts | Public endpoints — سليم |
-| permissions.ts | Permission CRUD — سليم |
-| notifications.ts | Notification CRUD — سليم |
+| permissions.ts | Permission CRUD — fixed (wildcard block, cross-tenant) |
+| notifications.ts | Notification CRUD — fixed (re-fetch companyId) |
 | notification-engine.ts | Push/email engine — سليم |
 | events.ts | Event streaming — سليم |
 | export.ts | Data export — سليم |
@@ -218,6 +260,14 @@
 - Soft-delete bypass: Fixed ✅
 - Missing LIMIT guards: Fixed ✅
 - Transaction safety (fixable cases): Fixed ✅
+- Middleware security (contextualRbac fail-closed): Fixed ✅
+- JWT algorithm pinning: Fixed ✅
+- Password complexity enforcement: Fixed ✅
+- Permission wildcard blocking: Fixed ✅
+- Floating-point journal accumulation: Fixed ✅
+- Database indexes (companyId + deletedAt): Migration 125 ✅
+- Frontend React lifecycle bugs: Fixed ✅
+- Bootstrap credential warnings: Fixed ✅
 
 ---
 
