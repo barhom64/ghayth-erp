@@ -3281,21 +3281,25 @@ router.post("/approval-chain-definitions", requirePermission("hr:create"), async
     }
     const { name, chainType, minAmount, maxAmount, steps } = zodParse(approvalChainSchema.safeParse(req.body));
 
-    const { insertId: chainId } = await rawExecute(
-      `INSERT INTO approval_chains ("companyId",name,"chainType","minAmount","maxAmount")
-       VALUES ($1,$2,$3,$4,$5)`,
-      [scope.companyId, name, chainType, minAmount ?? 0, maxAmount ?? 999999999]
-    );
-
-    if (Array.isArray(steps) && steps.length > 0) {
-      const values = steps.map((_, i) => `($${i * 5 + 1},$${i * 5 + 2},$${i * 5 + 3},$${i * 5 + 4},$${i * 5 + 5})`).join(",");
-      const params = steps.flatMap((step, i) => [chainId, i + 1, step.requiredRole ?? "branch_manager", step.timeoutHours ?? 48, step.autoApproveOnTimeout ?? false]);
-      await rawExecute(
-        `INSERT INTO approval_chain_steps ("chainId","stepOrder","requiredRole","timeoutHours","autoApproveOnTimeout")
-         VALUES ${values}`,
-        params
+    let chainId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO approval_chains ("companyId",name,"chainType","minAmount","maxAmount")
+         VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+        [scope.companyId, name, chainType, minAmount ?? 0, maxAmount ?? 999999999]
       );
-    }
+      chainId = ins.rows[0].id;
+
+      if (Array.isArray(steps) && steps.length > 0) {
+        const values = steps.map((_, i) => `($${i * 5 + 1},$${i * 5 + 2},$${i * 5 + 3},$${i * 5 + 4},$${i * 5 + 5})`).join(",");
+        const params = steps.flatMap((step, i) => [chainId, i + 1, step.requiredRole ?? "branch_manager", step.timeoutHours ?? 48, step.autoApproveOnTimeout ?? false]);
+        await client.query(
+          `INSERT INTO approval_chain_steps ("chainId","stepOrder","requiredRole","timeoutHours","autoApproveOnTimeout")
+           VALUES ${values}`,
+          params
+        );
+      }
+    });
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -3842,11 +3846,15 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
     const [seqRow] = await rawQuery<any>(`SELECT nextval('letter_number_seq') AS seq`).catch((e) => { logger.error(e, "letter sequence query failed"); return [{ seq: Date.now() % 1000000 }]; });
     const letterRef = generateRef("LTR", seqRow.seq);
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO official_letters ("companyId","employeeId",type,subject,content,status,"createdByAssignmentId",ref,"branchId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, Number(employeeId), type ?? "general", String(subject).trim(), String(content).trim(), status ?? "draft", scope.activeAssignmentId, letterRef, scope.branchId || null]
-    );
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO official_letters ("companyId","employeeId",type,subject,content,status,"createdByAssignmentId",ref,"branchId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [scope.companyId, Number(employeeId), type ?? "general", String(subject).trim(), String(content).trim(), status ?? "draft", scope.activeAssignmentId, letterRef, scope.branchId || null]
+      );
+      insertId = ins.rows[0].id;
+    });
 
     const approvalResult = await initiateApprovalChain({
       companyId: scope.companyId, branchId: scope.branchId,
