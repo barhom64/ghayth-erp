@@ -207,8 +207,9 @@ async function compute(
      WHERE p."companyId" = $1 AND p."seasonId" = $2
        AND EXTRACT(MONTH FROM p."createdAt") = $3
        AND EXTRACT(YEAR FROM p."createdAt") = $4
-       AND p."deletedAt" IS NULL`,
-    [plan.companyId, plan.seasonId, month, year]
+       AND p."deletedAt" IS NULL
+       AND p."createdBy" IN (SELECT u.id FROM users u WHERE u."employeeId" = $5)`,
+    [plan.companyId, plan.seasonId, month, year, plan.employeeId]
   )).rows[0] ?? { total: 0, avg_profit: 0, avg_price: 0 };
 
   const totalMutamers = Number(mutamerStats.total) || 0;
@@ -227,10 +228,10 @@ async function compute(
   const employeeSalesRes = (await queryFn(
     `SELECT COALESCE(SUM(ni."totalAmount"), 0)::numeric(12,2) AS emp_sales
      FROM umrah_nusk_invoices ni
-     JOIN umrah_pilgrims p ON p."companyId" = ni."companyId" AND p."groupId" = ni."groupId"
      WHERE ni."companyId" = $1 AND EXTRACT(MONTH FROM ni."issueDate") = $2 AND EXTRACT(YEAR FROM ni."issueDate") = $3
-       AND ni."deletedAt" IS NULL`,
-    [plan.companyId, month, year]
+       AND ni."deletedAt" IS NULL
+       AND ni."createdBy" IN (SELECT u.id FROM users u WHERE u."employeeId" = $4)`,
+    [plan.companyId, month, year, plan.employeeId]
   )).rows[0];
   const salesPercent = totalCompanySales > 0
     ? Math.round((Number(employeeSalesRes?.emp_sales) / totalCompanySales) * 10000) / 100

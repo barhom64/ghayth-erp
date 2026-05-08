@@ -145,7 +145,7 @@ async function documentExpiryAlerts(): Promise<string> {
   for (const company of companies) {
     // Scan 90-day window to cover all three alert thresholds (90, 30, 14 days)
     const docs = await rawQuery<any>(
-      `SELECT ed.id, ed."employeeId", ed."documentType", ed."expiryDate",
+      `SELECT ed.id, ed."employeeId", ed."type", ed."expiryDate",
               e.name AS "employeeName",
               (ed."expiryDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM employee_documents ed
@@ -221,8 +221,8 @@ async function documentExpiryAlerts(): Promise<string> {
 
     // Company documents (commercial registration, municipality license, etc.)
     const companyDocAlerts = await rawQuery<any>(
-      `SELECT cd.id, NULL AS "employeeId", cd."documentType" AS "employeeName",
-              cd."documentType", cd."expiryDate",
+      `SELECT cd.id, NULL AS "employeeId", cd."type" AS "employeeName",
+              cd."type", cd."expiryDate",
               (cd."expiryDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM company_documents cd
        WHERE cd."companyId"=$1 AND cd.status='active'
@@ -963,11 +963,11 @@ async function dailyDeductionCheck(): Promise<string> {
     for (const a of absentees) {
       // 1) خصم غياب في قيد الرواتب
       await rawExecute(
-        `INSERT INTO payroll_deductions ("companyId", "employeeId", type, amount, reason, date, "createdAt")
+        `INSERT INTO payroll_deductions ("companyId", "employeeId", type, amount, description, "effectiveDate", "createdAt")
          SELECT $1, $2, 'absence', 0, $3, CURRENT_DATE, NOW()
          WHERE NOT EXISTS (
            SELECT 1 FROM payroll_deductions
-           WHERE "companyId" = $1 AND "employeeId" = $2 AND date = CURRENT_DATE AND type = 'absence'
+           WHERE "companyId" = $1 AND "employeeId" = $2 AND "effectiveDate" = CURRENT_DATE AND type = 'absence'
          )`,
         [company.id, a.employeeId, `خصم غياب تلقائي — ${a.name}`]
       ).catch((e) => logger.error(e, "[cronScheduler] absence deduction insert failed"));
@@ -1025,15 +1025,13 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
       `SELECT i.id, i.ref, i."clientId", i.total, i."paidAmount", i."dueDate",
               c.name AS "clientName", c.phone AS "clientPhone",
               (CURRENT_DATE - i."dueDate"::date) AS "daysOverdue",
-              i."overduePhase"
+              i.status
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId"
-       WHERE i."companyId" = $1 AND i.status NOT IN ('paid','cancelled')
+       WHERE i."companyId" = $1 AND i.status NOT IN ('paid','cancelled','overdue')
          AND i."dueDate" < CURRENT_DATE`,
       [company.id]
     );
-
-    const PHASE_ORDER = ["alert", "first_notice", "reminder", "warning", "escalation", "legal"];
 
     for (const inv of invoices) {
       const days = Number(inv.daysOverdue);
@@ -1046,24 +1044,17 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
       else if (days >= 3) phase = "alert";
       if (!phase) continue;
 
-      const currentIdx = PHASE_ORDER.indexOf(inv.overduePhase || "");
-      const newIdx = PHASE_ORDER.indexOf(phase);
-      if (currentIdx >= newIdx) continue;
-
-      // Also flip the invoice status to 'overdue' when appropriate — reports,
-      // collection stages and dashboards key off invoices.status, not off
-      // overduePhase, so leaving status='sent' made overdue invoices
-      // invisible in half the UI.
+      // Flip the invoice status to 'overdue' when appropriate — reports,
+      // collection stages and dashboards key off invoices.status.
       await rawExecute(
         `UPDATE invoices
-            SET "overduePhase" = $1,
-                status = CASE
+            SET status = CASE
                   WHEN status IN ('sent','partial') THEN 'overdue'
                   ELSE status
                 END
-          WHERE id = $2`,
-        [phase, inv.id]
-      ).catch((e) => logger.error(e, "[cronScheduler] invoice overdue phase update failed"));
+          WHERE id = $1`,
+        [inv.id]
+      ).catch((e) => logger.error(e, "[cronScheduler] invoice overdue status update failed"));
 
       await broadcastAlert(
         company.id, "invoice_overdue",
@@ -1079,33 +1070,9 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
 }
 
 async function dailyFuelMonitor(): Promise<string> {
-  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
-  let alerts = 0;
-  for (const company of companies) {
-    const vehicles = await rawQuery<any>(
-      `SELECT fv.id, fv."plateNumber",
-              COALESCE(SUM(fl.amount), 0) AS "monthlyFuel",
-              fv."monthlyFuelBudget"
-       FROM fleet_vehicles fv
-       LEFT JOIN fleet_fuel_logs fl ON fl."vehicleId" = fv.id
-         AND fl."createdAt" >= date_trunc('month', CURRENT_DATE)
-       WHERE fv."companyId" = $1 AND fv."monthlyFuelBudget" IS NOT NULL
-         AND fv."monthlyFuelBudget" > 0
-       GROUP BY fv.id, fv."plateNumber", fv."monthlyFuelBudget"
-       HAVING COALESCE(SUM(fl.amount), 0) > fv."monthlyFuelBudget" * 0.8`,
-      [company.id]
-    );
-    for (const v of vehicles) {
-      await broadcastAlert(
-        company.id, "fuel_budget_warning",
-        `استهلاك وقود مرتفع: ${v.plateNumber}`,
-        `الاستهلاك ${v.monthlyFuel} من الميزانية ${v.monthlyFuelBudget}`,
-        "warning", "fleet_vehicle", v.id
-      );
-      alerts++;
-    }
-  }
-  return `Fuel monitor: ${alerts} alerts`;
+  // Skipped: fleet_vehicles table does not have a "monthlyFuelBudget" column.
+  // Fuel budget monitoring requires a schema migration before it can be enabled.
+  return `Fuel monitor: 0 alerts (disabled — no monthlyFuelBudget column)`;
 }
 
 async function dailyInventoryCheck(): Promise<string> {
@@ -1113,11 +1080,11 @@ async function dailyInventoryCheck(): Promise<string> {
   let pos = 0;
   for (const company of companies) {
     const products = await rawQuery<any>(
-      `SELECT id, name, "currentStock", COALESCE("minStock", "safetyStock", 0) AS threshold
+      `SELECT id, name, "currentStock", COALESCE("minStock", 0) AS threshold
        FROM warehouse_products
        WHERE "companyId" = $1
-         AND COALESCE("minStock", "safetyStock", 0) > 0
-         AND "currentStock" < COALESCE("minStock", "safetyStock", 0)`,
+         AND COALESCE("minStock", 0) > 0
+         AND "currentStock" < COALESCE("minStock", 0)`,
       [company.id]
     );
     for (const p of products) {
@@ -1505,7 +1472,7 @@ async function weeklyHrReport(): Promise<string> {
       `SELECT
          COUNT(*) AS total,
          COUNT(*) FILTER (WHERE status = 'active') AS active,
-         COUNT(*) FILTER (WHERE "joinDate" >= CURRENT_DATE - INTERVAL '7 days') AS "newHires"
+         COUNT(*) FILTER (WHERE "hireDate" >= CURRENT_DATE - INTERVAL '7 days') AS "newHires"
        FROM employee_assignments WHERE "companyId" = $1`,
       [company.id]
     );
@@ -2498,7 +2465,7 @@ async function dailySystemHealthReport(): Promise<string> {
 
   for (const company of companies) {
     const [activeUsers] = await rawQuery<any>(
-      `SELECT COUNT(DISTINCT "assignmentId") AS cnt FROM activity_logs
+      `SELECT COUNT(DISTINCT "userId") AS cnt FROM activity_logs
        WHERE "companyId" = $1 AND "createdAt" > NOW() - INTERVAL '24 hours'`,
       [company.id]
     ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ cnt: 0 }]; });
@@ -2655,7 +2622,7 @@ async function dailyDunningAutoSend(): Promise<string> {
       // Find overdue invoices needing dunning
       const today = todayISO();
       const rows = await rawQuery<any>(
-        `SELECT i.id, i."invoiceNumber", i."dueDate", i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
+        `SELECT i.id, i.ref, i."dueDate", i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
                 i."clientId", COALESCE(i."lastDunningStage",0) AS "lastStage", i."lastDunningAt",
                 GREATEST(0, ($1::date - i."dueDate"::date))::int AS "daysPastDue"
          FROM invoices i

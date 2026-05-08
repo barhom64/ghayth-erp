@@ -193,8 +193,8 @@ async function executeAction(
       if (payload.entityId) {
         const slaHours = Math.max(1, Math.min(Number(config.slaHours) || 4, 720));
         await rawExecute(
-          `UPDATE support_tickets SET "slaDeadline" = NOW() + make_interval(hours => $2) WHERE id = $1`,
-          [payload.entityId, slaHours]
+          `UPDATE support_tickets SET "slaDeadline" = NOW() + make_interval(hours => $2) WHERE id = $1 AND "companyId" = $3`,
+          [payload.entityId, slaHours, companyId]
         ).catch((e) => logger.error(e, "[RulesEngine] SLA update failed:"));
         return `sla_set_${slaHours}h`;
       }

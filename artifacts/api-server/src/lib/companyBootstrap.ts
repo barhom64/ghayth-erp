@@ -97,10 +97,10 @@ async function createDefaultShifts(client: pg.PoolClient, companyId: number, bra
   for (const s of shifts) {
     await exec(
       client,
-      `INSERT INTO shifts (name, "nameEn", "startTime", "endTime", "companyId", "branchId")
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO shifts (name, "startTime", "endTime", "companyId", "branchId")
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT DO NOTHING`,
-      [s.name, s.nameEn, s.startTime, s.endTime, companyId, branchId]
+      [s.name, s.startTime, s.endTime, companyId, branchId]
     );
   }
 }
@@ -126,20 +126,20 @@ async function createDefaultApprovalChains(client: pg.PoolClient, companyId: num
 
 async function createDefaultSalaryComponents(client: pg.PoolClient, companyId: number) {
   const components = [
-    { name: "الراتب الأساسي", nameEn: "Basic Salary", type: "earning", isFixed: true, percentage: 60 },
-    { name: "بدل سكن", nameEn: "Housing Allowance", type: "earning", isFixed: true, percentage: 25 },
-    { name: "بدل نقل", nameEn: "Transportation Allowance", type: "earning", isFixed: true, percentage: 10 },
-    { name: "بدل طعام", nameEn: "Food Allowance", type: "earning", isFixed: false, percentage: 0 },
-    { name: "تأمينات اجتماعية", nameEn: "GOSI", type: "deduction", isFixed: true, percentage: 9.75 },
-    { name: "ضريبة الدخل", nameEn: "Income Tax", type: "deduction", isFixed: false, percentage: 0 },
+    { name: "الراتب الأساسي", nameEn: "Basic Salary", type: "earning", calculationType: "fixed", value: 60 },
+    { name: "بدل سكن", nameEn: "Housing Allowance", type: "earning", calculationType: "fixed", value: 25 },
+    { name: "بدل نقل", nameEn: "Transportation Allowance", type: "earning", calculationType: "fixed", value: 10 },
+    { name: "بدل طعام", nameEn: "Food Allowance", type: "earning", calculationType: "percentage", value: 0 },
+    { name: "تأمينات اجتماعية", nameEn: "GOSI", type: "deduction", calculationType: "percentage", value: 9.75 },
+    { name: "ضريبة الدخل", nameEn: "Income Tax", type: "deduction", calculationType: "percentage", value: 0 },
   ];
   for (const c of components) {
     await exec(
       client,
-      `INSERT INTO salary_components (name, "nameEn", type, "isFixed", percentage, "companyId")
+      `INSERT INTO salary_components (name, "nameEn", type, "calculationType", value, "companyId")
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT DO NOTHING`,
-      [c.name, c.nameEn, c.type, c.isFixed, c.percentage, companyId]
+      [c.name, c.nameEn, c.type, c.calculationType, c.value, companyId]
     );
   }
 }

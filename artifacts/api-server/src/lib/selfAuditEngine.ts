@@ -99,7 +99,10 @@ async function checkOverdueInvoicesNoCollection(companyId: number): Promise<Audi
      WHERE i."companyId" = $1
        AND i.status NOT IN ('paid','cancelled')
        AND i."dueDate" < CURRENT_DATE - INTERVAL '7 days'
-       AND i."overduePhase" IS NULL`,
+       AND NOT EXISTS (
+         SELECT 1 FROM invoice_collection_stages ics
+         WHERE ics."invoiceId" = i.id AND ics."companyId" = $1
+       )`,
     [companyId]
   );
   return rows.map((r: any) => ({
@@ -156,11 +159,12 @@ async function checkStalledRequests(companyId: number): Promise<AuditViolation[]
 
 async function checkUpcomingHearingsNoAction(companyId: number): Promise<AuditViolation[]> {
   const rows = await rawQuery<any>(
-    `SELECT lc.id, lc.title, lc."nextHearingDate"
+    `SELECT lc.id, lc.title, ls."nextSessionDate" AS "nextHearingDate"
      FROM legal_cases lc
+     JOIN legal_sessions ls ON ls."caseId" = lc.id AND ls."deletedAt" IS NULL
      WHERE lc."companyId" = $1 AND lc.status = 'open'
-       AND lc."nextHearingDate" IS NOT NULL
-       AND lc."nextHearingDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+       AND ls."nextSessionDate" IS NOT NULL
+       AND ls."nextSessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
        AND NOT EXISTS (
          SELECT 1 FROM event_logs el
          WHERE el.entity = 'legal_case' AND el."entityId" = lc.id
@@ -183,6 +187,10 @@ async function checkEmployeesWithoutActiveAssignment(companyId: number): Promise
   const rows = await rawQuery<any>(
     `SELECT e.id, e.name FROM employees e
      WHERE e.status = 'active'
+       AND EXISTS (
+         SELECT 1 FROM employee_assignments ea2
+         WHERE ea2."employeeId" = e.id AND ea2."companyId" = $1
+       )
        AND NOT EXISTS (
          SELECT 1 FROM employee_assignments ea
          WHERE ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
@@ -224,12 +232,12 @@ async function checkIncompleteAttendance(companyId: number): Promise<AuditViolat
 async function checkNegativeLeaveBalance(companyId: number): Promise<AuditViolation[]> {
   const rows = await rawQuery<any>(
     `SELECT lb.id, lb."employeeId", e.name, lt.name AS "leaveType",
-            (lb.total - lb.used) AS balance
+            (lb.entitled - lb.used) AS balance
      FROM hr_leave_balances lb
      JOIN employees e ON e.id = lb."employeeId"
      JOIN hr_leave_types lt ON lt.id = lb."leaveTypeId"
      WHERE lb."companyId" = $1 AND lb.year = EXTRACT(YEAR FROM CURRENT_DATE)
-       AND (lb.total - lb.used) < 0`,
+       AND (lb.entitled - lb.used) < 0`,
     [companyId]
   );
   return rows.map((r: any) => ({

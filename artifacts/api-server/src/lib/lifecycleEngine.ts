@@ -410,10 +410,9 @@ export const STATE_MACHINES: StateMachine[] = [
       draft: ["pending_approval", "posted", "approved", "rejected", "returned"],
       pending_approval: ["posted", "approved", "rejected", "returned"],
       approved: ["posted", "rejected"],
-      posted: ["reversed"],
+      posted: [],
       rejected: ["draft"],
       returned: ["draft", "pending_approval", "approved"],
-      reversed: [],
     },
   },
   {
@@ -456,7 +455,7 @@ export const STATE_MACHINES: StateMachine[] = [
     transitions: {
       pending: ["approved", "rejected", "returned", "cancelled"],
       approved: ["cancelled", "completed"],
-      returned: ["pending", "draft"],
+      returned: ["pending"],
       rejected: [],
       cancelled: [],
       completed: [],

@@ -236,7 +236,7 @@ export async function saveRecommendationsForUser(
   const recs = await getPersonalizedRecommendations(companyId, userId, assignmentId, role);
 
   await rawExecute(
-    `DELETE FROM smart_recommendations WHERE "companyId"=$1 AND "userId"=$2 AND status='active'`,
+    `DELETE FROM smart_recommendations WHERE "companyId"=$1 AND "userId"=$2 AND "dismissedAt" IS NULL`,
     [companyId, userId]
   ).catch((e) => logger.error(e, "smart recommendations cleanup failed"));
 
@@ -244,10 +244,10 @@ export async function saveRecommendationsForUser(
   for (const rec of recs) {
     try {
       await rawExecute(
-        `INSERT INTO smart_recommendations ("companyId","userId","assignmentId",type,title,description,action,"actionLink",priority,status,metadata,"expiresAt","createdAt")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active',$10,NOW() + INTERVAL '7 days',NOW())`,
-        [companyId, userId, assignmentId, rec.type, rec.title, rec.description, rec.action,
-         rec.actionLink ?? null, rec.priority, rec.metadata ? JSON.stringify(rec.metadata) : null]
+        `INSERT INTO smart_recommendations ("companyId","userId",type,title,description,"actionUrl",priority,"expiresAt","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,NOW() + INTERVAL '7 days',NOW())`,
+        [companyId, userId, rec.type, rec.title, rec.description,
+         rec.actionLink ?? null, rec.priority]
       );
       saved++;
     } catch (err) { logger.error(err, "Save recommendation error:"); }
