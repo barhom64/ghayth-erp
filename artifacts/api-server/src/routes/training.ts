@@ -39,6 +39,8 @@ const createProgramSchema = z.object({
   durationUnit: z.string().optional(),
   cost: z.coerce.number().optional(),
   maxParticipants: z.coerce.number().optional(),
+  objectives: z.string().optional(),
+  targetAudience: z.string().optional(),
 });
 
 const patchProgramSchema = z.object({

@@ -214,9 +214,8 @@ export default function TripDetailPage() {
           variant: "default",
           onClick: async () => {
             try {
-              await apiFetch(`/fleet/trips/${id}`, {
-                method: "PATCH",
-                body: JSON.stringify({ status: "completed" }),
+              await apiFetch(`/fleet/trips/${id}/complete`, {
+                method: "POST",
               });
               queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
               toast({ title: "تم إكمال الرحلة بنجاح" });
@@ -237,9 +236,8 @@ export default function TripDetailPage() {
           variant: "outline",
           onClick: async () => {
             try {
-              await apiFetch(`/fleet/trips/${id}`, {
-                method: "PATCH",
-                body: JSON.stringify({ status: "cancelled" }),
+              await apiFetch(`/fleet/trips/${id}/cancel`, {
+                method: "POST",
               });
               queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
               toast({ title: "تم إلغاء الرحلة" });

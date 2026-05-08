@@ -41,6 +41,7 @@ const createPurchaseRequestSchema = z.object({
     quantity: z.coerce.number().optional(),
     unitPrice: z.coerce.number().optional(),
     accountCode: z.string().optional(),
+    productId: z.coerce.number().optional(),
   })).min(1, "يجب إضافة بند واحد على الأقل"),
   supplierId: z.coerce.number().optional(),
   notes: z.string().optional(),

@@ -76,6 +76,11 @@ const createExpenseSchema = z.object({
   govIntegrationId: z.any().optional(),
   govEntityType: z.string().optional(),
   govEntityId: z.any().optional(),
+  date: z.string().optional(),
+  isTaxLinked: z.boolean().optional(),
+  invoiceTypeCode: z.string().optional(),
+  taxCategoryCode: z.string().optional(),
+  exemptionReason: z.string().optional(),
 });
 
 const updateDescriptionSchema = z.object({
@@ -112,6 +117,8 @@ const createVoucherSchema = z.object({
   departmentId: z.any().optional(),
   autoDescription: z.any().optional(),
   operationType: z.string().optional(),
+  date: z.string().optional(),
+  costCenter: z.string().optional(),
 });
 
 const createSalaryAdvanceSchema = z.object({

@@ -131,9 +131,12 @@ const createTripSchema = z.object({
   toLng: z.coerce.number().optional(),
   distance: z.coerce.number().optional(),
   startTime: z.string().optional(),
+  endTime: z.string().optional(),
   notes: z.string().optional(),
   fuelPricePerLiter: z.coerce.number().optional(),
   driverFare: z.coerce.number().optional(),
+  cost: z.coerce.number().optional(),
+  status: z.string().optional(),
 });
 
 const completeTripSchema = z.object({

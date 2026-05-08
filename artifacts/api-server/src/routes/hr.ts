@@ -60,6 +60,8 @@ const leaveRequestSchema = z.object({
   endDate: z.string().min(1, "تاريخ النهاية مطلوب"),
   reason: z.string().optional(),
   documentUrl: z.string().optional(),
+  reliefOfficer: z.string().optional(),
+  contactDuringLeave: z.string().optional(),
 });
 
 const violationSchema = z.object({
@@ -71,6 +73,9 @@ const violationSchema = z.object({
   period: z.string().optional(),
   incidentDate: z.string().optional(),
   regulationId: z.coerce.number().optional(),
+  witness: z.string().optional(),
+  location: z.string().optional(),
+  actionTaken: z.string().optional(),
 });
 
 const shiftSchema = z.object({
@@ -86,6 +91,8 @@ const shiftSchema = z.object({
   splitBreakEnd: z.string().optional(),
   flexStartEarliest: z.string().optional(),
   flexStartLatest: z.string().optional(),
+  breakMinutes: z.coerce.number().optional(),
+  gracePeriod: z.coerce.number().optional(),
 });
 
 const performanceSchema = z.object({
