@@ -1303,7 +1303,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
       guardId: memoId ?? 0,
     }));
     if (journalId && memoId) {
-      await rawExecute(`UPDATE debit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
+      await rawExecute(`UPDATE debit_memos SET "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2`, [memoId, scope.companyId]);
     }
 
     emitEvent({
@@ -1338,14 +1338,14 @@ invoicesRouter.get("/invoices/:id/memos", requirePermission("finance:read"), asy
     let debitMemos: any[] = [];
     try {
       creditMemos = await rawQuery<any>(
-        `SELECT id, amount, "netAmount", "vatAmount", reason, "memoDate", "journalId", "createdAt"
+        `SELECT id, amount, "netAmount", "vatAmount", reason, "memoDate", "journalEntryId", "createdAt"
            FROM credit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY "memoDate" DESC`,
         [id, scope.companyId]
       );
     } catch (e) { logger.warn(e, "credit_memos table may not exist yet"); }
     try {
       debitMemos = await rawQuery<any>(
-        `SELECT id, amount, "netAmount", "vatAmount", reason, "memoDate", "journalId", "createdAt"
+        `SELECT id, amount, "netAmount", "vatAmount", reason, "memoDate", "createdAt"
            FROM debit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY "memoDate" DESC`,
         [id, scope.companyId]
       );
@@ -1765,14 +1765,11 @@ async function ensureDunningTables() {
       "companyId" INTEGER NOT NULL,
       "invoiceId" INTEGER NOT NULL,
       "clientId" INTEGER,
-      stage INTEGER NOT NULL,
-      "daysPastDue" INTEGER NOT NULL,
-      "outstandingAmount" NUMERIC(18,2) NOT NULL,
-      "letterContent" TEXT,
-      "sentAt" TIMESTAMP DEFAULT NOW(),
-      "sentBy" INTEGER,
-      "sentVia" VARCHAR(16) DEFAULT 'manual',
-      status VARCHAR(16) DEFAULT 'sent'
+      level INTEGER DEFAULT 1,
+      subject VARCHAR(500),
+      body TEXT,
+      "sentAt" TIMESTAMPTZ,
+      status VARCHAR(50) DEFAULT 'pending'
     )
   `);
   await rawExecute(`
@@ -1978,7 +1975,7 @@ invoicesRouter.get("/dunning/history", requirePermission("finance:read"), async 
     let where = `dl."companyId"=$1`;
     if (invoiceId) { params.push(Number(invoiceId)); where += ` AND dl."invoiceId"=$${params.length}`; }
     if (clientId) { params.push(Number(clientId)); where += ` AND dl."clientId"=$${params.length}`; }
-    if (stage) { params.push(Number(stage)); where += ` AND dl.stage=$${params.length}`; }
+    if (stage) { params.push(Number(stage)); where += ` AND dl.level=$${params.length}`; }
 
     const rows = await rawQuery<any>(
       `SELECT dl.*, i.ref AS "invoiceNumber", c.name AS "clientName"

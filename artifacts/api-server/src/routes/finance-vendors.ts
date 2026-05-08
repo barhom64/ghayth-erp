@@ -340,7 +340,7 @@ vendorsRouter.get("/financial-requests/:id", requirePermission("finance:read"), 
     const [row] = await rawQuery<any>(
       `SELECT wr.*, e.name AS "submittedByName"
        FROM workflow_requests wr
-       LEFT JOIN employee_assignments ea ON ea.id = wr."submittedBy"
+       LEFT JOIN employee_assignments ea ON ea.id = wr."requestedBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE wr.id = $1 AND wr."companyId" = $2`,
       [id, scope.companyId]
@@ -354,12 +354,12 @@ vendorsRouter.get("/financial-requests", requirePermission("finance:read"), asyn
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT wr.id, wr."requestType", wr.title, wr.status, wr.amount, wr."createdAt",
+      `SELECT wr.id, wr."workflowType", wr."entityType", wr.status, wr.notes, wr."createdAt",
               e.name AS "submittedByName"
        FROM workflow_requests wr
-       LEFT JOIN employee_assignments ea ON ea.id = wr."submittedBy"
+       LEFT JOIN employee_assignments ea ON ea.id = wr."requestedBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       WHERE wr."companyId" = $1 AND wr."requestType" IN ('expense','salary_advance','custody','purchase_order')
+       WHERE wr."companyId" = $1 AND wr."entityType" IN ('expense','salary_advance','custody','purchase_order')
        ORDER BY wr."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );

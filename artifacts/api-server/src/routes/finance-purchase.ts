@@ -698,8 +698,11 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
       subtotal += l.receivedQty * Number(item.unitPrice);
     }
     subtotal = roundTo2(subtotal);
-    const poSubtotal = Number(po.totalAmount) - Number(po.vatAmount ?? 0);
-    const vatRatio = poSubtotal > 0 ? Number(po.vatAmount ?? 0) / poSubtotal : 0;
+    const poTotal = Number(po.totalAmount);
+    const defaultVatRate = 0.15;
+    const poSubtotal = roundTo2(poTotal / (1 + defaultVatRate));
+    const poVatAmount = roundTo2(poTotal - poSubtotal);
+    const vatRatio = poSubtotal > 0 ? poVatAmount / poSubtotal : 0;
     const vatAmount = roundTo2(subtotal * vatRatio);
     const grnTotal = roundTo2(subtotal + vatAmount);
 
