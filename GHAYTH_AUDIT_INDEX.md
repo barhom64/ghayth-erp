@@ -3,7 +3,7 @@
 
 > آخر تحديث: 2026-05-08
 > الفرع: `claude/hr-smoke-testing-6DRib`
-> إجمالي الأخطاء المصلحة: **~940** عبر 20 جولة
+> إجمالي الأخطاء المصلحة: **~991** عبر 21 جولة
 
 ---
 
@@ -11,8 +11,8 @@
 
 | المقياس | القيمة |
 |---------|--------|
-| إجمالي الأخطاء المصلحة | ~940 |
-| عدد الجولات | 20 |
+| إجمالي الأخطاء المصلحة | ~991 |
+| عدد الجولات | 21 |
 | عدد الملفات المعدّلة | 90+ |
 | إجمالي ملفات الـ Routes | 80 |
 | نسبة التغطية | 100% |
@@ -153,6 +153,21 @@
 - execDashboard.ts: employees doc expiry count missing deletedAt
 - Seed migrations 126-136: 11 critical reference tables populated (leave types, holidays, attendance policies, financial periods, CRM stages, umrah packages, notification templates, approval chains, ZATCA settings, cost centers, roles)
 
+### Round 21 — 37 خطأ — Deep Scan of Remaining Routes
+- CRITICAL: activityLog.ts cross-tenant leak via `OR companyId IS NULL` on requests table (3 queries)
+- HIGH: storage.ts documents access-control bypass on soft-deleted files (2 queries)
+- HIGH: calendar.ts cross-tenant job_applications via `OR jp.companyId IS NULL`
+- HIGH: scheduled-reports.ts phantom deletedAt on table without column (runtime crash)
+- actionCenter.ts: notifications missing companyId scoping (2), hr_employee_loans/overtime/exit deletedAt (3)
+- intelligence.ts: tasks deletedAt in overload/productivity/smart-assign (6), hr_leave_requests deletedAt, employees deletedAt, Number() NaN fallbacks (7)
+- rules.ts: business_rules re-fetch without companyId + deletedAt on all CRUD checks (5)
+- entityMeta.ts: LIMIT on tags-filter and tags-list (2)
+- approvalActions.ts: LIMIT 200 (1)
+- calendar.ts: projects/training_programs deletedAt (2)
+- finance-accounts.ts: LIMIT + journal_lines deletedAt (3)
+- impactPreview.ts: deletedAt on leave_requests, purchase_orders, employees, project_tasks (4)
+- search.ts: LIKE metacharacter escape (1)
+
 ---
 
 ## حالة كل ملف
@@ -217,8 +232,8 @@
 |-------|---------|
 | index.ts | Router mounting — سليم |
 | health.ts | Health check — سليم |
-| search.ts | Full-text search — سليم |
-| storage.ts | File upload — سليم |
+| search.ts | Full-text search — fixed (LIKE escape) |
+| storage.ts | File upload — fixed (documents deletedAt access-control) |
 | publicData.ts | Public endpoints — سليم |
 | permissions.ts | Permission CRUD — fixed (wildcard block, cross-tenant) |
 | notifications.ts | Notification CRUD — fixed (re-fetch companyId) |
@@ -229,17 +244,17 @@
 | dashboard.ts | Main dashboard — سليم |
 | execDashboard.ts | Executive dashboard — fixed (deletedAt on employees) |
 | moduleDashboards.ts | Module dashboards — fixed (deletedAt on maintenance_requests) |
-| activityLog.ts | Activity log — سليم |
+| activityLog.ts | Activity log — fixed (cross-tenant leak, attendance deletedAt) |
 | activityIngest.ts | Activity ingestion — سليم |
 | auditLogs.ts | Audit trail — سليم |
-| impactPreview.ts | Preview calculations — سليم |
+| impactPreview.ts | Preview calculations — fixed (deletedAt on 4 tables) |
 | mySpace.ts | Employee self-service — fixed (companyId scoping) |
 | obligations.ts | Obligation tracking — سليم |
 | operationsCenter.ts | Operations dashboard — fixed (deletedAt on violations) |
-| actionCenter.ts | Action center — سليم |
-| intelligence.ts | Smart alerts — سليم (no deletedAt) |
+| actionCenter.ts | Action center — fixed (companyId, deletedAt) |
+| intelligence.ts | Smart alerts — fixed (tasks/employees deletedAt, NaN) |
 | automation.ts | Cron jobs — سليم (no deletedAt) |
-| approvalActions.ts | Approval handling — سليم |
+| approvalActions.ts | Approval handling — fixed (LIMIT) |
 | finance-collection.ts | Collection — سليم |
 | finance-reports.ts | Reports — fixed (journal_lines deletedAt) |
 
