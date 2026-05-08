@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   handleRouteError,
@@ -271,32 +271,35 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
 
     const exitNumber = await generateExitNumber(scope.companyId);
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO hr_exit_requests
-         ("companyId","branchId","assignmentId","employeeId","exitNumber","exitType",
-          "lastWorkingDay","exitReason",status,"gratuityAmount","leaveBalance",
-          "leaveCompensation","loanDeductions","otherDeductions","netSettlement",
-          "settlementAmount","createdAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12,$13,$14,$15,NOW())
-       RETURNING id`,
-      [
-        scope.companyId, emp.branchId, b.assignmentId, emp.employeeId,
-        exitNumber, b.exitType, b.lastWorkingDay || null,
-        b.exitReason || null, gratuity, leaveBalance,
-        leaveCompensation, loanDeductions, otherDeductions, netSettlement,
-        netSettlement,
-      ]
-    );
-
-    // إنشاء قائمة إخلاء الطرف
-    for (const dept of DEFAULT_CLEARANCE_DEPARTMENTS) {
-      await rawExecute(
-        `INSERT INTO hr_exit_clearance
-           ("exitRequestId","companyId",department,"departmentLabel",status)
-         VALUES ($1,$2,$3,$4,'pending')`,
-        [insertId, scope.companyId, dept.department, dept.departmentLabel]
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO hr_exit_requests
+           ("companyId","branchId","assignmentId","employeeId","exitNumber","exitType",
+            "lastWorkingDay","exitReason",status,"gratuityAmount","leaveBalance",
+            "leaveCompensation","loanDeductions","otherDeductions","netSettlement",
+            "settlementAmount","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12,$13,$14,$15,NOW())
+         RETURNING id`,
+        [
+          scope.companyId, emp.branchId, b.assignmentId, emp.employeeId,
+          exitNumber, b.exitType, b.lastWorkingDay || null,
+          b.exitReason || null, gratuity, leaveBalance,
+          leaveCompensation, loanDeductions, otherDeductions, netSettlement,
+          netSettlement,
+        ]
       );
-    }
+      insertId = ins.rows[0].id;
+
+      for (const dept of DEFAULT_CLEARANCE_DEPARTMENTS) {
+        await client.query(
+          `INSERT INTO hr_exit_clearance
+             ("exitRequestId","companyId",department,"departmentLabel",status)
+           VALUES ($1,$2,$3,$4,'pending')`,
+          [insertId, scope.companyId, dept.department, dept.departmentLabel]
+        );
+      }
+    });
 
     // ── سلسلة الموافقات — نهاية الخدمة تحتاج موافقة HR + المدير العام ──
     const approvalResult = await initiateApprovalChain({

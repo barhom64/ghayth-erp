@@ -1266,17 +1266,22 @@ router.post("/agent-invoices/generate", requirePermission("umrah:write"), async 
     const commission = subtotal * (Number(agent?.profitMargin || 0) / 100);
     const total = subtotal - commission;
     const ref = generateTimeRef("UMRAH-INV");
-    const rows = await rawQuery(
-      `INSERT INTO umrah_agent_invoices ("companyId","agentId","seasonId",ref,type,"pilgrimCount","penaltiesTotal","servicesTotal",subtotal,commission,total,status)
-       VALUES ($1,$2,$3,$4,'sales',$5,$6,$7,$8,$9,$10,'draft') RETURNING *`,
-      [scope.companyId, agentId, seasonId, ref, pilgrimCount, penaltiesTotal, servicesTotal, subtotal, commission, total]
-    );
-    if (penaltiesTotal > 0) {
-      await rawExecute(
-        `UPDATE umrah_penalties SET status='invoiced', "invoiceId"=$1 WHERE "agentId"=$2 AND "seasonId"=$3 AND "companyId"=$4 AND "deletedAt" IS NULL AND status='pending'`,
-        [rows[0].id, agentId, seasonId, scope.companyId]
+    let invoiceRow: any;
+    await withTransaction(async (client) => {
+      const insRes = await client.query(
+        `INSERT INTO umrah_agent_invoices ("companyId","agentId","seasonId",ref,type,"pilgrimCount","penaltiesTotal","servicesTotal",subtotal,commission,total,status)
+         VALUES ($1,$2,$3,$4,'sales',$5,$6,$7,$8,$9,$10,'draft') RETURNING *`,
+        [scope.companyId, agentId, seasonId, ref, pilgrimCount, penaltiesTotal, servicesTotal, subtotal, commission, total]
       );
-    }
+      invoiceRow = insRes.rows[0];
+      if (penaltiesTotal > 0) {
+        await client.query(
+          `UPDATE umrah_penalties SET status='invoiced', "invoiceId"=$1 WHERE "agentId"=$2 AND "seasonId"=$3 AND "companyId"=$4 AND "deletedAt" IS NULL AND status='pending'`,
+          [invoiceRow.id, agentId, seasonId, scope.companyId]
+        );
+      }
+    });
+    const rows = [invoiceRow];
 
     try {
       const { umrahEngine } = await import("../lib/engines/index.js");

@@ -442,20 +442,24 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
       }
     }
     const managerId = scope.role === "projects_manager" ? scope.employeeId : b.managerId;
-    const { insertId } = await rawExecute(
-      `INSERT INTO projects ("companyId",name,description,"clientId","managerId","startDate","endDate",budget,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, b.name.trim(), b.description, b.clientId || null, managerId, b.startDate, b.endDate, b.budget || 0, b.status || 'planning']
-    );
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO projects ("companyId",name,description,"clientId","managerId","startDate","endDate",budget,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [scope.companyId, b.name.trim(), b.description, b.clientId || null, managerId, b.startDate, b.endDate, b.budget || 0, b.status || 'planning']
+      );
+      insertId = ins.rows[0].id;
 
-    if (b.phases && Array.isArray(b.phases)) {
-      for (let i = 0; i < b.phases.length; i++) {
-        const phase = b.phases[i];
-        await rawExecute(
-          `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
-          [insertId, phase.name, i, phase.startDate, phase.endDate]
-        );
+      if (b.phases && Array.isArray(b.phases)) {
+        for (let i = 0; i < b.phases.length; i++) {
+          const phase = b.phases[i];
+          await client.query(
+            `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
+            [insertId, phase.name, i, phase.startDate, phase.endDate]
+          );
+        }
       }
-    }
+    });
 
     const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
@@ -897,38 +901,42 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
       }
     }
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO project_tasks ("projectId","phaseId",title,description,"assigneeId",priority,status,"startDate","dueDate","estimatedHours") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [projectId, b.phaseId || null, b.title.trim(), b.description || null, b.assigneeId || null, b.priority || 'medium', 'todo', b.startDate || null, b.dueDate || null, b.estimatedHours || null]
-    );
-
-    if (Array.isArray(b.dependsOn) && b.dependsOn.length > 0) {
-      const valuesSql: string[] = [];
-      const params: any[] = [];
-      for (const depId of b.dependsOn) {
-        const base = params.length;
-        valuesSql.push(`($${base + 1},$${base + 2})`);
-        params.push(insertId, depId);
-      }
-      try {
-        await rawExecute(
-          `INSERT INTO project_task_dependencies ("taskId","dependsOnId") VALUES ${valuesSql.join(",")} ON CONFLICT DO NOTHING`,
-          params
-        );
-      } catch (depErr) {
-        logger.error(depErr, `Failed to create task dependencies for ${insertId}:`);
-      }
-
-      const placeholders = b.dependsOn.map((_: any, i: number) => `$${i + 1}`).join(',');
-      const blockedDeps = await rawQuery<any>(
-        `SELECT pt.status FROM project_tasks pt WHERE pt.id IN (${placeholders})`,
-        b.dependsOn
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO project_tasks ("projectId","phaseId",title,description,"assigneeId",priority,status,"startDate","dueDate","estimatedHours") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+        [projectId, b.phaseId || null, b.title.trim(), b.description || null, b.assigneeId || null, b.priority || 'medium', 'todo', b.startDate || null, b.dueDate || null, b.estimatedHours || null]
       );
-      const allDepsDone = blockedDeps.every((d: any) => d.status === 'done');
-      if (!allDepsDone) {
-        await rawExecute(`UPDATE project_tasks SET status='blocked' WHERE id=$1 AND status='todo'`, [insertId]);
+      insertId = ins.rows[0].id;
+
+      if (Array.isArray(b.dependsOn) && b.dependsOn.length > 0) {
+        const valuesSql: string[] = [];
+        const params: any[] = [];
+        for (const depId of b.dependsOn) {
+          const base = params.length;
+          valuesSql.push(`($${base + 1},$${base + 2})`);
+          params.push(insertId, depId);
+        }
+        try {
+          await client.query(
+            `INSERT INTO project_task_dependencies ("taskId","dependsOnId") VALUES ${valuesSql.join(",")} ON CONFLICT DO NOTHING`,
+            params
+          );
+        } catch (depErr) {
+          logger.error(depErr, `Failed to create task dependencies for ${insertId}:`);
+        }
+
+        const placeholders = b.dependsOn.map((_: any, i: number) => `$${i + 1}`).join(',');
+        const blockedRes = await client.query(
+          `SELECT pt.status FROM project_tasks pt WHERE pt.id IN (${placeholders})`,
+          b.dependsOn
+        );
+        const allDepsDone = blockedRes.rows.every((d: any) => d.status === 'done');
+        if (!allDepsDone) {
+          await client.query(`UPDATE project_tasks SET status='blocked' WHERE id=$1 AND status='todo'`, [insertId]);
+        }
       }
-    }
+    });
 
     const [row] = await rawQuery<any>(`SELECT * FROM project_tasks WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
