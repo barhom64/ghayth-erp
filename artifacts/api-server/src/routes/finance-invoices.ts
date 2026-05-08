@@ -981,7 +981,7 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
             try {
               await reverseAccountBalances(scope.companyId, Number(je.id));
               await client.query(
-                `UPDATE journal_entries SET status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND status IN ('posted', 'approved')`,
+                `UPDATE journal_entries SET status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND status IN ('posted', 'approved') AND "deletedAt" IS NULL`,
                 [Number(je.id), scope.companyId]
               );
             } catch (e) { logger.error(e, "Failed to reverse invoice GL on rejection:"); }
@@ -1173,7 +1173,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
       guardId: memoId ?? 0,
     }));
     if (journalId && memoId) {
-      await rawExecute(`UPDATE credit_memos SET "journalEntryId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
+      await rawExecute(`UPDATE credit_memos SET "journalEntryId" = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [journalId, memoId, scope.companyId]);
     }
 
     emitEvent({
@@ -1303,7 +1303,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
       guardId: memoId ?? 0,
     }));
     if (journalId && memoId) {
-      await rawExecute(`UPDATE debit_memos SET "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2`, [memoId, scope.companyId]);
+      await rawExecute(`UPDATE debit_memos SET "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [memoId, scope.companyId]);
     }
 
     emitEvent({

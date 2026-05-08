@@ -77,7 +77,7 @@ scheduledReportsRouter.patch("/:id", requirePermission("reports:write"), async (
     if (isActive !== undefined) { vals.push(isActive); updates.push(`"isActive" = $${vals.length}`); }
     if (updates.length === 0) throw new ValidationError("No fields to update");
     const [row] = await rawQuery<any>(
-      `UPDATE scheduled_reports SET ${updates.join(", ")} WHERE id = $1 AND "companyId" = $2 RETURNING *`,
+      `UPDATE scheduled_reports SET ${updates.join(", ")} WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING *`,
       vals
     );
     if (!row) throw new NotFoundError("Not found");

@@ -469,7 +469,7 @@ custodiesRouter.post("/custodies", requirePermission("finance:create"), async (r
 
     if (purpose || expectedReturnDate) {
       await rawExecute(
-        `UPDATE journal_entries SET notes = $1, "dueDate" = $2 WHERE id = $3 AND "companyId" = $4`,
+        `UPDATE journal_entries SET notes = $1, "dueDate" = $2 WHERE id = $3 AND "companyId" = $4 AND "deletedAt" IS NULL`,
         [purpose || null, expectedReturnDate || null, journalId, scope.companyId]
       );
     }
@@ -482,7 +482,7 @@ custodiesRouter.post("/custodies", requirePermission("finance:create"), async (r
 
     if (approvalResult.requiresApproval) {
       await rawExecute(
-        `UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft'`,
+        `UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`,
         [journalId, scope.companyId]
       );
     }

@@ -388,7 +388,7 @@ router.put("/branches/:id", requirePermission("settings:write"), async (req, res
     if (sets.length === 0) { res.json({ message: "لا توجد تحديثات" }); return; }
     params.push(id);
     params.push(existing.companyId);
-    await rawExecute(`UPDATE branches SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    await rawExecute(`UPDATE branches SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [updated] = await rawQuery(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [id, existing.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_branch",

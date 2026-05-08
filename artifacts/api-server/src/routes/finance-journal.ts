@@ -1277,7 +1277,7 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", requirePermission("
         );
         if (existing) {
           await rawExecute(
-            `UPDATE financial_periods SET status='closed', "closedAt"=NOW(), "closedBy"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status = 'open'`,
+            `UPDATE financial_periods SET status='closed', "closedAt"=NOW(), "closedBy"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status = 'open' AND "deletedAt" IS NULL`,
             [scope.activeAssignmentId, existing.id, scope.companyId]
           );
         } else {

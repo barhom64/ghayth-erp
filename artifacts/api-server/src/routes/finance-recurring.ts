@@ -263,7 +263,7 @@ recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:upda
     params.push(id);
     params.push(scope.companyId);
     await rawExecute(
-      `UPDATE recurring_journals SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length}`,
+      `UPDATE recurring_journals SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`,
       params
     );
 

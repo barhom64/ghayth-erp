@@ -2982,18 +2982,8 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
       },
     });
 
-    res.status(201).json({
-      id: insertId,
-      assignmentId: Number(assignmentId),
-      employeeId: asn.employeeId,
-      employeeName: asn.employeeName,
-      type,
-      description,
-      severity: effectiveSeverity,
-      deduction: effectiveDeduction,
-      period,
-      incidentDate,
-    });
+    const [row] = await rawQuery<any>(`SELECT v.*, e.name AS "employeeName" FROM employee_violations v JOIN employee_assignments ea ON ea.id=v."assignmentId" JOIN employees e ON e.id=ea."employeeId" WHERE v.id=$1`, [insertId]);
+    res.status(201).json(row || { id: insertId, assignmentId: Number(assignmentId), employeeId: asn.employeeId, type, severity: effectiveSeverity, deduction: effectiveDeduction, period });
   } catch (err) { handleRouteError(err, res, "Create violation error:"); }
 });
 
@@ -3162,15 +3152,8 @@ router.post("/performance", requirePermission("hr:create"), async (req, res) => 
     });
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "performance.created", entity: "hr_performance", entityId: insertId, details: JSON.stringify({ employeeId: resolvedEmployeeId, period }) }).catch((e) => logger.error(e, "hr background task failed"));
 
-    res.status(201).json({
-      id: insertId,
-      employeeId: resolvedEmployeeId,
-      period,
-      overallScore: Number(overallScore ?? 0),
-      status: effectiveStatus,
-      scores: scores ?? categories ?? null,
-      comments: finalComments,
-    });
+    const [row] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId, employeeId: resolvedEmployeeId, period, overallScore: Number(overallScore ?? 0), status: effectiveStatus });
   } catch (err) { handleRouteError(err, res, "Create performance error:"); }
 });
 
@@ -3256,7 +3239,8 @@ router.post("/salary-components", requirePermission("hr:create"), async (req, re
       after: { name, type: type ?? "fixed", category: category ?? "allowance", value: Number(value ?? 0), taxable: taxable ?? true },
     });
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "salary_component.created", entity: "hr_salary_components", entityId: insertId, details: JSON.stringify({ name, type: type ?? "fixed", category: category ?? "allowance" }) }).catch((e) => logger.error(e, "hr background task failed"));
-    res.status(201).json({ id: insertId, name, type: type ?? "fixed", category: category ?? "allowance", value: Number(value ?? 0), taxable: taxable ?? true, status: "active" });
+    const [row] = await rawQuery<any>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId, name, type: type ?? "fixed", category: category ?? "allowance", value: Number(value ?? 0), taxable: taxable ?? true, status: "active" });
   } catch (err) { handleRouteError(err, res, "Create salary component error:"); }
 });
 
@@ -3830,7 +3814,8 @@ router.post("/shift-assignments", requirePermission("hr:create"), async (req, re
       after: { assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null },
     }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.assignment.created", entity: "hr_shift_assignments", entityId: insertId, details: JSON.stringify({ assignmentId: Number(assignmentId), shiftId: Number(shiftId) }) }).catch((e) => logger.error(e, "hr background task failed"));
-    res.status(201).json({ id: insertId, assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null });
+    const [row] = await rawQuery<any>(`SELECT esa.*, s.name AS "shiftName" FROM employee_shift_assignments esa LEFT JOIN shifts s ON s.id=esa."shiftId" WHERE esa.id=$1`, [insertId]);
+    res.status(201).json(row || { id: insertId, assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null });
   } catch (err) { handleRouteError(err, res, "Create shift assignment error:"); }
 });
 
@@ -3934,7 +3919,8 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
       after: { employeeId, type: type ?? "general", subject },
     }).catch((e) => logger.error(e, "hr background task failed"));
 
-    res.status(201).json({ id: insertId, employeeId: Number(employeeId), type: type ?? "general", subject, status: approvalResult?.requiresApproval ? "pending_approval" : (status ?? "draft"), ref: letterRef, approval: approvalResult });
+    const [row] = await rawQuery<any>(`SELECT * FROM official_letters WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json({ ...row, approval: approvalResult });
   } catch (err) { handleRouteError(err, res, "Create official letter error:"); }
 });
 
@@ -5410,7 +5396,8 @@ router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:crea
       after: { cycleId, evaluatorId, evaluatorRole, overallScore },
     }).catch((e) => logger.error(e, "hr background task failed"));
 
-    res.status(201).json({ id: insertId, cycleId, evaluatorId, evaluatorRole, overallScore });
+    const [row] = await rawQuery<any>(`SELECT * FROM peer_evaluations WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId, cycleId, evaluatorId, evaluatorRole, overallScore });
   } catch (err) { handleRouteError(err, res, "خطأ في إرسال التقييم"); }
 });
 
@@ -5763,7 +5750,8 @@ router.post("/delegations", requirePermission("hr:approve"), async (req, res) =>
       after: { delegatorId: emp.id, delegateId: Number(delegateId), scope: delegationScope || "عام", reason, startDate: startDate || null, endDate: endDate || null },
     }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delegation.created", entity: "hr_delegations", entityId: r.insertId, details: JSON.stringify({ delegateId: Number(delegateId), scope: delegationScope || "عام" }) }).catch((e) => logger.error(e, "hr background task failed"));
-    res.status(201).json({ success: true, id: r.insertId, delegateId: Number(delegateId), startDate: startDate || null, endDate: endDate || null });
+    const [row] = await rawQuery<any>(`SELECT * FROM delegations WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { success: true, id: r.insertId, delegateId: Number(delegateId), startDate: startDate || null, endDate: endDate || null });
   } catch (err) { handleRouteError(err, res, "خطأ في إنشاء التفويض"); }
 });
 
@@ -6907,7 +6895,8 @@ router.post("/company-documents", requirePermission("hr:create"), async (req, re
       after: { documentType: b.documentType, documentNumber: b.documentNumber, expiryDate: b.expiryDate },
     }).catch((e) => logger.error(e, "hr background task failed"));
 
-    res.status(201).json({ id: insertId, message: "تم إضافة وثيقة المنشأة" });
+    const [row] = await rawQuery<any>(`SELECT * FROM company_documents WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId, message: "تم إضافة وثيقة المنشأة" });
   } catch (err) { handleRouteError(err, res, "Company documents error:"); }
 });
 
@@ -6978,7 +6967,8 @@ router.post("/employee-documents", requirePermission("hr:create"), async (req, r
       after: { employeeId: Number(b.employeeId), documentType: b.documentType, documentNumber: b.documentNumber, expiryDate: b.expiryDate },
     }).catch((e) => logger.error(e, "hr background task failed"));
 
-    res.status(201).json({ id: insertId, message: "تم إضافة وثيقة الموظف" });
+    const [row] = await rawQuery<any>(`SELECT * FROM employee_documents WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId, message: "تم إضافة وثيقة الموظف" });
   } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
 });
 
@@ -7064,7 +7054,8 @@ router.post("/excuse-requests", requirePermission("hr:create"), async (req, res)
     }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: assignment.branchId, userId: scope.userId, action: "excuse.created", entity: "hr_excuse_requests", entityId: insertId, details: JSON.stringify({ excuseDate, excuseType }) }).catch((e) => logger.error(e, "hr background task failed"));
 
-    res.status(201).json({ id: insertId, message: "تم تقديم طلب الاستئذان بنجاح" });
+    const [row] = await rawQuery<any>(`SELECT * FROM hr_excuse_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId, message: "تم تقديم طلب الاستئذان بنجاح" });
   } catch (err) { handleRouteError(err, res, "Create excuse request error:"); }
 });
 

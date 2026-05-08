@@ -1292,7 +1292,8 @@ router.post("/trips/:id/waypoints", requirePermission("fleet:update"), async (re
       after: { tripId, lat, lon, speed: b.speed || 0 },
     }).catch((e) => logger.error(e, "fleet background task failed"));
 
-    res.status(201).json({ id: insertId, tripId, lat, lon });
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_trip_waypoints WHERE id=$1`, [insertId]);
+    res.status(201).json(row || { id: insertId, tripId, lat, lon });
   } catch (err) { handleRouteError(err, res, "Waypoint error:"); }
 });
 

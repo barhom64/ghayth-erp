@@ -532,7 +532,7 @@ router.patch("/log/:id", requirePermission("communications:write"), async (req, 
     if (sets.length === 0) { throw new ValidationError("لا توجد بيانات"); }
     params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
-      `UPDATE communications_log SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
+      `UPDATE communications_log SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!row) { throw new NotFoundError("السجل غير موجود"); }
@@ -599,7 +599,7 @@ router.post("/log/:id/convert", requirePermission("communications:write"), async
 
     try {
       await rawExecute(
-        `UPDATE communications_log SET "relatedType"=$1, "relatedId"=$2 WHERE id=$3 AND "companyId"=$4`,
+        `UPDATE communications_log SET "relatedType"=$1, "relatedId"=$2 WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
         [targetType, createdId, logId, scope.companyId]
       );
     } catch (e) {

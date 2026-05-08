@@ -267,7 +267,7 @@ router.post("/tickets/check-sla", requirePermission("support:read"), async (req,
       logger.info({ ticketRef: ticket.ref }, "SLA breach — escalating to critical priority");
       try {
         await rawExecute(
-          `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND priority != 'critical'`,
+          `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND priority != 'critical' AND "deletedAt" IS NULL`,
           [ticket.id, scope.companyId]
         );
         let notifAssignmentId = scope.activeAssignmentId;
@@ -340,13 +340,13 @@ router.post("/tickets/:id/replies", requirePermission("support:create"), async (
       [ticketId, scope.userId, b.authorName, b.message, b.isInternal || false]
     );
     if (!b.isInternal && !ticket.firstResponseAt) {
-      await rawExecute(`UPDATE support_tickets SET "firstResponseAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [ticketId, scope.companyId]);
+      await rawExecute(`UPDATE support_tickets SET "firstResponseAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
     }
 
     if (ticket.slaDeadline && new Date() > new Date(ticket.slaDeadline)) {
       try {
         await rawExecute(
-          `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND priority != 'critical'`,
+          `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND priority != 'critical' AND "deletedAt" IS NULL`,
           [ticketId, scope.companyId]
         );
         await createNotification({
@@ -680,7 +680,8 @@ router.post("/tickets/:id/csat", requirePermission("support:write"), async (req,
       action: "create", entity: "ticket_csat", entityId: ticketId,
       after: { ticketId, score, comment: comment || null },
     }).catch((e) => logger.error(e, "support background task failed"));
-    res.status(201).json({ ticketId, score, comment });
+    const [row] = await rawQuery<any>(`SELECT * FROM ticket_csat_ratings WHERE "ticketId"=$1 AND "companyId"=$2`, [ticketId, scope.companyId]);
+    res.status(201).json(row || { ticketId, score, comment });
   } catch (err) { handleRouteError(err, res, "CSAT error:"); }
 });
 
@@ -726,7 +727,7 @@ router.get("/kb/:id", requirePermission("support:read"), async (req, res) => {
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المقالة غير موجودة");
-    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]).catch((e) => logger.error(e, "support background task failed"));
+    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]).catch((e) => logger.error(e, "support background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "KB article error:"); }
 });
@@ -764,8 +765,8 @@ router.patch("/kb/:id", requirePermission("support:write"), async (req, res) => 
     if (b.tags !== undefined) { params.push(b.tags); sets.push(`tags=$${params.length}`); }
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE kb_articles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1`, [id]);
+    await rawExecute(`UPDATE kb_articles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.updated", entity: "kb_articles", entityId: id, details: JSON.stringify({ title: b.title }) }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -811,12 +812,12 @@ router.post("/kb/:id/feedback", requirePermission("support:read"), async (req, r
     if (!row) throw new NotFoundError("المقالة غير موجودة");
     if (helpful === true || helpful === 'true') {
       await rawExecute(
-        `UPDATE kb_articles SET helpful=COALESCE(helpful,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+        `UPDATE kb_articles SET helpful=COALESCE(helpful,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
     } else {
       await rawExecute(
-        `UPDATE kb_articles SET "notHelpful"=COALESCE("notHelpful",0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+        `UPDATE kb_articles SET "notHelpful"=COALESCE("notHelpful",0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
     }

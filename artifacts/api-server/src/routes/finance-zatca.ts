@@ -429,7 +429,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), asy
     let uuid = invoice.zatcaUuid;
     if (!uuid) {
       uuid = crypto.randomUUID();
-      await rawExecute(`UPDATE invoices SET "zatcaUuid" = $1::uuid WHERE id = $2 AND "companyId" = $3`, [uuid, id, scope.companyId]);
+      await rawExecute(`UPDATE invoices SET "zatcaUuid" = $1::uuid WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [uuid, id, scope.companyId]);
     }
 
     const xml = generateZatcaXml({
@@ -577,7 +577,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
 
     await rawExecute(
       `UPDATE invoices SET "zatcaUuid" = $1::uuid, "zatcaHash" = $2, "zatcaStatus" = $3, "zatcaQrCode" = $4
-       WHERE id = $5 AND "companyId" = $6`,
+       WHERE id = $5 AND "companyId" = $6 AND "deletedAt" IS NULL`,
       [uuid, hash, submissionStatus, qrCode, id, scope.companyId]
     );
 
@@ -665,7 +665,7 @@ zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"
 
     await rawExecute(
       `UPDATE journal_entries SET "zatcaUuid" = $1::uuid, "zatcaHash" = $2, "zatcaStatus" = $3, "zatcaQrCode" = $4
-       WHERE id = $5 AND "companyId" = $6`,
+       WHERE id = $5 AND "companyId" = $6 AND "deletedAt" IS NULL`,
       [uuid, hash, submissionStatus, qrCode, id, scope.companyId]
     );
 
