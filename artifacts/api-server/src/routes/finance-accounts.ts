@@ -94,7 +94,7 @@ accountsRouter.get("/accounts", requirePermission("finance:read"), async (req, r
     }
 
     const rows = await rawQuery(
-      `SELECT * FROM chart_of_accounts WHERE ${where} AND "deletedAt" IS NULL${extraWhere} ORDER BY code`,
+      `SELECT * FROM chart_of_accounts WHERE ${where} AND "deletedAt" IS NULL${extraWhere} ORDER BY code LIMIT 5000`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -342,9 +342,9 @@ accountsRouter.get("/ledger/:accountCode", requirePermission("finance:read"), as
       `SELECT je.id, je.ref, je.description, je."createdAt",
               jl.debit, jl.credit
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = $2
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = $2 AND jl."deletedAt" IS NULL
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
-       ORDER BY je."createdAt" ASC`,
+       ORDER BY je."createdAt" ASC LIMIT 5000`,
       params
     );
 

@@ -38,7 +38,7 @@ scheduledReportsRouter.get("/", requirePermission("reports:read"), async (req, r
        LEFT JOIN employee_assignments ea ON ea.id = sr."createdBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE sr."companyId" = $1
-       ORDER BY sr."createdAt" DESC`,
+       ORDER BY sr."createdAt" DESC LIMIT 200`,
       [scope.companyId]
     );
     res.json({ data: rows });
@@ -77,7 +77,7 @@ scheduledReportsRouter.patch("/:id", requirePermission("reports:write"), async (
     if (isActive !== undefined) { vals.push(isActive); updates.push(`"isActive" = $${vals.length}`); }
     if (updates.length === 0) throw new ValidationError("No fields to update");
     const [row] = await rawQuery<any>(
-      `UPDATE scheduled_reports SET ${updates.join(", ")} WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING *`,
+      `UPDATE scheduled_reports SET ${updates.join(", ")} WHERE id = $1 AND "companyId" = $2 RETURNING *`,
       vals
     );
     if (!row) throw new NotFoundError("Not found");

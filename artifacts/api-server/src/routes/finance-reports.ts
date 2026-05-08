@@ -804,7 +804,7 @@ reportsRouter.get("/reports/expenses-analysis", requirePermission("finance:read"
        LEFT JOIN branches b ON b.id = je."branchId"
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       WHERE jl.debit > jl.credit
+       WHERE jl.debit > jl.credit AND jl."deletedAt" IS NULL
        GROUP BY ${groupCol}
        ORDER BY amount DESC
        LIMIT 500`,
@@ -836,6 +836,7 @@ reportsRouter.get("/reports/revenue-analysis", requirePermission("finance:read")
        FROM journal_lines jl
        JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
        JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'revenue'
+       WHERE jl."deletedAt" IS NULL
        GROUP BY coa.code, coa.name
        ORDER BY amount DESC
        LIMIT 500`,
@@ -919,7 +920,7 @@ reportsRouter.get("/reports/cash-bank-statement", requirePermission("finance:rea
        FROM journal_lines jl
        JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
        LEFT JOIN branches b ON b.id = je."branchId"
-       WHERE jl."accountCode" = $2
+       WHERE jl."accountCode" = $2 AND jl."deletedAt" IS NULL
        ORDER BY je."createdAt" ASC
        LIMIT 500`,
       params

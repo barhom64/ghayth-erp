@@ -177,7 +177,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
         [companies]
       );
       const [violations] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM employee_violations WHERE "companyId" = ANY($1::int[]) AND status IN ('pending_inquiry','pending_employee','pending_manager','pending_gm')`,
+        `SELECT COUNT(*) AS total FROM employee_violations WHERE "companyId" = ANY($1::int[]) AND status IN ('pending_inquiry','pending_employee','pending_manager','pending_gm') AND "deletedAt" IS NULL`,
         [companies]
       ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; });
       const absentVal = Math.max(0, Number(absent?.total ?? 0));

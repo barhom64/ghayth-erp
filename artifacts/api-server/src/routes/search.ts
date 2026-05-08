@@ -17,7 +17,8 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
       return;
     }
 
-    const pattern = `%${query}%`;
+    const escaped = query.replace(/[%_\\]/g, "\\$&");
+    const pattern = `%${escaped}%`;
     const entityType = String(type).toLowerCase();
 
     const shouldSearch = (t: string) => entityType === "all" || entityType === t;

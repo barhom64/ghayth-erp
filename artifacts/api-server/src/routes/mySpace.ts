@@ -232,9 +232,9 @@ router.get("/", async (req, res) => {
       documents = await rawQuery<any>(
         `SELECT id, type, name, "expiryDate", "createdAt"
          FROM employee_documents
-         WHERE "employeeId" = $1
+         WHERE "employeeId" = $1 AND "companyId" = $2
          ORDER BY "createdAt" DESC LIMIT 10`,
-        [scope.employeeId]
+        [scope.employeeId, scope.companyId]
       );
     } catch (e) {
       logger.error(e, "my-space documents error:");
@@ -388,9 +388,9 @@ router.get("/", async (req, res) => {
         `SELECT pr.id, pr.period, pr."overallScore", pr.status, e.name AS "reviewerName", pr."createdAt"
          FROM performance_reviews pr
          LEFT JOIN employees e ON e.id = pr."reviewerId"
-         WHERE pr."employeeId" = $1 AND pr."deletedAt" IS NULL
+         WHERE pr."employeeId" = $1 AND pr."companyId" = $2 AND pr."deletedAt" IS NULL
          ORDER BY pr."createdAt" DESC LIMIT 5`,
-        [scope.employeeId]
+        [scope.employeeId, scope.companyId]
       );
     } catch (e) {
       logger.error(e, "my-space performanceReviews error:");
@@ -682,9 +682,9 @@ router.get("/documents", async (req, res) => {
     const rows = await rawQuery<any>(
       `SELECT id, type, name AS title, "fileUrl" AS url, "expiryDate", "createdAt"
        FROM employee_documents
-       WHERE "employeeId" = $1
+       WHERE "employeeId" = $1 AND "companyId" = $2
        ORDER BY "createdAt" DESC LIMIT 50`,
-      [scope.employeeId]
+      [scope.employeeId, scope.companyId]
     );
     res.json({ data: rows });
   } catch (err) {

@@ -186,7 +186,7 @@ router.get("/tags-filter/:entityType", requirePermission("operations:read"), asy
     }
     const rows = await rawQuery(
       `SELECT "entityId" FROM entity_tags
-       WHERE "entityType" = $1 AND tag = $2 AND "companyId" = $3`,
+       WHERE "entityType" = $1 AND tag = $2 AND "companyId" = $3 LIMIT 1000`,
       [entityType, tag, scope.companyId]
     );
     res.json({ data: rows.map((r: any) => r.entityId) });
@@ -204,7 +204,7 @@ router.get("/tags-list/:entityType", requirePermission("operations:read"), async
        FROM entity_tags
        WHERE "entityType" = $1 AND "companyId" = $2
        GROUP BY tag, color
-       ORDER BY count DESC`,
+       ORDER BY count DESC LIMIT 500`,
       [entityType, scope.companyId]
     );
     res.json({ data: rows });

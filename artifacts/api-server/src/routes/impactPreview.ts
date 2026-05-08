@@ -70,7 +70,7 @@ router.post("/", requirePermission("admin:write"), async (req, res): Promise<voi
          FROM hr_leave_requests lr
          LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
          LEFT JOIN employees e ON e.id = lr."employeeId"
-         WHERE lr.id = $1 AND lr."companyId" = $2`,
+         WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
         [entityId, scope.companyId]
       );
       if (leave) {
@@ -139,7 +139,7 @@ router.post("/", requirePermission("admin:write"), async (req, res): Promise<voi
             [entityId, scope.companyId]
           )
         : await rawQuery<any>(
-            `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`,
+            `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
             [entityId, scope.companyId]
           );
       if (item) {
@@ -194,7 +194,7 @@ router.post("/", requirePermission("admin:write"), async (req, res): Promise<voi
       const [emp] = await rawQuery<any>(
         `SELECT e.name FROM employees e
          JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-         WHERE e.id = $1 AND ea."companyId" = $2`,
+         WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL`,
         [entityId, scope.companyId]
       );
       if (emp) {
@@ -228,7 +228,7 @@ router.post("/", requirePermission("admin:write"), async (req, res): Promise<voi
       );
       if (proj) {
         const [[taskCount], [phaseCount]] = await Promise.all([
-          rawQuery<any>(`SELECT COUNT(*) AS c FROM project_tasks WHERE "projectId" = $1`, [entityId]),
+          rawQuery<any>(`SELECT COUNT(*) AS c FROM project_tasks WHERE "projectId" = $1 AND "deletedAt" IS NULL`, [entityId]),
           rawQuery<any>(`SELECT COUNT(*) AS c FROM project_phases WHERE "projectId" = $1`, [entityId]),
         ]);
         const tasks = Number(taskCount?.c || 0);

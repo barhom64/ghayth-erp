@@ -210,7 +210,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
     const hrDocExpiries = await safe(async () => {
       const [r] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM employees
-         WHERE "companyId"=$1 AND status='active'
+         WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL
            AND ("iqamaExpiry"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
                 OR "passportExpiry"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days')`,
         [companyId]

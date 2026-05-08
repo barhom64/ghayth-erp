@@ -48,7 +48,7 @@ router.get("/:entityType/:entityId", async (req, res) => {
        FROM approval_actions aa
        LEFT JOIN users u ON aa."actionBy" = u.id
        WHERE aa."entityType" = $1 AND aa."entityId" = $2 AND aa."companyId" = $3
-       ORDER BY aa."createdAt" DESC`,
+       ORDER BY aa."createdAt" DESC LIMIT 200`,
       [entityType, entityId, scope.companyId]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });

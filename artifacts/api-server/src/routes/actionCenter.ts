@@ -152,9 +152,9 @@ router.get("/", async (req, res) => {
       escalations = await rawQuery<any>(
         `SELECT n.id, n.title, n.body, n.priority, n."createdAt"
          FROM notifications n
-         WHERE n."assignmentId" = $1 AND n.type IN ('escalation','sla_breach','urgent') AND n."isRead" = false
+         WHERE n."assignmentId" = $1 AND n."companyId" = ANY($2::int[]) AND n.type IN ('escalation','sla_breach','urgent') AND n."isRead" = false
          ORDER BY n."createdAt" DESC LIMIT 10`,
-        [scope.activeAssignmentId]
+        [scope.activeAssignmentId, scope.allowedCompanies]
       );
     } catch (e) {
       logger.error(e, "Action-center escalations error");
@@ -185,9 +185,9 @@ router.get("/", async (req, res) => {
       criticalAlerts = await rawQuery<any>(
         `SELECT id, type, title, body, priority, "createdAt"
          FROM notifications
-         WHERE "assignmentId" = $1 AND priority IN ('high','urgent','critical') AND "isRead" = false
+         WHERE "assignmentId" = $1 AND "companyId" = ANY($2::int[]) AND priority IN ('high','urgent','critical') AND "isRead" = false
          ORDER BY "createdAt" DESC LIMIT 10`,
-        [scope.activeAssignmentId]
+        [scope.activeAssignmentId, scope.allowedCompanies]
       );
     } catch (e) {
       logger.error(e, "Action-center criticalAlerts error");
@@ -202,7 +202,7 @@ router.get("/", async (req, res) => {
            FROM hr_employee_loans l
            JOIN employee_assignments ea ON ea.id = l."assignmentId"
            JOIN employees e ON e.id = ea."employeeId"
-           WHERE l."companyId" = ANY($1::int[]) AND l.status = 'pending'
+           WHERE l."companyId" = ANY($1::int[]) AND l.status = 'pending' AND l."deletedAt" IS NULL
            ORDER BY l."createdAt" DESC LIMIT 20`,
           [scope.allowedCompanies]
         );
@@ -220,7 +220,7 @@ router.get("/", async (req, res) => {
            FROM hr_overtime_requests o
            JOIN employee_assignments ea ON ea.id = o."assignmentId"
            JOIN employees e ON e.id = ea."employeeId"
-           WHERE o."companyId" = ANY($1::int[]) AND o.status = 'pending'
+           WHERE o."companyId" = ANY($1::int[]) AND o.status = 'pending' AND o."deletedAt" IS NULL
            ORDER BY o."createdAt" DESC LIMIT 20`,
           [scope.allowedCompanies]
         );
@@ -238,7 +238,7 @@ router.get("/", async (req, res) => {
            FROM hr_exit_requests er
            JOIN employee_assignments ea ON ea.id = er."assignmentId"
            JOIN employees e ON e.id = ea."employeeId"
-           WHERE er."companyId" = ANY($1::int[]) AND er.status = 'pending'
+           WHERE er."companyId" = ANY($1::int[]) AND er.status = 'pending' AND er."deletedAt" IS NULL
            ORDER BY er."createdAt" DESC LIMIT 20`,
           [scope.allowedCompanies]
         );
