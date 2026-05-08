@@ -125,7 +125,8 @@ class ProjectsEngineImpl implements DomainEngine {
       `UPDATE project_tasks SET "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1)
        WHERE "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $2)
          AND status NOT IN ('completed','cancelled')
-         AND ("dueDate" IS NULL OR "dueDate" BETWEEN $3 AND $4)`,
+         AND ("dueDate" IS NULL OR "dueDate" BETWEEN $3 AND $4)
+         AND "deletedAt" IS NULL`,
       [params.toEmployeeQuery.id, params.fromEmployeeQuery.id, params.startDate, params.endDate]
     ).catch((e) => logger.error(e, "project task reassignment failed"));
   }

@@ -143,31 +143,31 @@ const DOMAIN_RECORD_HANDLERS: Record<
       await rawExecute(`UPDATE hr_overtime_requests SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`, [refId, companyId]);
     }
   },
-  hr_exit_requests: async (refId, outcome, approvedBy) => {
+  hr_exit_requests: async (refId, outcome, companyId, approvedBy) => {
     if (outcome === "approved") {
       await rawExecute(
-        `UPDATE hr_exit_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2 AND status = 'pending'`,
-        [approvedBy ?? null, refId]
+        `UPDATE hr_exit_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
+        [approvedBy ?? null, refId, companyId]
       );
     } else if (outcome === "rejected") {
-      await rawExecute(`UPDATE hr_exit_requests SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1 AND status = 'pending'`, [refId]);
+      await rawExecute(`UPDATE hr_exit_requests SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`, [refId, companyId]);
     }
   },
-  employee_commission_calculations: async (refId, outcome, approvedBy) => {
+  employee_commission_calculations: async (refId, outcome, companyId, approvedBy) => {
     if (outcome === "approved") {
       await rawExecute(
-        `UPDATE employee_commission_calculations SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2 AND status IN ('pending','calculated')`,
-        [approvedBy ?? null, refId]
+        `UPDATE employee_commission_calculations SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status IN ('pending','calculated')`,
+        [approvedBy ?? null, refId, companyId]
       );
     } else if (outcome === "rejected") {
       await rawExecute(
-        `UPDATE employee_commission_calculations SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1 AND status IN ('pending','calculated')`,
-        [refId]
+        `UPDATE employee_commission_calculations SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status IN ('pending','calculated')`,
+        [refId, companyId]
       );
     } else {
       await rawExecute(
-        `UPDATE employee_commission_calculations SET status = 'calculated', "updatedAt" = NOW() WHERE id = $1 AND status = 'pending'`,
-        [refId]
+        `UPDATE employee_commission_calculations SET status = 'calculated', "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
+        [refId, companyId]
       );
     }
   },
@@ -177,6 +177,7 @@ async function propagateDomainStatus(
   refTable: string | null | undefined,
   refId: number | null | undefined,
   outcome: "approved" | "rejected" | "returned",
+  companyId: number,
   approvedByAssignmentId?: number | null,
 ) {
   if (!refTable || !refId) return;
@@ -186,7 +187,7 @@ async function propagateDomainStatus(
   // IMPORTANT: we no longer swallow handler errors. Callers MUST run this
   // before committing the workflow status change so a handler failure keeps
   // the workflow in 'pending' instead of orphaning the domain record.
-  await handler(refId, outcome, approvedByAssignmentId);
+  await handler(refId, outcome, companyId, approvedByAssignmentId);
 }
 
 export type WorkflowAction = "submit" | "approve" | "reject" | "refer" | "escalate" | "return";
@@ -628,7 +629,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         // actor can retry — instead of being stuck with a green workflow on
         // top of a stale domain row.
         try {
-          await propagateDomainStatus(instance.refTable, instance.refId, "approved", actionBy);
+          await propagateDomainStatus(instance.refTable, instance.refId, "approved", companyId, actionBy);
         } catch (err) {
           logger.error(
             err as Error,

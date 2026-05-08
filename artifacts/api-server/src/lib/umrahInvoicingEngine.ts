@@ -203,17 +203,17 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     invoiceId = invRes.rows[0].id;
 
     if (lineItems.length > 0) {
-      const cols = 7;
+      const cols = 8;
       const valuesSql: string[] = [];
       const params: any[] = [];
       for (const li of lineItems) {
         const base = params.length;
         valuesSql.push(`(${Array.from({ length: cols }, (_, i) => `$${base + i + 1}`).join(",")})`);
-        params.push(invoiceId, li.itemType, li.groupId, li.violationId, li.description, li.quantity, li.lineTotal);
+        params.push(invoiceId, li.itemType, li.groupId, li.violationId, li.description, li.quantity, li.unitPrice, li.lineTotal);
       }
       await client.query(
         `INSERT INTO umrah_sales_invoice_items
-         ("invoiceId","itemType","groupId","violationId",description,quantity,"lineTotal")
+         ("invoiceId","itemType","groupId","violationId",description,quantity,"unitPrice","lineTotal")
          VALUES ${valuesSql.join(",")}`,
         params
       );

@@ -190,8 +190,8 @@ export async function retryFailedMessages(companyId?: number): Promise<{ retried
     if (result.success) succeeded++;
 
     await rawExecute(
-      `UPDATE integration_logs SET "retryAttempt"="retryAttempt"+1, status=$2 WHERE id=$1`,
-      [log.id, result.success ? "sent" : "retrying"]
+      `UPDATE integration_logs SET "retryAttempt"="retryAttempt"+1, status=$2 WHERE id=$1 AND "companyId"=$3`,
+      [log.id, result.success ? "sent" : "retrying", log.companyId]
     );
   }
 

@@ -465,7 +465,7 @@ protectedRouter.post("/tickets/:id/replies", withPortalScope(async (req, res) =>
       [id, message]
     );
     const { supportEngine } = await import("../lib/engines/index.js");
-    await supportEngine.markTicketInProgress(id);
+    await supportEngine.markTicketInProgress(id, scope.companyId);
     createAuditLog({
       companyId: scope.companyId, userId: scope.accountId,
       action: "create", entity: "ticket_replies", entityId: id,

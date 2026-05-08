@@ -133,7 +133,7 @@ export const HR_TABLES = {
   EXIT_CLEARANCE: "hr_exit_clearance",
   DISCIPLINE_MEMOS: "hr_inquiry_memos",
   DISCIPLINE_REGULATION: "hr_discipline_regulation",
-  ATTENDANCE: "hr_attendance",
+  ATTENDANCE: "attendance",
   LEAVE_REQUESTS: "hr_leave_requests",
   LEAVE_TYPES: "hr_leave_types",
 } as const;
