@@ -131,13 +131,13 @@ router.get("/storage/objects/*path", authMiddleware, requirePermission("document
     const scope = req.scope;
     if (scope) {
       const docs = await rawQuery(
-        `SELECT id FROM documents WHERE "storageKey"=$1 AND "companyId"=$2 LIMIT 1`,
+        `SELECT id FROM documents WHERE "storageKey"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
         [objectPath, scope.companyId]
       );
       const versions = docs.length > 0 ? docs : await rawQuery(
         `SELECT dv.id FROM document_versions dv
          JOIN documents d ON d.id = dv."documentId"
-         WHERE dv."storageKey"=$1 AND d."companyId"=$2 LIMIT 1`,
+         WHERE dv."storageKey"=$1 AND d."companyId"=$2 AND d."deletedAt" IS NULL LIMIT 1`,
         [objectPath, scope.companyId]
       );
       if (docs.length === 0 && versions.length === 0) {

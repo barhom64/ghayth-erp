@@ -36,7 +36,7 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
         `SELECT pm.id, pm.title, pm."dueDate" as "date", pm.status, p.name as "projectName", p.id as "projectId"
          FROM project_milestones pm
          JOIN projects p ON p.id = pm."projectId"
-         WHERE p."companyId" = $1 AND pm.status NOT IN ('completed','cancelled')
+         WHERE p."companyId" = $1 AND p."deletedAt" IS NULL AND pm.status NOT IN ('completed','cancelled')
            AND pm."dueDate" BETWEEN $2 AND $3
          ORDER BY pm."dueDate" LIMIT 50`,
         [cid, now, cutoff]
@@ -72,7 +72,7 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
       safe(() => rawQuery<any>(
         `SELECT id, name, "startDate" as "date", status, provider
          FROM training_programs
-         WHERE "companyId" = $1 AND status IN ('planned','ongoing')
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('planned','ongoing')
            AND "startDate" BETWEEN $2 AND $3
          ORDER BY "startDate" LIMIT 30`,
         [cid, now.slice(0, 10), cutoff.slice(0, 10)]
@@ -126,7 +126,7 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
                 a.status, jp.title as "jobTitle", a."postingId"
          FROM job_applications a
          LEFT JOIN job_postings jp ON jp.id = a."postingId"
-         WHERE (jp."companyId" = $1 OR jp."companyId" IS NULL)
+         WHERE jp."companyId" = $1
            AND a."interviewDate" IS NOT NULL
            AND a."interviewDate" BETWEEN $2 AND $3
            AND a."deletedAt" IS NULL

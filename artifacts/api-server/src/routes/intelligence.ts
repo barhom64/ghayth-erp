@@ -189,13 +189,13 @@ router.get("/overview", requirePermission("admin:read"), async (req, res): Promi
     const [alerts] = await rawQuery<any>(`SELECT COUNT(*) as unread FROM smart_alerts WHERE "companyId"=$1 AND "isRead"=false`, [cid]);
 
     res.json({
-      totalEmployees: Number(employees.total),
-      totalVehicles: Number(vehicles.total),
-      totalProperties: Number(properties.total),
-      activeProjects: Number(projects.active),
-      openTickets: Number(tickets.open),
-      monthlyRevenue: Number(revenue.total),
-      unreadAlerts: Number(alerts.unread),
+      totalEmployees: Number(employees?.total ?? 0),
+      totalVehicles: Number(vehicles?.total ?? 0),
+      totalProperties: Number(properties?.total ?? 0),
+      activeProjects: Number(projects?.active ?? 0),
+      openTickets: Number(tickets?.open ?? 0),
+      monthlyRevenue: Number(revenue?.total ?? 0),
+      unreadAlerts: Number(alerts?.unread ?? 0),
     });
   } catch (err) { handleRouteError(err, res, "Intelligence overview error:"); }
 });
@@ -209,12 +209,12 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
     const overloadedEmployees = await rawQuery<any>(
       `SELECT e.name,
               (SELECT COUNT(*) FROM tasks t WHERE t."assignedTo" = ea.id AND t."companyId" = $1
-               AND t.status NOT IN ('completed','cancelled'))::int AS "activeTasks"
+               AND t.status NOT IN ('completed','cancelled') AND t."deletedAt" IS NULL)::int AS "activeTasks"
        FROM employee_assignments ea
-       JOIN employees e ON e.id = ea."employeeId"
+       JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
        WHERE ea."companyId" = $1 AND ea.status = 'active'
          AND (SELECT COUNT(*) FROM tasks t WHERE t."assignedTo" = ea.id AND t."companyId" = $1
-              AND t.status NOT IN ('completed','cancelled'))::int > 6
+              AND t.status NOT IN ('completed','cancelled') AND t."deletedAt" IS NULL)::int > 6
        LIMIT 5`,
       [cid]
     ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
@@ -276,7 +276,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
        LEFT JOIN employees e ON e.id = lr."employeeId"
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1
        LEFT JOIN departments d ON d.id = ea."departmentId"
-       WHERE lr."companyId" = $1 AND lr.status = 'pending'
+       WHERE lr."companyId" = $1 AND lr.status = 'pending' AND lr."deletedAt" IS NULL
        GROUP BY d.name
        HAVING AVG(EXTRACT(EPOCH FROM (NOW() - lr."createdAt")) / 86400) > 2
        ORDER BY "avgDays" DESC LIMIT 3`,
@@ -319,12 +319,12 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
     const prodDrops = await rawQuery<any>(
       `WITH recent AS (
          SELECT t."assignedTo", COUNT(*) FILTER (WHERE t.status='completed')::float / NULLIF(COUNT(*),0) AS rate
-         FROM tasks t WHERE t."companyId"=$1 AND t."scheduledDate"::date >= CURRENT_DATE - INTERVAL '7 days'
+         FROM tasks t WHERE t."companyId"=$1 AND t."deletedAt" IS NULL AND t."scheduledDate"::date >= CURRENT_DATE - INTERVAL '7 days'
          GROUP BY t."assignedTo"
        ),
        historical AS (
          SELECT t."assignedTo", COUNT(*) FILTER (WHERE t.status='completed')::float / NULLIF(COUNT(*),0) AS rate
-         FROM tasks t WHERE t."companyId"=$1 AND t."scheduledDate"::date BETWEEN CURRENT_DATE - INTERVAL '37 days' AND CURRENT_DATE - INTERVAL '8 days'
+         FROM tasks t WHERE t."companyId"=$1 AND t."deletedAt" IS NULL AND t."scheduledDate"::date BETWEEN CURRENT_DATE - INTERVAL '37 days' AND CURRENT_DATE - INTERVAL '8 days'
          GROUP BY t."assignedTo"
        )
        SELECT r."assignedTo", e.name,
@@ -677,8 +677,8 @@ router.post("/smart-assign", requireRole("branch_manager", "general_manager", "o
     const [emp] = await rawQuery<any>(
       `SELECT e.id, e.name, e.email,
               (SELECT COUNT(*) FROM tasks t JOIN employee_assignments ea3 ON ea3.id = t."assignedTo"
-               WHERE ea3."employeeId"=e.id AND t."companyId"=$1 AND t.status NOT IN ('completed','cancelled'))::int AS "currentTasks"
-       FROM employees e WHERE e.id=$2`,
+               WHERE ea3."employeeId"=e.id AND t."companyId"=$1 AND t.status NOT IN ('completed','cancelled') AND t."deletedAt" IS NULL)::int AS "currentTasks"
+       FROM employees e WHERE e.id=$2 AND e."deletedAt" IS NULL`,
       [scope.companyId, result.employeeId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "smart_assign", entityId: result.assignmentId, after: { employeeId: result.employeeId, taskType: taskType ?? "general" } }).catch((e) => logger.error(e, "intelligence background task failed"));

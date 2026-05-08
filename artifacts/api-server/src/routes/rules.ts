@@ -118,7 +118,7 @@ router.post("/", requirePermission("admin:write"), async (req, res) => {
       ]
     );
 
-    const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1`, [insertId]);
+    const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "create_business_rule",
@@ -140,7 +140,7 @@ router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
     const id = parseId(req.params.id, "id");
 
     const [existing] = await rawQuery<any>(
-      `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) {
@@ -167,7 +167,7 @@ router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
     params.push(scope.companyId);
     await rawExecute(`UPDATE business_rules SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`, params);
 
-    const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_business_rule",
@@ -187,7 +187,7 @@ router.delete("/:id", requirePermission("admin:write"), async (req, res) => {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
-      `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) {
@@ -214,7 +214,7 @@ router.patch("/:id/toggle", requirePermission("admin:write"), async (req, res) =
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
-      `SELECT id, "isActive" FROM business_rules WHERE id = $1 AND "companyId" = $2`,
+      `SELECT id, "isActive" FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) {
