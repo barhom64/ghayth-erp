@@ -212,7 +212,7 @@ async function insertDeliveryLog(entry: DeliveryLogInsert): Promise<number> {
   return rows[0]?.id ?? 0;
 }
 
-async function updateDeliveryLog(id: number, status: string, extra?: { externalId?: string; errorMessage?: string; providerResponse?: unknown }): Promise<void> {
+async function updateDeliveryLog(id: number, companyId: number, status: string, extra?: { externalId?: string; errorMessage?: string; providerResponse?: unknown }): Promise<void> {
   const timeField = status === "sent" ? `"sentAt"=NOW(),` :
                     status === "delivered" ? `"deliveredAt"=NOW(),` :
                     status === "failed" || status === "bounced" ? `"failedAt"=NOW(),` : "";
@@ -222,9 +222,9 @@ async function updateDeliveryLog(id: number, status: string, extra?: { externalI
          "errorMessage"=COALESCE($4,"errorMessage"),
          "providerResponse"=COALESCE($5::jsonb,"providerResponse"),
          "attemptCount"="attemptCount"+1
-     WHERE id=$1`,
+     WHERE id=$1 AND "companyId" = $6`,
     [id, status, extra?.externalId ?? null, extra?.errorMessage ?? null,
-     extra?.providerResponse ? JSON.stringify(extra.providerResponse) : null]
+     extra?.providerResponse ? JSON.stringify(extra.providerResponse) : null, companyId]
   );
 }
 
@@ -304,25 +304,25 @@ async function dispatchWebhooks(companyId: number, eventCategory: string, payloa
       });
 
       if (resp.ok) {
-        await updateDeliveryLog(deliveryId, "delivered");
+        await updateDeliveryLog(deliveryId, companyId, "delivered");
         await rawExecute(
-          `UPDATE notification_webhooks SET "lastSuccessAt"=NOW(), "failCount"=0 WHERE id=$1`,
-          [wh.id]
+          `UPDATE notification_webhooks SET "lastSuccessAt"=NOW(), "failCount"=0 WHERE id=$1 AND "companyId" = $2`,
+          [wh.id, companyId]
         );
       } else {
         const errText = await resp.text().catch(() => "");
-        await updateDeliveryLog(deliveryId, "failed", { errorMessage: `HTTP ${resp.status}: ${errText.substring(0, 500)}` });
+        await updateDeliveryLog(deliveryId, companyId, "failed", { errorMessage: `HTTP ${resp.status}: ${errText.substring(0, 500)}` });
         await rawExecute(
-          `UPDATE notification_webhooks SET "lastFailureAt"=NOW(), "lastError"=$2, "failCount"="failCount"+1 WHERE id=$1`,
-          [wh.id, `HTTP ${resp.status}`]
+          `UPDATE notification_webhooks SET "lastFailureAt"=NOW(), "lastError"=$2, "failCount"="failCount"+1 WHERE id=$1 AND "companyId" = $3`,
+          [wh.id, `HTTP ${resp.status}`, companyId]
         );
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      await updateDeliveryLog(deliveryId, "failed", { errorMessage: errMsg });
+      await updateDeliveryLog(deliveryId, companyId, "failed", { errorMessage: errMsg });
       await rawExecute(
-        `UPDATE notification_webhooks SET "lastFailureAt"=NOW(), "lastError"=$2, "failCount"="failCount"+1 WHERE id=$1`,
-        [wh.id, errMsg]
+        `UPDATE notification_webhooks SET "lastFailureAt"=NOW(), "lastError"=$2, "failCount"="failCount"+1 WHERE id=$1 AND "companyId" = $3`,
+        [wh.id, errMsg, companyId]
       );
     }
   }
@@ -534,7 +534,7 @@ export async function processFallbackChains(): Promise<string> {
 
     const nextStepIndex = delivery.fallbackStep + 1;
     if (nextStepIndex >= chain.steps.length) {
-      await updateDeliveryLog(delivery.id, "failed", { errorMessage: "All fallback steps exhausted" });
+      await updateDeliveryLog(delivery.id, delivery.companyId, "failed", { errorMessage: "All fallback steps exhausted" });
       continue;
     }
 
@@ -584,8 +584,8 @@ export async function processFallbackChains(): Promise<string> {
     });
 
     await rawExecute(
-      `UPDATE notification_delivery_log SET status='fallback_triggered' WHERE id=$1`,
-      [delivery.id]
+      `UPDATE notification_delivery_log SET status='fallback_triggered' WHERE id=$1 AND "companyId" = $2`,
+      [delivery.id, delivery.companyId]
     );
 
     triggered++;

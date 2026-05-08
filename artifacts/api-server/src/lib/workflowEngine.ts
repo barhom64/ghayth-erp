@@ -4,10 +4,10 @@ import { NotFoundError, ValidationError, ForbiddenError } from "./errorHandler.j
 import { logger } from "./logger.js";
 import { OPS_CLOSE_ROLES } from "./rbacCatalog.js";
 
-async function handleLeaveApproval(refId: number, approvedBy?: number | null): Promise<void> {
+async function handleLeaveApproval(refId: number, companyId: number, approvedBy?: number | null): Promise<void> {
   const approveResult = await rawQuery<any>(
-    `UPDATE hr_leave_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW() WHERE id = $2 AND status = 'pending' RETURNING id`,
-    [approvedBy ?? null, refId]
+    `UPDATE hr_leave_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending' RETURNING id`,
+    [approvedBy ?? null, refId, companyId]
   );
   if (approveResult.length === 0) return;
 
@@ -16,7 +16,7 @@ async function handleLeaveApproval(refId: number, approvedBy?: number | null): P
             lt.name AS "leaveTypeName"
      FROM hr_leave_requests lr
      JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-     WHERE lr.id = $1`,
+     WHERE lr.id = $1 AND lr."deletedAt" IS NULL`,
     [refId]
   );
   if (!request) return;
@@ -61,15 +61,15 @@ async function handleLeaveApproval(refId: number, approvedBy?: number | null): P
   ).catch((e) => logger.error(e, "workflow engine background task failed"));
 }
 
-async function handleLeaveRejection(refId: number): Promise<void> {
+async function handleLeaveRejection(refId: number, companyId: number): Promise<void> {
   const rejectResult = await rawQuery<any>(
-    `UPDATE hr_leave_requests SET status = 'rejected', "approvedAt" = NOW() WHERE id = $1 AND status = 'pending' RETURNING id`,
-    [refId]
+    `UPDATE hr_leave_requests SET status = 'rejected', "approvedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status = 'pending' RETURNING id`,
+    [refId, companyId]
   );
   if (rejectResult.length === 0) return;
 
   const [request] = await rawQuery<any>(
-    `SELECT "employeeId", "companyId", "leaveTypeId", days, "startDate" FROM hr_leave_requests WHERE id = $1`,
+    `SELECT "employeeId", "companyId", "leaveTypeId", days, "startDate" FROM hr_leave_requests WHERE id = $1 AND "deletedAt" IS NULL`,
     [refId]
   );
   if (!request) return;
@@ -91,15 +91,15 @@ async function handleLeaveRejection(refId: number): Promise<void> {
 
 const DOMAIN_RECORD_HANDLERS: Record<
   string,
-  (refId: number, outcome: "approved" | "rejected" | "returned", approvedBy?: number | null) => Promise<void>
+  (refId: number, outcome: "approved" | "rejected" | "returned", companyId: number, approvedBy?: number | null) => Promise<void>
 > = {
-  hr_leave_requests: async (refId, outcome, approvedBy) => {
+  hr_leave_requests: async (refId, outcome, companyId, approvedBy) => {
     if (outcome === "approved") {
-      await handleLeaveApproval(refId, approvedBy);
+      await handleLeaveApproval(refId, companyId, approvedBy);
     } else if (outcome === "rejected") {
-      await handleLeaveRejection(refId);
+      await handleLeaveRejection(refId, companyId);
     } else {
-      await rawExecute(`UPDATE hr_leave_requests SET status = 'returned' WHERE id = $1 AND status = 'pending'`, [refId]);
+      await rawExecute(`UPDATE hr_leave_requests SET status = 'returned' WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`, [refId, companyId]);
       await rawExecute(
         `UPDATE leave_approval_stages SET status = 'returned', "decidedAt" = NOW()
          WHERE "leaveRequestId" = $1 AND status = 'pending'`,
@@ -107,40 +107,40 @@ const DOMAIN_RECORD_HANDLERS: Record<
       ).catch((e) => logger.error(e, "workflow engine background task failed"));
     }
   },
-  official_letters: async (refId, outcome) => {
+  official_letters: async (refId, outcome, companyId) => {
     const status = outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : "pending";
-    await rawExecute(`UPDATE official_letters SET status = $1 WHERE id = $2 AND status NOT IN ('approved','rejected')`, [status, refId]);
+    await rawExecute(`UPDATE official_letters SET status = $1 WHERE id = $2 AND "companyId" = $3 AND status NOT IN ('approved','rejected')`, [status, refId, companyId]);
   },
-  journal_entries: async (refId, outcome) => {
-    const status = outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : "pending";
-    await rawExecute(`UPDATE journal_entries SET status = $1 WHERE id = $2 AND status NOT IN ('approved','rejected')`, [status, refId]);
+  journal_entries: async (refId, outcome, companyId) => {
+    const status = outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : "pending_approval";
+    await rawExecute(`UPDATE journal_entries SET status = $1 WHERE id = $2 AND "companyId" = $3 AND status NOT IN ('approved','rejected')`, [status, refId, companyId]);
   },
-  purchase_requests: async (refId, outcome) => {
+  purchase_requests: async (refId, outcome, companyId) => {
     const status = outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : "draft";
-    await rawExecute(`UPDATE purchase_requests SET status = $1 WHERE id = $2 AND status NOT IN ('approved','rejected')`, [status, refId]);
+    await rawExecute(`UPDATE purchase_requests SET status = $1 WHERE id = $2 AND "companyId" = $3 AND status NOT IN ('approved','rejected')`, [status, refId, companyId]);
   },
-  expenses: async (refId, outcome) => {
+  expenses: async (refId, outcome, companyId) => {
     const status = outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : "pending";
-    await rawExecute(`UPDATE expenses SET status = $1 WHERE id = $2 AND status NOT IN ('approved','rejected')`, [status, refId]);
+    await rawExecute(`UPDATE expenses SET status = $1 WHERE id = $2 AND "companyId" = $3 AND status NOT IN ('approved','rejected')`, [status, refId, companyId]);
   },
-  hr_employee_loans: async (refId, outcome, approvedBy) => {
+  hr_employee_loans: async (refId, outcome, companyId, approvedBy) => {
     if (outcome === "approved") {
       await rawExecute(
-        `UPDATE hr_employee_loans SET status = 'active', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2 AND status = 'pending'`,
-        [approvedBy ?? null, refId]
+        `UPDATE hr_employee_loans SET status = 'active', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
+        [approvedBy ?? null, refId, companyId]
       );
     } else if (outcome === "rejected") {
-      await rawExecute(`UPDATE hr_employee_loans SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1 AND status = 'pending'`, [refId]);
+      await rawExecute(`UPDATE hr_employee_loans SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`, [refId, companyId]);
     }
   },
-  hr_overtime_requests: async (refId, outcome, approvedBy) => {
+  hr_overtime_requests: async (refId, outcome, companyId, approvedBy) => {
     if (outcome === "approved") {
       await rawExecute(
-        `UPDATE hr_overtime_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2 AND status = 'pending'`,
-        [approvedBy ?? null, refId]
+        `UPDATE hr_overtime_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
+        [approvedBy ?? null, refId, companyId]
       );
     } else if (outcome === "rejected") {
-      await rawExecute(`UPDATE hr_overtime_requests SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1 AND status = 'pending'`, [refId]);
+      await rawExecute(`UPDATE hr_overtime_requests SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`, [refId, companyId]);
     }
   },
   hr_exit_requests: async (refId, outcome, approvedBy) => {

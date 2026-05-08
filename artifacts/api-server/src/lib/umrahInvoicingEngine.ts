@@ -580,7 +580,7 @@ export async function getDashboard(scope: Scope, seasonId: number) {
        COUNT(*)::int AS "totalMutamers",
        COUNT(*) FILTER (WHERE "isInsideKingdom" = TRUE)::int AS "insideKingdom",
        COUNT(*) FILTER (WHERE status = 'overstayed')::int AS "overstayCount",
-       COUNT(*) FILTER (WHERE status = 'absconded')::int AS "abscondedCount"
+       COUNT(*) FILTER (WHERE status = 'violated')::int AS "abscondedCount"
      FROM umrah_pilgrims
      WHERE "companyId" = $1 AND "seasonId" = $2 AND "deletedAt" IS NULL`,
     [scope.companyId, seasonId]
