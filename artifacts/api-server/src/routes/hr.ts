@@ -2304,7 +2304,7 @@ router.get("/payroll/:id", requireAnyPermission("hr:payroll", "hr:read"), async 
        FROM payroll_lines pl
        LEFT JOIN employee_assignments ea ON ea.id = pl."assignmentId"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY pl.id`,
+       WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY pl.id LIMIT 1000`,
       [id]
     );
     const totalBasic = lines.reduce((s: number, l: any) => s + Number(l.basicSalary || 0), 0);
@@ -2342,7 +2342,7 @@ router.get("/payroll/:id/lines", requireAnyPermission("hr:payroll", "hr:read"), 
        FROM payroll_lines pl
        JOIN employee_assignments ea ON ea.id = pl."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
-       WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY e.name`,
+       WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY e.name LIMIT 1000`,
       [Number(id)]
     );
     const data = lines.map((l: any) => ({
@@ -3279,7 +3279,7 @@ router.get("/approval-chain-definitions", requirePermission("hr:read"), async (r
        LEFT JOIN approval_chain_steps acs ON acs."chainId" = ac.id
        WHERE ac."companyId" = $1
        GROUP BY ac.id
-       ORDER BY ac."chainType", ac."minAmount"`,
+       ORDER BY ac."chainType", ac."minAmount" LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: chains, total: chains.length });
@@ -3561,7 +3561,7 @@ router.get("/payroll-summary", requirePermission("hr:read"), async (req, res) =>
        LEFT JOIN branches b ON b.id = ea."branchId"
        JOIN payroll_runs pr ON pr.id = pl."runId"
        WHERE pr."companyId" = $1 AND pr.period = $2 AND pr."deletedAt" IS NULL AND pl."deletedAt" IS NULL
-       ORDER BY e.name, ea.id`,
+       ORDER BY e.name, ea.id LIMIT 1000`,
       [scope.companyId, targetPeriod]
     );
 
@@ -5625,7 +5625,7 @@ router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), as
        FROM evaluation_cycles ec
        LEFT JOIN evaluation_summaries es ON es."cycleId" = ec.id
        WHERE ec."companyId" = $1 AND ec."employeeId" = $2
-       ORDER BY ec."startDate" ASC`,
+       ORDER BY ec."startDate" ASC LIMIT 500`,
       [scope.companyId, employeeId]
     );
 
