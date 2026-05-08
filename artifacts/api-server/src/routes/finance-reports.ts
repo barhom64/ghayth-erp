@@ -327,8 +327,8 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", requirePermission(
       const advanceRows = await rawQuery<any>(`SELECT je.id, je.ref, CONCAT('سلفة: ', je.description) AS description, COALESCE(SUM(jl.debit), 0) AS debit, 0 AS credit, je."createdAt" AS date, 'advance' AS "movementType" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1410' WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."createdBy" = $2 ${advFilter.replace(/"createdAt"/g, 'je."createdAt"')} GROUP BY je.id, je.ref, je.description, je."createdAt" LIMIT 500`, [scope.companyId, assignmentId, ...advDates]);
       const { filter: cstFilter, extraParams: cstDates } = buildDateFilter(2, startDate, endDate);
       const custodyRows = await rawQuery<any>(`SELECT je.id, je.ref, CONCAT('عهدة: ', je.description) AS description, COALESCE(SUM(jl.debit), 0) AS debit, 0 AS credit, je."createdAt" AS date, 'custody' AS "movementType" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1400' WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."createdBy" = $2 AND je.ref LIKE 'CUSTODY%' ${cstFilter.replace(/"createdAt"/g, 'je."createdAt"')} GROUP BY je.id, je.ref, je.description, je."createdAt" LIMIT 500`, [scope.companyId, assignmentId, ...cstDates]);
-      const { filter: vioFilter, extraParams: vioDates } = buildDateFilter(1, startDate, endDate);
-      const violationRows = await rawQuery<any>(`SELECT v.id, CONCAT('VIO-', v.id::text) AS ref, CONCAT('خصم مخالفة: ', v.description) AS description, 0 AS debit, COALESCE(v.deduction, 0) AS credit, v."createdAt" AS date, 'violation' AS "movementType" FROM employee_violations v WHERE v."assignmentId" = $1 AND v.deduction > 0 ${vioFilter.replace(/"createdAt"/g, 'v."createdAt"')} ORDER BY v."createdAt" DESC LIMIT 500`, [assignmentId, ...vioDates]);
+      const { filter: vioFilter, extraParams: vioDates } = buildDateFilter(2, startDate, endDate);
+      const violationRows = await rawQuery<any>(`SELECT v.id, CONCAT('VIO-', v.id::text) AS ref, CONCAT('خصم مخالفة: ', v.description) AS description, 0 AS debit, COALESCE(v.deduction, 0) AS credit, v."createdAt" AS date, 'violation' AS "movementType" FROM employee_violations v WHERE v."assignmentId" = $1 AND v."companyId" = $2 AND v.deduction > 0 ${vioFilter.replace(/"createdAt"/g, 'v."createdAt"')} ORDER BY v."createdAt" DESC LIMIT 500`, [assignmentId, scope.companyId, ...vioDates]);
 
       const all = [...payrollRows, ...advanceRows, ...custodyRows, ...violationRows].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
       let runningBalance = 0;
@@ -363,12 +363,11 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", requirePermission(
       const totalOrdered = poRows.reduce((s: number, r: any) => s + Number(r.debit), 0);
       sections = { orders: { label: "أوامر الشراء", amount: totalOrdered, count: poRows.length } };
 
-    } else if (entityType === "vehicle" || entityType === "property" || entityType === "project" || entityType === "product") {
+    } else if (entityType === "vehicle" || entityType === "property" || entityType === "project") {
       const colFilterMap: Record<string, string> = {
         vehicle: 'jl."vehicleId"',
         property: 'jl."propertyId"',
         project: 'jl."projectId"',
-        product: 'jl."productId"',
       };
       const colFilter = colFilterMap[entityType];
       if (!colFilter) throw new ValidationError("نوع الكيان غير مدعوم");
