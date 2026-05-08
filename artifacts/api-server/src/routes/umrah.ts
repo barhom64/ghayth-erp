@@ -922,7 +922,7 @@ async function doImport(scope: any, body: { seasonId: number; rows: any[]; fileT
         }
         if (sets.length > 0) {
           sets.push(`"updatedAt"=NOW()`); params.push(existingId); params.push(scope.companyId);
-          await rawExecute(`UPDATE umrah_pilgrims SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
+          await rawExecute(`UPDATE umrah_pilgrims SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
           updateCount++;
         } else { dupCount++; }
       } else {

@@ -259,7 +259,7 @@ router.patch("/policies/:id", requirePermission("governance:write"), async (req,
     params.push(id); params.push(scope.companyId);
     const row = await withTransaction(async (client) => {
       const updateRes = await client.query(
-        `UPDATE governance_policies SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`,
+        `UPDATE governance_policies SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`,
         params
       );
       if ((updateRes.rowCount ?? 0) === 0) throw new NotFoundError("السياسة غير موجودة");
@@ -328,7 +328,7 @@ router.post("/policies/:id/new-version", requirePermission("governance:write"), 
       insertId = ins.rows[0].id;
 
       await client.query(
-        `UPDATE governance_policies SET status='archived', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status IN ('draft','active')`,
+        `UPDATE governance_policies SET status='archived', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status IN ('draft','active') AND "deletedAt" IS NULL`,
         [parentId, scope.companyId]
       );
 

@@ -765,7 +765,7 @@ router.patch("/units/:id", requirePermission("property:update"), async (req, res
       return;
     }
     params.push(id);
-    await rawExecute(`UPDATE property_units SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    await rawExecute(`UPDATE property_units SET ${sets.join(",")} WHERE id=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
 
     createAuditLog({
@@ -1337,7 +1337,7 @@ router.patch("/contracts/:id", requirePermission("property:update"), async (req,
     addField("registrationDate", b.registrationDate);
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE rental_contracts SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE rental_contracts SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("العقد غير موجود");
 
     createAuditLog({
@@ -1574,7 +1574,7 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
         // Free the unit
         if (contract.unitId) {
           await client.query(
-            `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status IN ('occupied','rented')`,
+            `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status IN ('occupied','rented') AND "deletedAt" IS NULL`,
             [contract.unitId, scope.companyId]
           );
         }
@@ -1753,7 +1753,7 @@ router.patch("/tenants/:id", requirePermission("property:update"), async (req, r
     addField("notes", b.notes);
     if (fields.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE tenants SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE tenants SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (!rows[0]) throw new NotFoundError("المستأجر غير موجود");
 
     createAuditLog({
@@ -1932,7 +1932,7 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
                 status       = CASE WHEN "paidAmount" + $1 >= amount THEN 'paid' ELSE 'partial' END,
                 notes        = COALESCE(notes || E'\n', '') || 'JE#' || COALESCE($4::text, '-'),
                 "updatedAt"  = NOW()
-          WHERE id = $5`,
+          WHERE id = $5 AND "deletedAt" IS NULL`,
         [paidAmount, b.paidDate || todayISO(), b.method || 'bank_transfer', journalEntryId, Number(id)]
       );
 
@@ -2045,7 +2045,7 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
           if (!locked) throw new NotFoundError("القسط غير موجود");
           const lateFee = roundTo2(Number(locked.amount) * 0.02);
           await client.query(
-            `UPDATE rent_payments SET amount=amount+$1, notes=CONCAT(COALESCE(notes,''), ' | غرامة تأخير 2%: ',$2::text) WHERE id=$3`,
+            `UPDATE rent_payments SET amount=amount+$1, notes=CONCAT(COALESCE(notes,''), ' | غرامة تأخير 2%: ',$2::text) WHERE id=$3 AND "deletedAt" IS NULL`,
             [lateFee, lateFee.toFixed(2), locked.id]
           );
           return { lateFee, newAmount: Number(locked.amount) + lateFee };
@@ -2830,7 +2830,7 @@ router.patch("/buildings/:id", requirePermission("property:update"), async (req,
     params.push(id);
     // sets already starts with `"updatedAt"=NOW()` — do not append a second
     // assignment or PostgreSQL raises 42601 "multiple assignments to same column".
-    await rawExecute(`UPDATE property_buildings SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    await rawExecute(`UPDATE property_buildings SET ${sets.join(",")} WHERE id=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
 
     createAuditLog({
@@ -3091,7 +3091,7 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
       }
     }
     params.push(id);
-    await rawExecute(`UPDATE maintenance_requests SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    await rawExecute(`UPDATE maintenance_requests SET ${sets.join(",")} WHERE id=$${params.length} AND "deletedAt" IS NULL`, params);
     if (b.status && b.status !== existing.status) {
       await createAuditLog({
         userId: scope.userId, entity: "maintenance_requests", entityId: id,
@@ -3327,7 +3327,7 @@ router.patch("/owners/:id", requirePermission("property:update"), async (req, re
     addField("notes", b.notes);
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE property_owners SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE property_owners SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (!rows[0]) throw new NotFoundError("المالك غير موجود");
 
     createAuditLog({

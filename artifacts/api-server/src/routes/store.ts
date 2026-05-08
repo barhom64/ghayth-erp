@@ -140,7 +140,7 @@ router.patch("/products/:id", requirePermission("store:write"), async (req, res)
     if (b.imageUrl !== undefined) { params.push(b.imageUrl); sets.push(`"imageUrl"=$${params.length}`); }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE store_products SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    await rawExecute(`UPDATE store_products SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "store_products", entityId: id, after: b }).catch((e) => logger.error(e, "store background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.product.updated", entity: "store_products", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "store background task failed"));
@@ -218,7 +218,7 @@ router.post("/orders", requirePermission("store:write"), async (req, res) => {
           // Deduct stock
           if (item.productId) {
             await client.query(
-              `UPDATE store_products SET quantity = quantity - $1 WHERE id = $2`,
+              `UPDATE store_products SET quantity = quantity - $1 WHERE id = $2 AND "deletedAt" IS NULL`,
               [qty, item.productId]
             );
           }
@@ -286,7 +286,7 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
 
       params.push(id); params.push(scope.companyId);
       await client.query(
-        `UPDATE store_orders SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`,
+        `UPDATE store_orders SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`,
         params
       );
       const updatedRes = await client.query(`SELECT * FROM store_orders WHERE id=$1`, [id]);
@@ -304,7 +304,7 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
     if (b.status === "cancelled" && row.previousStatus !== "cancelled") {
       const orderItems = await rawQuery<any>(`SELECT "productId", quantity FROM store_order_items WHERE "orderId" = $1`, [id]);
       for (const item of orderItems) {
-        await rawExecute(`UPDATE store_products SET quantity = quantity + $1 WHERE id = $2 AND "companyId" = $3`, [item.quantity, item.productId, scope.companyId]);
+        await rawExecute(`UPDATE store_products SET quantity = quantity + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [item.quantity, item.productId, scope.companyId]);
       }
     }
 
@@ -324,7 +324,7 @@ router.delete("/orders/:id", requirePermission("store:write"), async (req, res) 
       if (existing.status !== "cancelled") {
         const itemsRes = await client.query(`SELECT "productId", quantity FROM store_order_items WHERE "orderId" = $1`, [id]);
         for (const item of itemsRes.rows) {
-          await client.query(`UPDATE store_products SET quantity = quantity + $1 WHERE id = $2 AND "companyId" = $3`, [item.quantity, item.productId, scope.companyId]);
+          await client.query(`UPDATE store_products SET quantity = quantity + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [item.quantity, item.productId, scope.companyId]);
         }
       }
       await client.query(`UPDATE store_orders SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
@@ -383,7 +383,7 @@ async function postStoreOrderGl(scope: any, order: any) {
 
   if (result) {
     await rawExecute(
-      `UPDATE store_orders SET "journalEntryId"=$1 WHERE id=$2 AND "companyId"=$3`,
+      `UPDATE store_orders SET "journalEntryId"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
       [result.journalId, order.id, scope.companyId]
     ).catch((e) => logger.error(e, "store background task failed"));
   }

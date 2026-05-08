@@ -372,7 +372,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
     const rejectionReason = reason || notes;
     if (!approved) {
       const { affectedRows } = await rawExecute(
-        `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
+        `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL`,
         [rejectionReason || null, loan.id, scope.companyId]
       );
       if (!affectedRows) throw new ConflictError("تم تحديث السلفة مسبقاً — أعد التحميل");
@@ -426,7 +426,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
       const upd = await client.query(
         `UPDATE hr_employee_loans
          SET status = 'active', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW()
-         WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
+         WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL`,
         [scope.userId, loan.id, scope.companyId]
       );
       if (!upd.rowCount) throw new ConflictError("تم تحديث السلفة مسبقاً — أعد التحميل");
@@ -513,7 +513,7 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
     }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
     const { affectedRows } = await rawExecute(
-      `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
+      `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL`,
       [b.reason || null, loan.id, scope.companyId]
     );
     if (!affectedRows) throw new ConflictError("تم تحديث حالة السلفة بالفعل من مستخدم آخر");

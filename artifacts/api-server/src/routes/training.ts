@@ -157,7 +157,7 @@ router.patch("/programs/:id", requirePermission("hr:update"), async (req, res) =
       params.push(existing.status);
       updateWhere += ` AND status=$${params.length}`;
     }
-    await rawExecute(`UPDATE training_programs SET ${sets.join(",")} WHERE ${updateWhere}`, params);
+    await rawExecute(`UPDATE training_programs SET ${sets.join(",")} WHERE ${updateWhere} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -299,7 +299,7 @@ router.post("/enrollments", requirePermission("hr:create"), async (req, res) => 
         [Number(programId), employeeId ? Number(employeeId) : null, employeeName ?? null, status ?? "enrolled"]
       );
       enrollId = ins.rows[0].id;
-      await client.query(`UPDATE training_programs SET enrolled = enrolled + 1 WHERE id=$1`, [Number(programId)]);
+      await client.query(`UPDATE training_programs SET enrolled = enrolled + 1 WHERE id=$1 AND "deletedAt" IS NULL`, [Number(programId)]);
     });
     const r = { insertId: enrollId };
     await createAuditLog({
@@ -335,7 +335,7 @@ router.patch("/enrollments/:id", requirePermission("hr:update"), async (req, res
     if (b.score !== undefined) { params.push(b.score); sets.push(`score=$${params.length}`); }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id);
-    await rawExecute(`UPDATE training_enrollments SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    await rawExecute(`UPDATE training_enrollments SET ${sets.join(",")} WHERE id=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM training_enrollments WHERE id=$1`, [id]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -355,7 +355,7 @@ router.delete("/enrollments/:id", requirePermission("hr:delete"), async (req, re
     if (!existing) throw new NotFoundError("التسجيل غير موجود");
     await withTransaction(async (client) => {
       await client.query(`UPDATE training_enrollments SET "deletedAt" = NOW() WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
-      await client.query(`UPDATE training_programs SET enrolled = GREATEST(0, enrolled - 1) WHERE id=$1 AND "companyId"=$2`, [existing.programId, scope.companyId]);
+      await client.query(`UPDATE training_programs SET enrolled = GREATEST(0, enrolled - 1) WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [existing.programId, scope.companyId]);
     });
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,

@@ -999,7 +999,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       if (iqamaStatus !== undefined) { empVals.push(iqamaStatus); empFields.push(`"iqamaStatus" = $${empVals.length}`); }
       if (empFields.length) {
         empVals.push(id, scope.companyId);
-        await client.query(`UPDATE employees SET ${empFields.join(",")} WHERE id = $${empVals.length - 1} AND "companyId" = $${empVals.length}`, empVals);
+        await client.query(`UPDATE employees SET ${empFields.join(",")} WHERE id = $${empVals.length - 1} AND "companyId" = $${empVals.length} AND "deletedAt" IS NULL`, empVals);
       }
 
       if (status === "active" && before.status !== "active") {
@@ -1173,7 +1173,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
         [employee.assignmentId, scope.companyId]
       );
       await tx.query(
-        `UPDATE employees SET status = 'terminated' WHERE id = $1 AND "companyId" = $2 AND status = 'active'`,
+        `UPDATE employees SET status = 'terminated' WHERE id = $1 AND "companyId" = $2 AND status = 'active' AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
 
@@ -1182,7 +1182,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       await tx.query(
         `UPDATE employee_contracts
            SET status = 'terminated', "probationStatus" = 'ended'
-         WHERE "employeeId" = $1 AND "companyId" = $2 AND status <> 'terminated'`,
+         WHERE "employeeId" = $1 AND "companyId" = $2 AND status <> 'terminated' AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
 
@@ -1191,7 +1191,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       await tx.query(
         `UPDATE hr_leave_requests
            SET status = 'cancelled'
-         WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'pending'`,
+         WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
       await tx.query(
@@ -1210,7 +1210,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       await tx.query(
         `UPDATE tasks
            SET status = 'cancelled', notes = COALESCE(notes || E'\n', '') || 'ألغي تلقائياً: إنهاء خدمة الموظف'
-         WHERE "assignedTo" = $1 AND status IN ('pending', 'in_progress')`,
+         WHERE "assignedTo" = $1 AND status IN ('pending', 'in_progress') AND "deletedAt" IS NULL`,
         [employee.assignmentId]
       );
 
@@ -1228,7 +1228,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       await tx.query(
         `UPDATE hr_employee_loans
            SET status = 'cancelled', "updatedAt" = NOW()
-         WHERE "employeeId" = $1 AND "companyId" = $2 AND status IN ('active', 'pending')`,
+         WHERE "employeeId" = $1 AND "companyId" = $2 AND status IN ('active', 'pending') AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
 

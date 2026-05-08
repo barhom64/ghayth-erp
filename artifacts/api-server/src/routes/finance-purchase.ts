@@ -754,7 +754,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
     });
     journalId = grnJournalResult.journalId;
     if (journalId) {
-      await rawExecute(`UPDATE goods_receipts SET "journalId" = $1 WHERE id = $2`, [journalId, grnId]);
+      await rawExecute(`UPDATE goods_receipts SET "journalId" = $1 WHERE id = $2 AND "deletedAt" IS NULL`, [journalId, grnId]);
     }
 
     // Update PO header status — partial vs fully received

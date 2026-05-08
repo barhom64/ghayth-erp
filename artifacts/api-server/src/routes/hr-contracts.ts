@@ -465,8 +465,8 @@ contractsRouter.post("/:id/renew", requirePermission("hr:create"), async (req, r
       );
 
       await client.query(
-        `UPDATE employee_contracts SET "renewalDate" = $2, "updatedAt" = NOW() WHERE id = $1`,
-        [id, newStart]
+        `UPDATE employee_contracts SET "renewalDate" = $2, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [id, newStart, scope.companyId]
       );
 
       return insertRes.rows[0];

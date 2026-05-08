@@ -169,13 +169,13 @@ async function updateWeightedAverageCost(
           ? roundTo4(newTotalValue / newTotalQty)
           : movCost;
       await rawExecute(
-        `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2`,
+        `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2 AND "deletedAt" IS NULL`,
         [newWa, productId]
       );
     } else {
       // "out": weighted-average stays the same; just refresh lastWaCost snapshot
       await rawExecute(
-        `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1`,
+        `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1 AND "deletedAt" IS NULL`,
         [productId]
       );
     }
@@ -661,7 +661,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
       insertId = movRes.rows[0]?.id ?? 0;
 
       const newStock = Number(product.currentStock) + sign * Math.abs(Number(b.quantity));
-      await client.query(`UPDATE warehouse_products SET "currentStock" = "currentStock" + $1, "updatedAt" = NOW() WHERE id = $2`, [sign * Math.abs(b.quantity), b.productId]);
+      await client.query(`UPDATE warehouse_products SET "currentStock" = "currentStock" + $1, "updatedAt" = NOW() WHERE id = $2 AND "deletedAt" IS NULL`, [sign * Math.abs(b.quantity), b.productId]);
 
       if (b.type === 'in' || b.type === 'return' || b.type === 'transfer_in') {
         const incomingQty = Math.abs(Number(b.quantity));
@@ -672,12 +672,12 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
         const newTotalQty = prevStock + incomingQty;
         const newWaCost = newTotalQty > 0 ? roundTo4(newTotalValue / newTotalQty) : incomingCost;
         await client.query(
-          `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2`,
+          `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2 AND "deletedAt" IS NULL`,
           [newWaCost, b.productId]
         );
       } else if ((b.type === 'out' || b.type === 'transfer_out') && newStock <= 0) {
         await client.query(
-          `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1`,
+          `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1 AND "deletedAt" IS NULL`,
           [b.productId]
         );
       }
@@ -873,7 +873,7 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
 
       // Decrement source product stock (transfer_out)
       await client.query(
-        `UPDATE warehouse_products SET "currentStock" = "currentStock" - $1, "updatedAt" = NOW() WHERE id = $2`,
+        `UPDATE warehouse_products SET "currentStock" = "currentStock" - $1, "updatedAt" = NOW() WHERE id = $2 AND "deletedAt" IS NULL`,
         [qtyNum, b.productId]
       );
     });
@@ -1425,7 +1425,7 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
             : 0;
 
           await client.query(
-            `UPDATE warehouse_products SET "currentStock"="currentStock"+$1, "updatedAt"=NOW() WHERE id=$2`,
+            `UPDATE warehouse_products SET "currentStock"="currentStock"+$1, "updatedAt"=NOW() WHERE id=$2 AND "deletedAt" IS NULL`,
             [variance, item.productId]
           );
 

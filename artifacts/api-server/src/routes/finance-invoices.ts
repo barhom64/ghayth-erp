@@ -605,7 +605,7 @@ invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"
     // Update client totalRevenue upon approval (revenue recognition)
     if (invoice.clientId) {
       await rawQuery<any>(
-        `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) + $1 WHERE id = $2 AND "companyId" = $3`,
+        `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
         [Number(invoice.total) - Number(invoice.vatAmount || 0), invoice.clientId, scope.companyId]
       );
     }
@@ -613,7 +613,7 @@ invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"
     // Budget consumption at approval (not at draft creation)
     const baseAmount = Number(invoice.total) - Number(invoice.vatAmount || 0);
     await rawExecute(
-      `UPDATE budgets SET used = used + $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4`,
+      `UPDATE budgets SET used = used + $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
       [baseAmount, scope.companyId, invRevenueCode, currentPeriod()]
     ).catch((e) => logger.error(e, "Budget update on approval failed"));
 
@@ -718,12 +718,12 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
 
       if (paidAt) {
         await client.query(
-          `UPDATE invoices SET "paidAmount" = $1, status = $2, "paidAt" = $3 WHERE id = $4 AND "companyId" = $5`,
+          `UPDATE invoices SET "paidAmount" = $1, status = $2, "paidAt" = $3 WHERE id = $4 AND "companyId" = $5 AND "deletedAt" IS NULL`,
           [newPaid, newStatus, paidAt, id, scope.companyId]
         );
       } else {
         await client.query(
-          `UPDATE invoices SET "paidAmount" = $1, status = $2 WHERE id = $3 AND "companyId" = $4`,
+          `UPDATE invoices SET "paidAmount" = $1, status = $2 WHERE id = $3 AND "companyId" = $4 AND "deletedAt" IS NULL`,
           [newPaid, newStatus, id, scope.companyId]
         );
       }

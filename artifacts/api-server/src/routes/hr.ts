@@ -2774,7 +2774,7 @@ router.post("/payroll/:id/approve", requirePermission("hr:create"), async (req, 
       throw new ForbiddenError("لا يمكن للشخص الذي أنشأ المسير أن يوافق عليه (maker-checker)");
     }
     await rawExecute(
-      `UPDATE payroll_runs SET status='completed', "approvedBy"=$1, "approvedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+      `UPDATE payroll_runs SET status='completed', "approvedBy"=$1, "approvedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
       [scope.activeAssignmentId, id, scope.companyId]
     );
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "payroll.approved", entity: "payroll_runs", entityId: id, details: JSON.stringify({ approvedBy: scope.activeAssignmentId }) }).catch((e) => logger.error(e, "hr background task failed"));
@@ -3009,7 +3009,7 @@ router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
     const effectiveRemote = remoteAllowed ?? (effectiveShiftType === 'remote');
 
     if (isDefault) {
-      await rawExecute(`UPDATE shifts SET "isDefault" = false WHERE "companyId" = $1`, [scope.companyId]);
+      await rawExecute(`UPDATE shifts SET "isDefault" = false WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [scope.companyId]);
     }
     const { insertId } = await rawExecute(
       `INSERT INTO shifts ("companyId","branchId",name,"startTime","endTime",days,"isDefault",status,"shiftType","remoteAllowed","splitBreakStart","splitBreakEnd","flexStartEarliest","flexStartLatest")
@@ -3634,7 +3634,7 @@ router.patch("/violations/:id", requirePermission("hr:update"), async (req, res)
     }
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE employee_violations SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
+    await rawExecute(`UPDATE employee_violations SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [updated] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -3704,7 +3704,7 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
     if (b.flexStartEarliest !== undefined) { params.push(b.flexStartEarliest); sets.push(`"flexStartEarliest"=$${params.length}`); }
     if (b.flexStartLatest !== undefined) { params.push(b.flexStartLatest); sets.push(`"flexStartLatest"=$${params.length}`); }
     if (b.isDefault !== undefined) {
-      if (b.isDefault) await rawExecute(`UPDATE shifts SET "isDefault"=false WHERE "companyId"=$1`, [scope.companyId]);
+      if (b.isDefault) await rawExecute(`UPDATE shifts SET "isDefault"=false WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]);
       params.push(b.isDefault); sets.push(`"isDefault"=$${params.length}`);
     }
     if (sets.length === 0) {
@@ -3712,7 +3712,7 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
     }
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
+    await rawExecute(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,

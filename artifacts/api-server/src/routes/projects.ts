@@ -668,7 +668,7 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
     }
     if (Object.keys(after).length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE projects SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    await rawExecute(`UPDATE projects SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
@@ -933,7 +933,7 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
         );
         const allDepsDone = blockedRes.rows.every((d: any) => d.status === 'done');
         if (!allDepsDone) {
-          await client.query(`UPDATE project_tasks SET status='blocked' WHERE id=$1 AND status='todo'`, [insertId]);
+          await client.query(`UPDATE project_tasks SET status='blocked' WHERE id=$1 AND status='todo' AND "deletedAt" IS NULL`, [insertId]);
         }
       }
     });
@@ -1053,7 +1053,7 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
       params.push(existingTask.status ?? "todo");
       taskWhere += ` AND status=$${params.length}`;
     }
-    await rawExecute(`UPDATE project_tasks SET ${sets.join(",")} WHERE ${taskWhere}`, params);
+    await rawExecute(`UPDATE project_tasks SET ${sets.join(",")} WHERE ${taskWhere} AND "deletedAt" IS NULL`, params);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -1099,7 +1099,7 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
         //    blocked -> todo, so we don't need a follow-up SELECT per row.
         unlockedTasks = await rawQuery<any>(
           `UPDATE project_tasks SET status='todo'
-           WHERE id = ANY($1) AND status='blocked'
+           WHERE id = ANY($1) AND status='blocked' AND "deletedAt" IS NULL
            RETURNING *`,
           [candidateIds]
         );

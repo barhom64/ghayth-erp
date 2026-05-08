@@ -389,7 +389,7 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
           description = COALESCE($2, description),
           "branchId" = $3, "activityType" = $4,
           "isActive" = COALESCE($5, "isActive"), "updatedAt" = NOW()
-         WHERE id = $6 AND "companyId" = $7`,
+         WHERE id = $6 AND "companyId" = $7 AND "deletedAt" IS NULL`,
         [name ?? null, description ?? null, branchId ?? null, activityType ?? null, isActive ?? null, id, scope.companyId]
       );
 
@@ -530,7 +530,7 @@ router.delete("/subsidiary-accounts/:id", requirePermission("finance:write"), as
       [id, scope.companyId]
     );
     await rawExecute(
-      `DELETE FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2`,
+      `DELETE FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "subsidiary_accounts", entityId: id, before: before ?? null }).catch((e) => logger.error(e, "accounting-engine background task failed"));

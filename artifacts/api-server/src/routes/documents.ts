@@ -345,7 +345,7 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
       );
 
       await client.query(
-        `UPDATE documents SET "currentVersion"=$1, "fileName"=$2, "fileSize"=$3, "mimeType"=$4, "storageKey"=$5, "updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7`,
+        `UPDATE documents SET "currentVersion"=$1, "fileName"=$2, "fileSize"=$3, "mimeType"=$4, "storageKey"=$5, "updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7 AND "deletedAt" IS NULL`,
         [newVersion, fileName, fileSize, mimeType, storageKey, docId, scope.companyId]
       );
     });
@@ -402,7 +402,7 @@ router.patch("/:id/status", requirePermission("documents:update"), async (req: R
     if (!beforeDoc) throw new NotFoundError("المستند غير موجود");
 
     const result = await rawExecute(
-      `UPDATE documents SET status=$1, "updatedAt"=NOW() WHERE id=$2 AND ("companyId"=$3 OR "companyId" IS NULL) AND status != $1`,
+      `UPDATE documents SET status=$1, "updatedAt"=NOW() WHERE id=$2 AND ("companyId"=$3 OR "companyId" IS NULL) AND status != $1 AND "deletedAt" IS NULL`,
       [status, docId, scope.companyId]
     );
     if (result.affectedRows === 0 && beforeDoc.status === status) throw new ConflictError("المستند في هذه الحالة مسبقاً");
@@ -909,7 +909,7 @@ router.patch("/:id", requirePermission("documents:update"), async (req, res) => 
     if (b.tags !== undefined) { params.push(b.tags); sets.push(`tags=$${params.length}`); }
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id); params.push(scope.companyId);
-    const result = await rawExecute(`UPDATE documents SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const result = await rawExecute(`UPDATE documents SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (result.affectedRows === 0) throw new NotFoundError("المستند غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
