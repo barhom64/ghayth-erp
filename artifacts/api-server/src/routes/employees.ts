@@ -336,7 +336,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
     // early we give the caller a clean field-tagged error.
     if (managerId) {
       const mgrRows = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
         [Number(managerId), scope.companyId]
       );
       if (mgrRows.length === 0) {
@@ -349,7 +349,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
 
     if (email) {
       const emailRows = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE email = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.email = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL LIMIT 1`,
         [email, effectiveCompanyId]
       );
       if (emailRows.length > 0) {
@@ -362,7 +362,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
 
     if (nationalId) {
       const nidRows = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE "nationalId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e."nationalId" = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL LIMIT 1`,
         [nationalId, effectiveCompanyId]
       );
       if (nidRows.length > 0) {
@@ -389,17 +389,17 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
          "iqamaNumber","iqamaExpiry","passportNumber","passportExpiry",
          "borderNumber","visaNumber","visaType","visaExpiry",
          "sponsorNumber","workPermitNumber","workPermitExpiry","iqamaStatus",
-         "bankName","bankAccount",iban,"emergencyContact","emergencyPhone",attachments,"companyId")
+         "bankName","bankAccount",iban,"emergencyContact","emergencyPhone",attachments)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active',
          $9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-         $21,$22,$23,$24,$25,$26,$27)
+         $21,$22,$23,$24,$25,$26)
          RETURNING id`,
         [name, phone || null, email || null, finalEmpNumber, nationalId || null, gender || null, nationality || null, dateOfBirth || null,
          iqamaNumber || null, iqamaExpiry || null, passportNumber || null, passportExpiry || null,
          borderNumber || null, visaNumber || null, visaType || null, visaExpiry || null,
          sponsorNumber || null, workPermitNumber || null, workPermitExpiry || null, iqamaStatus || 'active',
          bankName || null, bankAccount || null, iban || null, emergencyContact || null, emergencyPhone || null,
-         (body as any).attachments ? JSON.stringify((body as any).attachments) : null, effectiveCompanyId]
+         (body as any).attachments ? JSON.stringify((body as any).attachments) : null]
       );
       const empId = empRes.rows[0].id;
 
@@ -918,7 +918,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     // round-trip on every PATCH that only touches unrelated fields.
     if (email !== undefined && email && email !== before.email) {
       const [clash] = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE email = $1 AND id <> $2 AND "companyId" = $3 AND "deletedAt" IS NULL LIMIT 1`,
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.email = $1 AND e.id <> $2 AND ea."companyId" = $3 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
         [email, id, scope.companyId]
       );
       if (clash) {
@@ -933,7 +933,7 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     // Pre-check: changing nationalId to one already registered.
     if (nationalId !== undefined && nationalId && nationalId !== before.nationalId) {
       const [clash] = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE "nationalId" = $1 AND id <> $2 AND "companyId" = $3 AND "deletedAt" IS NULL LIMIT 1`,
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e."nationalId" = $1 AND e.id <> $2 AND ea."companyId" = $3 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
         [nationalId, id, scope.companyId]
       );
       if (clash) {
@@ -998,8 +998,8 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       if (workPermitExpiry !== undefined) { empVals.push(workPermitExpiry || null); empFields.push(`"workPermitExpiry" = $${empVals.length}`); }
       if (iqamaStatus !== undefined) { empVals.push(iqamaStatus); empFields.push(`"iqamaStatus" = $${empVals.length}`); }
       if (empFields.length) {
-        empVals.push(id, scope.companyId);
-        await client.query(`UPDATE employees SET ${empFields.join(",")} WHERE id = $${empVals.length - 1} AND "companyId" = $${empVals.length} AND "deletedAt" IS NULL`, empVals);
+        empVals.push(id);
+        await client.query(`UPDATE employees SET ${empFields.join(",")} WHERE id = $${empVals.length} AND "deletedAt" IS NULL`, empVals);
       }
 
       if (status === "active" && before.status !== "active") {
@@ -1173,8 +1173,8 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
         [employee.assignmentId, scope.companyId]
       );
       await tx.query(
-        `UPDATE employees SET status = 'terminated' WHERE id = $1 AND "companyId" = $2 AND status = 'active' AND "deletedAt" IS NULL`,
-        [id, scope.companyId]
+        `UPDATE employees SET status = 'terminated' WHERE id = $1 AND status = 'active' AND "deletedAt" IS NULL`,
+        [id]
       );
 
       // 1. Deactivate contracts tied to this employee / assignment so

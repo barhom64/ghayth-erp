@@ -284,8 +284,9 @@ journalRouter.post("/expenses/impact-preview", requirePermission("finance:create
 
     if (costCenter) {
       const [budget] = await rawQuery<any>(
-        `SELECT name, "allocatedAmount", "usedAmount"
-         FROM cost_centers WHERE name = $1 AND "companyId" = $2 LIMIT 1`,
+        `SELECT cc.name, cc."allocatedAmount",
+                COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" WHERE je."companyId" = $2 AND jl."costCenter" = cc.name AND je."deletedAt" IS NULL), 0) AS "usedAmount"
+         FROM cost_centers cc WHERE cc.name = $1 AND cc."companyId" = $2 LIMIT 1`,
         [costCenter, scope.companyId]
       );
       if (budget) {

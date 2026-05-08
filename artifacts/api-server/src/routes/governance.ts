@@ -101,7 +101,7 @@ const createCapaSchema = z.object({
   rootCause: z.string().optional().nullable(),
   correctiveAction: z.string().optional().nullable(),
   preventiveAction: z.string().optional().nullable(),
-  status: z.string().optional(),
+  status: z.enum(["open", "in_progress", "closed", "overdue"]).optional(),
   responsiblePerson: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(),
 });
@@ -111,7 +111,7 @@ const updateCapaSchema = z.object({
   rootCause: z.string().optional().nullable(),
   correctiveAction: z.string().optional().nullable(),
   preventiveAction: z.string().optional().nullable(),
-  status: z.string().optional(),
+  status: z.enum(["open", "in_progress", "closed", "overdue"]).optional(),
   responsiblePerson: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(),
 });
@@ -122,7 +122,7 @@ const createComplianceActionSchema = z.object({
   description: z.string().optional().nullable(),
   owner: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(),
-  status: z.string().optional().nullable(),
+  status: z.enum(["open", "in_progress", "done", "overdue"]).optional().nullable(),
 });
 
 const updateComplianceActionSchema = z.object({
@@ -130,14 +130,14 @@ const updateComplianceActionSchema = z.object({
   regulation: z.string().optional().nullable(),
   owner: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(),
-  status: z.string().optional(),
+  status: z.enum(["open", "in_progress", "done", "overdue"]).optional(),
   description: z.string().optional().nullable(),
 });
 
 const createPolicyComplianceActionSchema = z.object({
   action: z.string().optional(),
   title: z.string().optional(),
-  status: z.string().optional().nullable(),
+  status: z.enum(["open", "in_progress", "done", "overdue"]).optional().nullable(),
   responsiblePerson: z.string().optional().nullable(),
   owner: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(),
@@ -146,7 +146,7 @@ const createPolicyComplianceActionSchema = z.object({
 });
 
 const updatePolicyComplianceActionSchema = z.object({
-  status: z.string().optional(),
+  status: z.enum(["open", "in_progress", "done", "overdue"]).optional(),
   action: z.string().optional(),
   title: z.string().optional(),
   responsiblePerson: z.string().optional().nullable(),

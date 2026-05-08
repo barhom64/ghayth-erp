@@ -270,9 +270,17 @@ router.post("/tickets/check-sla", requirePermission("support:read"), async (req,
           `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND priority != 'critical'`,
           [ticket.id, scope.companyId]
         );
+        let notifAssignmentId = scope.activeAssignmentId;
+        if (ticket.assigneeId) {
+          const [asgn] = await rawQuery<any>(
+            `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND status = 'active' LIMIT 1`,
+            [ticket.assigneeId]
+          );
+          if (asgn) notifAssignmentId = asgn.id;
+        }
         await createNotification({
           companyId: scope.companyId,
-          assignmentId: ticket.assigneeId || scope.activeAssignmentId,
+          assignmentId: notifAssignmentId,
           type: "alert",
           title: `SLA خرق: ${ticket.ref}`,
           body: `التذكرة "${ticket.title}" تجاوزت SLA — تم تصعيد الأولوية إلى حرجة`,

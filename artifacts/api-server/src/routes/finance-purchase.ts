@@ -435,7 +435,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
       const poRes = await client.query(
         `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"createdBy")
          VALUES ($1,$2,$3,'pending',$4,$5,$6,$7) RETURNING id`,
-        [scope.companyId, scope.branchId, poRef, totalAmount, pr.supplierId ?? null, pr.notes ?? null, scope.userId]
+        [scope.companyId, scope.branchId, poRef, totalAmount, pr.supplierId ?? null, pr.notes ?? null, scope.activeAssignmentId]
       );
       const newPoId = poRes.rows[0].id;
 
@@ -500,7 +500,7 @@ purchaseRouter.get("/purchase-orders", requirePermission("finance:read"), async 
     let paramIdx = nextParamIndex;
     if (filterStatus) { params.push(filterStatus); extraWhere += ` AND po.status = $${paramIdx++}`; }
     const { productId } = req.query as any;
-    if (productId) { params.push(Number(productId) || 0); extraWhere += ` AND po.id IN (SELECT "purchaseOrderId" FROM purchase_order_lines WHERE "productId" = $${paramIdx++})`; }
+    // productId filter disabled: purchase_order_items has no productId column
 
     const offset = (Math.max(Number(page), 1) - 1) * safeLim;
     params.push(safeLim);
@@ -698,8 +698,11 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
       subtotal += l.receivedQty * Number(item.unitPrice);
     }
     subtotal = roundTo2(subtotal);
-    const poSubtotal = Number(po.totalAmount) - Number(po.vatAmount ?? 0);
-    const vatRatio = poSubtotal > 0 ? Number(po.vatAmount ?? 0) / poSubtotal : 0;
+    const poTotal = Number(po.totalAmount);
+    const defaultVatRate = 0.15;
+    const poSubtotal = roundTo2(poTotal / (1 + defaultVatRate));
+    const poVatAmount = roundTo2(poTotal - poSubtotal);
+    const vatRatio = poSubtotal > 0 ? poVatAmount / poSubtotal : 0;
     const vatAmount = roundTo2(subtotal * vatRatio);
     const grnTotal = roundTo2(subtotal + vatAmount);
 
@@ -1297,7 +1300,7 @@ purchaseRouter.get("/purchase-orders/:id", requirePermission("finance:read"), as
     let lines: any[] = [];
     try {
       lines = await rawQuery<any>(
-        `SELECT * FROM purchase_order_lines WHERE "purchaseOrderId" = $1 ORDER BY id`,
+        `SELECT * FROM purchase_order_items WHERE "orderId" = $1 ORDER BY id`,
         [id]
       );
     } catch (e) { logger.error(e, "PO lines fetch error"); }

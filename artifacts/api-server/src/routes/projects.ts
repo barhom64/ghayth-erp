@@ -1399,8 +1399,8 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
       throw new ValidationError("تاريخ المعلَم المستهدف مطلوب", { field: "targetDate", fix: "حدد التاريخ المستهدف" });
     }
     const { insertId } = await rawExecute(
-      `INSERT INTO project_milestones ("projectId","companyId",title,description,"targetDate",status,"completedDate")
-       VALUES ($1,$2,$3,$4,$5,'pending',$6)`,
+      `INSERT INTO project_milestones ("projectId","companyId",name,title,description,"targetDate",status,"completedDate")
+       VALUES ($1,$2,$3,$3,$4,$5,'pending',$6)`,
       [projectId, scope.companyId, b.title, b.description || null, b.targetDate, b.completedDate || null]
     );
 

@@ -104,7 +104,7 @@ const performanceSchema = z.object({
   categories: z.any().optional(),
   comments: z.string().optional(),
   notes: z.string().optional(),
-  status: z.string().optional(),
+  status: z.enum(["pending", "in_progress", "completed", "acknowledged"]).optional(),
 });
 
 const salaryComponentSchema = z.object({
@@ -305,7 +305,7 @@ const performancePatchSchema = z.object({
   score: z.coerce.number().optional(),
   comments: z.string().optional(),
   feedback: z.string().optional(),
-  status: z.string().optional(),
+  status: z.enum(["pending", "in_progress", "completed", "acknowledged"]).optional(),
   strengths: z.any().optional(),
   improvements: z.any().optional(),
   goals: z.any().optional(),
@@ -4301,20 +4301,20 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
     await withTransaction(async (client) => {
       // ── Reverse financial side effects ──
 
-      // Revert attendance deductions
+      // Revert attendance deductions (table has no payrollRunId — match by period)
       await client.query(
-        `UPDATE attendance_deductions SET status = 'pending_payroll' WHERE "payrollRunId" = $1 AND "companyId" = $2 AND status = 'deducted_in_payroll'`,
-        [id, scope.companyId]
+        `UPDATE attendance_deductions SET status = 'pending_payroll' WHERE period = $1 AND "companyId" = $2 AND status = 'deducted_in_payroll'`,
+        [exists.period, scope.companyId]
       );
 
-      // Revert loan installments and restore loan remaining amounts
+      // Revert loan installments and restore loan remaining amounts (payrollLineId → payroll_lines.runId)
       const { rows: paidInstallments } = await client.query(
-        `SELECT id, "loanId", amount FROM hr_loan_installments WHERE "payrollRunId" = $1 AND status = 'paid'`,
+        `SELECT hli.id, hli."loanId", hli.amount FROM hr_loan_installments hli JOIN payroll_lines pl ON pl.id = hli."payrollLineId" WHERE pl."runId" = $1 AND hli.status = 'paid'`,
         [id]
       );
       if (paidInstallments.length > 0) {
         await client.query(
-          `UPDATE hr_loan_installments SET status = 'pending' WHERE "payrollRunId" = $1 AND "companyId" = $2 AND status = 'paid'`,
+          `UPDATE hr_loan_installments SET status = 'pending' WHERE "payrollLineId" IN (SELECT id FROM payroll_lines WHERE "runId" = $1) AND "companyId" = $2 AND status = 'paid'`,
           [id, scope.companyId]
         );
         for (const inst of paidInstallments) {
@@ -4325,9 +4325,9 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
         }
       }
 
-      // Revert overtime requests
+      // Revert overtime requests (payrollLineId → payroll_lines.runId)
       await client.query(
-        `UPDATE hr_overtime_requests SET status = 'approved' WHERE "payrollRunId" = $1 AND "companyId" = $2 AND status = 'paid'`,
+        `UPDATE hr_overtime_requests SET status = 'approved' WHERE "payrollLineId" IN (SELECT id FROM payroll_lines WHERE "runId" = $1) AND "companyId" = $2 AND status = 'paid'`,
         [id, scope.companyId]
       );
 

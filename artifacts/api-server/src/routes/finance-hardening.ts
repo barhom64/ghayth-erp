@@ -89,7 +89,7 @@ const updateBankGuaranteeSchema = z.object({
   beneficiary: z.string().optional(),
   amount: z.coerce.number().optional(),
   expiryDate: z.string().optional(),
-  status: z.string().optional(),
+  status: z.enum(["active", "expired", "released", "renewed", "cancelled"]).optional(),
   notes: z.string().optional(),
   attachmentUrl: z.string().optional(),
   guaranteeType: z.string().optional(),

@@ -782,7 +782,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
     if (updatedProduct && Number(updatedProduct.currentStock) <= Number(updatedProduct.minStock)) {
       let autoRequestId: number | null = null;
       try {
-        autoRequestId = await triggerMinStockPipeline(scope.companyId, updatedProduct, scope.userId);
+        autoRequestId = await triggerMinStockPipeline(scope.companyId, updatedProduct, scope.userId, scope.activeAssignmentId);
       } catch (e) {
         logger.error(e, "[MinStock] Pipeline error (non-critical, movement already committed):");
       }
@@ -796,7 +796,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
   }
 });
 
-async function triggerMinStockPipeline(companyId: number, product: any, userId: number): Promise<number | null> {
+async function triggerMinStockPipeline(companyId: number, product: any, userId: number, assignmentId?: number): Promise<number | null> {
   const lastOrders = await rawQuery<any>(
     `SELECT pri."unitPrice" AS "unitCost" FROM purchase_request_items pri JOIN purchase_requests pr ON pr.id=pri."requestId" WHERE pri."productId"=$1 AND pr."companyId"=$2 ORDER BY pr."createdAt" DESC LIMIT 3`,
     [product.id, companyId]
@@ -813,9 +813,14 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
   const estimatedTotal = reorderQty * estimatedUnitCost;
   const ref = generateTimeRef("PR-AUTO");
 
+  let effectiveAssignmentId = assignmentId;
+  if (!effectiveAssignmentId) {
+    const [asgn] = await rawQuery<any>(`SELECT id FROM employee_assignments WHERE "userId" = $1 AND status = 'active' LIMIT 1`, [userId]);
+    effectiveAssignmentId = asgn?.id || userId;
+  }
   const { insertId: prId } = await rawExecute(
     `INSERT INTO purchase_requests ("companyId","supplierId",ref,status,"totalAmount","requestedBy",notes) VALUES ($1,$2,$3,'pending',$4,$5,$6)`,
-    [companyId, supplierId, ref, estimatedTotal, userId, `طلب شراء تلقائي - مخزون منخفض: ${product.name}`]
+    [companyId, supplierId, ref, estimatedTotal, effectiveAssignmentId, `طلب شراء تلقائي - مخزون منخفض: ${product.name}`]
   );
   if (prId) {
     await rawExecute(

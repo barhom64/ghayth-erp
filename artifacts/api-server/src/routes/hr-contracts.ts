@@ -343,7 +343,7 @@ contractsRouter.post("/:id/sign-employee", async (req, res) => {
       `SELECT ec.* FROM employee_contracts ec
        JOIN employee_assignments ea ON ea.id = ec."assignmentId"
        WHERE ec.id = $1 AND ec."companyId" = $2
-         AND ea."employeeId" = (SELECT id FROM employees WHERE id = $3 AND "companyId" = $2)`,
+         AND ea."employeeId" = $3`,
       [id, scope.companyId, scope.employeeId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود أو ليس لك");
