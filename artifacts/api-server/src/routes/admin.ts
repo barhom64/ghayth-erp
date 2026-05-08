@@ -428,7 +428,8 @@ router.post("/roles", requirePermission("admin:write"), async (req, res) => {
       entityId: 0,
       details: JSON.stringify({ roleKey, label, level: roleLevel }),
     }).catch((e) => logger.error(e, "admin background task failed"));
-    res.status(201).json({ success: true, roleKey, label, level: roleLevel, modules: mods });
+    const [row] = await rawQuery<any>(`SELECT * FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2`, [scope.companyId, roleKey]);
+    res.status(201).json(row || { roleKey, label, level: roleLevel, modules: mods });
   } catch (e: any) { logger.error(e, "Create role error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
@@ -533,7 +534,8 @@ router.post("/user-roles", requirePermission("admin:write"), async (req, res) =>
       entityId: userId,
       details: JSON.stringify({ roleKey: def.roleKey, label: def.label }),
     }).catch((e) => logger.error(e, "admin background task failed"));
-    res.status(201).json({ success: true, roleKey: def.roleKey });
+    const [row] = await rawQuery<any>(`SELECT * FROM user_roles WHERE "userId"=$1 AND "roleKey"=$2 AND "companyId"=$3`, [userId, def.roleKey, scope.companyId]);
+    res.status(201).json(row || { userId, roleKey: def.roleKey });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -1078,7 +1080,8 @@ router.post("/role-permissions", requirePermission("admin:write"), async (req, r
       entityId: r.insertId,
       details: JSON.stringify({ role, permission }),
     }).catch((e) => logger.error(e, "admin background task failed"));
-    res.status(201).json({ success: true, id: r.insertId, role, permission });
+    const [row] = await rawQuery<any>(`SELECT * FROM role_permissions WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 

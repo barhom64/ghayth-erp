@@ -365,7 +365,9 @@ router.post("/definitions", requirePermission("admin:write"), async (req, res) =
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_definitions", entityId: insertId, after: { requestType, requestTypeLabel } }).catch((e) => logger.error(e, "workflows background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "workflow_definitions", entityId: insertId, details: JSON.stringify({ requestType, requestTypeLabel }) }).catch((e) => logger.error(e, "workflows background task failed"));
-    res.status(201).json({ id: insertId });
+    const [row] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const defSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId"=$1 ORDER BY "stepOrder" LIMIT 500`, [insertId]);
+    res.status(201).json({ ...row, steps: defSteps } || { id: insertId });
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
@@ -454,7 +456,8 @@ router.post("/sla-definitions", requirePermission("admin:write"), async (req, re
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "sla_definitions", entityId: insertId, after: { requestType } }).catch((e) => logger.error(e, "workflows background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "sla_definitions", entityId: insertId, details: JSON.stringify({ requestType }) }).catch((e) => logger.error(e, "workflows background task failed"));
-    res.status(201).json({ id: insertId });
+    const [row] = await rawQuery<any>(`SELECT * FROM sla_definitions WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId });
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }

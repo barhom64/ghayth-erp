@@ -506,8 +506,15 @@ custodiesRouter.post("/custodies", requirePermission("finance:create"), async (r
       after: { ref, employeeName: resolvedEmployeeName, amount, purpose, expectedReturnDate },
     }).catch((e) => logger.error(e, "finance-custodies background task failed"));
 
-    const entityStatus = approvalResult.requiresApproval ? "pending_approval" : "active";
-    res.status(201).json({ id: journalId, ref, employeeName: resolvedEmployeeName, assignmentId: custodyAssignmentId, amount, description, purpose, expectedReturnDate, status: entityStatus, approval: approvalResult });
+    const [createdCustody] = await rawQuery<any>(
+      `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [journalId, scope.companyId]
+    );
+    res.status(201).json(createdCustody || { id: journalId });
   } catch (err) {
     handleRouteError(err, res, "Create custody error:");
   }
@@ -637,7 +644,15 @@ custodiesRouter.post("/custodies/settle", requirePermission("finance:create"), a
       after: { custodyRef, settleRef, amount: settleAmount, remaining: remaining - settleAmount },
     }).catch((e) => logger.error(e, "finance-custodies background task failed"));
 
-    res.status(201).json({ id: journalId, ref: settleRef, custodyRef, amount, description });
+    const [createdSettle] = await rawQuery<any>(
+      `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [journalId, scope.companyId]
+    );
+    res.status(201).json(createdSettle || { id: journalId });
   } catch (err) {
     handleRouteError(err, res, "Settle custody error:");
   }
@@ -772,7 +787,15 @@ custodiesRouter.post("/custodies/:id/settle", requirePermission("finance:create"
       after: { custodyRef: custody.ref, settleRef, amount: settleAmount, remaining: remaining - settleAmount },
     }).catch((e) => logger.error(e, "finance-custodies background task failed"));
 
-    res.status(201).json({ id: journalId, ref: settleRef, custodyRef: custody.ref, amount, description });
+    const [createdSettleById] = await rawQuery<any>(
+      `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [journalId, scope.companyId]
+    );
+    res.status(201).json(createdSettleById || { id: journalId });
   } catch (err) {
     handleRouteError(err, res, "Settle custody by ID error:");
   }

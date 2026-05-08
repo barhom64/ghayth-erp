@@ -360,11 +360,15 @@ financeHardeningRouter.post("/journal-manual", requirePermission("finance:create
       after: { ref, totalDebit, lineCount: lines.length, approvalStatus: "draft", isManual: true },
     }).catch((err) => logger.error(err, "[audit] journal.manual_created:"));
 
-    res.status(201).json({
-      id: journalId, ref, description, totalDebit, totalCredit,
-      approvalStatus: "draft", isManual: true,
-      message: "تم إنشاء القيد اليدوي بحالة مسودة — يحتاج مراجعة واعتماد قبل الترحيل",
-    });
+    const [createdManualJournal] = await rawQuery<any>(
+      `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [journalId, scope.companyId]
+    );
+    res.status(201).json({ ...(createdManualJournal || { id: journalId }), message: "تم إنشاء القيد اليدوي بحالة مسودة — يحتاج مراجعة واعتماد قبل الترحيل" });
   } catch (err) {
     handleRouteError(err, res, "Create manual journal error:");
   }
@@ -1040,10 +1044,16 @@ financeHardeningRouter.post("/intercompany", requirePermission("finance:create")
       after: { ref, toCompanyId: Number(toCompanyId), amount: Number(amount), txDate },
     }).catch((err) => logger.error(err, "[audit] intercompany.created:"));
 
-    res.status(201).json({
-      ref, fromJournalId, toJournalId, amount: Number(amount),
-      message: `تم تسجيل المعاملة البينية ${ref} وإنشاء قيدين محاسبيين`,
-    });
+    const [createdIntercompany] = await rawQuery<any>(
+      `SELECT ic.*, fc.name AS "fromCompanyName", tc.name AS "toCompanyName"
+       FROM intercompany_transactions ic
+       LEFT JOIN companies fc ON fc.id = ic."fromCompanyId"
+       LEFT JOIN companies tc ON tc.id = ic."toCompanyId"
+       WHERE ic.ref = $1 AND (ic."fromCompanyId" = $2 OR ic."toCompanyId" = $2) AND ic."deletedAt" IS NULL
+       LIMIT 1`,
+      [ref, scope.companyId]
+    );
+    res.status(201).json({ ...(createdIntercompany || { ref, fromJournalId, toJournalId, amount: Number(amount) }), message: `تم تسجيل المعاملة البينية ${ref} وإنشاء قيدين محاسبيين` });
   } catch (err) {
     handleRouteError(err, res, "Create intercompany transaction error:");
   }

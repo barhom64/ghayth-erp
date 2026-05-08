@@ -360,7 +360,8 @@ router.post("/branches", requirePermission("settings:write"), async (req, res) =
       after: { name, nameEn, city, phone, companyId: targetCompanyId },
     }).catch((e) => logger.error(e, "settings background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "branch" }) }).catch((e) => logger.error(e, "settings background task failed"));
-    res.status(201).json({ id: r.insertId, companyId: targetCompanyId, ...body });
+    const [row] = await rawQuery<any>(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [r.insertId, targetCompanyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
@@ -449,7 +450,8 @@ router.post("/departments", requirePermission("settings:write"), async (req, res
       after: { name, nameEn, manager },
     }).catch((e) => logger.error(e, "settings background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "department" }) }).catch((e) => logger.error(e, "settings background task failed"));
-    res.status(201).json({ id: r.insertId, ...body });
+    const [row] = await rawQuery<any>(`SELECT * FROM departments WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
@@ -608,10 +610,12 @@ router.get("/timezone", requirePermission("settings:read"), async (_req, res) =>
   }
 });
 
-router.get("/system-controls", requirePermission("settings:read"), async (_req, res) => {
+router.get("/system-controls", requirePermission("settings:read"), async (req, res) => {
   try {
+    const scope = req.scope!;
     const rows = await rawQuery(
-      `SELECT key, value FROM settings WHERE scope='system' AND "scopeId"=0 ORDER BY key`
+      `SELECT key, value FROM settings WHERE scope='company' AND "scopeId"=$1 ORDER BY key`,
+      [scope.companyId]
     );
     const controls: Record<string, any> = {};
     for (const r of rows) {
@@ -623,17 +627,17 @@ router.get("/system-controls", requirePermission("settings:read"), async (_req, 
 
 router.put("/system-controls", requirePermission("settings:write"), async (req, res) => {
   try {
+    const scope = req.scope!;
     const entries: Record<string, unknown> = zodParse(systemControlsSchema.safeParse(req.body));
     for (const [key, value] of Object.entries(entries)) {
       const jsonVal = JSON.stringify(value);
-      const existing = await rawQuery(`SELECT id FROM settings WHERE scope='system' AND "scopeId"=0 AND key=$1`, [key]);
+      const existing = await rawQuery(`SELECT id FROM settings WHERE scope='company' AND "scopeId"=$1 AND key=$2`, [scope.companyId, key]);
       if (existing.length > 0) {
-        await rawExecute(`UPDATE settings SET value=$1 WHERE scope='system' AND "scopeId"=0 AND key=$2`, [jsonVal, key]);
+        await rawExecute(`UPDATE settings SET value=$1 WHERE scope='company' AND "scopeId"=$2 AND key=$3`, [jsonVal, scope.companyId, key]);
       } else {
-        await rawExecute(`INSERT INTO settings (scope, "scopeId", key, value) VALUES ('system', 0, $1, $2)`, [key, jsonVal]);
+        await rawExecute(`INSERT INTO settings (scope, "scopeId", key, value) VALUES ('company', $1, $2, $3)`, [scope.companyId, key, jsonVal]);
       }
     }
-    const scope = req.scope!;
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_system_controls",
       entity: "settings", entityId: 0,
@@ -713,7 +717,8 @@ router.post("/approval-config", requirePermission("settings:write"), async (req,
       after: { chainType, name, minAmount, maxAmount, isActive },
     }).catch((e) => logger.error(e, "settings background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "approval_config" }) }).catch((e) => logger.error(e, "settings background task failed"));
-    res.status(201).json({ id: r.insertId });
+    const [row] = await rawQuery<any>(`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 

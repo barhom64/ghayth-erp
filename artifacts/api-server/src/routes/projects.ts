@@ -234,7 +234,7 @@ router.post("/impact-preview", requirePermission("projects:read"), async (req, r
 
     if (managerId) {
       const [manager] = await rawQuery<any>(
-        `SELECT name FROM employees WHERE id = $1 AND "deletedAt" IS NULL`, [Number(managerId)]
+        `SELECT e.name FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`, [Number(managerId), scope.companyId]
       );
       const [[active]] = await Promise.all([
         rawQuery<any>(
@@ -434,8 +434,8 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
     }
     if (b.managerId) {
       const [emp] = await rawQuery<any>(
-        `SELECT id FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
-        [b.managerId]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
+        [b.managerId, scope.companyId]
       );
       if (!emp) {
         throw new ValidationError("مدير المشروع غير موجود", { field: "managerId", fix: "اختر موظفاً مسجلاً" });
@@ -644,8 +644,8 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
     }
     if (b.managerId !== undefined && b.managerId !== existing.managerId) {
       const [emp] = await rawQuery<any>(
-        `SELECT id FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
-        [b.managerId]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
+        [b.managerId, scope.companyId]
       );
       if (!emp) {
         throw new ValidationError("مدير المشروع غير موجود", { field: "managerId", fix: "اختر موظفاً مسجلاً" });
@@ -884,8 +884,8 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
 
     if (b.assigneeId) {
       const [emp] = await rawQuery<any>(
-        `SELECT id FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
-        [b.assigneeId]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
+        [b.assigneeId, scope.companyId]
       );
       if (!emp) {
         throw new ValidationError("الموظف المُكلَّف غير موجود", { field: "assigneeId", fix: "اختر موظفاً مسجلاً" });
@@ -942,8 +942,8 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
 
     if (b.assigneeId) {
       const [assigneeAssignment] = await rawQuery<any>(
-        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND status = 'active' LIMIT 1`,
-        [b.assigneeId]
+        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+        [b.assigneeId, scope.companyId]
       );
       if (assigneeAssignment) {
         createNotification({
@@ -1128,9 +1128,9 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
           const asgnRows = await rawQuery<{ id: number; employeeId: number }>(
             `SELECT DISTINCT ON ("employeeId") id, "employeeId"
              FROM employee_assignments
-             WHERE "employeeId" = ANY($1) AND status='active'
+             WHERE "employeeId" = ANY($1) AND "companyId" = $2 AND status='active'
              ORDER BY "employeeId", id`,
-            [assigneeIds]
+            [assigneeIds, scope.companyId]
           );
           const empToAssignment = new Map<number, number>();
           for (const r of asgnRows) empToAssignment.set(Number(r.employeeId), Number(r.id));

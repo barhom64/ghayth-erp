@@ -899,10 +899,12 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
       after: { transferRef, fromLocation, toLocation, quantity: b.quantity, productId: b.productId, unitCost },
     }).catch((e) => logger.error(e, "warehouse background task failed"));
 
+    const [outRow] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [outId, scope.companyId]);
+    const [inRow] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [inId, scope.companyId]);
     res.status(201).json({
       transferRef,
-      outMovementId: outId,
-      inMovementId: inId,
+      outMovement: outRow || { id: outId },
+      inMovement: inRow || { id: inId },
       fromLocation,
       toLocation,
       quantity: b.quantity,

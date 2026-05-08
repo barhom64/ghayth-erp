@@ -486,7 +486,8 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
       after: { status: "converted", purchaseOrderId: poId, poRef, totalAmount },
     }).catch((e) => logger.error(e, "finance-purchase background task failed"));
 
-    res.status(201).json({ message: "تم تحويل طلب الشراء إلى أمر شراء", purchaseOrderId: poId, poRef, totalAmount });
+    const [po] = await rawQuery<any>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`, [poId, scope.companyId]);
+    res.status(201).json({ message: "تم تحويل طلب الشراء إلى أمر شراء", ...(po || { purchaseOrderId: poId, poRef, totalAmount }) });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
     if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
@@ -1133,15 +1134,8 @@ purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"),
       details: JSON.stringify({ runRef, poCount: pos.length, totalPayment, journalId }),
     }).catch((e) => logger.error(e, "finance-purchase background task failed"));
 
-    res.status(201).json({
-      runId,
-      runRef,
-      paymentDate: payDate,
-      method,
-      poCount: pos.length,
-      totalPayment,
-      journalId,
-    });
+    const [run] = await rawQuery<any>(`SELECT * FROM payment_runs WHERE id=$1 AND "companyId"=$2`, [runId, scope.companyId]);
+    res.status(201).json(run || { runId, runRef, paymentDate: payDate, method, poCount: pos.length, totalPayment, journalId });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
     if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }

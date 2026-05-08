@@ -112,7 +112,11 @@ router.post("/auth/register", portalLimiter, async (req: Request, res: Response)
     }).catch((e) => logger.error(e, "careersPortal background task failed"));
     emitEvent({ companyId: 0, branchId: 0, userId: result.insertId, action: "careers.account.registered", entity: "applicant_accounts", entityId: result.insertId, details: JSON.stringify({ name: name.trim(), email: email.trim().toLowerCase() }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
-    res.status(201).json({ token, accountId: result.insertId });
+    const [row] = await rawQuery<any>(
+      `SELECT id, name, email, phone, "createdAt" FROM applicant_accounts WHERE id = $1`,
+      [result.insertId]
+    );
+    res.status(201).json({ token, account: row || { id: result.insertId } });
   } catch (err) {
     handleRouteError(err, res, "تسجيل حساب متقدم");
   }
@@ -331,7 +335,15 @@ router.post("/apply", careersAuth, async (req: Request, res: Response) => {
     }).catch((e) => logger.error(e, "careersPortal background task failed"));
     emitEvent({ companyId: 0, branchId: 0, userId: applicantId, action: "careers.application.submitted", entity: "job_applications", entityId: result.insertId, details: JSON.stringify({ postingId, applicantId }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
-    res.status(201).json({ applicationId: result.insertId, message: "تم تقديم طلبك بنجاح" });
+    const [row] = await rawQuery<any>(
+      `SELECT ja.id, ja.status, ja."coverLetter", ja."createdAt",
+              jp.title AS "jobTitle", jp.department, jp.location
+       FROM job_applications ja
+       JOIN job_postings jp ON jp.id = ja."postingId"
+       WHERE ja.id = $1 AND ja."deletedAt" IS NULL`,
+      [result.insertId]
+    );
+    res.status(201).json(row || { id: result.insertId });
   } catch (err) {
     handleRouteError(err, res, "تقديم طلب توظيف");
   }

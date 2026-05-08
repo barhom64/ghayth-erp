@@ -1195,16 +1195,8 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
       details: JSON.stringify({ memoId, amount: creditAmount, net, vat, reason }),
     }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    res.status(201).json({
-      memoId,
-      journalId,
-      invoiceId: id,
-      amount: creditAmount,
-      netAmount: net,
-      vatAmount: vat,
-      reason,
-      memoDate: memoDateStr,
-    });
+    const [memo] = await rawQuery<any>(`SELECT * FROM credit_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
+    res.status(201).json(memo || { memoId, journalId, invoiceId: id, amount: creditAmount, netAmount: net, vatAmount: vat, reason, memoDate: memoDateStr });
   } catch (err) {
     handleRouteError(err, res, "Credit memo error:");
   }
@@ -1325,16 +1317,8 @@ invoicesRouter.post("/invoices/:id/debit-memo", requirePermission("finance:creat
       details: JSON.stringify({ memoId, amount: chargeAmount, net, vat, reason }),
     }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    res.status(201).json({
-      memoId,
-      journalId,
-      invoiceId: id,
-      amount: chargeAmount,
-      netAmount: net,
-      vatAmount: vat,
-      reason,
-      memoDate: memoDateStr,
-    });
+    const [memo] = await rawQuery<any>(`SELECT * FROM debit_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
+    res.status(201).json(memo || { memoId, journalId, invoiceId: id, amount: chargeAmount, netAmount: net, vatAmount: vat, reason, memoDate: memoDateStr });
   } catch (err) {
     handleRouteError(err, res, "Debit memo error:");
   }

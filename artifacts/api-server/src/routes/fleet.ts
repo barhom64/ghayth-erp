@@ -432,11 +432,11 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
       throw new ConflictError("رقم الرخصة مسجل مسبقاً لسائق آخر", { field: "licenseNumber", fix: "استخدم رقم رخصة صحيح أو راجع السجل الموجود" });
     }
 
-    // FK pre-check on employeeId if provided
+    // FK pre-check on employeeId if provided (verify employee belongs to same company)
     if (b.employeeId !== undefined && b.employeeId !== null && b.employeeId !== "") {
       const [emp] = await rawQuery<any>(
-        `SELECT id FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
-        [b.employeeId]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
+        [b.employeeId, scope.companyId]
       );
       if (!emp) {
         throw new ValidationError("الموظف المرتبط غير موجود", { field: "employeeId", fix: "اختر موظفاً مسجلاً في النظام أو اترك الحقل فارغاً" });

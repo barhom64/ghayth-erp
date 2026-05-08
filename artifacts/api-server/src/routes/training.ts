@@ -283,8 +283,8 @@ router.post("/enrollments", requirePermission("hr:create"), async (req, res) => 
     if (!prog) throw new NotFoundError("البرنامج التدريبي غير موجود");
     if (employeeId) {
       const [emp] = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE id=$1 AND "deletedAt" IS NULL LIMIT 1`,
-        [Number(employeeId)]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
+        [Number(employeeId), scope.companyId]
       );
       if (!emp) {
         throw new ValidationError(`الموظف رقم ${employeeId} غير موجود`, {

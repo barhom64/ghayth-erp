@@ -631,7 +631,8 @@ protectedRouter.post("/tickets/:id/csat", withPortalScope(async (req, res) => {
       action: "portal.csat.submitted", entity: "ticket_csat", entityId: id,
       details: JSON.stringify({ score, ticketId: id, clientId: scope.clientId }),
     }).catch((e) => logger.error(e, "clientPortal background task failed"));
-    res.status(201).json({ ticketId: id, score, comment });
+    const [row] = await rawQuery<any>(`SELECT * FROM ticket_csat_ratings WHERE "ticketId"=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    res.status(201).json(row || { ticketId: id, score, comment });
   } catch (err) {
     handleRouteError(err, res, "Portal CSAT error:");
   }
