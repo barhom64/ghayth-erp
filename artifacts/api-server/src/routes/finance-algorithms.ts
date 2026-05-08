@@ -412,6 +412,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", requirePermissio
       maxDate.setDate(maxDate.getDate() + Number(toleranceDays));
 
       const creditOrDebit = bRow.type === "credit" ? "debit" : "credit";
+      if (creditOrDebit !== "debit" && creditOrDebit !== "credit") throw new Error("Invalid column");
 
       const [jLine] = await rawQuery<any>(
         `SELECT jl.id, je."createdAt"

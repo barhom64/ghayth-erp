@@ -252,7 +252,7 @@ invoicesRouter.get("/invoices", requirePermission("finance:read"), async (req, r
     const scope = req.scope!;
     const { status = "", page = "1", limit: lim = "20" } = req.query as any;
     const safeLim = Number(lim) || 50;
-    const offset = (Math.max(Number(page), 1) - 1) * safeLim;
+    const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLim;
 
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, {
@@ -1541,6 +1541,9 @@ invoicesRouter.post("/customer-advances", requirePermission("finance:create"), a
     const scope = req.scope!;
 
     const { clientId, amount, method = "bank_transfer", reference, notes, receivedDate } = zodParse(createCustomerAdvanceSchema.safeParse(req.body));
+
+    const [client] = await rawQuery<{ id: number }>(`SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`, [clientId, scope.companyId]);
+    if (!client) throw new ValidationError("العميل غير موجود", { field: "clientId", fix: "اختر عميلاً من قائمة العملاء." });
 
     const recvDate = receivedDate || todayISO();
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, recvDate);

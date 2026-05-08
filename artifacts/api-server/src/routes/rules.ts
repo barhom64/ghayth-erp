@@ -165,7 +165,7 @@ router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
 
     params.push(id);
     params.push(scope.companyId);
-    await rawExecute(`UPDATE business_rules SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length}`, params);
+    await rawExecute(`UPDATE business_rules SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`, params);
 
     const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
 

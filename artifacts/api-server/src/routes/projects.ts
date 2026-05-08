@@ -1562,6 +1562,10 @@ router.post("/:id/risks", requirePermission("projects:create"), async (req, res)
     if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
       throw new ValidationError("عنوان المخاطرة مطلوب", { field: "title", fix: "أدخل وصفاً مختصراً للمخاطرة" });
     }
+    if (b.responsibleId) {
+      const [resp] = await rawQuery<{ id: number }>(`SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`, [b.responsibleId, scope.companyId]);
+      if (!resp) throw new ValidationError("الموظف المسؤول غير موجود", { field: "responsibleId", fix: "اختر موظفاً من قائمة الموظفين." });
+    }
     const probability = Math.min(5, Math.max(1, Number(b.probability || 3)));
     const impact = Math.min(5, Math.max(1, Number(b.impact || 3)));
     const riskScore = probability * impact;
@@ -1717,6 +1721,14 @@ router.post("/:id/resources", requirePermission("projects:create"), async (req, 
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     assertProjectMutable(project);
+    if (b.employeeId) {
+      const [emp] = await rawQuery<{ id: number }>(`SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`, [b.employeeId, scope.companyId]);
+      if (!emp) throw new ValidationError("الموظف غير موجود", { field: "employeeId", fix: "اختر موظفاً من قائمة الموظفين." });
+    }
+    if (b.taskId) {
+      const [task] = await rawQuery<{ id: number }>(`SELECT id FROM project_tasks WHERE id = $1 AND "projectId" = $2 AND "deletedAt" IS NULL LIMIT 1`, [b.taskId, projectId]);
+      if (!task) throw new ValidationError("المهمة غير موجودة", { field: "taskId", fix: "اختر مهمة من مهام المشروع." });
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO project_resources ("projectId","companyId","employeeId","taskId",role,"allocatedHours","budgetAllocated","startDate","endDate")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,

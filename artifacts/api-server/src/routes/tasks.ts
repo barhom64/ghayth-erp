@@ -118,7 +118,8 @@ router.get("/", requirePermission("tasks:read"), async (req, res) => {
        LEFT JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN clients c ON c.id = t."clientId" AND c."deletedAt" IS NULL
        WHERE ${where}
-       ORDER BY t.priority DESC, t."scheduledDate" ASC NULLS LAST`,
+       ORDER BY t.priority DESC, t."scheduledDate" ASC NULLS LAST
+       LIMIT 500`,
       params
     );
 

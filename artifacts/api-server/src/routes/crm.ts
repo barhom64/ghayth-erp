@@ -454,7 +454,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
     if (b.source !== undefined) { params.push(b.source); sets.push(`source=$${params.length}`); }
     if (b.nextFollowUp !== undefined) { params.push(b.nextFollowUp || null); sets.push(`"nextFollowUp"=$${params.length}`); }
     params.push(oppId, scope.companyId);
-    await rawExecute(`UPDATE crm_opportunities SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    await rawExecute(`UPDATE crm_opportunities SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
 
     let autoActions: string[] = [];
 

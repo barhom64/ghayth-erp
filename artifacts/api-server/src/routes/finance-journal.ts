@@ -1087,8 +1087,8 @@ journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), 
       `UPDATE journal_entries
          SET "reversalOfId" = $1,
              "reversalReason" = $2
-       WHERE id = $3`,
-      [id, reason, newJournalId]
+       WHERE id = $3 AND "companyId" = $4`,
+      [id, reason, newJournalId, scope.companyId]
     );
     await rawExecute(
       `UPDATE journal_entries
@@ -1096,8 +1096,8 @@ journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), 
              "reversedAt" = NOW(),
              "reversalReason" = $2,
              status = 'reversed'
-       WHERE id = $3`,
-      [newJournalId, reason, id]
+       WHERE id = $3 AND "companyId" = $4`,
+      [newJournalId, reason, id, scope.companyId]
     );
 
     await createAuditLog({

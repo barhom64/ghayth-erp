@@ -100,9 +100,10 @@ router.post("/products", requirePermission("store:write"), async (req, res) => {
       `INSERT INTO store_products (name, description, sku, price, "costPrice", quantity, category, status, "imageUrl", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [name, description, sku, price || 0, costPrice || 0, quantity || 0, category, status || "active", imageUrl, scope.companyId]
     );
+    const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id = $1 AND "companyId" = $2`, [r.insertId, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "store_products", entityId: r.insertId, after: { name, sku, price, category, status: status || "active" } }).catch((e) => logger.error(e, "store background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.product.created", entity: "store_products", entityId: r.insertId, details: JSON.stringify({ name, sku }) }).catch((e) => logger.error(e, "store background task failed"));
-    res.status(201).json({ id: r.insertId });
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "Create store product"); }
 });
 
@@ -226,9 +227,10 @@ router.post("/orders", requirePermission("store:write"), async (req, res) => {
       }
       return newId;
     });
+    const [order] = await rawQuery<any>(`SELECT * FROM store_orders WHERE id = $1 AND "companyId" = $2`, [orderId, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "store_orders", entityId: orderId, after: { orderNumber: effectiveOrderNumber, customerName, status: status || "pending", totalAmount } }).catch((e) => logger.error(e, "store background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.order.created", entity: "store_orders", entityId: orderId, details: JSON.stringify({ customerName, totalAmount }) }).catch((e) => logger.error(e, "store background task failed"));
-    res.status(201).json({ id: orderId });
+    res.status(201).json(order || { id: orderId });
   } catch (err) { handleRouteError(err, res, "Create store order"); }
 });
 
