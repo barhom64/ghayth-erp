@@ -292,8 +292,12 @@ export async function createJournalEntry(params: {
     }
   }
 
-  const totalDebit = params.lines.reduce((s, l) => s + Number(l.debit), 0);
-  const totalCredit = params.lines.reduce((s, l) => s + Number(l.credit), 0);
+  for (const line of params.lines) {
+    line.debit = roundTo2(Number(line.debit));
+    line.credit = roundTo2(Number(line.credit));
+  }
+  const totalDebit = roundTo2(params.lines.reduce((s, l) => s + l.debit, 0));
+  const totalCredit = roundTo2(params.lines.reduce((s, l) => s + l.credit, 0));
   const imbalance = roundTo4(totalDebit - totalCredit);
   if (Math.abs(imbalance) > 0.001 && Math.abs(imbalance) <= 0.05) {
     let [roundingAcc] = await rawQuery<any>(
@@ -466,8 +470,8 @@ export async function reverseAccountBalances(
   journalId: number
 ) {
   const lines = await rawQuery<any>(
-    `SELECT "accountCode", debit, credit FROM journal_lines WHERE "journalId" = $1`,
-    [journalId]
+    `SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" WHERE jl."journalId" = $1 AND je."companyId" = $2`,
+    [journalId, companyId]
   );
   const balanceChanges = new Map<string, number>();
   for (const line of lines) {

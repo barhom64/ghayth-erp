@@ -68,15 +68,17 @@ function AnimatedNumber({ value, duration = 700 }: { value: number; duration?: n
     const end = value;
     if (start === end) return;
     let startTime: number | null = null;
+    let rafId: number;
     const animate = (t: number) => {
       if (!startTime) startTime = t;
       const p = Math.min((t - startTime) / duration, 1);
       const ease = 1 - Math.pow(1 - p, 3);
       setDisplay(Math.round(start + (end - start) * ease));
-      if (p < 1) requestAnimationFrame(animate);
+      if (p < 1) rafId = requestAnimationFrame(animate);
     };
-    requestAnimationFrame(animate);
+    rafId = requestAnimationFrame(animate);
     prev.current = end;
+    return () => cancelAnimationFrame(rafId);
   }, [value, duration]);
   return <span>{formatNumber(display)}</span>;
 }
