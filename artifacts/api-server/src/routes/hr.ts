@@ -1210,7 +1210,7 @@ router.get("/leave-requests", requirePermission("hr:read"), async (req, res) => 
     }
 
     const pageNum = Math.max(Number(page) || 1, 1);
-    const pageSize = Math.min(Math.max(Number(lim), 1), 100);
+    const pageSize = Math.min(Math.max(Number(lim) || 20, 1), 100);
     const offset = (pageNum - 1) * pageSize;
 
     params.push(pageSize);
