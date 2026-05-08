@@ -1832,10 +1832,11 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
           );
           // Stamp a note in the cost row so users see the reason.
           await rawExecute(
-            `UPDATE project_costs SET notes = COALESCE(notes,'') || $1 WHERE id=$2`,
+            `UPDATE project_costs SET notes = COALESCE(notes,'') || $1 WHERE id=$2 AND "companyId"=$3`,
             [
               ` [GL skipped: الفترة المالية "${period.periodName ?? ""}" مغلقة]`,
               insertId,
+              scope.companyId,
             ]
           ).catch((e) => logger.error(e, "projects background task failed"));
         } else {

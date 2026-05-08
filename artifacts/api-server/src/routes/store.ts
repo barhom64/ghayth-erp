@@ -198,8 +198,8 @@ router.post("/orders", requirePermission("store:write"), async (req, res) => {
           // Lock the product row and check available stock
           if (item.productId) {
             const stockRes = await client.query(
-              `SELECT quantity FROM store_products WHERE id = $1 FOR UPDATE`,
-              [item.productId]
+              `SELECT quantity FROM store_products WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
+              [item.productId, scope.companyId]
             );
             const stockRow = stockRes.rows[0];
             if (!stockRow) {
@@ -218,8 +218,8 @@ router.post("/orders", requirePermission("store:write"), async (req, res) => {
           // Deduct stock
           if (item.productId) {
             await client.query(
-              `UPDATE store_products SET quantity = quantity - $1 WHERE id = $2 AND "deletedAt" IS NULL`,
-              [qty, item.productId]
+              `UPDATE store_products SET quantity = quantity - $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+              [qty, item.productId, scope.companyId]
             );
           }
         }
@@ -289,6 +289,15 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
         `UPDATE store_orders SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`,
         params
       );
+
+      // Restore stock inside transaction when cancelling
+      if (b.status === "cancelled" && existing.status !== "cancelled") {
+        const itemsRes = await client.query(`SELECT "productId", quantity FROM store_order_items WHERE "orderId" = $1`, [id]);
+        for (const item of itemsRes.rows) {
+          await client.query(`UPDATE store_products SET quantity = quantity + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [item.quantity, item.productId, scope.companyId]);
+        }
+      }
+
       const updatedRes = await client.query(`SELECT * FROM store_orders WHERE id=$1`, [id]);
       return { updated: updatedRes.rows[0], previousStatus: existing.status };
     });
@@ -298,13 +307,6 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
         await postStoreOrderGl(scope, row.updated);
       } catch (glErr) {
         logger.error(glErr, "[store] GL posting failed for order");
-      }
-    }
-
-    if (b.status === "cancelled" && row.previousStatus !== "cancelled") {
-      const orderItems = await rawQuery<any>(`SELECT "productId", quantity FROM store_order_items WHERE "orderId" = $1`, [id]);
-      for (const item of orderItems) {
-        await rawExecute(`UPDATE store_products SET quantity = quantity + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [item.quantity, item.productId, scope.companyId]);
       }
     }
 

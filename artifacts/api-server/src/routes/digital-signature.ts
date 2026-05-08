@@ -106,7 +106,7 @@ router.post("/verify", requirePermission("documents:write"), async (req, res: Re
       throw new ValidationError("رمز التحقق غير صحيح أو منتهي الصلاحية");
     }
 
-    await rawExecute(`UPDATE digital_signature_otps SET used=true, "usedAt"=NOW() WHERE id=$1`, [record.id]);
+    await rawExecute(`UPDATE digital_signature_otps SET used=true, "usedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [record.id, scope.companyId]);
 
     const signatureRef = generateTimeRef("SIG");
     await rawExecute(

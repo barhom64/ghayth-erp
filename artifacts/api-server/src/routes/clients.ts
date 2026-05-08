@@ -509,8 +509,8 @@ router.patch("/:id/portal-account", requirePermission("crm:write"), async (req, 
     sets.push(`"updatedAt" = NOW()`);
     params.push(account.id);
     await rawExecute(
-      `UPDATE client_portal_accounts SET ${sets.join(",")} WHERE id = $${params.length}`,
-      params
+      `UPDATE client_portal_accounts SET ${sets.join(",")} WHERE id = $${params.length} AND "companyId" = $${params.length + 1}`,
+      [...params, scope.companyId]
     );
     const [updated] = await rawQuery<any>(
       `SELECT id, email, "isActive", "mustChangePassword", "lastLoginAt", "createdAt" FROM client_portal_accounts WHERE id = $1 AND "companyId" = $2`,

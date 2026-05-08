@@ -868,14 +868,6 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
         haversineKm(Number(lat), Number(lon), Number(assignment.branchLat), Number(assignment.branchLon)) * 1000
       );
       isCheckOutOutOfRange = checkOutDistanceMeters > gpsRadius;
-      if (isCheckOutOutOfRange) {
-        await rawExecute(
-          `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
-           VALUES ($1,$2,'gps_out_of_range',$3,'low',0,$4)`,
-          [scope.companyId, scope.activeAssignmentId,
-            `تسجيل انصراف خارج نطاق الفرع بمسافة ${checkOutDistanceMeters}م`, period]
-        );
-      }
     }
 
     // ── Calculate worked time ──
@@ -900,32 +892,9 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
       }
     }
 
-    // ── Update attendance record (atomic: only if checkOut IS NULL to prevent race condition) ──
-    const [checkOutResult] = await rawQuery<any>(
-      `UPDATE attendance SET "checkOut" = $1, notes = COALESCE($2, notes), "checkOutLat" = $4, "checkOutLon" = $5, "overtimeMinutes" = $6 WHERE id = $3 AND "companyId" = $7 AND "checkOut" IS NULL RETURNING id`,
-      [now.toISOString(), notes ?? null, existing.id,
-        lat !== undefined && lat !== null ? Number(lat) : null,
-        lon !== undefined && lon !== null ? Number(lon) : null,
-        overtimeMinutes, scope.companyId]
-    );
-    if (!checkOutResult) {
-      throw new ConflictError("لقد سجلت الانصراف مسبقاً اليوم", {
-        field: "attendance",
-        fix: "تم تسجيل انصرافك بالفعل. لا يمكن إعادة الانصراف في نفس اليوم.",
-      });
-    }
-
-    // ── Update monthly stats ──
-    await rawExecute(
-      `INSERT INTO employee_monthly_attendance ("companyId","assignmentId",period,"overtimeMinutes")
-       VALUES ($1,$2,$3,$4)
-       ON CONFLICT ("assignmentId",period) DO UPDATE
-       SET "overtimeMinutes" = COALESCE(employee_monthly_attendance."overtimeMinutes", 0) + $4`,
-      [scope.companyId, scope.activeAssignmentId, period, overtimeMinutes]
-    );
-
-    // ── Check for approved excuse before creating early departure violation ──
+    // ── Check for approved excuse before transaction (read-only) ──
     let excusedEarlyLeave = false;
+    let approvedExcuseId: number | null = null;
     if (earlyDepartureMinutes > 0) {
       const [approvedExcuse] = await rawQuery<any>(
         `SELECT id, "estimatedMinutes" FROM hr_excuse_requests
@@ -935,43 +904,91 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
       ).catch((e) => { logger.error(e, "hr query failed"); return [null]; });
       if (approvedExcuse) {
         excusedEarlyLeave = true;
-        await rawExecute(
-          `UPDATE hr_excuse_requests SET "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
-          [approvedExcuse.id, scope.companyId]
-        );
+        approvedExcuseId = approvedExcuse.id;
       }
     }
 
-    // ── Early departure violation (skipped if excused) ──
-    if (earlyDepartureMinutes > 0 && !excusedEarlyLeave) {
-      const dailySalary = Number(assignment?.salary ?? 0) / 30;
-      const minuteRate = dailySalary / 480;
-      const earlyDeductionAmount = roundTo2(minuteRate * earlyDepartureMinutes);
+    const dailySalary = Number(assignment?.salary ?? 0) / 30;
+    const minuteRate = dailySalary / 480;
+    const earlyDeductionAmount = (earlyDepartureMinutes > 0 && !excusedEarlyLeave) ? roundTo2(minuteRate * earlyDepartureMinutes) : 0;
 
-      const { insertId: earlyViolationId } = await rawExecute(
-        `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
-         VALUES ($1,$2,'early_departure',$3,'medium',$4,$5)
-         RETURNING id`,
-        [scope.companyId, scope.activeAssignmentId,
-          `خروج مبكر بمقدار ${earlyDepartureMinutes} دقيقة عن وقت نهاية الوردية`,
-          earlyDeductionAmount, period]
-      );
-
-      if (earlyDeductionAmount > 0) {
-        await rawExecute(
-          `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
-           VALUES ($1,$2,$3,'early_departure',$4,$5,$6,'pending_payroll')`,
-          [scope.companyId, scope.activeAssignmentId, existing.id, earlyDepartureMinutes, earlyDeductionAmount, period]
+    // ── Wrap all writes in a transaction ──
+    const txResult = await withTransaction(async (client) => {
+      // GPS violation
+      if (isCheckOutOutOfRange && checkOutDistanceMeters !== null) {
+        await client.query(
+          `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
+           VALUES ($1,$2,'gps_out_of_range',$3,'low',0,$4)`,
+          [scope.companyId, scope.activeAssignmentId,
+            `تسجيل انصراف خارج نطاق الفرع بمسافة ${checkOutDistanceMeters}م`, period]
         );
       }
 
-      // ── Auto-create inquiry memo for early departure ──
+      // Update attendance record (atomic: only if checkOut IS NULL)
+      const checkOutRes = await client.query(
+        `UPDATE attendance SET "checkOut" = $1, notes = COALESCE($2, notes), "checkOutLat" = $4, "checkOutLon" = $5, "overtimeMinutes" = $6 WHERE id = $3 AND "companyId" = $7 AND "checkOut" IS NULL AND "deletedAt" IS NULL RETURNING id`,
+        [now.toISOString(), notes ?? null, existing.id,
+          lat !== undefined && lat !== null ? Number(lat) : null,
+          lon !== undefined && lon !== null ? Number(lon) : null,
+          overtimeMinutes, scope.companyId]
+      );
+      if (!checkOutRes.rows.length) {
+        throw new ConflictError("لقد سجلت الانصراف مسبقاً اليوم", {
+          field: "attendance",
+          fix: "تم تسجيل انصرافك بالفعل. لا يمكن إعادة الانصراف في نفس اليوم.",
+        });
+      }
+
+      // Update monthly stats
+      await client.query(
+        `INSERT INTO employee_monthly_attendance ("companyId","assignmentId",period,"overtimeMinutes")
+         VALUES ($1,$2,$3,$4)
+         ON CONFLICT ("assignmentId",period) DO UPDATE
+         SET "overtimeMinutes" = COALESCE(employee_monthly_attendance."overtimeMinutes", 0) + $4`,
+        [scope.companyId, scope.activeAssignmentId, period, overtimeMinutes]
+      );
+
+      // Mark excuse as used
+      if (excusedEarlyLeave && approvedExcuseId) {
+        await client.query(
+          `UPDATE hr_excuse_requests SET "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
+          [approvedExcuseId, scope.companyId]
+        );
+      }
+
+      // Early departure violation + deduction
+      let earlyViolationId: number | null = null;
+      if (earlyDepartureMinutes > 0 && !excusedEarlyLeave) {
+        const vRes = await client.query(
+          `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
+           VALUES ($1,$2,'early_departure',$3,'medium',$4,$5)
+           RETURNING id`,
+          [scope.companyId, scope.activeAssignmentId,
+            `خروج مبكر بمقدار ${earlyDepartureMinutes} دقيقة عن وقت نهاية الوردية`,
+            earlyDeductionAmount, period]
+        );
+        earlyViolationId = vRes.rows[0]?.id ?? null;
+
+        if (earlyDeductionAmount > 0) {
+          await client.query(
+            `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
+             VALUES ($1,$2,$3,'early_departure',$4,$5,$6,'pending_payroll')`,
+            [scope.companyId, scope.activeAssignmentId, existing.id, earlyDepartureMinutes, earlyDeductionAmount, period]
+          );
+        }
+      }
+
+      return { earlyViolationId };
+    });
+
+    // ── Fire-and-forget side effects outside transaction ──
+    if (earlyDepartureMinutes > 0 && !excusedEarlyLeave && txResult.earlyViolationId) {
       ensureInquiryMemoForViolation({
         companyId: scope.companyId,
         branchId: assignment?.branchId ?? scope.branchId,
         assignmentId: scope.activeAssignmentId,
         employeeId: scope.employeeId ?? assignment?.employeeId ?? 0,
-        violationId: earlyViolationId,
+        violationId: txResult.earlyViolationId,
         incidentType: "early_leave",
         incidentDate: today,
         incidentDurationMinutes: earlyDepartureMinutes,
@@ -1870,17 +1887,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
     // Approval path – dynamic chain from approval_chains table
     const currentStageNum = currentStage?.stage ?? 1;
 
-    // Mark current stage as approved
-    if (currentStage) {
-      await rawExecute(
-        `UPDATE leave_approval_stages
-         SET status = 'approved', decision = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
-         WHERE id = $2`,
-        [scope.activeAssignmentId, currentStage.id]
-      );
-    }
-
-    // Read approval chain to determine next step
+    // Read approval chain to determine next step (read-only, before transaction)
     let chainSteps: any[] = [];
     try {
       chainSteps = await rawQuery<any>(
@@ -1903,23 +1910,40 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
     // Find the next step after the current one
     const nextStep = chainSteps.find((s: any) => s.stepOrder > currentStageNum);
 
+    // Find the appropriate assignee for next step (read-only)
+    let nextAssignee: any = null;
     if (nextStep) {
-      // Find the appropriate assignee for next step
-      const [nextAssignee] = await rawQuery<any>(
+      [nextAssignee] = await rawQuery<any>(
         `SELECT id FROM employee_assignments
          WHERE "companyId" = $1 AND role IN ($2, 'owner') AND status = 'active'
          ORDER BY CASE role WHEN $2 THEN 1 ELSE 2 END LIMIT 1`,
         [scope.companyId, nextStep.requiredRole]
       );
+    }
 
-      if (nextAssignee && nextAssignee.id !== scope.activeAssignmentId) {
+    // Mark current stage + create next stage atomically
+    await withTransaction(async (client) => {
+      if (currentStage) {
+        await client.query(
+          `UPDATE leave_approval_stages
+           SET status = 'approved', decision = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
+           WHERE id = $2`,
+          [scope.activeAssignmentId, currentStage.id]
+        );
+      }
+
+      if (nextStep && nextAssignee && nextAssignee.id !== scope.activeAssignmentId) {
         const nextExpiresAt = new Date();
         nextExpiresAt.setHours(nextExpiresAt.getHours() + (nextStep.timeoutHours ?? 48));
-        await rawExecute(
+        await client.query(
           `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
            VALUES ($1,$2,$3,$4,$5)`,
           [id, nextStep.stepOrder, nextStep.requiredRole, nextAssignee.id, nextExpiresAt.toISOString()]
         );
+      }
+    });
+
+    if (nextStep && nextAssignee && nextAssignee.id !== scope.activeAssignmentId) {
 
         createNotification({
           companyId: scope.companyId, assignmentId: nextAssignee.id,
@@ -1939,7 +1963,6 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 
         res.json({ message: `تمت الموافقة من المرحلة ${currentStageNum}. الطلب الآن في مرحلة ${nextStep.requiredRole}`, status: "pending", nextStage: nextStep.stepOrder });
         return;
-      }
     }
 
     // Final approval (stage 2 HR or owner approving directly)
@@ -1998,7 +2021,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         for (const asn of allAssignments) {
           await client.query(
             `DELETE FROM attendance
-             WHERE "assignmentId" = $1 AND date BETWEEN $2 AND $3 AND status = 'absent' AND "companyId" = $4`,
+             WHERE "assignmentId" = $1 AND date BETWEEN $2 AND $3 AND status = 'absent' AND "companyId" = $4 AND "deletedAt" IS NULL`,
             [asn.id, request.startDate, request.endDate, asn.companyId]
           );
           await client.query(
@@ -3457,13 +3480,13 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       if (request.refType === "official_letter") {
         await rawExecute(
           `UPDATE email_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
-            WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
-          [request.refId]
+            WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
+          [request.refId, scope.companyId]
         ).catch((e) => logger.error(e, "cancel email_queue for rejected letter failed:"));
         await rawExecute(
           `UPDATE whatsapp_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
-            WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
-          [request.refId]
+            WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
+          [request.refId, scope.companyId]
         ).catch((e) => { logger.warn(e, "hr whatsapp_queue insert failed (table may not exist)"); });
       }
     }
@@ -4036,7 +4059,7 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
           await client.query(
             `DELETE FROM attendance
              WHERE "companyId" = $1 AND status = 'on_leave' AND notes LIKE $2
-               AND date >= CURRENT_DATE AND date BETWEEN $3 AND $4`,
+               AND date >= CURRENT_DATE AND date BETWEEN $3 AND $4 AND "deletedAt" IS NULL`,
             [scope.companyId, `%[leave_request:${id}]%`, request.startDate, request.endDate]
           );
         } else {
@@ -4280,8 +4303,8 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
 
       // Revert attendance deductions
       await client.query(
-        `UPDATE attendance_deductions SET status = 'pending_payroll' WHERE "payrollRunId" = $1 AND status = 'deducted_in_payroll'`,
-        [id]
+        `UPDATE attendance_deductions SET status = 'pending_payroll' WHERE "payrollRunId" = $1 AND "companyId" = $2 AND status = 'deducted_in_payroll'`,
+        [id, scope.companyId]
       );
 
       // Revert loan installments and restore loan remaining amounts
@@ -4291,21 +4314,21 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
       );
       if (paidInstallments.length > 0) {
         await client.query(
-          `UPDATE hr_loan_installments SET status = 'pending' WHERE "payrollRunId" = $1 AND status = 'paid'`,
-          [id]
+          `UPDATE hr_loan_installments SET status = 'pending' WHERE "payrollRunId" = $1 AND "companyId" = $2 AND status = 'paid'`,
+          [id, scope.companyId]
         );
         for (const inst of paidInstallments) {
           await client.query(
-            `UPDATE loan_accounts SET "remainingAmount" = "remainingAmount" + $1 WHERE id = $2`,
-            [inst.amount, inst.loanId]
+            `UPDATE loan_accounts SET "remainingAmount" = "remainingAmount" + $1 WHERE id = $2 AND "companyId" = $3`,
+            [inst.amount, inst.loanId, scope.companyId]
           );
         }
       }
 
       // Revert overtime requests
       await client.query(
-        `UPDATE hr_overtime_requests SET status = 'approved' WHERE "payrollRunId" = $1 AND status = 'paid'`,
-        [id]
+        `UPDATE hr_overtime_requests SET status = 'approved' WHERE "payrollRunId" = $1 AND "companyId" = $2 AND status = 'paid'`,
+        [id, scope.companyId]
       );
 
       // Reverse GL journal entry if one exists (via finance helper to respect domain boundaries)
@@ -4365,7 +4388,7 @@ router.patch("/performance/:id", requirePermission("hr:update"), async (req, res
     params.push(id, scope.companyId);
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
-      `UPDATE performance_reviews SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
+      `UPDATE performance_reviews SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx++} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!row) throw new NotFoundError("التقييم غير موجود");

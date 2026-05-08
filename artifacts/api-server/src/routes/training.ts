@@ -299,7 +299,7 @@ router.post("/enrollments", requirePermission("hr:create"), async (req, res) => 
         [Number(programId), employeeId ? Number(employeeId) : null, employeeName ?? null, status ?? "enrolled"]
       );
       enrollId = ins.rows[0].id;
-      await client.query(`UPDATE training_programs SET enrolled = enrolled + 1 WHERE id=$1 AND "deletedAt" IS NULL`, [Number(programId)]);
+      await client.query(`UPDATE training_programs SET enrolled = enrolled + 1 WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(programId), scope.companyId]);
     });
     const r = { insertId: enrollId };
     await createAuditLog({

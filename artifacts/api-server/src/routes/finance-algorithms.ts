@@ -436,8 +436,8 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", requirePermissio
 
       if (jLine) {
         await rawExecute(
-          `UPDATE bank_statements SET "matchStatus" = 'matched', "matchedJournalLineId" = $1 WHERE id = $2`,
-          [jLine.id, bRow.id]
+          `UPDATE bank_statements SET "matchStatus" = 'matched', "matchedJournalLineId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [jLine.id, bRow.id, scope.companyId]
         );
         matched++;
       }
