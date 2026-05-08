@@ -147,7 +147,7 @@ budgetRouter.post("/budget", requirePermission("finance:create"), async (req, re
       after: { accountCode, period, amount: Number(amount) },
     }).catch((err) => logger.error(err, "[audit] budget.created:"));
 
-    res.status(201).json({ id: insertId, ...req.body });
+    res.status(201).json({ id: insertId, accountCode, period, amount: Number(amount), branchId: branchId ?? scope.branchId });
   } catch (err) {
     handleRouteError(err, res, "Create budget error:");
   }

@@ -3907,7 +3907,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
       after: { employeeId, type: type ?? "general", subject },
     }).catch((e) => logger.error(e, "hr background task failed"));
 
-    res.status(201).json({ id: insertId, ...req.body, approval: approvalResult });
+    res.status(201).json({ id: insertId, employeeId: Number(employeeId), type: type ?? "general", subject, status: approvalResult?.requiresApproval ? "pending_approval" : (status ?? "draft"), ref: letterRef, approval: approvalResult });
   } catch (err) { handleRouteError(err, res, "Create official letter error:"); }
 });
 

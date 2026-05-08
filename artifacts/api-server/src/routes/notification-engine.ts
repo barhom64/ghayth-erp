@@ -588,7 +588,7 @@ router.get("/webhooks", requirePermission("admin:write"), async (req: Request, r
        ORDER BY name`,
       [scope.companyId]
     );
-    const masked = rows.map((r) => ({ ...r, secret: r.secret ? "__configured__" : null }));
+    const masked = rows.map((r) => ({ ...r, secret: r.secret ? "__configured__" : null, headers: r.headers ? "__configured__" : null }));
     res.json({ data: masked });
   } catch (err) {
     handleRouteError(err, res, "Notification engine error:");

@@ -716,7 +716,7 @@ router.get("/integration-logs", requirePermission("admin:read"), async (req, res
     const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM integration_logs WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
     const rows = await rawQuery(
-      `SELECT * FROM integration_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      `SELECT id, "integrationId", channel, status, "errorMessage", "createdAt" FROM integration_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
     res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });

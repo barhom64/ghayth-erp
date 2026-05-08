@@ -762,7 +762,7 @@ router.get("/channels", requirePermission("settings:read"), async (req, res) => 
     const settings: Record<string, string> = {};
     for (const r of rows) settings[r.key] = r.value;
 
-    const SECRET_KEYS = ["sms_auth_token", "whatsapp_access_token"];
+    const SECRET_KEYS = ["sms_auth_token", "whatsapp_access_token", "whatsapp_verify_token"];
     const result: Record<string, string> = { ...settings };
     for (const key of SECRET_KEYS) {
       if (result[key]) {
