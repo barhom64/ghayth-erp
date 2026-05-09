@@ -1,9 +1,9 @@
 # فهرس فحص نظام غيث الشامل
 ### Ghayth ERP Comprehensive Audit Index
 
-> آخر تحديث: 2026-05-08
+> آخر تحديث: 2026-05-09
 > الفرع: `claude/hr-smoke-testing-6DRib`
-> إجمالي الأخطاء المصلحة: **~991** عبر 21 جولة
+> إجمالي الأخطاء المصلحة: **~1066** عبر 24 جولة
 
 ---
 
@@ -11,8 +11,8 @@
 
 | المقياس | القيمة |
 |---------|--------|
-| إجمالي الأخطاء المصلحة | ~991 |
-| عدد الجولات | 21 |
+| إجمالي الأخطاء المصلحة | ~1066 |
+| عدد الجولات | 24 |
 | عدد الملفات المعدّلة | 90+ |
 | إجمالي ملفات الـ Routes | 80 |
 | نسبة التغطية | 100% |
@@ -167,6 +167,53 @@
 - finance-accounts.ts: LIMIT + journal_lines deletedAt (3)
 - impactPreview.ts: deletedAt on leave_requests, purchase_orders, employees, project_tasks (4)
 - search.ts: LIKE metacharacter escape (1)
+
+### Round 22 — 26 خطأ — Governance, Clients, Workflows, Support, Settings
+- 22a: 18 bugs
+  - CRITICAL: clients.ts `insertId` → `insertedId` variable mismatch (ReferenceError on every client creation)
+  - CRITICAL: governance.ts phantom deletedAt on governance_capa (2 runtime crashes)
+  - CRITICAL: workflows.ts phantom deletedAt on workflow_definitions UPDATE (runtime crash)
+  - governance.ts: policy_module_links missing companyId (3 queries), merged duplicate PATCH route
+  - clients.ts: re-fetch missing companyId, portal email cross-tenant check
+  - support.ts: employee_assignments missing companyId (3), ticket_replies deletedAt, agent stats LIMIT
+  - workflows.ts: LIMIT 500 on definitions and sla_definitions
+- 22b: 8 bugs
+  - finance-cost-centers.ts: phantom deletedAt on departments/branches subqueries (2 runtime crashes)
+  - settings.ts: phantom deletedAt on branches UPDATE (runtime crash)
+  - hr.ts: violations re-fetch with proper companyId + deletedAt
+  - finance-journal.ts: roundTo2 on manual journal entry + expense + voucher amounts
+
+### Round 23 — 14 خطأ — Training, HR, Projects, CRM
+- CRITICAL: training.ts phantom companyId on training_enrollments (2 SQL crashes) — fixed via JOIN
+- training.ts: PATCH re-fetch missing companyId
+- hr-contracts.ts: sign-employee missing deletedAt
+- hr-discipline.ts: gm-decision assignment lookup missing companyId
+- hr-exit.ts: clearance UPDATE missing companyId
+- projects.ts: project_tasks missing deletedAt (corrupted progress %), budget-alert missing companyId
+- crm.ts: deletedAt on crm_opportunities JOINs (2 queries)
+- moduleDashboards.ts: deletedAt on crm_opportunities pipeline JOIN
+- governance.ts: stray `});` causing TypeScript compile error
+- workflows.ts: always-truthy expression fix (dead fallback code)
+
+### Round 24 — 35 خطأ — Finance, Fleet, Gov-integrations, Warehouse, Dashboard
+- CRITICAL: finance-vendors.ts wrong table name `vendors` → `suppliers` (every vendor creation crashed)
+- CRITICAL: finance-invoices.ts phantom deletedAt on credit_memos
+- CRITICAL: finance-invoices.ts rawExecute for DDL → rawQuery (dunning tables creation crashed)
+- CRITICAL: fleet.ts phantom table fleet_trip_waypoints → fleet_gps_tracking
+- CRITICAL: gov-integrations.ts 4 phantom deletedAt on gov_integrations table
+- finance-purchase.ts: convert-to-po re-fetch missing companyId
+- dashboard.ts: notifications query missing companyId
+- finance-custodies.ts: approval_actions query missing companyId
+- finance-recurring.ts: recurring_journal_runs history missing companyId
+- warehouse.ts: updateWeightedAverageCost helper missing companyId (cross-tenant cost corruption)
+- fleet.ts: deletedAt on fleet_trips (3), fleet_maintenance (4), fleet_fuel_logs, fleet_insurance (2)
+- finance-vendors.ts: deletedAt on workflow_requests (2), purchase_orders
+- properties.ts: deletedAt on maintenance_requests (2) — blocked unit deletion spuriously
+- finance-budget.ts: roundTo2 on variance accumulation
+- finance-invoices.ts: roundTo2 on bad-debt bucket accumulation (2 endpoints)
+- finance-collection.ts: LIMIT 500 on overdue invoices
+- finance-hardening.ts: LIMIT 500 on projects list
+- crm.ts: LIMIT 500 on overdue activities
 
 ---
 
