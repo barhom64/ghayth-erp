@@ -68,9 +68,9 @@ router.get("/", async (req, res) => {
         `SELECT lr.id, 'leave' AS type, lt.name AS title, lr.status, lr."createdAt"
          FROM hr_leave_requests lr
          JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-         WHERE lr."employeeId" = $1 AND lr.status = 'pending' AND lr."deletedAt" IS NULL
+         WHERE lr."employeeId" = $1 AND lr."companyId" = $2 AND lr.status = 'pending' AND lr."deletedAt" IS NULL
          ORDER BY lr."createdAt" DESC LIMIT 10`,
-        [scope.employeeId]
+        [scope.employeeId, scope.companyId]
       ).catch((e) => { logger.error(e, "my-space leaveReqs error:"); return []; });
 
       let advanceReqs: any[] = [];
@@ -92,9 +92,9 @@ router.get("/", async (req, res) => {
         letterReqs = await rawQuery<any>(
           `SELECT ol.id, 'letter' AS type, ol.type AS title, ol.status, ol."createdAt"
            FROM official_letters ol
-           WHERE ol."employeeId" = $1 AND ol.status IN ('pending','pending_approval') AND ol."deletedAt" IS NULL
+           WHERE ol."employeeId" = $1 AND ol."companyId" = $2 AND ol.status IN ('pending','pending_approval') AND ol."deletedAt" IS NULL
            ORDER BY ol."createdAt" DESC LIMIT 5`,
-          [scope.employeeId]
+          [scope.employeeId, scope.companyId]
         );
       } catch (e) {
         logger.error(e, "my-space letterReqs error:");
@@ -374,9 +374,9 @@ router.get("/", async (req, res) => {
       recentActions = await rawQuery<any>(
         `SELECT id, action, entity AS "entityType", "entityId", reason AS description, "createdAt"
          FROM audit_logs
-         WHERE "userId" = $1
+         WHERE "userId" = $1 AND "companyId" = $2
          ORDER BY "createdAt" DESC LIMIT 5`,
-        [scope.userId]
+        [scope.userId, scope.companyId]
       );
     } catch (e) {
       logger.error(e, "my-space recentActions error:");
@@ -410,10 +410,10 @@ router.get("/", async (req, res) => {
         `SELECT lr.id, lt.name AS title, 'leave_request' AS "itemType", lr."createdAt" AS deadline, lr.status
          FROM hr_leave_requests lr
          JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-         WHERE lr."employeeId" = $1 AND lr.status = 'pending' AND lr."deletedAt" IS NULL
+         WHERE lr."employeeId" = $1 AND lr."companyId" = $2 AND lr.status = 'pending' AND lr."deletedAt" IS NULL
            AND lr."createdAt" < NOW() - INTERVAL '3 days'
          ORDER BY lr."createdAt" ASC LIMIT 5`,
-        [scope.employeeId]
+        [scope.employeeId, scope.companyId]
       ).catch((e) => { logger.error(e, "my space query failed"); return []; });
       overdueItems = [...overdueTasks, ...overdueRequests];
     } catch (e) {
@@ -427,10 +427,10 @@ router.get("/", async (req, res) => {
       const expiringDocs = await rawQuery<any>(
         `SELECT id, type AS title, 'document' AS "itemType", "expiryDate"
          FROM employee_documents
-         WHERE "employeeId" = $1 AND "expiryDate" IS NOT NULL
+         WHERE "employeeId" = $1 AND "companyId" = $4 AND "expiryDate" IS NOT NULL
            AND "expiryDate" BETWEEN $2 AND $3
          ORDER BY "expiryDate" ASC LIMIT 10`,
-        [scope.employeeId, today, toDateISO(thirtyDaysLater)]
+        [scope.employeeId, today, toDateISO(thirtyDaysLater), scope.companyId]
       ).catch((e) => { logger.error(e, "my space query failed"); return []; });
       const expiringContracts = await rawQuery<any>(
         `SELECT c.id, CONCAT('عقد إيجار - ', pu."unitNumber") AS title, 'contract' AS "itemType", c."endDate" AS "expiryDate"
@@ -726,9 +726,9 @@ router.get("/requests", async (req, res) => {
       `SELECT lr.id, lt.name AS "leaveTypeName", lr."startDate", lr."endDate", lr.days, lr.status, lr."createdAt"
        FROM hr_leave_requests lr
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-       WHERE lr."employeeId" = $1 AND lr."deletedAt" IS NULL
+       WHERE lr."employeeId" = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL
        ORDER BY lr."createdAt" DESC LIMIT 20`,
-      [scope.employeeId]
+      [scope.employeeId, scope.companyId]
     ).catch((e) => { logger.error(e, "my space query failed"); return []; });
 
     res.json({ data: rows, leaveRequests: leaveRows, total: rows.length });

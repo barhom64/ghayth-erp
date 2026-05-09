@@ -427,6 +427,7 @@ router.delete("/branches/:id", requirePermission("settings:write"), async (req, 
     }
 
     const [beforeBranch] = await rawQuery(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [branchId, scope.companyId]);
+    if (!beforeBranch) throw new NotFoundError("الفرع غير موجود");
     await rawExecute(`DELETE FROM branches WHERE id=$1 AND "companyId"=$2 RETURNING id`, [branchId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_branch",
@@ -461,7 +462,8 @@ router.put("/departments/:id", requirePermission("settings:write"), async (req, 
     const id = parseId(req.params.id, "id");
     const { name, manager } = body;
     const scope = req.scope!;
-    await rawExecute(`UPDATE departments SET name=$1, "managerId"=$2 WHERE id=$3 AND "companyId"=$4 RETURNING id`, [name, manager || null, id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE departments SET name=$1, "managerId"=$2 WHERE id=$3 AND "companyId"=$4 RETURNING id`, [name, manager || null, id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("القسم غير موجود");
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_department",
       entity: "departments", entityId: id,
@@ -588,6 +590,7 @@ router.delete("/companies/:id", requirePermission("settings:write"), async (req,
       throw new ValidationError("لا يمكنك حذف الشركة الحالية");
     }
     const [beforeCompany] = await rawQuery(`SELECT * FROM companies WHERE id=$1`, [id]);
+    if (!beforeCompany) throw new NotFoundError("الشركة غير موجودة");
     await rawExecute(`DELETE FROM companies WHERE id=$1 RETURNING id`, [id]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_company",
