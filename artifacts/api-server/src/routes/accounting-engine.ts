@@ -125,7 +125,7 @@ export async function validateAccountingMapping(
 // ACCOUNTING MAPPINGS CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/accounting-mappings", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+router.get("/accounting-mappings", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -146,7 +146,7 @@ router.get("/accounting-mappings", authorize({ feature: "finance", action: "list
   }
 });
 
-router.post("/accounting-mappings/batch", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+router.post("/accounting-mappings/batch", authorize({ feature: "finance.accounting_engine", action: "create" }), async (req, res) => {
   try {
     const parsedBody = zodParse(batchAccountingMappingsSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -183,7 +183,7 @@ router.post("/accounting-mappings/batch", authorize({ feature: "finance", action
   }
 });
 
-router.get("/accounting-mappings/:operationType", authorize({ feature: "finance", action: "view" }), async (req, res) => {
+router.get("/accounting-mappings/:operationType", authorize({ feature: "finance.accounting_engine", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(
@@ -203,7 +203,7 @@ router.get("/accounting-mappings/:operationType", authorize({ feature: "finance"
   }
 });
 
-router.put("/accounting-mappings/:operationType", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+router.put("/accounting-mappings/:operationType", authorize({ feature: "finance.accounting_engine", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(updateAccountingMappingSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -269,7 +269,7 @@ router.put("/accounting-mappings/:operationType", authorize({ feature: "finance"
 });
 
 // Validate mapping endpoint
-router.get("/accounting-mappings/:operationType/validate", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+router.get("/accounting-mappings/:operationType/validate", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const result = await validateAccountingMapping(scope.companyId, String(req.params.operationType));
@@ -283,7 +283,7 @@ router.get("/accounting-mappings/:operationType/validate", authorize({ feature: 
 // JOURNAL ENTRY TEMPLATES CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/journal-templates", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+router.get("/journal-templates", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { operationType } = req.query as any;
@@ -321,7 +321,7 @@ router.get("/journal-templates", authorize({ feature: "finance", action: "list" 
   }
 });
 
-router.post("/journal-templates", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+router.post("/journal-templates", authorize({ feature: "finance.accounting_engine", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(createJournalTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -369,7 +369,7 @@ router.post("/journal-templates", authorize({ feature: "finance", action: "creat
   }
 });
 
-router.put("/journal-templates/:id", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+router.put("/journal-templates/:id", authorize({ feature: "finance.accounting_engine", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(updateJournalTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -424,7 +424,7 @@ router.put("/journal-templates/:id", authorize({ feature: "finance", action: "cr
   }
 });
 
-router.delete("/journal-templates/:id", authorize({ feature: "finance", action: "delete" }), async (req, res) => {
+router.delete("/journal-templates/:id", authorize({ feature: "finance.accounting_engine", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -447,7 +447,7 @@ router.delete("/journal-templates/:id", authorize({ feature: "finance", action: 
 // SUBSIDIARY ACCOUNTS CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/subsidiary-accounts", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+router.get("/subsidiary-accounts", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.query as any;
@@ -472,7 +472,7 @@ router.get("/subsidiary-accounts", authorize({ feature: "finance", action: "list
   }
 });
 
-router.get("/subsidiary-accounts/entity/:entityType/:entityId", authorize({ feature: "finance", action: "view" }), async (req, res) => {
+router.get("/subsidiary-accounts/entity/:entityType/:entityId", authorize({ feature: "finance.accounting_engine", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -492,7 +492,7 @@ router.get("/subsidiary-accounts/entity/:entityType/:entityId", authorize({ feat
   }
 });
 
-router.post("/subsidiary-accounts", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+router.post("/subsidiary-accounts", authorize({ feature: "finance.accounting_engine", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(createSubsidiaryAccountSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -521,7 +521,7 @@ router.post("/subsidiary-accounts", authorize({ feature: "finance", action: "cre
   }
 });
 
-router.delete("/subsidiary-accounts/:id", authorize({ feature: "finance", action: "delete" }), async (req, res) => {
+router.delete("/subsidiary-accounts/:id", authorize({ feature: "finance.accounting_engine", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

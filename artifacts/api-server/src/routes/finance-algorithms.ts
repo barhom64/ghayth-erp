@@ -120,7 +120,7 @@ function assertFinanceRole(scope: any): void {
 // AR AGING — تقادم الذمم المدينة
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeAlgorithmsRouter.get("/ar-aging", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeAlgorithmsRouter.get("/ar-aging", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const asOfDate = (req.query.asOfDate as string) || todayISO();
@@ -210,7 +210,7 @@ financeAlgorithmsRouter.get("/ar-aging", authorize({ feature: "finance", action:
 // AP AGING — تقادم الذمم الدائنة
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeAlgorithmsRouter.get("/ap-aging", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeAlgorithmsRouter.get("/ap-aging", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const asOfDate = (req.query.asOfDate as string) || todayISO();
@@ -345,7 +345,7 @@ financeAlgorithmsRouter.get("/ap-aging", authorize({ feature: "finance", action:
 // BANK RECONCILIATION — التسوية البنكية
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeAlgorithmsRouter.post("/bank-reconciliation/import", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeAlgorithmsRouter.post("/bank-reconciliation/import", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -387,7 +387,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/import", authorize({ feature:
   }
 });
 
-financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -452,7 +452,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", authorize({ feat
   }
 });
 
-financeAlgorithmsRouter.get("/bank-reconciliation/:batchId", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeAlgorithmsRouter.get("/bank-reconciliation/:batchId", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { batchId } = req.params;
@@ -494,7 +494,7 @@ financeAlgorithmsRouter.get("/bank-reconciliation/:batchId", authorize({ feature
   }
 });
 
-financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -526,7 +526,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", authorize({ fe
   }
 });
 
-financeAlgorithmsRouter.get("/journal-lines/search", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeAlgorithmsRouter.get("/journal-lines/search", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { accountCode: acc, search, amount, pageSize = "20" } = req.query as any;
@@ -560,7 +560,7 @@ financeAlgorithmsRouter.get("/journal-lines/search", authorize({ feature: "finan
   }
 });
 
-financeAlgorithmsRouter.get("/bank-reconciliation", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeAlgorithmsRouter.get("/bank-reconciliation", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const batches = await rawQuery<any>(
@@ -588,7 +588,7 @@ financeAlgorithmsRouter.get("/bank-reconciliation", authorize({ feature: "financ
 // FIXED ASSETS & DEPRECIATION — الأصول الثابتة والإهلاك
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeAlgorithmsRouter.get("/fixed-assets", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeAlgorithmsRouter.get("/fixed-assets", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -601,7 +601,7 @@ financeAlgorithmsRouter.get("/fixed-assets", authorize({ feature: "finance", act
   }
 });
 
-financeAlgorithmsRouter.post("/fixed-assets", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeAlgorithmsRouter.post("/fixed-assets", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -634,7 +634,7 @@ financeAlgorithmsRouter.post("/fixed-assets", authorize({ feature: "finance", ac
   }
 });
 
-financeAlgorithmsRouter.get("/fixed-assets/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeAlgorithmsRouter.get("/fixed-assets/:id", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -653,7 +653,7 @@ financeAlgorithmsRouter.get("/fixed-assets/:id", authorize({ feature: "finance",
   }
 });
 
-financeAlgorithmsRouter.patch("/fixed-assets/:id", authorize({ feature: "finance", action: "update" }), async (req, res) => {
+financeAlgorithmsRouter.patch("/fixed-assets/:id", authorize({ feature: "finance.algorithms", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -732,7 +732,7 @@ function calcDepreciationAmount(asset: any, _period: string, opts?: { unitsThisP
   return Math.min(monthlyAmount, remainingDepreciable);
 }
 
-financeAlgorithmsRouter.get("/fixed-assets/:id/schedule", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeAlgorithmsRouter.get("/fixed-assets/:id/schedule", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -807,7 +807,7 @@ financeAlgorithmsRouter.get("/fixed-assets/:id/schedule", authorize({ feature: "
   }
 });
 
-financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -885,7 +885,7 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", authorize({ feature
 // MONTHLY DEPRECIATION BATCH — إهلاك دفعي لجميع الأصول
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -956,7 +956,7 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", authorize({ feature
 // WEIGHTED AVERAGE INVENTORY COST — المتوسط المرجح للمخزون
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeAlgorithmsRouter.get("/inventory-costing", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeAlgorithmsRouter.get("/inventory-costing", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const products = await rawQuery<any>(
@@ -984,7 +984,7 @@ financeAlgorithmsRouter.get("/inventory-costing", authorize({ feature: "finance"
   }
 });
 
-financeAlgorithmsRouter.get("/inventory-costing/:productId", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeAlgorithmsRouter.get("/inventory-costing/:productId", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const productId = parseId(req.params.productId, "productId");
@@ -1052,7 +1052,7 @@ financeAlgorithmsRouter.get("/inventory-costing/:productId", authorize({ feature
 // ROUNDING DIFFERENCES — فروقات التقريب
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeAlgorithmsRouter.get("/rounding-account", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeAlgorithmsRouter.get("/rounding-account", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [account] = await rawQuery<any>(
@@ -1065,7 +1065,7 @@ financeAlgorithmsRouter.get("/rounding-account", authorize({ feature: "finance",
   }
 });
 
-financeAlgorithmsRouter.post("/rounding-account/setup", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeAlgorithmsRouter.post("/rounding-account/setup", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -1091,7 +1091,7 @@ financeAlgorithmsRouter.post("/rounding-account/setup", authorize({ feature: "fi
   }
 });
 
-financeAlgorithmsRouter.post("/rounding-differences/apply", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeAlgorithmsRouter.post("/rounding-differences/apply", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -1186,7 +1186,7 @@ async function ensureFxTables(client?: any) {
 }
 
 // List FX rates
-financeAlgorithmsRouter.get("/fx/rates", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeAlgorithmsRouter.get("/fx/rates", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     await ensureFxTables();
@@ -1207,7 +1207,7 @@ financeAlgorithmsRouter.get("/fx/rates", authorize({ feature: "finance", action:
 });
 
 // Upsert FX rate
-financeAlgorithmsRouter.post("/fx/rates", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeAlgorithmsRouter.post("/fx/rates", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -1228,7 +1228,7 @@ financeAlgorithmsRouter.post("/fx/rates", authorize({ feature: "finance", action
 });
 
 // Preview FX revaluation for a period (no posting)
-financeAlgorithmsRouter.get("/fx/revaluation/preview", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeAlgorithmsRouter.get("/fx/revaluation/preview", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -1353,7 +1353,7 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", authorize({ feature: "fin
 });
 
 // Post FX revaluation journal entry for the period
-financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
@@ -1515,7 +1515,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
 });
 
 // List past revaluations
-financeAlgorithmsRouter.get("/fx/revaluation", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeAlgorithmsRouter.get("/fx/revaluation", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     await ensureFxTables();
@@ -1533,7 +1533,7 @@ financeAlgorithmsRouter.get("/fx/revaluation", authorize({ feature: "finance", a
 // TREASURY — الخزينة وإدارة السيولة
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeAlgorithmsRouter.get("/treasury", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeAlgorithmsRouter.get("/treasury", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1639,7 +1639,7 @@ financeAlgorithmsRouter.get("/treasury", authorize({ feature: "finance", action:
 // Returns all GL transactions, subsidiary accounts, and cost breakdown
 // for a given entity (vehicle, employee, property, project, product, vendor)
 // ─────────────────────────────────────────────────────────────────────────────
-financeAlgorithmsRouter.get("/entity-financial-profile", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeAlgorithmsRouter.get("/entity-financial-profile", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.query as { entityType: string; entityId: string };

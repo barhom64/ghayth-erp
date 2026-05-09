@@ -129,7 +129,7 @@ const createProjectSchema = z.object({
 // FISCAL PERIODS — FULL CRUD + OPEN/CLOSE/REOPEN
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/fiscal-periods-v2", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeHardeningRouter.get("/fiscal-periods-v2", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -149,7 +149,7 @@ financeHardeningRouter.get("/fiscal-periods-v2", authorize({ feature: "finance",
   }
 });
 
-financeHardeningRouter.post("/fiscal-periods-v2", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeHardeningRouter.post("/fiscal-periods-v2", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -185,7 +185,7 @@ financeHardeningRouter.post("/fiscal-periods-v2", authorize({ feature: "finance"
   }
 });
 
-financeHardeningRouter.post("/fiscal-periods-v2/:id/close", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeHardeningRouter.post("/fiscal-periods-v2/:id/close", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -255,7 +255,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", authorize({ feature:
   }
 });
 
-financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -305,7 +305,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", authorize({ feature
 // draft → pending_review → approved → posted
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -375,7 +375,7 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance", a
   }
 });
 
-financeHardeningRouter.get("/journal-manual", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeHardeningRouter.get("/journal-manual", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -407,7 +407,7 @@ financeHardeningRouter.get("/journal-manual", authorize({ feature: "finance", ac
   }
 });
 
-financeHardeningRouter.get("/journal-manual/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeHardeningRouter.get("/journal-manual/:id", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -442,7 +442,7 @@ financeHardeningRouter.get("/journal-manual/:id", authorize({ feature: "finance"
 // for approvalStatus are no longer permitted on this entity.
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.patch("/journal-manual/:id/submit", authorize({ feature: "finance", action: "update" }), async (req, res) => {
+financeHardeningRouter.patch("/journal-manual/:id/submit", authorize({ feature: "finance.hardening", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -479,7 +479,7 @@ financeHardeningRouter.patch("/journal-manual/:id/submit", authorize({ feature: 
   }
 });
 
-financeHardeningRouter.patch("/journal-manual/:id/review", authorize({ feature: "finance", action: "update" }), async (req, res) => {
+financeHardeningRouter.patch("/journal-manual/:id/review", authorize({ feature: "finance.hardening", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -543,7 +543,7 @@ financeHardeningRouter.patch("/journal-manual/:id/review", authorize({ feature: 
   }
 });
 
-financeHardeningRouter.patch("/journal-manual/:id/approve", authorize({ feature: "finance", action: "update" }), async (req, res) => {
+financeHardeningRouter.patch("/journal-manual/:id/approve", authorize({ feature: "finance.hardening", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -595,7 +595,7 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", authorize({ feature:
   }
 });
 
-financeHardeningRouter.patch("/journal-manual/:id/post", authorize({ feature: "finance", action: "update" }), async (req, res) => {
+financeHardeningRouter.patch("/journal-manual/:id/post", authorize({ feature: "finance.hardening", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -645,7 +645,7 @@ financeHardeningRouter.patch("/journal-manual/:id/post", authorize({ feature: "f
 // BANK GUARANTEES
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/bank-guarantees", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeHardeningRouter.get("/bank-guarantees", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -678,7 +678,7 @@ financeHardeningRouter.get("/bank-guarantees", authorize({ feature: "finance", a
   }
 });
 
-financeHardeningRouter.post("/bank-guarantees", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeHardeningRouter.post("/bank-guarantees", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -714,7 +714,7 @@ financeHardeningRouter.post("/bank-guarantees", authorize({ feature: "finance", 
   }
 });
 
-financeHardeningRouter.patch("/bank-guarantees/:id", authorize({ feature: "finance", action: "update" }), async (req, res) => {
+financeHardeningRouter.patch("/bank-guarantees/:id", authorize({ feature: "finance.hardening", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -763,7 +763,7 @@ financeHardeningRouter.patch("/bank-guarantees/:id", authorize({ feature: "finan
   }
 });
 
-financeHardeningRouter.delete("/bank-guarantees/:id", authorize({ feature: "finance", action: "delete" }), async (req, res) => {
+financeHardeningRouter.delete("/bank-guarantees/:id", authorize({ feature: "finance.hardening", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -833,7 +833,7 @@ financeHardeningRouter.delete("/bank-guarantees/:id", authorize({ feature: "fina
 // go through `applyTransition` so the graph is enforced centrally.
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.post("/bank-guarantees/:id/cancel", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeHardeningRouter.post("/bank-guarantees/:id/cancel", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -880,7 +880,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/cancel", authorize({ feature: 
   }
 });
 
-financeHardeningRouter.post("/bank-guarantees/:id/release", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeHardeningRouter.post("/bank-guarantees/:id/release", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -929,7 +929,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/release", authorize({ feature:
 // INTERCOMPANY TRANSACTIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/intercompany", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeHardeningRouter.get("/intercompany", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -949,7 +949,7 @@ financeHardeningRouter.get("/intercompany", authorize({ feature: "finance", acti
   }
 });
 
-financeHardeningRouter.post("/intercompany", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1060,7 +1060,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance", act
   }
 });
 
-financeHardeningRouter.get("/intercompany/consolidation", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeHardeningRouter.get("/intercompany/consolidation", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const companies = scope.allowedCompanies ?? [scope.companyId];
@@ -1111,7 +1111,7 @@ financeHardeningRouter.get("/intercompany/consolidation", authorize({ feature: "
 // PROJECTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/projects", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeHardeningRouter.get("/projects", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -1133,7 +1133,7 @@ financeHardeningRouter.get("/projects", authorize({ feature: "finance", action: 
   }
 });
 
-financeHardeningRouter.post("/projects", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+financeHardeningRouter.post("/projects", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1170,7 +1170,7 @@ financeHardeningRouter.post("/projects", authorize({ feature: "finance", action:
   }
 });
 
-financeHardeningRouter.get("/projects/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeHardeningRouter.get("/projects/:id", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1187,7 +1187,7 @@ financeHardeningRouter.get("/projects/:id", authorize({ feature: "finance", acti
   }
 });
 
-financeHardeningRouter.get("/projects/:id/costs", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeHardeningRouter.get("/projects/:id/costs", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1224,7 +1224,7 @@ financeHardeningRouter.get("/projects/:id/costs", authorize({ feature: "finance"
 // CASH FLOW FORECAST
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const inflow30 = await rawQuery<any>(
@@ -1310,7 +1310,7 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance"
 // COST CENTER REPORT
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/cost-center-report", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeHardeningRouter.get("/cost-center-report", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate, costCenter } = req.query as any;
@@ -1355,7 +1355,7 @@ financeHardeningRouter.get("/cost-center-report", authorize({ feature: "finance"
 });
 
 // Financial Posting Failures dashboard — surfaces operations where GL entry failed
-financeHardeningRouter.get("/posting-failures", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+financeHardeningRouter.get("/posting-failures", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const resolved = req.query.resolved === "true";
@@ -1371,7 +1371,7 @@ financeHardeningRouter.get("/posting-failures", authorize({ feature: "finance", 
   }
 });
 
-financeHardeningRouter.patch("/posting-failures/:id/resolve", authorize({ feature: "finance", action: "approve" }), async (req, res) => {
+financeHardeningRouter.patch("/posting-failures/:id/resolve", authorize({ feature: "finance.hardening", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

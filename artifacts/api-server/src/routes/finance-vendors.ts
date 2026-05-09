@@ -65,7 +65,7 @@ vendorsRouter.get("/vendors", authorize({ feature: "finance.vendors", action: "l
   }
 });
 
-vendorsRouter.post("/vendors", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+vendorsRouter.post("/vendors", authorize({ feature: "finance.vendors", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { name, contactPerson, phone, email, taxNumber, address, paymentTerms, category } = zodParse(createVendorSchema.safeParse(req.body ?? {}));
@@ -100,7 +100,7 @@ vendorsRouter.post("/vendors", authorize({ feature: "finance", action: "create" 
   }
 });
 
-vendorsRouter.patch("/vendors/:id", authorize({ feature: "finance", action: "update" }), async (req, res) => {
+vendorsRouter.patch("/vendors/:id", authorize({ feature: "finance.vendors", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const vendorId = parseId(req.params.id, "id");
@@ -151,7 +151,7 @@ vendorsRouter.patch("/vendors/:id", authorize({ feature: "finance", action: "upd
   }
 });
 
-vendorsRouter.delete("/vendors/:id", authorize({ feature: "finance", action: "delete" }), async (req, res) => {
+vendorsRouter.delete("/vendors/:id", authorize({ feature: "finance.vendors", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -216,7 +216,7 @@ vendorsRouter.delete("/vendors/:id", authorize({ feature: "finance", action: "de
   }
 });
 
-vendorsRouter.get("/stats", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+vendorsRouter.get("/stats", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -246,7 +246,7 @@ vendorsRouter.get("/stats", authorize({ feature: "finance", action: "list" }), a
   }
 });
 
-vendorsRouter.get("/receivables", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+vendorsRouter.get("/receivables", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -266,7 +266,7 @@ vendorsRouter.get("/receivables", authorize({ feature: "finance", action: "list"
   }
 });
 
-vendorsRouter.get("/receivables/:id", authorize({ feature: "finance", action: "view" }), async (req, res) => {
+vendorsRouter.get("/receivables/:id", authorize({ feature: "finance.vendors", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -282,7 +282,7 @@ vendorsRouter.get("/receivables/:id", authorize({ feature: "finance", action: "v
   } catch (err) { handleRouteError(err, res, "Receivable detail error:"); }
 });
 
-vendorsRouter.get("/payments", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+vendorsRouter.get("/payments", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -303,7 +303,7 @@ vendorsRouter.get("/payments", authorize({ feature: "finance", action: "list" })
   }
 });
 
-vendorsRouter.get("/commitments", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+vendorsRouter.get("/commitments", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -322,7 +322,7 @@ vendorsRouter.get("/commitments", authorize({ feature: "finance", action: "list"
   }
 });
 
-vendorsRouter.get("/commitments/:id", authorize({ feature: "finance", action: "view" }), async (req, res) => {
+vendorsRouter.get("/commitments/:id", authorize({ feature: "finance.vendors", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -338,7 +338,7 @@ vendorsRouter.get("/commitments/:id", authorize({ feature: "finance", action: "v
   } catch (err) { handleRouteError(err, res, "Commitment detail error:"); }
 });
 
-vendorsRouter.get("/financial-requests/:id", authorize({ feature: "finance", action: "view" }), async (req, res) => {
+vendorsRouter.get("/financial-requests/:id", authorize({ feature: "finance.vendors", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -355,7 +355,7 @@ vendorsRouter.get("/financial-requests/:id", authorize({ feature: "finance", act
   } catch (err) { handleRouteError(err, res, "Financial request detail error:"); }
 });
 
-vendorsRouter.get("/financial-requests", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+vendorsRouter.get("/financial-requests", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -378,7 +378,7 @@ vendorsRouter.get("/financial-requests", authorize({ feature: "finance", action:
 // Phase 7.1 — migrated from finance.ts (canonical ownership consolidation)
 // ─────────────────────────────────────────────────────────────────────────────
 
-vendorsRouter.get("/vendors/:id", authorize({ feature: "finance", action: "view" }), async (req, res) => {
+vendorsRouter.get("/vendors/:id", authorize({ feature: "finance.vendors", action: "view" }), async (req, res) => {
   try {
     const scope = (req as any).scope!;
     const id = parseId(req.params.id, "id");
@@ -407,7 +407,7 @@ vendorsRouter.get("/vendors/:id", authorize({ feature: "finance", action: "view"
 // APPROVAL ENDPOINTS — commitments, receivables, vouchers, financial-requests, budgets
 // ─────────────────────────────────────────────────────────────────────────────
 
-vendorsRouter.patch("/commitments/:id/approve", authorize({ feature: "finance", action: "update" }), async (req, res) => {
+vendorsRouter.patch("/commitments/:id/approve", authorize({ feature: "finance.vendors", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -434,7 +434,7 @@ vendorsRouter.patch("/commitments/:id/approve", authorize({ feature: "finance", 
   } catch (err) { handleRouteError(err, res, "Commitment approval error:"); }
 });
 
-vendorsRouter.patch("/receivables/:id/approve", authorize({ feature: "finance", action: "update" }), async (req, res) => {
+vendorsRouter.patch("/receivables/:id/approve", authorize({ feature: "finance.vendors", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -461,7 +461,7 @@ vendorsRouter.patch("/receivables/:id/approve", authorize({ feature: "finance", 
   } catch (err) { handleRouteError(err, res, "Receivable approval error:"); }
 });
 
-vendorsRouter.patch("/vouchers/:id/approve", authorize({ feature: "finance", action: "update" }), async (req, res) => {
+vendorsRouter.patch("/vouchers/:id/approve", authorize({ feature: "finance.vendors", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -488,7 +488,7 @@ vendorsRouter.patch("/vouchers/:id/approve", authorize({ feature: "finance", act
   } catch (err) { handleRouteError(err, res, "Voucher approval error:"); }
 });
 
-vendorsRouter.patch("/financial-requests/:id/approve", authorize({ feature: "finance", action: "update" }), async (req, res) => {
+vendorsRouter.patch("/financial-requests/:id/approve", authorize({ feature: "finance.vendors", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -514,7 +514,7 @@ vendorsRouter.patch("/financial-requests/:id/approve", authorize({ feature: "fin
   } catch (err) { handleRouteError(err, res, "Financial request approval error:"); }
 });
 
-vendorsRouter.patch("/budgets/:id/approve", authorize({ feature: "finance", action: "update" }), async (req, res) => {
+vendorsRouter.patch("/budgets/:id/approve", authorize({ feature: "finance.vendors", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

@@ -102,7 +102,7 @@ const STAGE_AUTO_ACTIONS: Record<string, { followUpDays: number; description: st
   closed_lost: { followUpDays: 0, description: 'تسجيل سبب الخسارة + تحليل' },
 };
 
-router.get("/opportunities", authorize({ feature: "crm", action: "list" }), async (req, res) => {
+router.get("/opportunities", authorize({ feature: "crm.opportunities", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { stage, status } = req.query as any;
@@ -120,7 +120,7 @@ router.get("/opportunities", authorize({ feature: "crm", action: "list" }), asyn
   } catch (err) { handleRouteError(err, res, "CRM opportunities error:"); }
 });
 
-router.post("/opportunities", authorize({ feature: "crm", action: "create" }), async (req, res) => {
+router.post("/opportunities", authorize({ feature: "crm.opportunities", action: "create" }), async (req, res) => {
   // Phase C domain 2 — CRM opportunity creation, mirror of the HR Step 1
   // treatment. Adds input validation the old handler lacked (title,
   // contact-or-client, stage enum, numeric ranges), pre-checks the
@@ -309,7 +309,7 @@ router.post("/opportunities", authorize({ feature: "crm", action: "create" }), a
   } catch (err) { handleRouteError(err, res, "Create opportunity error:"); }
 });
 
-router.patch("/opportunities/:id", authorize({ feature: "crm", action: "update" }), async (req, res) => {
+router.patch("/opportunities/:id", authorize({ feature: "crm.opportunities", action: "update" }), async (req, res) => {
   try {
     const parsed = zodParse(updateOpportunitySchema.safeParse(req.body));
     const scope = req.scope!;
@@ -768,7 +768,7 @@ router.get("/opportunities/:id", authorize({ feature: "crm.opportunities", actio
 // won, runs the deal-won side-effects (client + contract + invoice), then
 // writes the lifecycle markers (convertedAt / convertedClientId) in the same
 // atomic transition via the lifecycle engine.
-router.post("/opportunities/:id/convert", authorize({ feature: "crm", action: "update" }), async (req, res) => {
+router.post("/opportunities/:id/convert", authorize({ feature: "crm.opportunities", action: "update" }), async (req, res) => {
   try {
     const parsed = zodParse(convertOpportunitySchema.safeParse(req.body));
     const scope = req.scope!;
@@ -862,7 +862,7 @@ router.delete("/opportunities/:id", authorize({ feature: "crm.opportunities", ac
 // Related deals for a given opportunity: other opportunities that share the
 // same clientId or contact name / phone / email. Used by the lead / opportunity
 // detail page instead of fetching the full list client-side.
-router.get("/opportunities/:id/related", authorize({ feature: "crm", action: "list" }), async (req, res) => {
+router.get("/opportunities/:id/related", authorize({ feature: "crm.opportunities", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -925,7 +925,7 @@ router.get("/opportunities/:id/related", authorize({ feature: "crm", action: "li
 // leak). Fixed by pre-validating the opportunity exists in the
 // caller's scope — same pattern used by routes 257/687/742 in this
 // file for the opportunity PATCH/DELETE side.
-router.get("/opportunities/:id/activities", authorize({ feature: "crm", action: "list" }), async (req, res) => {
+router.get("/opportunities/:id/activities", authorize({ feature: "crm.opportunities", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const oppId = parseId(req.params.id, "id");
@@ -939,7 +939,7 @@ router.get("/opportunities/:id/activities", authorize({ feature: "crm", action: 
   } catch (err) { handleRouteError(err, res, "CRM activities error:"); }
 });
 
-router.post("/opportunities/:id/activities", authorize({ feature: "crm", action: "create" }), async (req, res) => {
+router.post("/opportunities/:id/activities", authorize({ feature: "crm.opportunities", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createActivitySchema.safeParse(req.body));
     const scope = req.scope!;
