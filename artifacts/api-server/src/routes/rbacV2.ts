@@ -577,6 +577,77 @@ router.post("/simulate", authorize({ feature: "admin.roles", action: "view" }), 
   }
 });
 
+// ─── Effective grants for a user (full picture) ────────────────────────────
+router.get("/users/:userId/effective", authorize({ feature: "admin.roles", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const userId = Number(req.params.userId);
+    const [target] = await rawQuery<any>(
+      `SELECT u.id, u."employeeId", e.name AS "userName", ea."companyId", ea."branchId",
+              ea."departmentId", ea.role, jt.name AS "jobTitle"
+         FROM users u
+         JOIN employee_assignments ea ON ea."employeeId" = u."employeeId" AND ea.status = 'active'
+         LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
+         LEFT JOIN employees e ON e.id = u."employeeId"
+        WHERE u.id = $1 AND ea."companyId" = $2 LIMIT 1`,
+      [userId, scope.companyId]
+    );
+    if (!target) return void res.status(404).json({ error: "المستخدم غير موجود" });
+
+    const roles = await rawQuery<any>(
+      `SELECT ur.role_id, ur.is_primary, ur.expires_at, r.role_key, r.label_ar, r.color, r.level
+         FROM rbac_user_roles ur
+         JOIN rbac_roles r ON r.id = ur.role_id
+        WHERE ur."userId" = $1 AND ur."companyId" = $2
+          AND (ur.expires_at IS NULL OR ur.expires_at > NOW())`,
+      [userId, scope.companyId]
+    );
+
+    const grants = await rawQuery<any>(
+      `SELECT g.role_id, g.feature_key, g.actions, g.scope, r.label_ar AS role_label
+         FROM rbac_role_grants g
+         JOIN rbac_user_roles ur ON ur.role_id = g.role_id
+         JOIN rbac_roles r ON r.id = g.role_id
+        WHERE ur."userId" = $1 AND ur."companyId" = $2
+          AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+        ORDER BY g.feature_key`,
+      [userId, scope.companyId]
+    );
+
+    const fields = await rawQuery<any>(
+      `SELECT fp.feature_key, fp.field_name, fp.mode, r.label_ar AS role_label
+         FROM rbac_field_policies fp
+         JOIN rbac_user_roles ur ON ur.role_id = fp.role_id
+         JOIN rbac_roles r ON r.id = fp.role_id
+        WHERE ur."userId" = $1 AND ur."companyId" = $2
+          AND (ur.expires_at IS NULL OR ur.expires_at > NOW())`,
+      [userId, scope.companyId]
+    );
+
+    const limits = await rawQuery<any>(
+      `SELECT al.feature_key, al.action, al.currency, al.max_amount, al.requires_dual_control, r.label_ar AS role_label
+         FROM rbac_approval_limits al
+         JOIN rbac_user_roles ur ON ur.role_id = al.role_id
+         JOIN rbac_roles r ON r.id = al.role_id
+        WHERE ur."userId" = $1 AND ur."companyId" = $2
+          AND (ur.expires_at IS NULL OR ur.expires_at > NOW())`,
+      [userId, scope.companyId]
+    );
+
+    const overrides = await rawQuery<any>(
+      `SELECT feature_key, action, scope, type, expires_at, reason
+         FROM rbac_user_grants
+        WHERE "userId" = $1 AND "companyId" = $2
+          AND (expires_at IS NULL OR expires_at > NOW())`,
+      [userId, scope.companyId]
+    );
+
+    res.json({ target, roles, grants, fields, limits, overrides });
+  } catch (err) {
+    handleRouteError(err, res, "effective grants");
+  }
+});
+
 // ─── User role bindings ─────────────────────────────────────────────────────
 router.get("/users/:userId/roles", authorize({ feature: "admin.roles", action: "view" }), async (req, res) => {
   try {
