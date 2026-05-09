@@ -856,17 +856,19 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", authorize({ feature
       ],
     });
 
-    const entRes = await rawQuery<any>(
-      `INSERT INTO depreciation_entries ("assetId","companyId",period,"depreciationAmount","bookValueAfter","journalEntryId",status,"postedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,'posted',NOW()) RETURNING id`,
-      [id, scope.companyId, targetPeriod, depAmount, newBookValue, journalId]
-    );
-    entryId = entRes[0].id;
+    await withTransaction(async (client) => {
+      const entRes = await client.query(
+        `INSERT INTO depreciation_entries ("assetId","companyId",period,"depreciationAmount","bookValueAfter","journalEntryId",status,"postedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,'posted',NOW()) RETURNING id`,
+        [id, scope.companyId, targetPeriod, depAmount, newBookValue, journalId]
+      );
+      entryId = entRes.rows[0].id;
 
-    await rawExecute(
-      `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
-      [newAccumulated, newBookValue, id, scope.companyId]
-    );
+      await client.query(
+        `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
+        [newAccumulated, newBookValue, id, scope.companyId]
+      );
+    });
 
     res.status(201).json({
       entryId,
@@ -925,15 +927,17 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", authorize({ feature
         ],
       });
 
-      await rawExecute(
-        `INSERT INTO depreciation_entries ("assetId","companyId",period,"depreciationAmount","bookValueAfter","journalEntryId",status,"postedAt")
-         VALUES ($1,$2,$3,$4,$5,$6,'posted',NOW())`,
-        [asset.id, scope.companyId, targetPeriod, depAmount, newBookValue, journalId]
-      );
-      await rawExecute(
-        `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
-        [newAccumulated, newBookValue, asset.id, scope.companyId]
-      );
+      await withTransaction(async (client) => {
+        await client.query(
+          `INSERT INTO depreciation_entries ("assetId","companyId",period,"depreciationAmount","bookValueAfter","journalEntryId",status,"postedAt")
+           VALUES ($1,$2,$3,$4,$5,$6,'posted',NOW())`,
+          [asset.id, scope.companyId, targetPeriod, depAmount, newBookValue, journalId]
+        );
+        await client.query(
+          `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
+          [newAccumulated, newBookValue, asset.id, scope.companyId]
+        );
+      });
 
       results.push({ assetId: asset.id, assetName: asset.name, depAmount, newBookValue });
       processed++;
