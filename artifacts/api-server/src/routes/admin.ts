@@ -626,7 +626,7 @@ router.patch("/integrations/:id", requirePermission("admin:write"), async (req, 
     if (sets.length === 1) { throw new ValidationError("لا توجد بيانات"); }
     params.push(id); params.push(scope.companyId);
     await rawExecute(
-      `UPDATE integrations SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`,
+      `UPDATE integrations SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`,
       params
     );
     const [row] = await rawQuery(`SELECT id, "companyId", type, name, status, "lastSuccessAt", "lastFailureAt", "retryCount", "maxRetries", "createdAt", "updatedAt" FROM integrations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);

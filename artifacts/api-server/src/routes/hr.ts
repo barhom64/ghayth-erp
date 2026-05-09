@@ -4302,12 +4302,12 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
       );
       if (paidInstallments.length > 0) {
         await client.query(
-          `UPDATE hr_loan_installments SET status = 'pending' WHERE "payrollLineId" IN (SELECT id FROM payroll_lines WHERE "runId" = $1) AND "companyId" = $2 AND status = 'paid' AND "deletedAt" IS NULL`,
+          `UPDATE hr_loan_installments SET status = 'pending' WHERE "payrollLineId" IN (SELECT id FROM payroll_lines WHERE "runId" = $1) AND "companyId" = $2 AND status = 'paid'`,
           [id, scope.companyId]
         );
         for (const inst of paidInstallments) {
           await client.query(
-            `UPDATE loan_accounts SET "remainingAmount" = "remainingAmount" + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+            `UPDATE loan_accounts SET "remainingAmount" = "remainingAmount" + $1 WHERE id = $2 AND "companyId" = $3`,
             [inst.amount, inst.loanId, scope.companyId]
           );
         }
