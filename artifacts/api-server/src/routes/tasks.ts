@@ -51,7 +51,7 @@ const VALID_TASK_TRANSITIONS: Record<string, string[]> = {
 
 const router = Router();
 
-router.get("/", requirePermission("tasks:read"), async (req, res) => {
+router.get("/", authorize({ feature: "tasks", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status = "", date = "" } = req.query as any;
@@ -167,7 +167,7 @@ router.get("/", requirePermission("tasks:read"), async (req, res) => {
   }
 });
 
-router.get("/entity-search", requirePermission("tasks:read"), async (req, res) => {
+router.get("/entity-search", authorize({ feature: "tasks", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { type, q } = req.query as any;

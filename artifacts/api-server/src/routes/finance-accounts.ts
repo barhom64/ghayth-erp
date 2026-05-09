@@ -11,6 +11,7 @@ import {
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { checkFinancialPeriodOpen, emitEvent, createAuditLog, todayISO, toDateISO } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
@@ -55,7 +56,7 @@ const createJournalSchema = z.object({
 export const accountsRouter = Router();
 accountsRouter.use(authMiddleware);
 
-accountsRouter.get("/chart-of-accounts", requirePermission("finance:read"), async (req, res) => {
+accountsRouter.get("/chart-of-accounts", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -73,7 +74,7 @@ accountsRouter.get("/chart-of-accounts", requirePermission("finance:read"), asyn
   }
 });
 
-accountsRouter.get("/accounts", requirePermission("finance:read"), async (req, res) => {
+accountsRouter.get("/accounts", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -103,7 +104,7 @@ accountsRouter.get("/accounts", requirePermission("finance:read"), async (req, r
   }
 });
 
-accountsRouter.post("/accounts", requirePermission("finance:create"), async (req, res) => {
+accountsRouter.post("/accounts", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -141,7 +142,7 @@ accountsRouter.post("/accounts", requirePermission("finance:create"), async (req
   }
 });
 
-accountsRouter.patch("/accounts/:id", requirePermission("finance:update"), async (req, res) => {
+accountsRouter.patch("/accounts/:id", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -185,7 +186,7 @@ accountsRouter.patch("/accounts/:id", requirePermission("finance:update"), async
   } catch (err) { handleRouteError(err, res, "Update account error:"); }
 });
 
-accountsRouter.delete("/accounts/:id", requirePermission("finance:delete"), async (req, res) => {
+accountsRouter.delete("/accounts/:id", authorize({ feature: "finance", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -243,7 +244,7 @@ accountsRouter.delete("/accounts/:id", requirePermission("finance:delete"), asyn
   } catch (err) { handleRouteError(err, res, "Delete account error:"); }
 });
 
-accountsRouter.get("/journal", requirePermission("finance:read"), async (req, res) => {
+accountsRouter.get("/journal", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -263,7 +264,7 @@ accountsRouter.get("/journal", requirePermission("finance:read"), async (req, re
   }
 });
 
-accountsRouter.post("/journal", requirePermission("finance:create"), async (req, res) => {
+accountsRouter.post("/journal", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -327,7 +328,7 @@ accountsRouter.post("/journal", requirePermission("finance:create"), async (req,
   }
 });
 
-accountsRouter.get("/ledger/:accountCode", requirePermission("finance:read"), async (req, res) => {
+accountsRouter.get("/ledger/:accountCode", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { accountCode } = req.params;
@@ -363,7 +364,7 @@ accountsRouter.get("/ledger/:accountCode", requirePermission("finance:read"), as
   }
 });
 
-accountsRouter.get("/summary", requirePermission("finance:read"), async (req, res) => {
+accountsRouter.get("/summary", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [inv] = await rawQuery<any>(

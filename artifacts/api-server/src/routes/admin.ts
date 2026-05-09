@@ -11,6 +11,7 @@ import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { getRedisRateLimitStatus } from "../lib/rateLimitStore.js";
 import { integrationService } from "../lib/integrationService.js";
 import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import crypto from "node:crypto";
 import { ADMIN_ROLES } from "../lib/rbacCatalog.js";
@@ -126,7 +127,7 @@ async function userBelongsToCompany(userId: number, companyId: number): Promise<
   return !!row;
 }
 
-router.get("/users", requirePermission("admin:read"), async (req, res) => {
+router.get("/users", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -146,7 +147,7 @@ router.get("/users", requirePermission("admin:read"), async (req, res) => {
   } catch (e: any) { logger.error(e, "Get users error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
-router.post("/users", requirePermission("admin:write"), async (req, res) => {
+router.post("/users", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -225,7 +226,7 @@ router.post("/users", requirePermission("admin:write"), async (req, res) => {
   } catch (e: any) { logger.error(e, "Create user error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
-router.patch("/users/:id", requirePermission("admin:write"), async (req, res) => {
+router.patch("/users/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -294,7 +295,7 @@ router.patch("/users/:id", requirePermission("admin:write"), async (req, res) =>
   } catch (e: any) { handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
-router.delete("/users/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/users/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -343,7 +344,7 @@ router.delete("/users/:id", requirePermission("admin:write"), async (req, res) =
   } catch (e: any) { handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
-router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission("admin:write"), async (req, res) => {
+router.post("/users/:id/reset-password", resetPasswordLimiter, authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -380,7 +381,7 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
   } catch (e: any) { handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
-router.get("/roles", requirePermission("admin:read"), async (req, res) => {
+router.get("/roles", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -391,7 +392,7 @@ router.get("/roles", requirePermission("admin:read"), async (req, res) => {
   } catch (e: any) { logger.error(e, "Get roles error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
-router.post("/roles", requirePermission("admin:write"), async (req, res) => {
+router.post("/roles", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -452,7 +453,7 @@ const PREDEFINED_ROLES = [
   { roleKey: "employee", label: "موظف", modules: ["home","requests","documents","comms"], level: 10 },
 ];
 
-router.get("/predefined-roles", requirePermission("admin:read"), async (req, res) => {
+router.get("/predefined-roles", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -477,7 +478,7 @@ router.get("/predefined-roles", requirePermission("admin:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.get("/user-roles/:userId", requirePermission("admin:read"), async (req, res) => {
+router.get("/user-roles/:userId", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -494,7 +495,7 @@ router.get("/user-roles/:userId", requirePermission("admin:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.post("/user-roles", requirePermission("admin:write"), async (req, res) => {
+router.post("/user-roles", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -541,7 +542,7 @@ router.post("/user-roles", requirePermission("admin:write"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.delete("/user-roles/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/user-roles/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -569,7 +570,7 @@ router.delete("/user-roles/:id", requirePermission("admin:write"), async (req, r
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.get("/integrations", requirePermission("admin:read"), async (req, res) => {
+router.get("/integrations", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -581,7 +582,7 @@ router.get("/integrations", requirePermission("admin:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.post("/integrations", requirePermission("admin:write"), async (req, res) => {
+router.post("/integrations", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -609,7 +610,7 @@ router.post("/integrations", requirePermission("admin:write"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.patch("/integrations/:id", requirePermission("admin:write"), async (req, res) => {
+router.patch("/integrations/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -647,7 +648,7 @@ router.patch("/integrations/:id", requirePermission("admin:write"), async (req, 
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.delete("/integrations/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/integrations/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -672,7 +673,7 @@ router.delete("/integrations/:id", requirePermission("admin:write"), async (req,
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.post("/integrations/:id/test", requirePermission("admin:write"), async (req, res) => {
+router.post("/integrations/:id/test", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -705,7 +706,7 @@ router.post("/integrations/:id/test", requirePermission("admin:write"), async (r
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.get("/integration-logs", requirePermission("admin:read"), async (req, res) => {
+router.get("/integration-logs", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -728,7 +729,7 @@ router.get("/integration-logs", requirePermission("admin:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.post("/integration-logs/retry", requirePermission("admin:write"), async (req, res) => {
+router.post("/integration-logs/retry", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -748,7 +749,7 @@ router.post("/integration-logs/retry", requirePermission("admin:write"), async (
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.get("/system-health", requirePermission("admin:read"), async (req, res) => {
+router.get("/system-health", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
 
@@ -871,7 +872,7 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.get("/violations-report", requirePermission("admin:read"), async (req, res) => {
+router.get("/violations-report", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -941,7 +942,7 @@ router.get("/violations-report", requirePermission("admin:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.patch("/violations/:id/resolve", requirePermission("admin:write"), async (req, res) => {
+router.patch("/violations/:id/resolve", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -978,7 +979,7 @@ router.patch("/violations/:id/resolve", requirePermission("admin:write"), async 
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.get("/security-log", requirePermission("admin:read"), async (req, res) => {
+router.get("/security-log", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -1043,7 +1044,7 @@ router.get("/security-log", requirePermission("admin:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.get("/role-permissions", requirePermission("admin:read"), async (req, res) => {
+router.get("/role-permissions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -1059,7 +1060,7 @@ router.get("/role-permissions", requirePermission("admin:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.post("/role-permissions", requirePermission("admin:write"), async (req, res) => {
+router.post("/role-permissions", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -1089,7 +1090,7 @@ router.post("/role-permissions", requirePermission("admin:write"), async (req, r
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.put("/role-permissions/bulk", requirePermission("admin:write"), async (req, res) => {
+router.put("/role-permissions/bulk", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -1127,7 +1128,7 @@ router.put("/role-permissions/bulk", requirePermission("admin:write"), async (re
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.delete("/role-permissions/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/role-permissions/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -1162,7 +1163,7 @@ import { STATE_MACHINES } from "../lib/lifecycleEngine.js";
 import { EVENT_CATALOG, countEventsByDomain } from "../lib/eventCatalog.js";
 import { PERMISSIONS, ROLE_PERMISSIONS } from "../lib/rbacCatalog.js";
 
-router.get("/governance/policy-audit", requirePermission("admin:read"), async (req, res) => {
+router.get("/governance/policy-audit", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const violations = await runFullPolicyAudit(scope.companyId);
@@ -1170,11 +1171,11 @@ router.get("/governance/policy-audit", requirePermission("admin:read"), async (r
   } catch (err) { handleRouteError(err, res, "Policy audit error:"); }
 });
 
-router.get("/governance/role-strategies", requirePermission("admin:read"), async (_req, res) => {
+router.get("/governance/role-strategies", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
   res.json({ strategies: ROLE_STRATEGIES, separationOfDuties: SEPARATION_OF_DUTIES, sensitiveOperations: SENSITIVE_OPERATIONS });
 });
 
-router.get("/governance/system-guards", requirePermission("admin:read"), async (req, res) => {
+router.get("/governance/system-guards", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const companyId = req.scope?.companyId;
     if (!companyId) {
@@ -1189,13 +1190,13 @@ router.get("/governance/system-guards", requirePermission("admin:read"), async (
   }
 });
 
-router.get("/governance/domain-registry", requirePermission("admin:read"), async (_req, res) => {
+router.get("/governance/domain-registry", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
   try {
     res.json({ domains: DOMAIN_REGISTRY, stats: getSystemStats() });
   } catch (err) { handleRouteError(err, res, "Domain registry error:"); }
 });
 
-router.get("/governance/gl-reconciliation", requirePermission("admin:read"), async (req, res) => {
+router.get("/governance/gl-reconciliation", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const companyId = req.scope!.companyId;
     const mismatches = await rawQuery<any>(
@@ -1223,13 +1224,13 @@ router.get("/governance/gl-reconciliation", requirePermission("admin:read"), asy
   } catch (err) { handleRouteError(err, res, "GL reconciliation error:"); }
 });
 
-router.get("/governance/lifecycle-machines", requirePermission("admin:read"), async (_req, res) => {
+router.get("/governance/lifecycle-machines", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
   try {
     res.json({ machines: STATE_MACHINES, total: STATE_MACHINES.length });
   } catch (err) { handleRouteError(err, res, "Lifecycle machines error:"); }
 });
 
-router.get("/governance/event-dlq", requirePermission("admin:read"), async (req, res) => {
+router.get("/governance/event-dlq", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const onlyUnresolved = req.query.unresolved !== "false";
@@ -1252,7 +1253,7 @@ router.get("/governance/event-dlq", requirePermission("admin:read"), async (req,
   } catch (err) { handleRouteError(err, res, "DLQ list error:"); }
 });
 
-router.post("/governance/event-dlq/:id/replay", requirePermission("admin:write"), async (req, res) => {
+router.post("/governance/event-dlq/:id/replay", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1274,7 +1275,7 @@ router.post("/governance/event-dlq/:id/replay", requirePermission("admin:write")
   } catch (err) { handleRouteError(err, res, "DLQ replay error:"); }
 });
 
-router.delete("/governance/event-dlq/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/governance/event-dlq/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1283,7 +1284,7 @@ router.delete("/governance/event-dlq/:id", requirePermission("admin:write"), asy
   } catch (err) { handleRouteError(err, res, "DLQ resolve error:"); }
 });
 
-router.get("/governance/event-catalog", requirePermission("admin:read"), async (req, res) => {
+router.get("/governance/event-catalog", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const byDomain = countEventsByDomain();
@@ -1301,7 +1302,7 @@ router.get("/governance/event-catalog", requirePermission("admin:read"), async (
   } catch (err) { handleRouteError(err, res, "Event catalog error:"); }
 });
 
-router.get("/governance/rbac-matrix", requirePermission("admin:read"), async (req, res) => {
+router.get("/governance/rbac-matrix", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const customPerms = await rawQuery<any>(
@@ -1320,7 +1321,7 @@ router.get("/governance/rbac-matrix", requirePermission("admin:read"), async (re
 
 // ── System Master Registry endpoints ──
 
-router.get("/system-registry", requirePermission("admin:read"), async (req, res) => {
+router.get("/system-registry", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const stats = getSystemStats();
@@ -1361,7 +1362,7 @@ router.get("/system-registry", requirePermission("admin:read"), async (req, res)
   } catch (err) { handleRouteError(err, res, "System registry error:"); }
 });
 
-router.get("/system-registry/entities", requirePermission("admin:read"), async (_req, res) => {
+router.get("/system-registry/entities", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
   try {
     const entities = DOMAIN_REGISTRY.flatMap(d =>
       d.tables.map(t => ({
@@ -1376,7 +1377,7 @@ router.get("/system-registry/entities", requirePermission("admin:read"), async (
   } catch (err) { handleRouteError(err, res, "Entity registry error:"); }
 });
 
-router.get("/system-registry/actions", requirePermission("admin:read"), async (req, res) => {
+router.get("/system-registry/actions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const domain = req.query.domain as string | undefined;
@@ -1404,7 +1405,7 @@ router.get("/system-registry/actions", requirePermission("admin:read"), async (r
   } catch (err) { handleRouteError(err, res, "Action registry error:"); }
 });
 
-router.get("/system-registry/pages", requirePermission("admin:read"), async (_req, res) => {
+router.get("/system-registry/pages", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
   try {
     const pages = [
       { path: "/", component: "Dashboard", domain: "core", lazy: true },
@@ -1436,7 +1437,7 @@ router.get("/system-registry/pages", requirePermission("admin:read"), async (_re
   } catch (err) { handleRouteError(err, res, "Page registry error:"); }
 });
 
-router.get("/system-registry/missing", requirePermission("admin:read"), async (req, res) => {
+router.get("/system-registry/missing", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1473,7 +1474,7 @@ router.get("/system-registry/missing", requirePermission("admin:read"), async (r
 
 // ─── System Health Checks (structured pass/fail) ────────────────────────
 
-router.get("/system-health-checks", requirePermission("admin:read"), async (req, res) => {
+router.get("/system-health-checks", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const checks: { name: string; status: "ok" | "warn" | "error"; detail?: string }[] = [];
@@ -1627,7 +1628,7 @@ router.get("/system-health-checks", requirePermission("admin:read"), async (req,
 
 // ─── Domain Dependency Graph ────────────────────────────────────────────
 
-router.get("/system-health/dependency-graph", requirePermission("admin:read"), async (_req, res) => {
+router.get("/system-health/dependency-graph", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
   try {
     const graph: { from: string; to: string; via: string }[] = [];
 
@@ -1670,7 +1671,7 @@ router.get("/system-health/dependency-graph", requirePermission("admin:read"), a
 // SYSTEM STOPS — زر الإيقاف الطارئ (Red Button)
 // ============================================================================
 
-router.get("/system-stops", requirePermission("admin:read"), async (req, res) => {
+router.get("/system-stops", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
@@ -1691,7 +1692,7 @@ const systemStopSchema = z.object({
   reason: z.string().min(1, "سبب الإيقاف مطلوب"),
 });
 
-router.post("/system-stops", requirePermission("admin:write"), async (req, res) => {
+router.post("/system-stops", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { scope: s, reason } = zodParse(systemStopSchema.safeParse(req.body));
@@ -1706,7 +1707,7 @@ router.post("/system-stops", requirePermission("admin:write"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Create system stop"); }
 });
 
-router.patch("/system-stops/:id/deactivate", requirePermission("admin:write"), async (req, res) => {
+router.patch("/system-stops/:id/deactivate", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

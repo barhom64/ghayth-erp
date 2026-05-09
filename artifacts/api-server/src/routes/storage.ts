@@ -5,6 +5,7 @@ import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
@@ -55,7 +56,7 @@ const uploadLimiter = createPerUserLimiter({
   message: "تم تجاوز الحد الأقصى لطلبات الرفع. يرجى المحاولة بعد دقيقة",
 });
 
-router.post("/storage/uploads/request-url", authMiddleware, uploadLimiter, requirePermission("documents:write"), async (req: Request, res: Response) => {
+router.post("/storage/uploads/request-url", authMiddleware, uploadLimiter, authorize({ feature: "documents", action: "create" }), async (req: Request, res: Response) => {
   try {
     const { name, size, contentType } = zodParse(RequestUploadUrlBody.safeParse(req.body));
 
@@ -122,7 +123,7 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
   }
 });
 
-router.get("/storage/objects/*path", authMiddleware, requirePermission("documents:download"), async (req: Request, res: Response) => {
+router.get("/storage/objects/*path", authMiddleware, authorize({ feature: "documents", action: "export" }), async (req: Request, res: Response) => {
   try {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;

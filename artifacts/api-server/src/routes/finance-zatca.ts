@@ -13,6 +13,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, toDateISO } from "../lib/businessHelpers.js";
 import crypto from "node:crypto";
 import QRCode from "qrcode";
@@ -239,7 +240,7 @@ function computeInvoiceHash(xmlContent: string): string {
 // ZATCA Settings CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
-zatcaRouter.get("/zatca/settings", requirePermission("finance:read"), async (req, res) => {
+zatcaRouter.get("/zatca/settings", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -262,7 +263,7 @@ zatcaRouter.get("/zatca/settings", requirePermission("finance:read"), async (req
   }
 });
 
-zatcaRouter.put("/zatca/settings", requirePermission("finance:update"), async (req, res) => {
+zatcaRouter.put("/zatca/settings", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -359,7 +360,7 @@ zatcaRouter.put("/zatca/settings", requirePermission("finance:update"), async (r
 // ─────────────────────────────────────────────────────────────────────────────
 // Test connection (simulated)
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.post("/zatca/test-connection", requirePermission("finance:create"), async (req, res) => {
+zatcaRouter.post("/zatca/test-connection", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -393,7 +394,7 @@ zatcaRouter.post("/zatca/test-connection", requirePermission("finance:create"), 
 // ─────────────────────────────────────────────────────────────────────────────
 // Generate XML for an invoice
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), async (req, res) => {
+zatcaRouter.get("/zatca/invoice/:id/xml", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -480,7 +481,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), asy
 // ─────────────────────────────────────────────────────────────────────────────
 // Simulate ZATCA submission for invoice
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"), async (req, res) => {
+zatcaRouter.post("/zatca/invoice/:id/submit", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -611,7 +612,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
 // ─────────────────────────────────────────────────────────────────────────────
 // Simulate ZATCA submission for expense
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"), async (req, res) => {
+zatcaRouter.post("/zatca/expense/:id/submit", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -691,7 +692,7 @@ zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"
 // ─────────────────────────────────────────────────────────────────────────────
 // ZATCA submission log list
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.get("/zatca/submissions", requirePermission("finance:read"), async (req, res) => {
+zatcaRouter.get("/zatca/submissions", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -758,7 +759,7 @@ zatcaRouter.get("/zatca/submissions", requirePermission("finance:read"), async (
 // ─────────────────────────────────────────────────────────────────────────────
 // Update invoice ZATCA fields (isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason)
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.patch("/zatca/invoice/:id", requirePermission("finance:update"), async (req, res) => {
+zatcaRouter.patch("/zatca/invoice/:id", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -789,7 +790,7 @@ zatcaRouter.patch("/zatca/invoice/:id", requirePermission("finance:update"), asy
 // ─────────────────────────────────────────────────────────────────────────────
 // Update expense ZATCA fields
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.patch("/zatca/expense/:id", requirePermission("finance:update"), async (req, res) => {
+zatcaRouter.patch("/zatca/expense/:id", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 

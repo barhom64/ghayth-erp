@@ -283,7 +283,7 @@ const DRIVER_TRANSITIONS: Record<string, readonly string[]> = {
   suspended:  ["off_duty", "available"],
 };
 
-router.get("/vehicles", requirePermission("fleet:read"), async (req, res) => {
+router.get("/vehicles", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, search } = req.query as any;
@@ -298,7 +298,7 @@ router.get("/vehicles", requirePermission("fleet:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet vehicles error:"); }
 });
 
-router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => {
+router.post("/vehicles", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createVehicleSchema.safeParse(req.body)) as any;
@@ -387,7 +387,7 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Create vehicle error:"); }
 });
 
-router.get("/drivers", requirePermission("fleet:read"), async (req, res) => {
+router.get("/drivers", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -406,7 +406,7 @@ router.get("/drivers", requirePermission("fleet:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet drivers error:"); }
 });
 
-router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
+router.post("/drivers", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createDriverSchema.safeParse(req.body)) as any;
@@ -506,7 +506,7 @@ router.get("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "view
   } catch (err) { handleRouteError(err, res, "Get vehicle error:"); }
 });
 
-router.get("/vehicles/:id/impact-preview", requirePermission("fleet:read"), async (req, res) => {
+router.get("/vehicles/:id/impact-preview", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -519,7 +519,7 @@ router.get("/vehicles/:id/impact-preview", requirePermission("fleet:read"), asyn
   } catch (err) { handleRouteError(err, res, "Vehicle impact preview error:"); }
 });
 
-router.patch("/vehicles/:id", requirePermission("fleet:update"), async (req, res) => {
+router.patch("/vehicles/:id", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -710,7 +710,7 @@ router.delete("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "d
   } catch (err) { handleRouteError(err, res, "Delete vehicle error:"); }
 });
 
-router.get("/drivers/:id", requirePermission("fleet:read"), async (req, res) => {
+router.get("/drivers/:id", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -720,7 +720,7 @@ router.get("/drivers/:id", requirePermission("fleet:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Get driver error:"); }
 });
 
-router.patch("/drivers/:id", requirePermission("fleet:update"), async (req, res) => {
+router.patch("/drivers/:id", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -856,7 +856,7 @@ router.delete("/drivers/:id", authorize({ feature: "fleet", action: "delete", re
   } catch (err) { handleRouteError(err, res, "Delete driver error:"); }
 });
 
-router.get("/trips", requirePermission("fleet:read"), async (req, res) => {
+router.get("/trips", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -895,7 +895,7 @@ router.get("/trips/:id", authorize({ feature: "fleet.trips", action: "view", res
   } catch (err) { handleRouteError(err, res, "Get trip error:"); }
 });
 
-router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
+router.post("/trips", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createTripSchema.safeParse(req.body));
@@ -1117,7 +1117,7 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create trip error:"); }
 });
 
-router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req, res) => {
+router.post("/trips/:id/complete", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const tripId = parseId(req.params.id, "id");
@@ -1211,7 +1211,7 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
 });
 
 /** Cancel a trip — frees vehicle+driver via the lifecycle engine, no cost posted */
-router.post("/trips/:id/cancel", requirePermission("fleet:update"), async (req, res) => {
+router.post("/trips/:id/cancel", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const tripId = parseId(req.params.id, "id");
@@ -1273,7 +1273,7 @@ router.post("/trips/:id/cancel", requirePermission("fleet:update"), async (req, 
   }
 });
 
-router.post("/trips/:id/waypoints", requirePermission("fleet:update"), async (req, res) => {
+router.post("/trips/:id/waypoints", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const tripId = parseId(req.params.id, "id");
@@ -1312,7 +1312,7 @@ router.post("/trips/:id/waypoints", requirePermission("fleet:update"), async (re
   } catch (err) { handleRouteError(err, res, "Waypoint error:"); }
 });
 
-router.get("/maintenance", requirePermission("fleet:read"), async (req, res) => {
+router.get("/maintenance", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { vehicleId } = req.query as any;
@@ -1335,7 +1335,7 @@ router.get("/maintenance", requirePermission("fleet:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Fleet maintenance error:"); }
 });
 
-router.get("/maintenance/:id", requirePermission("fleet:read"), async (req, res): Promise<any> => {
+router.get("/maintenance/:id", authorize({ feature: "fleet", action: "list" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1357,7 +1357,7 @@ router.get("/maintenance/:id", requirePermission("fleet:read"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Fleet maintenance detail error:"); }
 });
 
-router.post("/maintenance", requirePermission("fleet:create"), async (req, res) => {
+router.post("/maintenance", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createMaintenanceSchema.safeParse(req.body)) as any;
@@ -1463,7 +1463,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Create maintenance error:"); }
 });
 
-router.post("/maintenance/:id/complete", requirePermission("fleet:update"), async (req, res) => {
+router.post("/maintenance/:id/complete", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1549,7 +1549,7 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
 });
 
 /** Cancel a maintenance job — frees vehicle, no cost posted */
-router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async (req, res) => {
+router.post("/maintenance/:id/cancel", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1597,7 +1597,7 @@ router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async 
   } catch (err) { handleRouteError(err, res, "Cancel maintenance error:"); }
 });
 
-router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
+router.get("/alerts", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1734,7 +1734,7 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet alerts error:"); }
 });
 
-router.get("/fuel-logs", requirePermission("fleet:read"), async (req, res) => {
+router.get("/fuel-logs", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { vehicleId } = req.query as any;
@@ -1751,7 +1751,7 @@ router.get("/fuel-logs", requirePermission("fleet:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet fuel error:"); }
 });
 
-router.get("/fuel-logs/:id", requirePermission("fleet:read"), async (req, res) => {
+router.get("/fuel-logs/:id", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1771,7 +1771,7 @@ router.get("/fuel-logs/:id", requirePermission("fleet:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Fleet fuel detail error:"); }
 });
 
-router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) => {
+router.post("/fuel-logs", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createFuelLogSchema.safeParse(req.body)) as any;
@@ -1868,7 +1868,7 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Create fuel log error:"); }
 });
 
-router.get("/insurance", requirePermission("fleet:read"), async (req, res) => {
+router.get("/insurance", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { vehicleId } = req.query as any;
@@ -1885,7 +1885,7 @@ router.get("/insurance", requirePermission("fleet:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet insurance error:"); }
 });
 
-router.get("/insurance/:id", requirePermission("fleet:read"), async (req, res) => {
+router.get("/insurance/:id", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1901,7 +1901,7 @@ router.get("/insurance/:id", requirePermission("fleet:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Fleet insurance detail error:"); }
 });
 
-router.post("/insurance", requirePermission("fleet:create"), async (req, res) => {
+router.post("/insurance", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createInsuranceSchema.safeParse(req.body)) as any;
@@ -1962,7 +1962,7 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Create insurance error:"); }
 });
 
-router.patch("/trips/:id", requirePermission("fleet:update"), async (req, res) => {
+router.patch("/trips/:id", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2072,7 +2072,7 @@ router.patch("/trips/:id", requirePermission("fleet:update"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Update trip error:"); }
 });
 
-router.delete("/trips/:id", requirePermission("fleet:delete"), async (req, res) => {
+router.delete("/trips/:id", authorize({ feature: "fleet", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2124,7 +2124,7 @@ router.delete("/trips/:id", requirePermission("fleet:delete"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Delete trip error:"); }
 });
 
-router.patch("/maintenance/:id", requirePermission("fleet:update"), async (req, res) => {
+router.patch("/maintenance/:id", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2225,7 +2225,7 @@ router.patch("/maintenance/:id", requirePermission("fleet:update"), async (req, 
   } catch (err) { handleRouteError(err, res, "Update maintenance error:"); }
 });
 
-router.delete("/maintenance/:id", requirePermission("fleet:delete"), async (req, res) => {
+router.delete("/maintenance/:id", authorize({ feature: "fleet", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2269,7 +2269,7 @@ router.delete("/maintenance/:id", requirePermission("fleet:delete"), async (req,
   } catch (err) { handleRouteError(err, res, "Delete maintenance error:"); }
 });
 
-router.patch("/fuel-logs/:id", requirePermission("fleet:update"), async (req, res) => {
+router.patch("/fuel-logs/:id", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2345,7 +2345,7 @@ router.patch("/fuel-logs/:id", requirePermission("fleet:update"), async (req, re
   } catch (err) { handleRouteError(err, res, "Update fuel log error:"); }
 });
 
-router.delete("/fuel-logs/:id", requirePermission("fleet:delete"), async (req, res) => {
+router.delete("/fuel-logs/:id", authorize({ feature: "fleet", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2376,7 +2376,7 @@ router.delete("/fuel-logs/:id", requirePermission("fleet:delete"), async (req, r
   } catch (err) { handleRouteError(err, res, "Delete fuel log error:"); }
 });
 
-router.patch("/insurance/:id", requirePermission("fleet:update"), async (req, res) => {
+router.patch("/insurance/:id", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2455,7 +2455,7 @@ router.patch("/insurance/:id", requirePermission("fleet:update"), async (req, re
   } catch (err) { handleRouteError(err, res, "Update insurance error:"); }
 });
 
-router.delete("/insurance/:id", requirePermission("fleet:delete"), async (req, res) => {
+router.delete("/insurance/:id", authorize({ feature: "fleet", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2483,7 +2483,7 @@ router.delete("/insurance/:id", requirePermission("fleet:delete"), async (req, r
   } catch (err) { handleRouteError(err, res, "Delete insurance error:"); }
 });
 
-router.get("/stats", requirePermission("fleet:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -2510,7 +2510,7 @@ router.get("/stats", requirePermission("fleet:read"), async (req, res) => {
 // PREVENTIVE MAINTENANCE PLANS — خطة الصيانة الوقائية
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/preventive-plans", requirePermission("fleet:read"), async (req, res) => {
+router.get("/preventive-plans", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { vehicleId } = req.query as any;
@@ -2529,7 +2529,7 @@ router.get("/preventive-plans", requirePermission("fleet:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "Preventive plans error:"); }
 });
 
-router.post("/preventive-plans", requirePermission("fleet:create"), async (req, res) => {
+router.post("/preventive-plans", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createPreventivePlanSchema.safeParse(req.body));
@@ -2602,7 +2602,7 @@ router.post("/preventive-plans", requirePermission("fleet:create"), async (req, 
   } catch (err) { handleRouteError(err, res, "Create preventive plan error:"); }
 });
 
-router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (req, res) => {
+router.patch("/preventive-plans/:id", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2680,7 +2680,7 @@ router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (
 // TRAFFIC VIOLATIONS — مخالفات مرورية
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/traffic-violations", requirePermission("fleet:read"), async (req, res) => {
+router.get("/traffic-violations", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { vehicleId, driverId } = req.query as any;
@@ -2701,7 +2701,7 @@ router.get("/traffic-violations", requirePermission("fleet:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "Traffic violations error:"); }
 });
 
-router.get("/traffic-violations/:id", requirePermission("fleet:read"), async (req, res): Promise<any> => {
+router.get("/traffic-violations/:id", authorize({ feature: "fleet", action: "list" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2718,7 +2718,7 @@ router.get("/traffic-violations/:id", requirePermission("fleet:read"), async (re
   } catch (err) { handleRouteError(err, res, "Traffic violation detail error:"); }
 });
 
-router.post("/traffic-violations", requirePermission("fleet:create"), async (req, res) => {
+router.post("/traffic-violations", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createTrafficViolationSchema.safeParse(req.body));
@@ -2856,7 +2856,7 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
   } catch (err) { handleRouteError(err, res, "Create traffic violation error:"); }
 });
 
-router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), async (req, res) => {
+router.patch("/traffic-violations/:id/pay", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2927,7 +2927,7 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
 // TCO ANALYSIS — تحليل التكلفة الكلية للمركبة
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/vehicles/:id/tco", requirePermission("fleet:read"), async (req, res) => {
+router.get("/vehicles/:id/tco", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const vehicleId = parseId(req.params.id, "id");

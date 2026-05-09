@@ -5,6 +5,7 @@ import { handleRouteError, ValidationError, NotFoundError,
   zodParse,
 } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
@@ -43,7 +44,7 @@ const toggleRuleSchema = z.object({}).optional();
 
 const router = Router();
 
-router.get("/", requirePermission("admin:write"), async (req, res) => {
+router.get("/", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rules = await rawQuery<any>(
@@ -58,7 +59,7 @@ router.get("/", requirePermission("admin:write"), async (req, res) => {
   }
 });
 
-router.get("/logs", requirePermission("admin:write"), async (req, res) => {
+router.get("/logs", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { ruleId, limit: lim = "50", page = "1" } = req.query as any;
@@ -98,7 +99,7 @@ router.get("/logs", requirePermission("admin:write"), async (req, res) => {
   }
 });
 
-router.post("/", requirePermission("admin:write"), async (req, res) => {
+router.post("/", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const b = zodParse(createRuleSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -133,7 +134,7 @@ router.post("/", requirePermission("admin:write"), async (req, res) => {
   }
 });
 
-router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
+router.patch("/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const b = zodParse(patchRuleSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -183,7 +184,7 @@ router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
   }
 });
 
-router.delete("/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -210,7 +211,7 @@ router.delete("/:id", requirePermission("admin:write"), async (req, res) => {
   }
 });
 
-router.patch("/:id/toggle", requirePermission("admin:write"), async (req, res) => {
+router.patch("/:id/toggle", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     zodParse(toggleRuleSchema.safeParse(req.body));
     const scope = req.scope!;

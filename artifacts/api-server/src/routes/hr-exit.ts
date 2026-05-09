@@ -9,6 +9,7 @@ import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
   NotFoundError,
@@ -124,7 +125,7 @@ const approvalDecisionSchema = z.object({
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/exit — قائمة طلبات نهاية الخدمة
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/exit", requirePermission("hr:read"), async (req, res) => {
+router.get("/exit", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     await ensureExitTables();
     const scope = req.scope!;
@@ -170,7 +171,7 @@ router.get("/exit", requirePermission("hr:read"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/exit/:id — تفاصيل الطلب مع قائمة إخلاء الطرف
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/exit/:id", requirePermission("hr:read"), async (req, res) => {
+router.get("/exit/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     await ensureExitTables();
     const scope = req.scope!;
@@ -203,7 +204,7 @@ router.get("/exit/:id", requirePermission("hr:read"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // POST /hr/exit — إنشاء طلب نهاية خدمة
 // ═══════════════════════════════════════════════════════════════════════════════
-router.post("/exit", requirePermission("hr:create"), async (req, res) => {
+router.post("/exit", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     await ensureExitTables();
     const scope = req.scope!;
@@ -358,7 +359,7 @@ router.post("/exit", requirePermission("hr:create"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/exit/:id/approve — اعتماد الطلب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, res): Promise<void> => {
+router.patch("/exit/:id/approve", authorize({ feature: "hr", action: "update" }), async (req, res): Promise<void> => {
   try {
     const b = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
     const { approved = true, reason, notes } = b;
@@ -470,7 +471,7 @@ router.patch("/exit/:id/approve", requirePermission("hr:update"), async (req, re
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/exit/clearance/:id — تحديث إخلاء الطرف (إتمام / رفض)
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, res) => {
+router.patch("/exit/clearance/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -518,7 +519,7 @@ router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/exit/:id/complete — إتمام نهاية الخدمة نهائياً
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/exit/:id/complete", requirePermission("hr:update"), async (req, res): Promise<void> => {
+router.patch("/exit/:id/complete", authorize({ feature: "hr", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

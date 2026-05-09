@@ -224,7 +224,7 @@ function checkAttachmentRequired(params: { operationType: string; amount?: numbe
   return { required: false };
 }
 
-journalRouter.get("/expenses", requirePermission("finance:read"), async (req, res) => {
+journalRouter.get("/expenses", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -258,7 +258,7 @@ journalRouter.get("/expenses", requirePermission("finance:read"), async (req, re
 });
 
 // Impact preview — shows what will happen when the expense is created
-journalRouter.post("/expenses/impact-preview", requirePermission("finance:create"), async (req, res) => {
+journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { amount, expenseType, paymentMethod, costCenter, supplierId, branchId } = zodParse(expenseImpactPreviewSchema.safeParse(req.body ?? {}));
@@ -530,7 +530,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
   }
 });
 
-journalRouter.patch("/expenses/:id", requirePermission("finance:update"), async (req, res) => {
+journalRouter.patch("/expenses/:id", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -637,7 +637,7 @@ journalRouter.patch("/expenses/:id/approve", authorize({ feature: "finance.journ
   }
 });
 
-journalRouter.get("/vouchers", requirePermission("finance:read"), async (req, res) => {
+journalRouter.get("/vouchers", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -664,7 +664,7 @@ journalRouter.get("/vouchers", requirePermission("finance:read"), async (req, re
   }
 });
 
-journalRouter.get("/vouchers/:id", requirePermission("finance:read"), async (req, res) => {
+journalRouter.get("/vouchers/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -686,7 +686,7 @@ journalRouter.get("/vouchers/:id", requirePermission("finance:read"), async (req
   } catch (err) { handleRouteError(err, res, "Get voucher detail error:"); }
 });
 
-journalRouter.post("/vouchers", requirePermission("finance:create"), async (req, res) => {
+journalRouter.post("/vouchers", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -802,7 +802,7 @@ journalRouter.post("/vouchers", requirePermission("finance:create"), async (req,
   }
 });
 
-journalRouter.patch("/vouchers/:id", requirePermission("finance:update"), async (req, res) => {
+journalRouter.patch("/vouchers/:id", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -815,7 +815,7 @@ journalRouter.patch("/vouchers/:id", requirePermission("finance:update"), async 
   }
 });
 
-journalRouter.delete("/vouchers/:id", requirePermission("finance:delete"), async (req, res) => {
+journalRouter.delete("/vouchers/:id", authorize({ feature: "finance", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -828,7 +828,7 @@ journalRouter.delete("/vouchers/:id", requirePermission("finance:delete"), async
   }
 });
 
-journalRouter.get("/salary-advances", requirePermission("finance:read"), async (req, res) => {
+journalRouter.get("/salary-advances", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(`SELECT je.id, je.ref, je.description, COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, 'active' AS status FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%' GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId]);
@@ -838,7 +838,7 @@ journalRouter.get("/salary-advances", requirePermission("finance:read"), async (
   }
 });
 
-journalRouter.get("/salary-advances/:id", requirePermission("finance:read"), async (req, res) => {
+journalRouter.get("/salary-advances/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -858,7 +858,7 @@ journalRouter.get("/salary-advances/:id", requirePermission("finance:read"), asy
   } catch (err) { handleRouteError(err, res, "Get salary advance detail error:"); }
 });
 
-journalRouter.post("/salary-advances", requirePermission("finance:create"), async (req, res) => {
+journalRouter.post("/salary-advances", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -895,7 +895,7 @@ journalRouter.post("/salary-advances", requirePermission("finance:create"), asyn
   }
 });
 
-journalRouter.patch("/salary-advances/:id/approve", requirePermission("finance:update"), async (req, res) => {
+journalRouter.patch("/salary-advances/:id/approve", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -955,7 +955,7 @@ journalRouter.patch("/salary-advances/:id/approve", requirePermission("finance:u
 // JOURNAL ENTRY DETAIL + REVERSAL (Phase 2)
 // ─────────────────────────────────────────────────────────────────────────────
 
-journalRouter.get("/journal", requirePermission("finance:read"), async (req, res) => {
+journalRouter.get("/journal", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -977,7 +977,7 @@ journalRouter.get("/journal", requirePermission("finance:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "List journal entries error:"); }
 });
 
-journalRouter.post("/journal", requirePermission("finance:create"), async (req, res) => {
+journalRouter.post("/journal", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { description, lines, date } = zodParse(createJournalSchema.safeParse(req.body ?? {}));
@@ -1022,7 +1022,7 @@ journalRouter.post("/journal", requirePermission("finance:create"), async (req, 
   } catch (err) { handleRouteError(err, res, "Create journal entry error:"); }
 });
 
-journalRouter.get("/journal/:id", requirePermission("finance:read"), async (req, res) => {
+journalRouter.get("/journal/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1062,7 +1062,7 @@ journalRouter.get("/journal/:id", requirePermission("finance:read"), async (req,
   }
 });
 
-journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), async (req, res) => {
+journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1244,7 +1244,7 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
   return { revenues, expenses, totalRevenue, totalExpense, netIncome, lines };
 }
 
-journalRouter.post("/fiscal-periods/:period/year-end-close", requirePermission("finance:create"), async (req, res) => {
+journalRouter.post("/fiscal-periods/:period/year-end-close", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1391,7 +1391,7 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", requirePermission("
 // OPENING BALANCES (Phase 2)
 // ─────────────────────────────────────────────────────────────────────────────
 
-journalRouter.get("/opening-balances", requirePermission("finance:read"), async (req, res) => {
+journalRouter.get("/opening-balances", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { periodStart } = req.query as { periodStart?: string };
@@ -1505,7 +1505,7 @@ async function createOpeningBalanceEntry(params: {
   return { id: journalId, ref, description };
 }
 
-journalRouter.post("/opening-balances", requirePermission("finance:create"), async (req, res) => {
+journalRouter.post("/opening-balances", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1521,7 +1521,7 @@ journalRouter.post("/opening-balances", requirePermission("finance:create"), asy
   }
 });
 
-journalRouter.post("/opening-balances/import-csv", requirePermission("finance:create"), async (req, res) => {
+journalRouter.post("/opening-balances/import-csv", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 

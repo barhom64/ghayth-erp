@@ -501,7 +501,7 @@ const DEPOSIT_TRANSITIONS: Record<string, readonly string[]> = {
 // short-circuit in requirePermission, so legitimate workflows are
 // unaffected. Aligning these five routes with the established
 // requirePermission pattern used by fleet, hr, crm, etc.
-router.get("/units", requirePermission("property:read"), async (req, res) => {
+router.get("/units", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, search, buildingId } = req.query as any;
@@ -535,7 +535,7 @@ router.get("/units", requirePermission("property:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Property units error:"); }
 });
 
-router.post("/units", requirePermission("property:create"), async (req, res) => {
+router.post("/units", authorize({ feature: "properties", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createUnitSchema.safeParse(req.body));
@@ -647,7 +647,7 @@ router.get("/units/:id", authorize({ feature: "properties.units", action: "view"
   } catch (err) { handleRouteError(err, res, "Get unit error:"); }
 });
 
-router.get("/units/:id/impact-preview", requirePermission("property:read"), async (req, res) => {
+router.get("/units/:id/impact-preview", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -660,7 +660,7 @@ router.get("/units/:id/impact-preview", requirePermission("property:read"), asyn
   } catch (err) { handleRouteError(err, res, "Impact preview error:"); }
 });
 
-router.patch("/units/:id", requirePermission("property:update"), async (req, res) => {
+router.patch("/units/:id", authorize({ feature: "properties", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -853,7 +853,7 @@ router.delete("/units/:id", authorize({ feature: "properties.units", action: "de
 });
 
 // Impact preview — shows what will happen when the rental contract is created
-router.post("/contracts/impact-preview", requirePermission("property:read"), async (req, res) => {
+router.post("/contracts/impact-preview", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { unitId, tenantId, monthlyRent, startDate, endDate, securityDeposit } = zodParse(contractImpactPreviewSchema.safeParse(req.body));
@@ -983,7 +983,7 @@ router.post("/contracts/impact-preview", requirePermission("property:read"), asy
   }
 });
 
-router.get("/contracts", requirePermission("property:read"), async (req, res) => {
+router.get("/contracts", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -1016,7 +1016,7 @@ router.get("/contracts/:id", authorize({ feature: "properties.contracts", action
   } catch (err) { handleRouteError(err, res, "Get contract error:"); }
 });
 
-router.post("/contracts", requirePermission("property:create"), async (req, res) => {
+router.post("/contracts", authorize({ feature: "properties", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createContractSchema.safeParse(req.body)) as any;
@@ -1227,7 +1227,7 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
   }
 });
 
-router.patch("/contracts/:id", requirePermission("property:update"), async (req, res) => {
+router.patch("/contracts/:id", authorize({ feature: "properties", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1420,7 +1420,7 @@ router.delete("/contracts/:id", authorize({ feature: "properties.contracts", act
 // ────────────────────────────────────────────────────────────────────────────
 
 /** Renew an active contract — extends endDate, generates new installments, resets obligations */
-router.post("/contracts/:id/renew", requirePermission("property:update"), async (req, res) => {
+router.post("/contracts/:id/renew", authorize({ feature: "properties", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1540,7 +1540,7 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
 });
 
 /** Terminate an active contract — early termination with optional fee */
-router.post("/contracts/:id/terminate", requirePermission("property:update"), async (req, res) => {
+router.post("/contracts/:id/terminate", authorize({ feature: "properties", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1631,7 +1631,7 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
   }
 });
 
-router.get("/tenants/list", requirePermission("property:read"), async (req, res) => {
+router.get("/tenants/list", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search } = req.query as any;
@@ -1701,7 +1701,7 @@ router.get("/tenants/list", requirePermission("property:read"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Tenants list error:"); }
 });
 
-router.patch("/tenants/:id", requirePermission("property:update"), async (req, res) => {
+router.patch("/tenants/:id", authorize({ feature: "properties", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1792,7 +1792,7 @@ router.patch("/tenants/:id", requirePermission("property:update"), async (req, r
   } catch (err) { handleRouteError(err, res, "Update tenant error:"); }
 });
 
-router.delete("/tenants/:id", requirePermission("property:delete"), async (req, res) => {
+router.delete("/tenants/:id", authorize({ feature: "properties", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1839,7 +1839,7 @@ router.delete("/tenants/:id", requirePermission("property:delete"), async (req, 
   } catch (err) { handleRouteError(err, res, "Delete tenant error:"); }
 });
 
-router.get("/payments", requirePermission("property:read"), async (req, res) => {
+router.get("/payments", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, contractId } = req.query as any;
@@ -1872,7 +1872,7 @@ router.get("/payments/:id", authorize({ feature: "properties.payments", action: 
   } catch (err) { handleRouteError(err, res, "Property payment detail error:"); }
 });
 
-router.post("/payments/:id/pay", requirePermission("property:update"), async (req, res) => {
+router.post("/payments/:id/pay", authorize({ feature: "properties", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -1968,7 +1968,7 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
   } catch (err) { handleRouteError(err, res, "Record rent payment error:"); }
 });
 
-router.post("/late-rent/escalate", requirePermission("property:create"), async (req, res) => {
+router.post("/late-rent/escalate", authorize({ feature: "properties", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -2106,7 +2106,7 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
   } catch (err) { handleRouteError(err, res, "Late rent escalation error:"); }
 });
 
-router.get("/maintenance-requests", requirePermission("property:read"), async (req, res) => {
+router.get("/maintenance-requests", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -2121,7 +2121,7 @@ router.get("/maintenance-requests", requirePermission("property:read"), async (r
   } catch (err) { handleRouteError(err, res, "Maintenance requests error:"); }
 });
 
-router.get("/maintenance/:id", requirePermission("property:read"), async (req, res) => {
+router.get("/maintenance/:id", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2140,7 +2140,7 @@ router.get("/maintenance/:id", requirePermission("property:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "Get maintenance request detail error:"); }
 });
 
-router.post("/maintenance-requests", requirePermission("property:create"), async (req, res) => {
+router.post("/maintenance-requests", authorize({ feature: "properties", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createMaintenanceRequestSchema.safeParse(req.body)) as any;
@@ -2300,7 +2300,7 @@ router.post("/maintenance-requests", requirePermission("property:create"), async
   } catch (err) { handleRouteError(err, res, "Create maintenance request error:"); }
 });
 
-router.patch("/maintenance-requests/:id/approve", requirePermission("property:update"), async (req, res) => {
+router.patch("/maintenance-requests/:id/approve", authorize({ feature: "properties", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2367,7 +2367,7 @@ router.patch("/maintenance-requests/:id/approve", requirePermission("property:up
   }
 });
 
-router.post("/maintenance-requests/:id/complete", requirePermission("property:create"), async (req, res) => {
+router.post("/maintenance-requests/:id/complete", authorize({ feature: "properties", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2538,7 +2538,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
   }
 });
 
-router.get("/technicians", requirePermission("property:read"), async (req, res) => {
+router.get("/technicians", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(`SELECT * FROM technicians WHERE "companyId"=$1 ORDER BY name LIMIT 500`, [scope.companyId]);
@@ -2562,7 +2562,7 @@ router.get("/tenants", authorize({ feature: "properties.tenants", action: "list"
   } catch (err) { handleRouteError(err, res, "Tenants error:"); }
 });
 
-router.post("/tenants", requirePermission("property:create"), async (req, res) => {
+router.post("/tenants", authorize({ feature: "properties", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createTenantSchema.safeParse(req.body)) as any;
@@ -2675,7 +2675,7 @@ router.get("/tenants/:id", authorize({ feature: "properties.tenants", action: "v
   } catch (err) { handleRouteError(err, res, "Tenant detail error:"); }
 });
 
-router.get("/buildings", requirePermission("property:read"), async (req, res) => {
+router.get("/buildings", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search } = req.query as any;
@@ -2703,7 +2703,7 @@ router.get("/buildings", requirePermission("property:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Buildings list error:"); }
 });
 
-router.get("/buildings/:id", requirePermission("property:read"), async (req, res) => {
+router.get("/buildings/:id", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2723,7 +2723,7 @@ router.get("/buildings/:id", requirePermission("property:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "Building detail error:"); }
 });
 
-router.post("/buildings", requirePermission("property:create"), async (req, res) => {
+router.post("/buildings", authorize({ feature: "properties", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createBuildingSchema.safeParse(req.body)) as any;
@@ -2799,7 +2799,7 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Create building error:"); }
 });
 
-router.patch("/buildings/:id", requirePermission("property:update"), async (req, res) => {
+router.patch("/buildings/:id", authorize({ feature: "properties", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2878,7 +2878,7 @@ router.patch("/buildings/:id", requirePermission("property:update"), async (req,
   } catch (err) { handleRouteError(err, res, "Update building error:"); }
 });
 
-router.delete("/buildings/:id", requirePermission("property:delete"), async (req, res) => {
+router.delete("/buildings/:id", authorize({ feature: "properties", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2923,7 +2923,7 @@ router.delete("/buildings/:id", requirePermission("property:delete"), async (req
   } catch (err) { handleRouteError(err, res, "Delete building error:"); }
 });
 
-router.get("/maintenance", requirePermission("property:read"), async (req, res) => {
+router.get("/maintenance", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -2938,7 +2938,7 @@ router.get("/maintenance", requirePermission("property:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Property maintenance error:"); }
 });
 
-router.post("/maintenance", requirePermission("property:create"), async (req, res) => {
+router.post("/maintenance", authorize({ feature: "properties", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createMaintenanceSimpleSchema.safeParse(req.body)) as any;
@@ -2980,7 +2980,7 @@ router.post("/maintenance", requirePermission("property:create"), async (req, re
   } catch (err) { handleRouteError(err, res, "Create property maintenance error:"); }
 });
 
-router.get("/stats", requirePermission("property:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -3047,7 +3047,7 @@ router.get("/stats", requirePermission("property:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Properties stats error:"); }
 });
 
-router.patch("/maintenance-requests/:id", requirePermission("property:update"), async (req, res) => {
+router.patch("/maintenance-requests/:id", authorize({ feature: "properties", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -3184,7 +3184,7 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
   } catch (err) { handleRouteError(err, res, "Update maintenance request error:"); }
 });
 
-router.get("/operations-dashboard", requirePermission("property:read"), async (req, res) => {
+router.get("/operations-dashboard", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -3233,7 +3233,7 @@ router.get("/operations-dashboard", requirePermission("property:read"), async (r
   } catch (err) { handleRouteError(err, res, "Operations dashboard error:"); }
 });
 
-router.get("/owners", requirePermission("property:read"), async (req, res) => {
+router.get("/owners", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search } = req.query as any;
@@ -3265,7 +3265,7 @@ router.get("/owners/:id", authorize({ feature: "properties", action: "view", res
   } catch (err) { handleRouteError(err, res, "Owner detail error:"); }
 });
 
-router.post("/owners", requirePermission("property:create"), async (req, res) => {
+router.post("/owners", authorize({ feature: "properties", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createOwnerSchema.safeParse(req.body)) as any;
@@ -3322,7 +3322,7 @@ router.post("/owners", requirePermission("property:create"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Create owner error:"); }
 });
 
-router.patch("/owners/:id", requirePermission("property:update"), async (req, res) => {
+router.patch("/owners/:id", authorize({ feature: "properties", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -3373,7 +3373,7 @@ router.patch("/owners/:id", requirePermission("property:update"), async (req, re
   } catch (err) { handleRouteError(err, res, "Update owner error:"); }
 });
 
-router.delete("/owners/:id", requirePermission("property:delete"), async (req, res) => {
+router.delete("/owners/:id", authorize({ feature: "properties", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -3428,7 +3428,7 @@ router.delete("/owners/:id", requirePermission("property:delete"), async (req, r
   } catch (err) { handleRouteError(err, res, "Delete owner error:"); }
 });
 
-router.get("/contracts/:id/schedule", requirePermission("property:read"), async (req, res) => {
+router.get("/contracts/:id/schedule", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const contractId = parseId(req.params.id, "id");
@@ -3442,7 +3442,7 @@ router.get("/contracts/:id/schedule", requirePermission("property:read"), async 
   } catch (err) { handleRouteError(err, res, "Payment schedule error:"); }
 });
 
-router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("property:create"), async (req, res) => {
+router.post("/contracts/:id/schedule/:installmentId/pay", authorize({ feature: "properties", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const contractId = parseId(req.params.id, "id");
@@ -3507,7 +3507,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
 // PROPERTY INSPECTIONS — جدول فحص دوري للوحدات
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/inspections", requirePermission("property:read"), async (req, res) => {
+router.get("/inspections", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { unitId, status } = req.query as any;
@@ -3528,7 +3528,7 @@ router.get("/inspections", requirePermission("property:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Inspections error:"); }
 });
 
-router.post("/inspections", requirePermission("property:create"), async (req, res) => {
+router.post("/inspections", authorize({ feature: "properties", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createInspectionSchema.safeParse(req.body)) as any;
@@ -3576,7 +3576,7 @@ router.post("/inspections", requirePermission("property:create"), async (req, re
   } catch (err) { handleRouteError(err, res, "Create inspection error:"); }
 });
 
-router.patch("/inspections/:id", requirePermission("property:update"), async (req, res) => {
+router.patch("/inspections/:id", authorize({ feature: "properties", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -3675,7 +3675,7 @@ router.patch("/inspections/:id", requirePermission("property:update"), async (re
 // SECURITY DEPOSITS — ودائع ضمان
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/deposits", requirePermission("property:read"), async (req, res) => {
+router.get("/deposits", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, contractId } = req.query as any;
@@ -3697,7 +3697,7 @@ router.get("/deposits", requirePermission("property:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Security deposits error:"); }
 });
 
-router.post("/deposits", requirePermission("property:create"), async (req, res) => {
+router.post("/deposits", authorize({ feature: "properties", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createDepositSchema.safeParse(req.body)) as any;
@@ -3764,7 +3764,7 @@ router.post("/deposits", requirePermission("property:create"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Create deposit error:"); }
 });
 
-router.patch("/deposits/:id/refund", requirePermission("property:update"), async (req, res) => {
+router.patch("/deposits/:id/refund", authorize({ feature: "properties", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -3836,7 +3836,7 @@ router.patch("/deposits/:id/refund", requirePermission("property:update"), async
 // OCCUPANCY REPORT — تقرير الإشغال التفاعلي
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/occupancy-report", requirePermission("property:read"), async (req, res) => {
+router.get("/occupancy-report", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { buildingId } = req.query as any;
@@ -3886,7 +3886,7 @@ router.get("/occupancy-report", requirePermission("property:read"), async (req, 
   } catch (err) { handleRouteError(err, res, "Occupancy report error:"); }
 });
 
-router.get("/tenants/:id/letters", requirePermission("property:read"), async (req, res) => {
+router.get("/tenants/:id/letters", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const tenantId = parseId(req.params.id, "id");

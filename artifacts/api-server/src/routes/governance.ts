@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError,
   parseId,
   zodParse,
@@ -165,7 +166,7 @@ const updateRiskTreatmentSchema = z.object({
 
 const router = Router();
 
-router.get("/policies", requirePermission("governance:read"), async (req, res) => {
+router.get("/policies", authorize({ feature: "governance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, module: mod } = req.query as any;
@@ -184,7 +185,7 @@ router.get("/policies", requirePermission("governance:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.post("/policies", requirePermission("governance:write"), async (req, res) => {
+router.post("/policies", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { title, description, category, status, effectiveDate, expiryDate, modules } = zodParse(createPolicySchema.safeParse(req.body));
@@ -219,7 +220,7 @@ router.post("/policies", requirePermission("governance:write"), async (req, res)
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.get("/policies/:id", requirePermission("governance:read"), async (req, res) => {
+router.get("/policies/:id", authorize({ feature: "governance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -242,7 +243,7 @@ router.get("/policies/:id", requirePermission("governance:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.patch("/policies/:id", requirePermission("governance:write"), async (req, res) => {
+router.patch("/policies/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -289,7 +290,7 @@ router.patch("/policies/:id", requirePermission("governance:write"), async (req,
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.post("/policies/:id/new-version", requirePermission("governance:write"), async (req, res) => {
+router.post("/policies/:id/new-version", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const parentId = parseId(req.params.id, "id");
@@ -358,7 +359,7 @@ router.post("/policies/:id/new-version", requirePermission("governance:write"), 
   }
 });
 
-router.get("/policies/:id/module-links", requirePermission("governance:read"), async (req, res) => {
+router.get("/policies/:id/module-links", authorize({ feature: "governance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const policyId = parseId(req.params.id, "id");
@@ -375,7 +376,7 @@ router.get("/policies/:id/module-links", requirePermission("governance:read"), a
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.get("/module-policies/:module", requirePermission("governance:read"), async (req, res) => {
+router.get("/module-policies/:module", authorize({ feature: "governance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const mod = req.params.module;
@@ -394,7 +395,7 @@ router.get("/module-policies/:module", requirePermission("governance:read"), asy
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.delete("/policies/:id", requirePermission("governance:write"), async (req, res) => {
+router.delete("/policies/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -413,7 +414,7 @@ router.delete("/policies/:id", requirePermission("governance:write"), async (req
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.get("/risks", requirePermission("governance:read"), async (req, res) => {
+router.get("/risks", authorize({ feature: "governance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM governance_risks WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
@@ -421,7 +422,7 @@ router.get("/risks", requirePermission("governance:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.post("/risks", requirePermission("governance:write"), async (req, res) => {
+router.post("/risks", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { title, description, severity, likelihood, impact, status, mitigationPlan, assignedTo } = zodParse(createRiskSchema.safeParse(req.body));
@@ -447,7 +448,7 @@ router.post("/risks", requirePermission("governance:write"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Create risk error:"); }
 });
 
-router.get("/risks/:id", requirePermission("governance:read"), async (req, res) => {
+router.get("/risks/:id", authorize({ feature: "governance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -457,7 +458,7 @@ router.get("/risks/:id", requirePermission("governance:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.patch("/risks/:id", requirePermission("governance:write"), async (req, res) => {
+router.patch("/risks/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -488,7 +489,7 @@ router.patch("/risks/:id", requirePermission("governance:write"), async (req, re
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.delete("/risks/:id", requirePermission("governance:write"), async (req, res) => {
+router.delete("/risks/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -507,7 +508,7 @@ router.delete("/risks/:id", requirePermission("governance:write"), async (req, r
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.get("/audits", requirePermission("governance:read"), async (req, res) => {
+router.get("/audits", authorize({ feature: "governance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM governance_audits WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
@@ -515,7 +516,7 @@ router.get("/audits", requirePermission("governance:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.post("/audits", requirePermission("governance:write"), async (req, res) => {
+router.post("/audits", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { title, scope: auditScope, status, auditorName, startDate, endDate, findings } = zodParse(createAuditSchema.safeParse(req.body)) as any;
@@ -537,7 +538,7 @@ router.post("/audits", requirePermission("governance:write"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.get("/audits/:id", requirePermission("governance:read"), async (req, res) => {
+router.get("/audits/:id", authorize({ feature: "governance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -547,7 +548,7 @@ router.get("/audits/:id", requirePermission("governance:read"), async (req, res)
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.patch("/audits/:id", requirePermission("governance:write"), async (req, res) => {
+router.patch("/audits/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -576,7 +577,7 @@ router.patch("/audits/:id", requirePermission("governance:write"), async (req, r
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.delete("/audits/:id", requirePermission("governance:write"), async (req, res) => {
+router.delete("/audits/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -595,7 +596,7 @@ router.delete("/audits/:id", requirePermission("governance:write"), async (req, 
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.get("/compliance", requirePermission("governance:read"), async (req, res) => {
+router.get("/compliance", authorize({ feature: "governance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM governance_compliance WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
@@ -603,7 +604,7 @@ router.get("/compliance", requirePermission("governance:read"), async (req, res)
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.post("/compliance", requirePermission("governance:write"), async (req, res) => {
+router.post("/compliance", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { regulation, description, status, dueDate, responsiblePerson, notes } = zodParse(createComplianceSchema.safeParse(req.body));
@@ -625,7 +626,7 @@ router.post("/compliance", requirePermission("governance:write"), async (req, re
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.get("/compliance/:id", requirePermission("governance:read"), async (req, res) => {
+router.get("/compliance/:id", authorize({ feature: "governance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -635,7 +636,7 @@ router.get("/compliance/:id", requirePermission("governance:read"), async (req, 
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.patch("/compliance/:id", requirePermission("governance:write"), async (req, res) => {
+router.patch("/compliance/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -665,7 +666,7 @@ router.patch("/compliance/:id", requirePermission("governance:write"), async (re
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.delete("/compliance/:id", requirePermission("governance:write"), async (req, res) => {
+router.delete("/compliance/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -684,7 +685,7 @@ router.delete("/compliance/:id", requirePermission("governance:write"), async (r
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.get("/stats", requirePermission("governance:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "governance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -711,7 +712,7 @@ router.get("/stats", requirePermission("governance:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.get("/compliance-dashboard", requirePermission("governance:read"), async (req, res) => {
+router.get("/compliance-dashboard", authorize({ feature: "governance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -737,7 +738,7 @@ router.get("/compliance-dashboard", requirePermission("governance:read"), async 
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.get("/compliance-actions", requirePermission("governance:read"), async (req, res) => {
+router.get("/compliance-actions", authorize({ feature: "governance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "dueDate" ASC NULLS LAST, "createdAt" DESC LIMIT 500`, [scope.companyId]);
@@ -745,7 +746,7 @@ router.get("/compliance-actions", requirePermission("governance:read"), async (r
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.post("/compliance-actions", requirePermission("governance:write"), async (req, res) => {
+router.post("/compliance-actions", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createComplianceActionSchema.safeParse(req.body ?? {}));
@@ -767,7 +768,7 @@ router.post("/compliance-actions", requirePermission("governance:write"), async 
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.patch("/compliance-actions/:actionId", requirePermission("governance:write"), async (req, res) => {
+router.patch("/compliance-actions/:actionId", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.actionId, "actionId");
@@ -796,7 +797,7 @@ router.patch("/compliance-actions/:actionId", requirePermission("governance:writ
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.delete("/compliance-actions/:actionId", requirePermission("governance:write"), async (req, res) => {
+router.delete("/compliance-actions/:actionId", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.actionId, "actionId");
@@ -815,7 +816,7 @@ router.delete("/compliance-actions/:actionId", requirePermission("governance:wri
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.get("/policies/:id/compliance-actions", requirePermission("governance:read"), async (req, res) => {
+router.get("/policies/:id/compliance-actions", authorize({ feature: "governance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const policyId = parseId(req.params.id, "id");
@@ -824,7 +825,7 @@ router.get("/policies/:id/compliance-actions", requirePermission("governance:rea
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.post("/policies/:id/compliance-actions", requirePermission("governance:write"), async (req, res) => {
+router.post("/policies/:id/compliance-actions", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const policyId = parseId(req.params.id, "id");
@@ -848,7 +849,7 @@ router.post("/policies/:id/compliance-actions", requirePermission("governance:wr
 });
 
 
-router.patch("/risks/:id/treatment", requirePermission("governance:write"), async (req, res) => {
+router.patch("/risks/:id/treatment", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -875,7 +876,7 @@ router.patch("/risks/:id/treatment", requirePermission("governance:write"), asyn
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.get("/capa", requirePermission("governance:read"), async (req, res) => {
+router.get("/capa", authorize({ feature: "governance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(`SELECT * FROM governance_capa WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
@@ -883,7 +884,7 @@ router.get("/capa", requirePermission("governance:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.post("/capa", requirePermission("governance:write"), async (req, res) => {
+router.post("/capa", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createCapaSchema.safeParse(req.body));
@@ -905,7 +906,7 @@ router.post("/capa", requirePermission("governance:write"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.patch("/capa/:id", requirePermission("governance:write"), async (req, res) => {
+router.patch("/capa/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

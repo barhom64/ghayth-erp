@@ -2,13 +2,14 @@ import { handleRouteError, NotFoundError, parseId } from "../lib/errorHandler.js
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { triggerJobByName } from "../lib/cronScheduler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
 
-router.get("/cron-jobs", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/cron-jobs", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(`SELECT * FROM cron_jobs ORDER BY name LIMIT 500`, []);
@@ -16,7 +17,7 @@ router.get("/cron-jobs", requirePermission("admin:read"), async (req, res): Prom
   } catch (err) { handleRouteError(err, res, "Cron jobs error:"); }
 });
 
-router.post("/cron-jobs/:id/toggle", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/cron-jobs/:id/toggle", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -29,7 +30,7 @@ router.post("/cron-jobs/:id/toggle", requirePermission("admin:write"), async (re
   } catch (err) { handleRouteError(err, res, "Toggle cron error:"); }
 });
 
-router.post("/cron-jobs/:id/trigger", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/cron-jobs/:id/trigger", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -48,7 +49,7 @@ router.post("/cron-jobs/:id/trigger", requirePermission("admin:write"), async (r
   } catch (err) { handleRouteError(err, res, "Trigger cron error:"); }
 });
 
-router.get("/cron-logs", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/cron-logs", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { jobId } = req.query as any;
@@ -61,7 +62,7 @@ router.get("/cron-logs", requirePermission("admin:read"), async (req, res): Prom
   } catch (err) { handleRouteError(err, res, "Cron logs error:"); }
 });
 
-router.get("/notification-stats", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/notification-stats", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -74,7 +75,7 @@ router.get("/notification-stats", requirePermission("admin:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "Notification stats error:"); }
 });
 
-router.get("/event-logs", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/event-logs", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { action, limit: lim, offset: off } = req.query as any;
@@ -91,7 +92,7 @@ router.get("/event-logs", requirePermission("admin:read"), async (req, res): Pro
   } catch (err) { handleRouteError(err, res, "Event logs error:"); }
 });
 
-router.get("/proactive-rules", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/proactive-rules", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -102,7 +103,7 @@ router.get("/proactive-rules", requirePermission("admin:read"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Proactive rules error:"); }
 });
 
-router.post("/proactive-rules/:id/toggle", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/proactive-rules/:id/toggle", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -121,7 +122,7 @@ router.post("/proactive-rules/:id/toggle", requirePermission("admin:write"), asy
   } catch (err) { handleRouteError(err, res, "Toggle proactive rule error:"); }
 });
 
-router.get("/automation-logs", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/automation-logs", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { type, page: pg, limit: lim } = req.query as any;
@@ -143,7 +144,7 @@ router.get("/automation-logs", requirePermission("admin:read"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Automation logs error:"); }
 });
 
-router.get("/automation-stats", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/automation-stats", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;

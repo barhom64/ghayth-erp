@@ -81,7 +81,7 @@ budgetRouter.get("/budget", authorize({ feature: "finance.budget", action: "list
   }
 });
 
-budgetRouter.get("/budget-vs-actual", requirePermission("finance:read"), async (req, res) => {
+budgetRouter.get("/budget-vs-actual", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { period } = req.query as { period?: string };
@@ -157,7 +157,7 @@ budgetRouter.post("/budget", authorize({ feature: "finance.budget", action: "cre
   }
 });
 
-budgetRouter.post("/budget/validate", requirePermission("finance:create"), async (req, res) => {
+budgetRouter.post("/budget/validate", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { accountCode, amount, period } = zodParse(validateBudgetSchema.safeParse(req.body ?? {}));
@@ -345,7 +345,7 @@ async function ensureBudgetApprovalTable() {
   `);
 }
 
-budgetRouter.post("/budget/approval-requests", requirePermission("finance:create"), async (req, res) => {
+budgetRouter.post("/budget/approval-requests", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { accountCode, period, requestedAmount, sourceType, sourceId, reason } = zodParse(createApprovalRequestSchema.safeParse(req.body ?? {}));
@@ -414,7 +414,7 @@ budgetRouter.post("/budget/approval-requests", requirePermission("finance:create
   }
 });
 
-budgetRouter.get("/budget/approval-requests", requirePermission("finance:read"), async (req, res) => {
+budgetRouter.get("/budget/approval-requests", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     await ensureBudgetApprovalTable();
@@ -506,7 +506,7 @@ budgetRouter.post("/budget/approval-requests/:id/decide", authorize({ feature: "
 // BUDGET VARIANCE REPORT — تقرير الفروقات بين الميزانية والفعلي
 // ─────────────────────────────────────────────────────────────────────────────
 
-budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (req, res) => {
+budgetRouter.get("/budget/variance", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const period = (req.query.period as string) ?? currentPeriod();
@@ -600,7 +600,7 @@ budgetRouter.get("/budget/:id", authorize({ feature: "finance.budget", action: "
   } catch (err) { handleRouteError(err, res, "Get budget detail error:"); }
 });
 
-budgetRouter.get("/fiscal-periods", requirePermission("finance:read"), async (req, res) => {
+budgetRouter.get("/fiscal-periods", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const thisYear = currentYear();
@@ -633,7 +633,7 @@ budgetRouter.get("/fiscal-periods", requirePermission("finance:read"), async (re
   }
 });
 
-budgetRouter.post("/fiscal-periods/:period/close", requirePermission("finance:create"), async (req, res) => {
+budgetRouter.post("/fiscal-periods/:period/close", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 

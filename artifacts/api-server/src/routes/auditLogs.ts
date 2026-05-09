@@ -2,10 +2,11 @@ import { handleRouteError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 
 const router = Router();
 
-router.get("/", requirePermission("audit:read"), async (req, res) => {
+router.get("/", authorize({ feature: "admin.audit", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const {
@@ -66,7 +67,7 @@ router.get("/", requirePermission("audit:read"), async (req, res) => {
   }
 });
 
-router.get("/entities", requirePermission("audit:read"), async (req, res) => {
+router.get("/entities", authorize({ feature: "admin.audit", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -80,7 +81,7 @@ router.get("/entities", requirePermission("audit:read"), async (req, res) => {
   }
 });
 
-router.get("/:entityType/:entityId", requirePermission("audit:read"), async (req, res) => {
+router.get("/:entityType/:entityId", authorize({ feature: "admin.audit", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.params;

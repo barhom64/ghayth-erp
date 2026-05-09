@@ -2,6 +2,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError, parseId, zodParse } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
@@ -24,7 +25,7 @@ const bulkActionSchema = z.object({
 
 const router = Router();
 
-router.get("/comments/:entityType/:entityId", requirePermission("operations:read"), async (req, res) => {
+router.get("/comments/:entityType/:entityId", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -42,7 +43,7 @@ router.get("/comments/:entityType/:entityId", requirePermission("operations:read
   }
 });
 
-router.post("/comments/:entityType/:entityId", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/comments/:entityType/:entityId", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const validatedBody = zodParse(createCommentSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -72,7 +73,7 @@ router.post("/comments/:entityType/:entityId", requirePermission("admin:write"),
   }
 });
 
-router.delete("/comments/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/comments/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -98,7 +99,7 @@ router.delete("/comments/:id", requirePermission("admin:write"), async (req, res
   }
 });
 
-router.get("/tags/:entityType/:entityId", requirePermission("operations:read"), async (req, res) => {
+router.get("/tags/:entityType/:entityId", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -116,7 +117,7 @@ router.get("/tags/:entityType/:entityId", requirePermission("operations:read"), 
   }
 });
 
-router.post("/tags/:entityType/:entityId", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/tags/:entityType/:entityId", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const validatedBody = zodParse(createTagSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -150,7 +151,7 @@ router.post("/tags/:entityType/:entityId", requirePermission("admin:write"), asy
   }
 });
 
-router.delete("/tags/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/tags/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -176,7 +177,7 @@ router.delete("/tags/:id", requirePermission("admin:write"), async (req, res) =>
   }
 });
 
-router.get("/tags-filter/:entityType", requirePermission("operations:read"), async (req, res): Promise<void> => {
+router.get("/tags-filter/:entityType", authorize({ feature: "projects", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -195,7 +196,7 @@ router.get("/tags-filter/:entityType", requirePermission("operations:read"), asy
   }
 });
 
-router.get("/tags-list/:entityType", requirePermission("operations:read"), async (req, res) => {
+router.get("/tags-list/:entityType", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -213,7 +214,7 @@ router.get("/tags-list/:entityType", requirePermission("operations:read"), async
   }
 });
 
-router.post("/bulk-action", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/bulk-action", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const validatedBody = zodParse(bulkActionSchema.safeParse(req.body));
     const scope = req.scope!;

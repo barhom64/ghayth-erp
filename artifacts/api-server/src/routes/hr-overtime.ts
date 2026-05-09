@@ -9,6 +9,7 @@ import { HR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
   NotFoundError,
@@ -97,7 +98,7 @@ const approvalDecisionSchema = z.object({
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime — قائمة الطلبات
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/overtime", requirePermission("hr:read"), async (req, res) => {
+router.get("/overtime", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
@@ -145,7 +146,7 @@ router.get("/overtime", requirePermission("hr:read"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime/my — طلباتي (Self-Service)
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/overtime/my", requirePermission("hr:read"), async (req, res) => {
+router.get("/overtime/my", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
@@ -166,7 +167,7 @@ router.get("/overtime/my", requirePermission("hr:read"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime/summary — ملخص شهري للربط بالرواتب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/overtime/summary", requirePermission("hr:read"), async (req, res) => {
+router.get("/overtime/summary", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
@@ -201,7 +202,7 @@ router.get("/overtime/summary", requirePermission("hr:read"), async (req, res) =
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime/:id — تفاصيل الطلب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/overtime/:id", requirePermission("hr:read"), async (req, res) => {
+router.get("/overtime/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
@@ -226,7 +227,7 @@ router.get("/overtime/:id", requirePermission("hr:read"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // POST /hr/overtime — طلب وقت إضافي
 // ═══════════════════════════════════════════════════════════════════════════════
-router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
+router.post("/overtime", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
@@ -336,7 +337,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/overtime/:id/approve — اعتماد الطلب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req, res) => {
+router.patch("/overtime/:id/approve", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const b = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
     const { approved = true, reason, notes } = b;
@@ -450,7 +451,7 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/overtime/:id/reject — رفض الطلب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req, res) => {
+router.patch("/overtime/:id/reject", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

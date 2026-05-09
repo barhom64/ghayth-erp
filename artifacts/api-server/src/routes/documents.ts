@@ -109,7 +109,7 @@ const router = Router();
 
 const objectStorageService = new ObjectStorageService();
 
-router.get("/", requirePermission("documents:read"), async (req: Request, res: Response) => {
+router.get("/", authorize({ feature: "documents", action: "list" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const { entity, entityId, category, status: docStatus } = req.query;
@@ -144,7 +144,7 @@ router.get("/", requirePermission("documents:read"), async (req: Request, res: R
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.post("/", requirePermission("documents:create"), async (req: Request, res: Response) => {
+router.post("/", authorize({ feature: "documents", action: "create" }), async (req: Request, res: Response) => {
   try {
     const body = zodParse(createDocumentSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -179,7 +179,7 @@ router.post("/", requirePermission("documents:create"), async (req: Request, res
   } catch (err) { handleRouteError(err, res, "Create document error:"); }
 });
 
-router.post("/upload", requirePermission("documents:create"), async (req: Request, res: Response) => {
+router.post("/upload", authorize({ feature: "documents", action: "create" }), async (req: Request, res: Response) => {
   try {
     const body = zodParse(uploadDocumentSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -238,7 +238,7 @@ router.post("/upload", requirePermission("documents:create"), async (req: Reques
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/:id/download", requirePermission("documents:download"), async (req: Request, res: Response) => {
+router.get("/:id/download", authorize({ feature: "documents", action: "export" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -279,7 +279,7 @@ router.get("/:id/download", requirePermission("documents:download"), async (req:
 // Used by the frontend <AttachmentPreview> component for side-panel preview
 // without leaving the current page. Same scope + permission checks as
 // /download, but skips the attachment header so browsers embed the content.
-router.get("/:id/preview", requirePermission("documents:download"), async (req: Request, res: Response) => {
+router.get("/:id/preview", authorize({ feature: "documents", action: "export" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -324,7 +324,7 @@ router.get("/:id/preview", requirePermission("documents:download"), async (req: 
 // precheck and the UPDATE to caller's company only; new versions of
 // global/system documents must be created as company-owned documents
 // via the regular create flow, not by mutating shared rows.
-router.post("/:id/versions", requirePermission("documents:create"), async (req: Request, res: Response) => {
+router.post("/:id/versions", authorize({ feature: "documents", action: "create" }), async (req: Request, res: Response) => {
   try {
     const body = zodParse(createVersionSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -371,7 +371,7 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/:id/versions", requirePermission("documents:read"), async (req: Request, res: Response) => {
+router.get("/:id/versions", authorize({ feature: "documents", action: "list" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const docId = parseId(req.params.id, "id");
@@ -389,7 +389,7 @@ router.get("/:id/versions", requirePermission("documents:read"), async (req: Req
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.patch("/:id/status", requirePermission("documents:update"), async (req: Request, res: Response) => {
+router.patch("/:id/status", authorize({ feature: "documents", action: "update" }), async (req: Request, res: Response) => {
   try {
     const body = zodParse(updateStatusSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -440,7 +440,7 @@ router.patch("/:id/status", requirePermission("documents:update"), async (req: R
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.post("/:id/entity-links", requirePermission("documents:update"), async (req: Request, res: Response) => {
+router.post("/:id/entity-links", authorize({ feature: "documents", action: "update" }), async (req: Request, res: Response) => {
   try {
     const body = zodParse(createEntityLinkSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -475,7 +475,7 @@ router.post("/:id/entity-links", requirePermission("documents:update"), async (r
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/:id/entity-links", requirePermission("documents:read"), async (req: Request, res: Response) => {
+router.get("/:id/entity-links", authorize({ feature: "documents", action: "list" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const docId = parseId(req.params.id, "id");
@@ -494,7 +494,7 @@ router.get("/:id/entity-links", requirePermission("documents:read"), async (req:
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/folders", requirePermission("documents:read"), async (req, res) => {
+router.get("/folders", authorize({ feature: "documents", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM document_folders WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
@@ -502,7 +502,7 @@ router.get("/folders", requirePermission("documents:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.post("/folders", requirePermission("documents:create"), async (req, res) => {
+router.post("/folders", authorize({ feature: "documents", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(createFolderSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -547,7 +547,7 @@ router.post("/folders", requirePermission("documents:create"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Create folder error:"); }
 });
 
-router.get("/templates", requirePermission("documents:read"), async (req, res) => {
+router.get("/templates", authorize({ feature: "documents", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -558,7 +558,7 @@ router.get("/templates", requirePermission("documents:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/templates/:id", requirePermission("documents:read"), async (req, res) => {
+router.get("/templates/:id", authorize({ feature: "documents", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -568,7 +568,7 @@ router.get("/templates/:id", requirePermission("documents:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.post("/templates", requirePermission("documents:create"), async (req, res) => {
+router.post("/templates", authorize({ feature: "documents", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(createTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -622,7 +622,7 @@ router.post("/templates", requirePermission("documents:create"), async (req, res
 // guard to "must own the template" (companyId IS NULL is always
 // rejected, regardless of isDefault) and scope the actual UPDATE /
 // DELETE / SELECT-back to the caller's company.
-router.put("/templates/:id", requirePermission("documents:update"), async (req, res) => {
+router.put("/templates/:id", authorize({ feature: "documents", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(updateTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -653,7 +653,7 @@ router.put("/templates/:id", requirePermission("documents:update"), async (req, 
   } catch (e: any) { handleRouteError(e, res, "Update document template error"); }
 });
 
-router.delete("/templates/:id", requirePermission("documents:delete"), async (req, res) => {
+router.delete("/templates/:id", authorize({ feature: "documents", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -708,7 +708,7 @@ function buildDateContext() {
   return { today: todayGregorian, todayHijri };
 }
 
-router.post("/templates/:id/generate", requirePermission("documents:read"), async (req, res) => {
+router.post("/templates/:id/generate", authorize({ feature: "documents", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -856,7 +856,7 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/templates/:id/variables", requirePermission("documents:read"), async (req, res) => {
+router.get("/templates/:id/variables", authorize({ feature: "documents", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -868,7 +868,7 @@ router.get("/templates/:id/variables", requirePermission("documents:read"), asyn
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/stats", requirePermission("documents:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "documents", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -897,7 +897,7 @@ router.get("/:id", authorize({ feature: "documents", action: "view", resource: {
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.patch("/:id", requirePermission("documents:update"), async (req, res) => {
+router.patch("/:id", authorize({ feature: "documents", action: "update" }), async (req, res) => {
   try {
     const b = zodParse(patchDocumentSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -932,7 +932,7 @@ router.patch("/:id", requirePermission("documents:update"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.delete("/:id", requirePermission("documents:delete"), async (req, res) => {
+router.delete("/:id", authorize({ feature: "documents", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

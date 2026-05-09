@@ -6,6 +6,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
@@ -124,7 +125,7 @@ export async function validateAccountingMapping(
 // ACCOUNTING MAPPINGS CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/accounting-mappings", requirePermission("finance:read"), async (req, res) => {
+router.get("/accounting-mappings", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -145,7 +146,7 @@ router.get("/accounting-mappings", requirePermission("finance:read"), async (req
   }
 });
 
-router.post("/accounting-mappings/batch", requirePermission("finance:write"), async (req, res) => {
+router.post("/accounting-mappings/batch", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const parsedBody = zodParse(batchAccountingMappingsSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -182,7 +183,7 @@ router.post("/accounting-mappings/batch", requirePermission("finance:write"), as
   }
 });
 
-router.get("/accounting-mappings/:operationType", requirePermission("finance:read"), async (req, res) => {
+router.get("/accounting-mappings/:operationType", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(
@@ -202,7 +203,7 @@ router.get("/accounting-mappings/:operationType", requirePermission("finance:rea
   }
 });
 
-router.put("/accounting-mappings/:operationType", requirePermission("finance:write"), async (req, res) => {
+router.put("/accounting-mappings/:operationType", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(updateAccountingMappingSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -268,7 +269,7 @@ router.put("/accounting-mappings/:operationType", requirePermission("finance:wri
 });
 
 // Validate mapping endpoint
-router.get("/accounting-mappings/:operationType/validate", requirePermission("finance:read"), async (req, res) => {
+router.get("/accounting-mappings/:operationType/validate", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const result = await validateAccountingMapping(scope.companyId, String(req.params.operationType));
@@ -282,7 +283,7 @@ router.get("/accounting-mappings/:operationType/validate", requirePermission("fi
 // JOURNAL ENTRY TEMPLATES CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/journal-templates", requirePermission("finance:read"), async (req, res) => {
+router.get("/journal-templates", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { operationType } = req.query as any;
@@ -320,7 +321,7 @@ router.get("/journal-templates", requirePermission("finance:read"), async (req, 
   }
 });
 
-router.post("/journal-templates", requirePermission("finance:write"), async (req, res) => {
+router.post("/journal-templates", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(createJournalTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -368,7 +369,7 @@ router.post("/journal-templates", requirePermission("finance:write"), async (req
   }
 });
 
-router.put("/journal-templates/:id", requirePermission("finance:write"), async (req, res) => {
+router.put("/journal-templates/:id", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(updateJournalTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -423,7 +424,7 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
   }
 });
 
-router.delete("/journal-templates/:id", requirePermission("finance:write"), async (req, res) => {
+router.delete("/journal-templates/:id", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -446,7 +447,7 @@ router.delete("/journal-templates/:id", requirePermission("finance:write"), asyn
 // SUBSIDIARY ACCOUNTS CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/subsidiary-accounts", requirePermission("finance:read"), async (req, res) => {
+router.get("/subsidiary-accounts", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.query as any;
@@ -471,7 +472,7 @@ router.get("/subsidiary-accounts", requirePermission("finance:read"), async (req
   }
 });
 
-router.get("/subsidiary-accounts/entity/:entityType/:entityId", requirePermission("finance:read"), async (req, res) => {
+router.get("/subsidiary-accounts/entity/:entityType/:entityId", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -491,7 +492,7 @@ router.get("/subsidiary-accounts/entity/:entityType/:entityId", requirePermissio
   }
 });
 
-router.post("/subsidiary-accounts", requirePermission("finance:write"), async (req, res) => {
+router.post("/subsidiary-accounts", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(createSubsidiaryAccountSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -520,7 +521,7 @@ router.post("/subsidiary-accounts", requirePermission("finance:write"), async (r
   }
 });
 
-router.delete("/subsidiary-accounts/:id", requirePermission("finance:write"), async (req, res) => {
+router.delete("/subsidiary-accounts/:id", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
