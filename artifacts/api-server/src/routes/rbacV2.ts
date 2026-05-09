@@ -410,13 +410,68 @@ router.post("/roles/:id/clone", authorize({ feature: "admin.roles", action: "cre
 router.get("/templates", async (req, res) => {
   try {
     const rows = await rawQuery<any>(
-      `SELECT id, role_key, label_ar, label_en, description, level, color
-         FROM rbac_roles WHERE is_template = TRUE
+      `SELECT id, role_key, label_ar, label_en, description, level, color,
+              (SELECT COUNT(*) FROM rbac_role_grants WHERE role_id = r.id) AS grant_count,
+              (SELECT COUNT(*) FROM rbac_field_policies WHERE role_id = r.id) AS field_count,
+              (SELECT COUNT(*) FROM rbac_approval_limits WHERE role_id = r.id) AS limit_count
+         FROM rbac_roles r WHERE is_template = TRUE
          ORDER BY level DESC, role_key`
     );
     res.json({ templates: rows });
   } catch (err) {
     handleRouteError(err, res, "list templates");
+  }
+});
+
+const applyTemplateSchema = z.object({
+  newRoleKey: z.string().min(1).max(80),
+  labelAr: z.string().min(1).max(200),
+});
+
+router.post("/templates/:id/apply", authorize({ feature: "admin.roles", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const templateId = Number(req.params.id);
+    const parsed = applyTemplateSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { newRoleKey, labelAr } = parsed.data;
+
+    const newId = await withTransaction(async (client) => {
+      const [tpl] = (await client.query(`SELECT * FROM rbac_roles WHERE id = $1 AND is_template = TRUE`, [templateId])).rows;
+      if (!tpl) throw new ValidationError("القالب غير موجود");
+
+      const ins = await client.query(
+        `INSERT INTO rbac_roles ("companyId", role_key, label_ar, label_en, description, level, color, is_system, is_template, "createdBy")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, FALSE, $8) RETURNING id`,
+        [scope.companyId, newRoleKey, labelAr, tpl.label_en, tpl.description, tpl.level, tpl.color, scope.userId]
+      );
+      const id = ins.rows[0].id;
+      await client.query(
+        `INSERT INTO rbac_role_grants (role_id, feature_key, actions, scope, conditions)
+         SELECT $1, feature_key, actions, scope, conditions FROM rbac_role_grants WHERE role_id = $2`,
+        [id, templateId]
+      );
+      await client.query(
+        `INSERT INTO rbac_field_policies (role_id, feature_key, field_name, mode)
+         SELECT $1, feature_key, field_name, mode FROM rbac_field_policies WHERE role_id = $2`,
+        [id, templateId]
+      );
+      await client.query(
+        `INSERT INTO rbac_approval_limits (role_id, feature_key, action, currency, max_amount, requires_dual_control)
+         SELECT $1, feature_key, action, currency, max_amount, requires_dual_control FROM rbac_approval_limits WHERE role_id = $2`,
+        [id, templateId]
+      );
+      await client.query(
+        `INSERT INTO rbac_role_history (role_id, "companyId", "changedBy", change_type, after_state, reason)
+         VALUES ($1, $2, $3, 'role.from_template', $4, $5)`,
+        [id, scope.companyId, scope.userId, JSON.stringify({ templateId, templateKey: tpl.role_key }), `instantiated from template ${tpl.role_key}`]
+      );
+      return id;
+    });
+    await bumpCacheVersion(scope.companyId);
+    res.status(201).json({ id: newId });
+  } catch (err) {
+    handleRouteError(err, res, "apply template");
   }
 });
 
