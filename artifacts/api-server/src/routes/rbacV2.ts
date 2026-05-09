@@ -354,6 +354,114 @@ router.put("/roles/:id/approval-limits", authorize({ feature: "admin.roles", act
   }
 });
 
+// ─── SoD rules CRUD (custom per-company rules) ──────────────────────────────
+const sodRuleSchema = z.object({
+  ruleKey: z.string().min(1).max(100),
+  labelAr: z.string().min(1).max(200),
+  featureA: z.string().min(1),
+  actionA: z.string().min(1),
+  featureB: z.string().min(1),
+  actionB: z.string().min(1),
+  severity: z.enum(["critical", "high", "medium", "low"]).default("high"),
+  isActive: z.boolean().default(true),
+});
+
+router.post("/sod", authorize({ feature: "admin.roles", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const parsed = sodRuleSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const { ruleKey, labelAr, featureA, actionA, featureB, actionB, severity, isActive } = parsed.data;
+
+    // Validate features exist in catalog
+    if (!FEATURE_INDEX.has(featureA)) throw new ValidationError(`الميزة "${featureA}" غير معروفة`);
+    if (!FEATURE_INDEX.has(featureB)) throw new ValidationError(`الميزة "${featureB}" غير معروفة`);
+
+    const result = await rawExecute(
+      `INSERT INTO rbac_sod_rules ("companyId", rule_key, label_ar, feature_a, action_a, feature_b, action_b, severity, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [scope.companyId, ruleKey, labelAr, featureA, actionA, featureB, actionB, severity, isActive]
+    );
+    res.status(201).json({ id: result.insertId });
+  } catch (err) {
+    handleRouteError(err, res, "create SoD rule");
+  }
+});
+
+router.patch("/sod/:id", authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const fields = ["label_ar", "feature_a", "action_a", "feature_b", "action_b", "severity", "is_active"];
+    const sets: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+    for (const f of fields) {
+      const camel = f.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+      if (req.body[camel] !== undefined) {
+        sets.push(`${f} = $${idx++}`);
+        params.push(req.body[camel]);
+      }
+    }
+    if (sets.length === 0) return void res.json({ updated: 0 });
+    params.push(id, scope.companyId);
+    await rawExecute(
+      `UPDATE rbac_sod_rules SET ${sets.join(", ")} WHERE id = $${idx++} AND ("companyId" = $${idx} OR "companyId" IS NULL)`,
+      params
+    );
+    res.json({ updated: 1 });
+  } catch (err) {
+    handleRouteError(err, res, "update SoD rule");
+  }
+});
+
+router.delete("/sod/:id", authorize({ feature: "admin.roles", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [rule] = await rawQuery<any>(`SELECT * FROM rbac_sod_rules WHERE id = $1`, [id]);
+    if (!rule) return void res.status(404).json({ error: "القاعدة غير موجودة" });
+    if (rule.companyId == null) return void res.status(403).json({ error: "لا يمكن حذف القواعد النظامية، عطّلها بدلاً من ذلك" });
+    await rawExecute(`DELETE FROM rbac_sod_rules WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    res.json({ deleted: 1 });
+  } catch (err) {
+    handleRouteError(err, res, "delete SoD rule");
+  }
+});
+
+// ─── User assignment helpers ────────────────────────────────────────────────
+router.get("/users", authorize({ feature: "admin.users", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const search = String(req.query.q || "").trim();
+    const params: any[] = [scope.companyId];
+    let where = `ea."companyId" = $1 AND ea.status = 'active'`;
+    if (search) {
+      where += ` AND (e.name ILIKE $2 OR u.email ILIKE $2 OR ea."jobTitle" ILIKE $2)`;
+      params.push(`%${search}%`);
+    }
+    const rows = await rawQuery<any>(
+      `SELECT u.id AS "userId", u.email, e.name AS "userName", e."empNumber",
+              ea.role AS legacy_role, ea."jobTitle", ea."branchId", b.name AS "branchName",
+              ea."departmentId", d.name AS "departmentName",
+              (SELECT COUNT(*)::int FROM rbac_user_roles ur
+                WHERE ur."userId" = u.id AND ur."companyId" = $1
+                  AND (ur.expires_at IS NULL OR ur.expires_at > NOW())) AS v2_role_count
+         FROM users u
+         JOIN employee_assignments ea ON ea."employeeId" = u."employeeId"
+         JOIN employees e ON e.id = u."employeeId"
+         LEFT JOIN branches b ON b.id = ea."branchId"
+         LEFT JOIN departments d ON d.id = ea."departmentId"
+        WHERE ${where}
+        ORDER BY e.name LIMIT 200`,
+      params
+    );
+    res.json({ users: rows });
+  } catch (err) {
+    handleRouteError(err, res, "list users");
+  }
+});
+
 // ─── Clone / Templates ──────────────────────────────────────────────────────
 router.post("/roles/:id/clone", authorize({ feature: "admin.roles", action: "create" }), async (req, res) => {
   try {

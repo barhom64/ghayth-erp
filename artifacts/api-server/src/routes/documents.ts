@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { Readable } from "stream";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -886,7 +887,7 @@ router.get("/stats", requirePermission("documents:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/:id", requirePermission("documents:read"), async (req, res) => {
+router.get("/:id", authorize({ feature: "documents", action: "view", resource: { table: "documents", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

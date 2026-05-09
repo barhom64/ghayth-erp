@@ -13,6 +13,7 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2, generateTimeRef } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
@@ -613,7 +614,7 @@ router.post("/units", requirePermission("property:create"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Create unit error:"); }
 });
 
-router.get("/units/:id", requirePermission("property:read"), async (req, res) => {
+router.get("/units/:id", authorize({ feature: "properties.units", action: "view", resource: { table: "property_units", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -996,7 +997,7 @@ router.get("/contracts", requirePermission("property:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Rental contracts error:"); }
 });
 
-router.get("/contracts/:id", requirePermission("property:read"), async (req, res) => {
+router.get("/contracts/:id", authorize({ feature: "properties.contracts", action: "view", resource: { table: "property_contracts", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const contractId = parseId(req.params.id, "id");
@@ -1850,7 +1851,7 @@ router.get("/payments", requirePermission("property:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Rent payments error:"); }
 });
 
-router.get("/payments/:id", requirePermission("property:read"), async (req, res): Promise<any> => {
+router.get("/payments/:id", authorize({ feature: "properties.payments", action: "view", resource: { table: "rent_payments", idParam: "id" } }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2600,7 +2601,9 @@ router.post("/tenants", requirePermission("property:create"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Create tenant error:"); }
 });
 
-router.get("/tenants/:id", requirePermission("property:read"), async (req, res) => {
+// RBAC v2: tenant detail with maskFields — nationalId/phone are
+// declared sensitive in featureCatalog so per-role policies mask them.
+router.get("/tenants/:id", authorize({ feature: "properties.tenants", action: "view", resource: { table: "tenants", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rawId = decodeURIComponent(String(req.params.id));
@@ -3243,7 +3246,7 @@ router.get("/owners", requirePermission("property:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Property owners error:"); }
 });
 
-router.get("/owners/:id", requirePermission("property:read"), async (req, res) => {
+router.get("/owners/:id", authorize({ feature: "properties", action: "view", resource: { table: "owners", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
