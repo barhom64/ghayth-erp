@@ -165,7 +165,8 @@ router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
 
     params.push(id);
     params.push(scope.companyId);
-    await rawExecute(`UPDATE business_rules SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE business_rules SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("القاعدة غير موجودة");
 
     const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
@@ -193,7 +194,8 @@ router.delete("/:id", requirePermission("admin:write"), async (req, res) => {
     if (!existing) {
       throw new NotFoundError("القاعدة غير موجودة أو لا يمكن حذف القواعد الافتراضية");
     }
-    await rawExecute(`UPDATE business_rules SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE business_rules SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("القاعدة غير موجودة");
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_business_rule",
@@ -221,7 +223,8 @@ router.patch("/:id/toggle", requirePermission("admin:write"), async (req, res) =
       throw new NotFoundError("القاعدة غير موجودة");
     }
     const newActive = !existing.isActive;
-    await rawExecute(`UPDATE business_rules SET "isActive" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [newActive, id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE business_rules SET "isActive" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [newActive, id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("القاعدة غير موجودة");
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "toggle_business_rule",

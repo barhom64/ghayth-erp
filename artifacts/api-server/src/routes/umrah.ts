@@ -403,7 +403,8 @@ router.patch("/seasons/:id", requirePermission("umrah:write"), async (req, res):
     params.push(id); params.push(scope.companyId);
     let seasonUpdateWhere = `id=$${params.length-1} AND "companyId"=$${params.length}`;
     if (originalStatus !== undefined) { params.push(originalStatus); seasonUpdateWhere += ` AND status=$${params.length}`; }
-    await rawExecute(`UPDATE umrah_seasons SET ${sets.join(",")} WHERE ${seasonUpdateWhere}`, params);
+    const { affectedRows } = await rawExecute(`UPDATE umrah_seasons SET ${sets.join(",")} WHERE ${seasonUpdateWhere}`, params);
+    if (!affectedRows) throw new NotFoundError("الموسم غير موجود");
     const [row] = await rawQuery(`SELECT * FROM umrah_seasons WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_seasons", entityId: Number(id), after: { status: b.status } }).catch((e) => logger.error(e, "umrah background task failed"));
     if (b.status) {
@@ -481,7 +482,8 @@ router.patch("/agents/:id", requirePermission("umrah:write"), async (req, res) =
     params.push(id); params.push(scope.companyId);
     let agentUpdateWhere = `id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`;
     if (originalAgentStatus !== undefined) { params.push(originalAgentStatus); agentUpdateWhere += ` AND status=$${params.length}`; }
-    await rawExecute(`UPDATE umrah_agents SET ${sets.join(",")} WHERE ${agentUpdateWhere}`, params);
+    const { affectedRows } = await rawExecute(`UPDATE umrah_agents SET ${sets.join(",")} WHERE ${agentUpdateWhere}`, params);
+    if (!affectedRows) throw new NotFoundError("الوكيل غير موجود");
     const [row] = await rawQuery(`SELECT * FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_agents", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.updated", entity: "umrah_agents", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah background task failed"));
@@ -562,7 +564,8 @@ router.patch("/packages/:id", requirePermission("umrah:write"), async (req, res)
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     sets.push(`"updatedAt"=NOW()`);
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE umrah_packages SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE umrah_packages SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("الباقة غير موجودة");
     const [row] = await rawQuery(`SELECT * FROM umrah_packages WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_packages", entityId: id, after: b }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.package.updated", entity: "umrah_packages", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah background task failed"));
@@ -771,7 +774,8 @@ router.patch("/pilgrims/:id", requirePermission("umrah:write"), async (req, res)
       }
       sets.push(`"updatedAt"=NOW()`);
       params.push(pilgrimId); params.push(scope.companyId);
-      await rawExecute(`UPDATE umrah_pilgrims SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+      const { affectedRows } = await rawExecute(`UPDATE umrah_pilgrims SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+      if (!affectedRows) throw new NotFoundError("الحاج غير موجود");
       const [row] = await rawQuery(`SELECT * FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [pilgrimId, scope.companyId]);
       if (!row) throw new NotFoundError("المعتمر غير موجود");
       createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pilgrims", entityId: pilgrimId }).catch((e) => logger.error(e, "umrah background task failed"));
@@ -1509,7 +1513,8 @@ router.patch("/transport/:id", requirePermission("umrah:write"), async (req, res
         res.json(row); return;
       }
       params.push(id); params.push(scope.companyId);
-      await rawExecute(`UPDATE umrah_transport SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+      const { affectedRows } = await rawExecute(`UPDATE umrah_transport SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+      if (!affectedRows) throw new NotFoundError("السجل غير موجود");
       const [row] = await rawQuery(`SELECT * FROM umrah_transport WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
       if (!row) throw new NotFoundError("رحلة النقل غير موجودة");
       createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_transport", entityId: id, after: b }).catch((e) => logger.error(e, "umrah background task failed"));
