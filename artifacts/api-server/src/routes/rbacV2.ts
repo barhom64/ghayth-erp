@@ -41,8 +41,8 @@ const updateRoleSchema = z.object({
   labelAr: z.string().max(200).optional(),
   labelEn: z.string().max(200).optional(),
   description: z.string().max(1000).optional(),
-  level: z.number().int().min(0).max(100).optional(),
-  parentRoleId: z.number().int().positive().nullable().optional(),
+  level: z.coerce.number().int().min(0).max(100).optional(),
+  parentRoleId: z.coerce.number().int().positive().nullable().optional(),
   color: z.string().max(20).optional(),
   isActive: z.boolean().optional(),
   roleKey: z.string().max(100).optional(),
@@ -55,9 +55,9 @@ const cloneRoleSchema = z.object({
 }).strict();
 
 const assignUserRoleSchema = z.object({
-  roleId: z.number().int().positive(),
-  branchId: z.number().int().positive().nullable().optional(),
-  departmentId: z.number().int().positive().nullable().optional(),
+  roleId: z.coerce.number().int().positive(),
+  branchId: z.coerce.number().int().positive().nullable().optional(),
+  departmentId: z.coerce.number().int().positive().nullable().optional(),
   isPrimary: z.boolean().optional(),
   expiresAt: z.string().datetime().nullable().optional(),
 }).strict();
@@ -104,8 +104,8 @@ const createRoleSchema = z.object({
   labelAr: z.string().min(1).max(200),
   labelEn: z.string().max(200).optional(),
   description: z.string().optional(),
-  level: z.number().int().min(0).max(100).optional(),
-  parentRoleId: z.number().int().nullable().optional(),
+  level: z.coerce.number().int().min(0).max(100).optional(),
+  parentRoleId: z.coerce.number().int().nullable().optional(),
   color: z.string().max(20).optional(),
 });
 
@@ -345,7 +345,7 @@ const approvalLimitsSchema = z.object({
     featureKey: z.string(),
     action: z.string(),
     currency: z.string().default("SAR"),
-    maxAmount: z.number().nullable(),
+    maxAmount: z.coerce.number().nullable(),
     requiresDualControl: z.boolean().default(false),
   })),
 });
@@ -675,7 +675,7 @@ router.get("/sod", authorize({ feature: "admin.roles", action: "view" }), async 
 
 // ─── Simulation ─────────────────────────────────────────────────────────────
 const simulateSchema = z.object({
-  userId: z.number().int().positive(),
+  userId: z.coerce.number().int().positive(),
   feature: z.string(),
   action: z.string(),
 });

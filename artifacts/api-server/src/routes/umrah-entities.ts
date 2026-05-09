@@ -541,19 +541,19 @@ router.get("/groups", authorize({ feature: "umrah", action: "list" }), async (re
 const createGroupSchema = z.object({
   nuskGroupNumber: z.string().min(1),
   name: z.string().optional(),
-  agentId: z.number().optional(),
-  subAgentId: z.number().optional(),
-  seasonId: z.number(),
-  mutamerCount: z.number().int().min(0).default(0),
-  programDuration: z.number().int().optional(),
+  agentId: z.coerce.number().optional(),
+  subAgentId: z.coerce.number().optional(),
+  seasonId: z.coerce.number(),
+  mutamerCount: z.coerce.number().int().min(0).default(0),
+  programDuration: z.coerce.number().int().optional(),
 });
 
 const patchGroupSchema = z.object({
   name: z.string().optional(),
-  agentId: z.number().optional().nullable(),
-  subAgentId: z.number().optional().nullable(),
-  mutamerCount: z.number().int().min(0).optional(),
-  programDuration: z.number().int().optional(),
+  agentId: z.coerce.number().optional().nullable(),
+  subAgentId: z.coerce.number().optional().nullable(),
+  mutamerCount: z.coerce.number().int().min(0).optional(),
+  programDuration: z.coerce.number().int().optional(),
   status: z.string().optional(),
 });
 
