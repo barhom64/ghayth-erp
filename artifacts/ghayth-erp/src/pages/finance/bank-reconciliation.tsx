@@ -43,7 +43,7 @@ export default function BankReconciliationPage() {
   const autoMatchMutation = useApiMutation("/finance/bank-reconciliation/auto-match", "POST");
 
   if (batchesLoading) return <LoadingSpinner />;
-  if (batchesError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (batchesError) return <ErrorState />;
 
   function parseCSVLine(line: string): string[] {
     const result: string[] = [];

@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UpcomingEventsWidget } from "@/components/shared/upcoming-events-widget";
+import { PromptDialog } from "@/components/shared/prompt-dialog";
 
 function formatTimeAgo(timestamp: string): string {
   const now = Date.now();
@@ -73,6 +74,11 @@ export default function ActionCenter() {
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const [activeTab, setActiveTab] = useState<TabKey>("leaves");
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  const [pendingPrompt, setPendingPrompt] = useState<
+    | { kind: "workflow"; id: number; decision: "reject" | "return" }
+    | { kind: "approval"; tab: TabKey; id: number }
+    | null
+  >(null);
   const { toast } = useToast();
 
   const workflowMut = useApiMutation<any, { url: string; notes?: string }>(
@@ -95,18 +101,7 @@ export default function ActionCenter() {
 
   type WorkflowDecision = "approve" | "reject" | "return";
 
-  const handleWorkflowDecision = async (id: number, decision: WorkflowDecision) => {
-    let notes: string | undefined;
-    if (decision !== "approve") {
-      const prompt = decision === "reject" ? "سبب الرفض:" : "سبب الإرجاع للتعديل:";
-      const reason = window.prompt(prompt);
-      if (!reason || reason.trim() === "") {
-        toast({ title: "تنبيه", description: decision === "reject" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع", variant: "destructive" });
-        return;
-      }
-      notes = reason.trim();
-    }
-
+  const runWorkflow = (id: number, decision: WorkflowDecision, notes?: string) => {
     const key = `workflows-${id}`;
     setProcessingIds((prev) => new Set(prev).add(key));
 
@@ -126,19 +121,28 @@ export default function ActionCenter() {
     );
   };
 
+  const handleWorkflowDecision = (id: number, decision: WorkflowDecision) => {
+    if (decision === "approve") {
+      runWorkflow(id, "approve");
+      return;
+    }
+    setPendingPrompt({ kind: "workflow", id, decision });
+  };
+
   const handleApproval = (tab: TabKey, id: number, approved: boolean) => {
     const endpoint = approvalEndpoints[tab];
     if (!endpoint) return;
 
-    let notes: string | undefined;
     if (!approved) {
-      const reason = window.prompt("سبب الرفض:");
-      if (!reason || reason.trim() === "") {
-        toast({ title: "تنبيه", description: "يجب ذكر سبب الرفض", variant: "destructive" });
-        return;
-      }
-      notes = reason.trim();
+      setPendingPrompt({ kind: "approval", tab, id });
+      return;
     }
+    runApproval(tab, id, true);
+  };
+
+  const runApproval = (tab: TabKey, id: number, approved: boolean, notes?: string) => {
+    const endpoint = approvalEndpoints[tab];
+    if (!endpoint) return;
 
     const key = `${tab}-${id}`;
     setProcessingIds((prev) => new Set(prev).add(key));
@@ -166,7 +170,7 @@ export default function ActionCenter() {
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const summary = data?.summary || {};
   const pendingLeaves = data?.pendingLeaves || [];
@@ -654,6 +658,35 @@ export default function ActionCenter() {
           </Card>
         )}
       </div>
+      <PromptDialog
+        open={pendingPrompt !== null}
+        title={
+          pendingPrompt?.kind === "workflow" && pendingPrompt.decision === "return"
+            ? "إرجاع المعاملة للتعديل"
+            : "رفض المعاملة"
+        }
+        description={
+          pendingPrompt?.kind === "workflow" && pendingPrompt.decision === "return"
+            ? "يرجى إدخال سبب الإرجاع للتعديل."
+            : "يرجى إدخال سبب الرفض."
+        }
+        confirmLabel={
+          pendingPrompt?.kind === "workflow" && pendingPrompt.decision === "return"
+            ? "تأكيد الإرجاع"
+            : "تأكيد الرفض"
+        }
+        onSubmit={(reason) => {
+          if (!pendingPrompt) return;
+          const current = pendingPrompt;
+          setPendingPrompt(null);
+          if (current.kind === "workflow") {
+            runWorkflow(current.id, current.decision, reason);
+          } else {
+            runApproval(current.tab, current.id, false, reason);
+          }
+        }}
+        onClose={() => setPendingPrompt(null)}
+      />
     </PageShell>
   );
 }

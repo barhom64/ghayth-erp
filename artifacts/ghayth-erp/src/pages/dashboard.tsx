@@ -319,7 +319,7 @@ export default function Dashboard() {
   const { data: suggestionsResp } = useApiQuery<any>(["intelligence-suggestions"], "/intelligence/suggestions", roleLevel >= 40);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const cards = cmdCenter?.cards || {};
   const todayTasks = cmdCenter?.todayTasks || [];

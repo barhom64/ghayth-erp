@@ -45,7 +45,7 @@ export function CommunicationChannelsTab() {
   }, [data]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleSave = async (entries: Record<string, string>, secretFields?: { key: string; configured: boolean }[]) => {
     setSaving(true);

@@ -406,7 +406,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", authorize({ feature: "finance", action
     );
 
     const [invoice] = await rawQuery<any>(
-      `SELECT i.*, c.name AS "clientName", c."taxNumber" AS "clientVat",
+      `SELECT i.*, c.name AS "clientName", NULL AS "clientVat",
               b.name AS "branchName", b."taxNumber" AS "branchVat"
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
@@ -424,8 +424,8 @@ zatcaRouter.get("/zatca/invoice/:id/xml", authorize({ feature: "finance", action
       [id]
     );
 
-    const issueDate = toDateISO(invoice.createdAt);
-    const issueTime = new Date(invoice.createdAt).toISOString().split("T")[1].substring(0, 8);
+    const issueDate = toDateISO(invoice.createdAt || new Date());
+    const issueTime = new Date(invoice.createdAt || new Date()).toISOString().split("T")[1].substring(0, 8);
 
     let uuid = invoice.zatcaUuid;
     if (!uuid) {
@@ -497,7 +497,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", authorize({ feature: "finance", ac
     }
 
     const [invoice] = await rawQuery<any>(
-      `SELECT i.*, c.name AS "clientName", c."taxNumber" AS "clientVat",
+      `SELECT i.*, c.name AS "clientName", NULL AS "clientVat",
               b.name AS "branchName", b."taxNumber" AS "branchVat"
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
@@ -519,8 +519,8 @@ zatcaRouter.post("/zatca/invoice/:id/submit", authorize({ feature: "finance", ac
       [id]
     );
 
-    const issueDate = toDateISO(invoice.createdAt);
-    const issueTime = new Date(invoice.createdAt).toISOString().split("T")[1].substring(0, 8);
+    const issueDate = toDateISO(invoice.createdAt || new Date());
+    const issueTime = new Date(invoice.createdAt || new Date()).toISOString().split("T")[1].substring(0, 8);
     const uuid = invoice.zatcaUuid || crypto.randomUUID();
 
     const xml = generateZatcaXml({
@@ -697,7 +697,7 @@ zatcaRouter.get("/zatca/submissions", authorize({ feature: "finance", action: "l
     const scope = req.scope!;
 
     const { page = "1", limit: lim = "20", status = "" } = req.query as any;
-    const safeLim = Number(lim) || 50;
+    const safeLim = Math.min(Number(lim) || 50, 500);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLim;
 
     let whereExtra = "";

@@ -49,13 +49,19 @@ export interface ButtonProps
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
   /**
-   * Task #169 — when true, the button subscribes to the global
-   * rate-limit cooldown and:
+   * When true, the button subscribes to the global rate-limit cooldown and:
    *   • disables itself while the cooldown is active
    *   • replaces its children with "حاول بعد N ثانية…" (with a Clock
-   *     icon) so the customer sees exactly when they may retry
-   * Cleared automatically when the countdown reaches zero. Mirrors the
-   * main app's Task #155 implementation.
+   *     icon) so the user sees exactly when they may retry
+   * Cleared automatically when the countdown reaches zero. This is the
+   * one-line opt-in for high-traffic save / search / submit buttons
+   * across finance / hr / properties / fleet pages.
+   *
+   * Implementation note: rendered through one of two thin sibling
+   * components (RateLimitAwareNativeButton, RateLimitAwareSlotButton)
+   * depending on `asChild`, so non-opted-in buttons pay zero subscription
+   * cost and don't re-render every cooldown tick. Splitting by render
+   * mode keeps both branches strictly typed without `as any` casts.
    */
   rateLimitAware?: boolean
 }

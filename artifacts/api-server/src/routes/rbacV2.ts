@@ -32,10 +32,35 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { bumpCacheVersion, checkAccess } from "../lib/rbac/authzEngine.js";
 import { FEATURE_CATALOG, FEATURE_INDEX } from "../lib/rbac/featureCatalog.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, parseId, zodParse } from "../lib/errorHandler.js";
 
 const router = Router();
 router.use(authMiddleware);
+
+const updateRoleSchema = z.object({
+  labelAr: z.string().max(200).optional(),
+  labelEn: z.string().max(200).optional(),
+  description: z.string().max(1000).optional(),
+  level: z.number().int().min(0).max(100).optional(),
+  parentRoleId: z.number().int().positive().nullable().optional(),
+  color: z.string().max(20).optional(),
+  isActive: z.boolean().optional(),
+  roleKey: z.string().max(100).optional(),
+}).strict();
+
+const cloneRoleSchema = z.object({
+  newRoleKey: z.string().min(1).max(100),
+  labelAr: z.string().min(1).max(200),
+  asTemplate: z.boolean().optional(),
+}).strict();
+
+const assignUserRoleSchema = z.object({
+  roleId: z.number().int().positive(),
+  branchId: z.number().int().positive().nullable().optional(),
+  departmentId: z.number().int().positive().nullable().optional(),
+  isPrimary: z.boolean().optional(),
+  expiresAt: z.string().datetime().nullable().optional(),
+}).strict();
 
 // ─── Catalog (read-only, anyone authenticated) ──────────────────────────────
 router.get("/features", async (req, res) => {
@@ -109,10 +134,11 @@ router.post("/roles", authorize({ feature: "admin.roles", action: "create" }), a
 router.patch("/roles/:id", authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(updateRoleSchema.safeParse(req.body));
     const [before] = await rawQuery<any>(`SELECT * FROM rbac_roles WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     if (!before) return void res.status(404).json({ error: "الدور غير موجود" });
-    if (before.is_system && req.body.role_key && req.body.role_key !== before.role_key) {
+    if (before.is_system && b.roleKey && b.roleKey !== before.role_key) {
       return void res.status(403).json({ error: "لا يمكن تغيير مفتاح دور نظامي" });
     }
 
@@ -122,9 +148,9 @@ router.patch("/roles/:id", authorize({ feature: "admin.roles", action: "update" 
     let idx = 1;
     for (const f of fields) {
       const camel = f.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-      if (req.body[camel] !== undefined) {
+      if ((b as any)[camel] !== undefined) {
         sets.push(`${f} = $${idx++}`);
-        params.push(req.body[camel]);
+        params.push((b as any)[camel]);
       }
     }
     if (sets.length === 0) return void res.json({ updated: 0 });
@@ -145,7 +171,7 @@ router.patch("/roles/:id", authorize({ feature: "admin.roles", action: "update" 
 router.delete("/roles/:id", authorize({ feature: "admin.roles", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [role] = await rawQuery<any>(`SELECT * FROM rbac_roles WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     if (!role) return void res.status(404).json({ error: "الدور غير موجود" });
     if (role.is_system) return void res.status(403).json({ error: "لا يمكن حذف الأدوار النظامية" });
@@ -166,7 +192,7 @@ router.delete("/roles/:id", authorize({ feature: "admin.roles", action: "delete"
 router.get("/roles/:id/grants", authorize({ feature: "admin.roles", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [{ count }] = await rawQuery<{ count: string }>(`SELECT COUNT(*)::text AS count FROM rbac_roles WHERE id = $1 AND ("companyId" = $2 OR is_template)`, [id, scope.companyId]);
     if (Number(count) === 0) return void res.status(404).json({ error: "الدور غير موجود" });
 
@@ -192,7 +218,7 @@ const grantsSchema = z.object({
 router.put("/roles/:id/grants", authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const parsed = grantsSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError("بيانات الصلاحيات غير صالحة");
 
@@ -238,7 +264,7 @@ router.put("/roles/:id/grants", authorize({ feature: "admin.roles", action: "upd
 router.get("/roles/:id/field-policies", authorize({ feature: "admin.roles", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [{ count }] = await rawQuery<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM rbac_roles WHERE id = $1 AND ("companyId" = $2 OR is_template)`,
       [id, scope.companyId]
@@ -265,7 +291,7 @@ const fieldPoliciesSchema = z.object({
 router.put("/roles/:id/field-policies", authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const parsed = fieldPoliciesSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError("بيانات سياسة الحقول غير صالحة");
 
@@ -297,7 +323,7 @@ router.put("/roles/:id/field-policies", authorize({ feature: "admin.roles", acti
 router.get("/roles/:id/approval-limits", authorize({ feature: "admin.roles", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [{ count }] = await rawQuery<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM rbac_roles WHERE id = $1 AND ("companyId" = $2 OR is_template)`,
       [id, scope.companyId]
@@ -327,7 +353,7 @@ const approvalLimitsSchema = z.object({
 router.put("/roles/:id/approval-limits", authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const parsed = approvalLimitsSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError("بيانات سقوف الاعتماد غير صالحة");
 
@@ -391,7 +417,7 @@ router.post("/sod", authorize({ feature: "admin.roles", action: "create" }), asy
 router.patch("/sod/:id", authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const fields = ["label_ar", "feature_a", "action_a", "feature_b", "action_b", "severity", "is_active"];
     const sets: string[] = [];
     const params: any[] = [];
@@ -418,7 +444,7 @@ router.patch("/sod/:id", authorize({ feature: "admin.roles", action: "update" })
 router.delete("/sod/:id", authorize({ feature: "admin.roles", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [rule] = await rawQuery<any>(`SELECT * FROM rbac_sod_rules WHERE id = $1`, [id]);
     if (!rule) return void res.status(404).json({ error: "القاعدة غير موجودة" });
     if (rule.companyId == null) return void res.status(403).json({ error: "لا يمكن حذف القواعد النظامية، عطّلها بدلاً من ذلك" });
@@ -466,9 +492,8 @@ router.get("/users", authorize({ feature: "admin.users", action: "list" }), asyn
 router.post("/roles/:id/clone", authorize({ feature: "admin.roles", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const sourceId = Number(req.params.id);
-    const { newRoleKey, labelAr, asTemplate } = req.body || {};
-    if (!newRoleKey || !labelAr) throw new ValidationError("newRoleKey و labelAr مطلوبان");
+    const sourceId = parseId(req.params.id, "id");
+    const { newRoleKey, labelAr, asTemplate } = zodParse(cloneRoleSchema.safeParse(req.body));
 
     await withTransaction(async (client) => {
       const [src] = (await client.query(`SELECT * FROM rbac_roles WHERE id = $1`, [sourceId])).rows;
@@ -539,7 +564,7 @@ const applyTemplateSchema = z.object({
 router.post("/templates/:id/apply", authorize({ feature: "admin.roles", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const templateId = Number(req.params.id);
+    const templateId = parseId(req.params.id, "id");
     const parsed = applyTemplateSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     const { newRoleKey, labelAr } = parsed.data;
@@ -587,7 +612,7 @@ router.post("/templates/:id/apply", authorize({ feature: "admin.roles", action: 
 router.get("/roles/:id/history", authorize({ feature: "admin.roles", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const rows = await rawQuery<any>(
       `SELECT h.id, h."changedBy", h.change_type, h.before_state, h.after_state, h.reason, h."createdAt",
               COALESCE(e.name, u.email) AS "changedByName"
@@ -689,7 +714,7 @@ router.post("/simulate", authorize({ feature: "admin.roles", action: "view" }), 
 router.get("/users/:userId/effective", authorize({ feature: "admin.roles", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const userId = Number(req.params.userId);
+    const userId = parseId(req.params.userId, "userId");
     const [target] = await rawQuery<any>(
       `SELECT u.id, u."employeeId", e.name AS "userName", ea."companyId", ea."branchId",
               ea."departmentId", ea.role, jt.name AS "jobTitle"
@@ -760,7 +785,7 @@ router.get("/users/:userId/effective", authorize({ feature: "admin.roles", actio
 router.get("/users/:userId/roles", authorize({ feature: "admin.roles", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const userId = Number(req.params.userId);
+    const userId = parseId(req.params.userId, "userId");
     const rows = await rawQuery<any>(
       `SELECT ur.id, ur.role_id, ur."branchId", ur."departmentId", ur.is_primary, ur.expires_at,
               r.role_key, r.label_ar, r.color, r.level
@@ -778,9 +803,8 @@ router.get("/users/:userId/roles", authorize({ feature: "admin.roles", action: "
 router.post("/users/:userId/roles", authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const userId = Number(req.params.userId);
-    const { roleId, branchId, departmentId, isPrimary, expiresAt } = req.body || {};
-    if (!roleId) throw new ValidationError("roleId مطلوب");
+    const userId = parseId(req.params.userId, "userId");
+    const { roleId, branchId, departmentId, isPrimary, expiresAt } = zodParse(assignUserRoleSchema.safeParse(req.body));
 
     await rawExecute(
       `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, "branchId", "departmentId", is_primary, expires_at, "assignedBy")
@@ -802,7 +826,7 @@ router.delete("/users/:userId/roles/:roleId", authorize({ feature: "admin.roles"
     const scope = req.scope!;
     await rawExecute(
       `DELETE FROM rbac_user_roles WHERE "userId" = $1 AND role_id = $2 AND "companyId" = $3`,
-      [Number(req.params.userId), Number(req.params.roleId), scope.companyId]
+      [parseId(req.params.userId, "userId"), parseId(req.params.roleId, "roleId"), scope.companyId]
     );
     await bumpCacheVersion(scope.companyId);
     res.json({ ok: true });

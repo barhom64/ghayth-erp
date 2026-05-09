@@ -36,7 +36,7 @@ export default function PropertiesBuildings() {
   );
   const buildings = asList(buildingsResp);
 
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const filtered = applyFilters(buildings, filters, {
     searchFields: ["name", "address", "city"],

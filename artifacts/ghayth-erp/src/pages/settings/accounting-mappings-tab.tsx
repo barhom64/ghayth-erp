@@ -19,7 +19,7 @@ export function AccountingMappingsTab() {
   const [saving, setSaving] = useState<string | null>(null);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const postingAccounts = accounts.filter((a: any) => a.allowPosting !== false);
 

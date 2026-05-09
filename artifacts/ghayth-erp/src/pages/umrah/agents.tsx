@@ -98,7 +98,7 @@ export default function UmrahAgents() {
   }
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const activeCount = items.filter((a: any) => a.status === "active").length;
   const kpiCards = [

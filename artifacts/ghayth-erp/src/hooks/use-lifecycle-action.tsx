@@ -1,7 +1,18 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ApiError, apiFetch, getErrorMessage } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 /**
  * useLifecycleAction — P1.5 of the unification plan (docs/UNIFICATION_PLAN.md).
@@ -67,7 +78,7 @@ export interface LifecycleActionOptions {
 
 export interface RunOptions {
   /**
-   * When true, prompts the user for a reason via `window.prompt` before
+   * When true, opens an AlertDialog asking the user for a reason before
    * calling the endpoint. The reason is sent as `{ reason }` in the body.
    * Use for reject / cancel / return transitions where the server requires
    * a justification.
@@ -75,10 +86,28 @@ export interface RunOptions {
   requireReason?: boolean;
   /** Extra body fields merged into the POST. */
   body?: Record<string, unknown>;
-  /** Prompt text when `requireReason` is true. */
+  /** Dialog title when `requireReason` is true. Defaults to "السبب مطلوب". */
+  reasonTitle?: string;
+  /**
+   * Dialog body text when `requireReason` is true.
+   * Defaults to "يرجى إدخال السبب لإكمال العملية:".
+   */
   reasonPrompt?: string;
   /** Override the success toast title for this specific action. */
   successMessage?: string;
+}
+
+/**
+ * Internal state describing whether the reason-prompt dialog should be open.
+ * The hook exposes `reasonDialog` (JSX) so callers just drop it into their
+ * tree once and the dialog manages its own state.
+ */
+interface ReasonDialogState {
+  open: boolean;
+  title: string;
+  prompt: string;
+  /** Resolves with the entered reason, or null when the user cancels. */
+  resolve: ((value: string | null) => void) | null;
 }
 
 export interface LifecycleHandle {
@@ -88,6 +117,12 @@ export interface LifecycleHandle {
   pending: boolean;
   /** The last error (if any) — cleared on the next successful run. */
   lastError: Error | null;
+  /**
+   * JSX node that renders the reason-prompt dialog. Drop it into the page
+   * once (anywhere — it's positioned via portal) and `run("reject", { requireReason: true })`
+   * will open it automatically.
+   */
+  reasonDialog: React.ReactNode;
 }
 
 export function useLifecycleAction(
@@ -96,15 +131,35 @@ export function useLifecycleAction(
   const qc = useQueryClient();
   const [pending, setPending] = useState(false);
   const [lastError, setLastError] = useState<Error | null>(null);
+  const [reasonState, setReasonState] = useState<ReasonDialogState>({
+    open: false,
+    title: "السبب مطلوب",
+    prompt: "يرجى إدخال السبب لإكمال العملية:",
+    resolve: null,
+  });
+  const reasonInputRef = useRef<HTMLTextAreaElement>(null);
+
+  const askReason = (title: string, prompt: string): Promise<string | null> =>
+    new Promise<string | null>((resolve) => {
+      setReasonState({ open: true, title, prompt, resolve });
+    });
+
+  const closeReason = (value: string | null) => {
+    setReasonState((prev) => {
+      prev.resolve?.(value);
+      return { ...prev, open: false, resolve: null };
+    });
+  };
 
   const run = async (action: string, runOptions: RunOptions = {}): Promise<unknown> => {
     if (pending) return;
 
     let reason: string | undefined;
     if (runOptions.requireReason) {
-      const promptText =
-        runOptions.reasonPrompt ?? "يرجى إدخال السبب:";
-      const answer = window.prompt(promptText);
+      const answer = await askReason(
+        runOptions.reasonTitle ?? "السبب مطلوب",
+        runOptions.reasonPrompt ?? "يرجى إدخال السبب لإكمال العملية:",
+      );
       if (answer === null) return; // user cancelled
       if (!answer.trim()) {
         toast({
@@ -170,7 +225,38 @@ export function useLifecycleAction(
     }
   };
 
-  return { run, pending, lastError };
+  const reasonDialog = (
+    <AlertDialog
+      open={reasonState.open}
+      onOpenChange={(open) => {
+        if (!open) closeReason(null);
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{reasonState.title}</AlertDialogTitle>
+          <AlertDialogDescription>{reasonState.prompt}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <Textarea
+          ref={reasonInputRef}
+          autoFocus
+          rows={3}
+          placeholder="اكتب السبب هنا..."
+          dir="rtl"
+        />
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => closeReason(null)}>إلغاء</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => closeReason(reasonInputRef.current?.value ?? "")}
+          >
+            تأكيد
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
+  return { run, pending, lastError, reasonDialog };
 }
 
 /**

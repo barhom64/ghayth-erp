@@ -47,7 +47,7 @@ export default function IntercompanyPage() {
   const companies = companiesData?.data ?? companiesData ?? [];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

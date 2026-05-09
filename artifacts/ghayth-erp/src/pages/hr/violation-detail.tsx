@@ -206,7 +206,7 @@ export default function ViolationDetail() {
       entityId={Number(id)}
       isLoading={isLoading}
       error={isError ? true : undefined}
-      onRetry={() => window.location.reload()}
+     
       createdAt={item?.createdAt}
       overview={overviewContent}
       actions={

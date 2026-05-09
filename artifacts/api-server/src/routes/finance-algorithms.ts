@@ -1056,7 +1056,7 @@ financeAlgorithmsRouter.get("/rounding-account", authorize({ feature: "finance",
   try {
     const scope = req.scope!;
     const [account] = await rawQuery<any>(
-      `SELECT * FROM chart_of_accounts WHERE "companyId"=$1 AND (code='9999' OR name LIKE '%تقريب%') ORDER BY code LIMIT 1`,
+      `SELECT * FROM chart_of_accounts WHERE "companyId"=$1 AND (code='9999' OR name LIKE '%تقريب%') AND "deletedAt" IS NULL ORDER BY code LIMIT 1`,
       [scope.companyId]
     );
     res.json({ account: account ?? null });
@@ -1071,7 +1071,7 @@ financeAlgorithmsRouter.post("/rounding-account/setup", authorize({ feature: "fi
     assertFinanceRole(scope);
 
     const [existing] = await rawQuery<any>(
-      `SELECT * FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999'`,
+      `SELECT * FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' AND "deletedAt" IS NULL`,
       [scope.companyId]
     );
     if (existing) {
@@ -1106,7 +1106,7 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", authorize({ feature:
     }
 
     const [roundingAcc] = await rawQuery<any>(
-      `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' LIMIT 1`,
+      `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' AND "deletedAt" IS NULL LIMIT 1`,
       [scope.companyId]
     );
     if (!roundingAcc) {
@@ -1192,7 +1192,7 @@ financeAlgorithmsRouter.get("/fx/rates", authorize({ feature: "finance", action:
     await ensureFxTables();
     const { from, to, type } = req.query as any;
     const params: any[] = [scope.companyId];
-    let where = `"companyId"=$1`;
+    let where = `"companyId"=$1 AND "deletedAt" IS NULL`;
     if (from) { params.push(from); where += ` AND "fromCurrency"=$${params.length}`; }
     if (to) { params.push(to); where += ` AND "toCurrency"=$${params.length}`; }
     if (type) { params.push(type); where += ` AND source=$${params.length}`; }

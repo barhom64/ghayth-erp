@@ -70,7 +70,7 @@ export function WorkflowDefinitionsTab() {
   ];
 
   if (isLoading) return <DataTable columns={slaColumns} data={[]} isLoading={true} searchPlaceholder={null} noToolbar />;
-  if (isError) return <DataTable columns={slaColumns} data={[]} isError={true} onRetry={() => window.location.reload()} searchPlaceholder={null} noToolbar />;
+  if (isError) return <DataTable columns={slaColumns} data={[]} isError={true} searchPlaceholder={null} noToolbar />;
 
   const resetForm = () => {
     setForm({

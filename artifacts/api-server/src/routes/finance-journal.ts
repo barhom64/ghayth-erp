@@ -460,9 +460,10 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
       });
     }
 
-    const baseAmount = roundTo2(Number(amount));
-    const vatRateVal = rawVatRate != null ? Number(rawVatRate) : 0;
-    const computedVat = roundTo2(rawVatAmount != null ? Number(rawVatAmount) : computeVat(baseAmount, vatRateVal));
+    const baseAmount = roundTo2(Number(amount) || 0);
+    if (!baseAmount || isNaN(baseAmount)) throw new ValidationError("المبلغ غير صالح", { field: "amount" });
+    const vatRateVal = rawVatRate != null ? (Number(rawVatRate) || 0) : 0;
+    const computedVat = roundTo2(rawVatAmount != null ? (Number(rawVatAmount) || 0) : computeVat(baseAmount, vatRateVal));
     const totalWithVat = roundTo2(baseAmount + computedVat);
 
     let finalDescription = description;
@@ -747,9 +748,10 @@ journalRouter.post("/vouchers", authorize({ feature: "finance", action: "create"
       );
     }
 
-    const baseAmount = roundTo2(Number(amount));
-    const vatRateVal = rawVatRate != null ? Number(rawVatRate) : 0;
-    const computedVat = roundTo2(rawVatAmount != null ? Number(rawVatAmount) : computeVat(baseAmount, vatRateVal));
+    const baseAmount = roundTo2(Number(amount) || 0);
+    if (!baseAmount || isNaN(baseAmount)) throw new ValidationError("المبلغ غير صالح", { field: "amount" });
+    const vatRateVal = rawVatRate != null ? (Number(rawVatRate) || 0) : 0;
+    const computedVat = roundTo2(rawVatAmount != null ? (Number(rawVatAmount) || 0) : computeVat(baseAmount, vatRateVal));
     const totalWithVat = roundTo2(baseAmount + computedVat);
 
     const isReceipt = type === "receipt";
@@ -1085,7 +1087,7 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance", actio
 
     const originalLines = await rawQuery<any>(
       `SELECT "accountCode", debit, credit, description, "costCenter", "departmentId", "projectId", "employeeId"
-       FROM journal_lines WHERE "journalId" = $1 ORDER BY id ASC`,
+       FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL ORDER BY id ASC`,
       [id]
     );
     if (originalLines.length === 0) {

@@ -507,7 +507,7 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
     if (!shift) {
       const [defaultShift] = await rawQuery<any>(
         `SELECT id, "startTime", "endTime", days, "shiftType", "remoteAllowed", "flexStartEarliest", "flexStartLatest" FROM shifts
-         WHERE "companyId" = $1 AND status = 'active'
+         WHERE "companyId" = $1 AND status = 'active' AND "deletedAt" IS NULL
          ORDER BY "isDefault" DESC LIMIT 1`,
         [scope.companyId]
       );
@@ -853,7 +853,7 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     } else {
       const [defaultShift] = await rawQuery<any>(
         `SELECT "endTime", "startTime" FROM shifts
-         WHERE "companyId" = $1 AND status = 'active'
+         WHERE "companyId" = $1 AND status = 'active' AND "deletedAt" IS NULL
          ORDER BY "isDefault" DESC LIMIT 1`,
         [scope.companyId]
       );
@@ -1120,7 +1120,7 @@ router.get("/attendance/:id", authorize({ feature: "hr", action: "list" }), asyn
        FROM attendance a
        JOIN employee_assignments ea ON ea.id = a."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
-       WHERE a.id = $1 AND a."companyId" = $2`,
+       WHERE a.id = $1 AND a."companyId" = $2 AND a."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("سجل الحضور غير موجود");
@@ -1351,7 +1351,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
       `SELECT SUM(LEAST("endDate"::date, $2::date) - GREATEST("startDate"::date, $1::date) + 1) AS "holidayDays"
        FROM public_holidays
        WHERE "companyId"=$3
-         AND "startDate" <= $2::date AND "endDate" >= $1::date`,
+         AND "startDate" <= $2::date AND "endDate" >= $1::date AND "deletedAt" IS NULL`,
       [startDate, endDate, scope.companyId]
     );
     const holidayDays = Math.max(0, Number(holidayOverlap[0]?.holidayDays ?? 0));
@@ -1597,7 +1597,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
         `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
          FROM approval_chains ac
          JOIN approval_chain_steps acs ON acs."chainId" = ac.id
-         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true
+         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true AND ac."deletedAt" IS NULL
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
@@ -1625,6 +1625,19 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
          )`,
         [scope.companyId, scope.employeeId, scope.activeAssignmentId, leaveTypeId, year, entitled]
       );
+      const balLock = await client.query(
+        `SELECT entitled, used, reserved FROM hr_leave_balances
+         WHERE "companyId" = $1 AND "employeeId" = $2 AND "leaveTypeId" = $3 AND year = $4
+         FOR UPDATE`,
+        [scope.companyId, scope.employeeId, leaveTypeId, year]
+      );
+      if (balLock.rows[0]) {
+        const r = balLock.rows[0];
+        const rem = Math.max(0, Number(r.entitled) - Number(r.used) - Number(r.reserved));
+        if (rem < days) {
+          throw new ConflictError(`رصيد الإجازة غير كافٍ. المتبقي: ${rem} يوم، المطلوب: ${days} يوم`, { field: "days" });
+        }
+      }
       await client.query(
         `UPDATE hr_leave_balances
          SET reserved = reserved + $1
@@ -1732,7 +1745,7 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr", action: "
       `SELECT lr.*, lt.name AS "leaveTypeName"
        FROM hr_leave_requests lr
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-       WHERE lr.id = $1 AND lr."companyId" = $2`,
+       WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!request) throw new NotFoundError("الطلب غير موجود");
@@ -1908,7 +1921,7 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr", action: "
         `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
          FROM approval_chains ac
          JOIN approval_chain_steps acs ON acs."chainId" = ac.id
-         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true
+         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true AND ac."deletedAt" IS NULL
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
@@ -2155,7 +2168,7 @@ router.get("/leave-requests/:id/stages", authorize({ feature: "hr", action: "lis
         `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
          FROM approval_chains ac
          JOIN approval_chain_steps acs ON acs."chainId" = ac.id
-         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true
+         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true AND ac."deletedAt" IS NULL
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
@@ -2185,7 +2198,7 @@ router.patch("/leave-requests/:id/escalate", authorize({ feature: "hr", action: 
     }
 
     const [request] = await rawQuery<any>(
-      `SELECT * FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
+      `SELECT * FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!request) {
@@ -2220,14 +2233,6 @@ router.patch("/leave-requests/:id/escalate", authorize({ feature: "hr", action: 
       );
     }
 
-    // Stage has expired – mark it and escalate
-    await rawExecute(
-      `UPDATE leave_approval_stages
-       SET status = 'escalated'
-       WHERE "leaveRequestId" = $1 AND status = 'pending' AND "expiresAt" < NOW()`,
-      [id]
-    );
-
     const [hrAssignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments
        WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active'
@@ -2237,11 +2242,18 @@ router.patch("/leave-requests/:id/escalate", authorize({ feature: "hr", action: 
     if (hrAssignment) {
       const escalateExpiresAt = new Date();
       escalateExpiresAt.setHours(escalateExpiresAt.getHours() + 24);
-      await rawExecute(
-        `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
-         VALUES ($1,99,'hr_manager',$2,$3)`,
-        [id, hrAssignment.id, escalateExpiresAt.toISOString()]
-      );
+      await withTransaction(async (client) => {
+        await client.query(
+          `UPDATE leave_approval_stages SET status = 'escalated'
+           WHERE "leaveRequestId" = $1 AND status = 'pending' AND "expiresAt" < NOW()`,
+          [id]
+        );
+        await client.query(
+          `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
+           VALUES ($1,99,'hr_manager',$2,$3)`,
+          [id, hrAssignment.id, escalateExpiresAt.toISOString()]
+        );
+      });
 
       createNotification({
         companyId: scope.companyId, assignmentId: hrAssignment.id,
@@ -2474,7 +2486,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     );
     const gosiSettingsMap = new Map(gosiSettings.map((r) => [r.key, r.value]));
     const gosiComponent = salaryComponents.find((c: any) => c.isGosi && c.type === 'deduction');
-    const GOSI_EMPLOYEE_RATE = gosiComponent
+    const GOSI_EMPLOYEE_RATE = gosiComponent && Number(gosiComponent.value) > 0
       ? Number(gosiComponent.value) / 100
       : Number(gosiSettingsMap.get("gosiEmployeeRate") ?? "9.75") / 100;
     const GOSI_EMPLOYER_RATE = Number(gosiSettingsMap.get("gosiEmployerRate") ?? "11.75") / 100;
@@ -2525,7 +2537,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     const absenceRows = await rawQuery<any>(
       `SELECT a."assignmentId", COUNT(*) AS "absentDays"
        FROM attendance a
-       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a.status = 'absent'
+       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a.status = 'absent' AND a."deletedAt" IS NULL
        GROUP BY a."assignmentId"`,
       [scope.companyId, targetPeriod]
     );
@@ -2560,7 +2572,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     const overtimeRows = await rawQuery<any>(
       `SELECT a."assignmentId", COALESCE(SUM(a."overtimeMinutes"), 0) AS "totalOvertimeMinutes"
        FROM attendance a
-       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a."overtimeMinutes" > 0
+       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a."overtimeMinutes" > 0 AND a."deletedAt" IS NULL
        GROUP BY a."assignmentId"`,
       [scope.companyId, targetPeriod]
     );
@@ -2571,7 +2583,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     const hrOtRows = await rawQuery<any>(
       `SELECT "assignmentId", COALESCE(SUM("totalAmount"), 0) AS "otAmount"
        FROM hr_overtime_requests
-       WHERE "companyId" = $1 AND TO_CHAR("overtimeDate", 'YYYY-MM') = $2 AND status = 'approved'
+       WHERE "companyId" = $1 AND TO_CHAR("overtimeDate", 'YYYY-MM') = $2 AND status = 'approved' AND "deletedAt" IS NULL
        GROUP BY "assignmentId"`,
       [scope.companyId, targetPeriod]
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
@@ -2866,7 +2878,7 @@ router.get("/violations/:id", authorize({ feature: "hr", action: "list" }), asyn
       `SELECT m.id, m."memoNumber", m.status, m."appliedPenaltyLabel" AS "penaltyLabel",
               m."appliedDeductionAmount" AS "baseDeductionAmount", m."appliedExtraDeduction", m."createdAt"
        FROM hr_inquiry_memos m
-       WHERE m."violationId" = $1 AND m."companyId" = $2
+       WHERE m."violationId" = $1 AND m."companyId" = $2 AND m."deletedAt" IS NULL
        ORDER BY m."createdAt" DESC`,
       [item.id, scope.companyId]
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
@@ -3041,17 +3053,21 @@ router.post("/shifts", authorize({ feature: "hr", action: "create" }), async (re
     }
     const effectiveRemote = remoteAllowed ?? (effectiveShiftType === 'remote');
 
-    if (isDefault) {
-      await rawExecute(`UPDATE shifts SET "isDefault" = false WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [scope.companyId]);
-    }
-    const { insertId } = await rawExecute(
-      `INSERT INTO shifts ("companyId","branchId",name,"startTime","endTime",days,"isDefault",status,"shiftType","remoteAllowed","splitBreakStart","splitBreakEnd","flexStartEarliest","flexStartLatest")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,$10,$11,$12,$13)`,
-      [scope.companyId, effectiveBranchId, String(name).trim(), startTime ?? null, endTime ?? null, days ?? "0,1,2,3,4", isDefault ?? false,
-       effectiveShiftType, effectiveRemote,
-       splitBreakStart || null, splitBreakEnd || null,
-       flexStartEarliest || null, flexStartLatest || null]
-    );
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      if (isDefault) {
+        await client.query(`UPDATE shifts SET "isDefault" = false WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [scope.companyId]);
+      }
+      const result = await client.query(
+        `INSERT INTO shifts ("companyId","branchId",name,"startTime","endTime",days,"isDefault",status,"shiftType","remoteAllowed","splitBreakStart","splitBreakEnd","flexStartEarliest","flexStartLatest")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,$10,$11,$12,$13) RETURNING id`,
+        [scope.companyId, effectiveBranchId, String(name).trim(), startTime ?? null, endTime ?? null, days ?? "0,1,2,3,4", isDefault ?? false,
+         effectiveShiftType, effectiveRemote,
+         splitBreakStart || null, splitBreakEnd || null,
+         flexStartEarliest || null, flexStartLatest || null]
+      );
+      insertId = result.rows[0].id;
+    });
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "shifts", entityId: insertId,
@@ -3200,7 +3216,7 @@ router.get("/attendance-stats", authorize({ feature: "hr", action: "list" }), as
       totalEmployees: Number(totalEmp?.count ?? 0),
       month,
     });
-  } catch (_e) { res.json({ present: 0, absent: 0, late: 0, totalEmployees: 0 }); }
+  } catch (_e) { logger.error(_e, "attendance-stats query failed"); res.json({ present: 0, absent: 0, late: 0, totalEmployees: 0 }); }
 });
 
 router.get("/leave-stats", authorize({ feature: "hr", action: "list" }), async (req, res) => {
@@ -3224,7 +3240,7 @@ router.get("/leave-stats", authorize({ feature: "hr", action: "list" }), async (
       rejected: Number(rejected?.count ?? 0),
       total: Number(total?.count ?? 0),
     });
-  } catch (_e) { res.json({ pending: 0, approved: 0, rejected: 0, total: 0 }); }
+  } catch (_e) { logger.error(_e, "leave-stats query failed"); res.json({ pending: 0, approved: 0, rejected: 0, total: 0 }); }
 });
 
 router.get("/salary-components", authorize({ feature: "hr", action: "list" }), async (req, res) => {
@@ -3234,7 +3250,7 @@ router.get("/salary-components", authorize({ feature: "hr", action: "list" }), a
       `SELECT * FROM salary_components WHERE "companyId"=$1 ORDER BY name LIMIT 500`, [scope.companyId]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "salary-components query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.post("/salary-components", authorize({ feature: "hr", action: "create" }), async (req, res) => {
@@ -3276,7 +3292,7 @@ router.get("/approval-chains", authorize({ feature: "hr", action: "list" }), asy
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "approval-chains query failed"); res.json({ data: [], total: 0 }); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3291,13 +3307,13 @@ router.get("/approval-chain-definitions", authorize({ feature: "hr", action: "li
               json_agg(json_build_object('id', acs.id, 'stepOrder', acs."stepOrder", 'requiredRole', acs."requiredRole", 'timeoutHours', acs."timeoutHours", 'autoApproveOnTimeout', acs."autoApproveOnTimeout") ORDER BY acs."stepOrder") AS steps
        FROM approval_chains ac
        LEFT JOIN approval_chain_steps acs ON acs."chainId" = ac.id
-       WHERE ac."companyId" = $1
+       WHERE ac."companyId" = $1 AND ac."deletedAt" IS NULL
        GROUP BY ac.id
        ORDER BY ac."chainType", ac."minAmount" LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: chains, total: chains.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "approval-chain-definitions query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.post("/approval-chain-definitions", authorize({ feature: "hr", action: "create" }), async (req, res) => {
@@ -3375,7 +3391,7 @@ router.get("/approval-requests", authorize({ feature: "hr", action: "list" }), a
       [scope.companyId, statusFilter]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "approval-requests query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.patch("/approval-requests/:id/decide", authorize({ feature: "hr", action: "update" }), async (req, res) => {
@@ -3635,7 +3651,7 @@ router.get("/violations-stats", authorize({ feature: "hr", action: "list" }), as
       thisMonth: Number(thisMonthRow?.count ?? 0),
       totalDeductions: Number(totalDeductions?.total ?? 0),
     });
-  } catch (_e) { res.json({ total: 0, thisMonth: 0, totalDeductions: 0 }); }
+  } catch (_e) { logger.error(_e, "violations-stats query failed"); res.json({ total: 0, thisMonth: 0, totalDeductions: 0 }); }
 });
 
 router.patch("/violations/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
@@ -3732,7 +3748,6 @@ router.patch("/shifts/:id", authorize({ feature: "hr", action: "update", resourc
     if (b.flexStartEarliest !== undefined) { params.push(b.flexStartEarliest); sets.push(`"flexStartEarliest"=$${params.length}`); }
     if (b.flexStartLatest !== undefined) { params.push(b.flexStartLatest); sets.push(`"flexStartLatest"=$${params.length}`); }
     if (b.isDefault !== undefined) {
-      if (b.isDefault) await rawExecute(`UPDATE shifts SET "isDefault"=false WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]);
       params.push(b.isDefault); sets.push(`"isDefault"=$${params.length}`);
     }
     if (sets.length === 0) {
@@ -3740,7 +3755,10 @@ router.patch("/shifts/:id", authorize({ feature: "hr", action: "update", resourc
     }
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    await withTransaction(async (client) => {
+      if (b.isDefault) await client.query(`UPDATE shifts SET "isDefault"=false WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]);
+      await client.query(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    });
     const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -3784,7 +3802,7 @@ router.get("/shift-assignments", authorize({ feature: "hr", action: "list" }), a
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "shift-assignments query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.post("/shift-assignments", authorize({ feature: "hr", action: "create" }), async (req, res) => {
@@ -3831,7 +3849,14 @@ router.post("/shift-assignments", authorize({ feature: "hr", action: "create" })
       after: { assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null },
     }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.assignment.created", entity: "hr_shift_assignments", entityId: insertId, details: JSON.stringify({ assignmentId: Number(assignmentId), shiftId: Number(shiftId) }) }).catch((e) => logger.error(e, "hr background task failed"));
-    const [row] = await rawQuery<any>(`SELECT esa.*, s.name AS "shiftName" FROM employee_shift_assignments esa LEFT JOIN shifts s ON s.id=esa."shiftId" WHERE esa.id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(
+      `SELECT esa.*, s.name AS "shiftName"
+         FROM employee_shift_assignments esa
+         JOIN employee_assignments ea ON ea.id = esa."assignmentId" AND ea."companyId" = $2
+         LEFT JOIN shifts s ON s.id = esa."shiftId"
+        WHERE esa.id = $1`,
+      [insertId, scope.companyId]
+    );
     res.status(201).json(row || { id: insertId, assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null });
   } catch (err) { handleRouteError(err, res, "Create shift assignment error:"); }
 });
@@ -3850,7 +3875,7 @@ router.get("/official-letters", authorize({ feature: "hr", action: "list" }), as
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "official-letters query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.post("/official-letters", authorize({ feature: "hr", action: "create" }), async (req, res) => {
@@ -3955,7 +3980,7 @@ router.get("/monthly-attendance", authorize({ feature: "hr", action: "list" }), 
       [scope.companyId, month]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "monthly-attendance query failed"); res.json({ data: [], total: 0 }); }
 });
 
 // ─── Leave requests general PATCH/DELETE ──────────────────────
@@ -4016,7 +4041,7 @@ router.post("/leave-requests/:id/cancel", authorize({ feature: "hr", action: "up
       `SELECT lr.*, lt.name AS "leaveTypeName"
        FROM hr_leave_requests lr
        LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-       WHERE lr.id = $1 AND lr."companyId" = $2`,
+       WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!request) throw new NotFoundError("طلب الإجازة غير موجود");
@@ -4096,7 +4121,7 @@ router.delete("/leave-requests/:id", authorize({ feature: "hr", action: "delete"
     const id = parseId(req.params.id, "id");
     const [leaveReq] = await rawQuery<any>(
       `SELECT lr.id, lr."employeeId", lr."leaveTypeId", lr.days, lr."startDate", lr.status
-       FROM hr_leave_requests lr WHERE lr.id = $1 AND lr."companyId" = $2`,
+       FROM hr_leave_requests lr WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!leaveReq) throw new NotFoundError("طلب الإجازة غير موجود");
@@ -4674,7 +4699,7 @@ router.get("/stats", authorize({ feature: "hr", action: "list" }), async (req, r
       `SELECT COUNT(*) AS total,
               COUNT(*) FILTER(WHERE status='pending') AS pending,
               COUNT(*) FILTER(WHERE status='approved') AS approved
-       FROM hr_leave_requests WHERE "companyId" = $1`,
+       FROM hr_leave_requests WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [scope.companyId]
     );
     const [violationCount] = await rawQuery<any>(
@@ -4710,7 +4735,7 @@ router.get("/deductions", authorize({ feature: "hr", action: "list" }), async (r
       [scope.companyId, month]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "deductions query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.get("/onboarding-steps", authorize({ feature: "hr", action: "list" }), async (req, res) => {
@@ -4854,7 +4879,7 @@ router.get("/employees-status", authorize({ feature: "hr", action: "list" }), as
       `SELECT e.id AS "employeeId", ea.id AS "assignmentId"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
-       WHERE e.status = 'active'
+       WHERE e.status = 'active' AND e."deletedAt" IS NULL
        LIMIT 500`,
       [scope.companyId]
     );
@@ -5384,21 +5409,24 @@ router.post("/evaluation-cycles/:id/peer-evaluation", authorize({ feature: "hr",
       throw new ForbiddenError("أنت لست ضمن المقيِّمين المعينين لهذه الدورة");
     }
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO peer_evaluations ("cycleId","companyId","evaluatorId","employeeId","evaluatorRole","overallScore",scores,comments)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-       ON CONFLICT ("cycleId","evaluatorId") DO UPDATE SET
-         "evaluatorRole"=$5,"overallScore"=$6,scores=$7,comments=$8`,
-      [cycleId, scope.companyId, evaluatorId, cycle.employeeId, evaluatorRole, overallScore,
-       scores ? JSON.stringify(scores) : null, comments ?? null]
-    );
-
-    // Mark participant as submitted — no participant record is valid for HR/manager paths
-    await rawExecute(
-      `UPDATE evaluation_participants SET "hasSubmitted"=true,"submittedAt"=NOW()
-       WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
-      [cycleId, evaluatorId]
-    );
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const result = await client.query(
+        `INSERT INTO peer_evaluations ("cycleId","companyId","evaluatorId","employeeId","evaluatorRole","overallScore",scores,comments)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT ("cycleId","evaluatorId") DO UPDATE SET
+           "evaluatorRole"=$5,"overallScore"=$6,scores=$7,comments=$8
+         RETURNING id`,
+        [cycleId, scope.companyId, evaluatorId, cycle.employeeId, evaluatorRole, overallScore,
+         scores ? JSON.stringify(scores) : null, comments ?? null]
+      );
+      insertId = result.rows[0].id;
+      await client.query(
+        `UPDATE evaluation_participants SET "hasSubmitted"=true,"submittedAt"=NOW()
+         WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
+        [cycleId, evaluatorId]
+      );
+    });
 
     await recomputeSummary(cycleId, scope.companyId, cycle.employeeId);
 
@@ -5571,12 +5599,16 @@ router.get("/evaluation-cycles/:id/summary", authorize({ feature: "hr", action: 
     );
 
     let [summary] = await rawQuery<any>(
-      `SELECT * FROM evaluation_summaries WHERE "cycleId" = $1`, [cycleId]
+      `SELECT * FROM evaluation_summaries WHERE "cycleId" = $1 AND "companyId" = $2`,
+      [cycleId, scope.companyId]
     );
 
     if (!summary) {
       await recomputeSummary(cycleId, scope.companyId, cycle.employeeId);
-      [summary] = await rawQuery<any>(`SELECT * FROM evaluation_summaries WHERE "cycleId" = $1`, [cycleId]);
+      [summary] = await rawQuery<any>(
+        `SELECT * FROM evaluation_summaries WHERE "cycleId" = $1 AND "companyId" = $2`,
+        [cycleId, scope.companyId]
+      );
     }
 
     const upwardCount = Number(upwardRow?.count ?? 0);
@@ -5780,7 +5812,7 @@ router.get("/public-holidays", authorize({ feature: "hr", action: "list" }), asy
   try {
     const scope = req.scope!;
     const { year } = req.query as any;
-    const conditions = [`"companyId" = $1`];
+    const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (year) { params.push(Number(year)); conditions.push(`year = $${params.length}`); }
     const rows = await rawQuery<any>(
@@ -6256,7 +6288,7 @@ router.get("/idp", authorize({ feature: "hr", action: "list" }), async (req, res
   try {
     const scope = req.scope!;
     const { employeeId } = req.query as any;
-    const conditions = [`idp."companyId"=$1`];
+    const conditions = [`idp."companyId"=$1`, `idp."deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (employeeId) { params.push(Number(employeeId)); conditions.push(`idp."employeeId"=$${params.length}`); }
     else if (scope.role === "employee" && scope.employeeId) {
@@ -6456,8 +6488,8 @@ router.post("/accruals/monthly", authorize({ feature: "hr", action: "update" }),
     }
 
     const employees = await rawQuery<any>(
-      `SELECT ea."employeeId", ea.salary, ea."startDate",
-              COALESCE(ec."startDate", ea."startDate") AS "contractStart"
+      `SELECT ea."employeeId", ea.salary, ea."hireDate",
+              COALESCE(ec."startDate", ea."hireDate") AS "contractStart"
        FROM employee_assignments ea
        LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId"
                                       AND ec."companyId"=$1 AND ec.status='active'
@@ -6729,7 +6761,8 @@ router.get("/expiring-documents", authorize({ feature: "hr", action: "list" }), 
               (e."workPermitExpiry"::date - CURRENT_DATE) AS "daysLeft"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-       WHERE e."workPermitExpiry" IS NOT NULL
+       WHERE e."deletedAt" IS NULL
+         AND e."workPermitExpiry" IS NOT NULL
          AND e."workPermitExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
     );
@@ -6740,7 +6773,8 @@ router.get("/expiring-documents", authorize({ feature: "hr", action: "list" }), 
               (e."iqamaExpiry"::date - CURRENT_DATE) AS "daysLeft"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-       WHERE e."iqamaExpiry" IS NOT NULL
+       WHERE e."deletedAt" IS NULL
+         AND e."iqamaExpiry" IS NOT NULL
          AND e."iqamaExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
     );
@@ -6751,7 +6785,8 @@ router.get("/expiring-documents", authorize({ feature: "hr", action: "list" }), 
               (e."passportExpiry"::date - CURRENT_DATE) AS "daysLeft"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-       WHERE e."passportExpiry" IS NOT NULL
+       WHERE e."deletedAt" IS NULL
+         AND e."passportExpiry" IS NOT NULL
          AND e."passportExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
     );
@@ -6791,7 +6826,7 @@ router.get("/expiring-documents", authorize({ feature: "hr", action: "list" }), 
               (fv."registrationExpiry"::date - CURRENT_DATE) AS "daysLeft",
               'vehicle' AS "entityType"
        FROM fleet_vehicles fv
-       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped' AND fv."deletedAt" IS NULL
          AND fv."registrationExpiry" IS NOT NULL
          AND fv."registrationExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
@@ -6805,7 +6840,7 @@ router.get("/expiring-documents", authorize({ feature: "hr", action: "list" }), 
               (fv."insuranceExpiry"::date - CURRENT_DATE) AS "daysLeft",
               'vehicle' AS "entityType"
        FROM fleet_vehicles fv
-       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped' AND fv."deletedAt" IS NULL
          AND fv."insuranceExpiry" IS NOT NULL
          AND fv."insuranceExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
@@ -6819,7 +6854,7 @@ router.get("/expiring-documents", authorize({ feature: "hr", action: "list" }), 
               (fv."nextInspectionDate"::date - CURRENT_DATE) AS "daysLeft",
               'vehicle' AS "entityType"
        FROM fleet_vehicles fv
-       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped' AND fv."deletedAt" IS NULL
          AND fv."nextInspectionDate" IS NOT NULL
          AND fv."nextInspectionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
@@ -6878,7 +6913,7 @@ router.get("/company-documents", authorize({ feature: "hr", action: "list" }), a
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
     const [countRow] = await rawQuery<any>(
@@ -6926,7 +6961,7 @@ router.get("/employee-documents", authorize({ feature: "hr", action: "list" }), 
     const scope = req.scope!;
     const { employeeId, page = "1", limit: lim = "50" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
     let paramIdx = 1;

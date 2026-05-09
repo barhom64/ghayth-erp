@@ -243,7 +243,7 @@ export default function AdminLogsPage() {
           data={filteredLogs}
           isLoading={isLoading}
           isError={isError}
-          onRetry={() => window.location.reload()}
+         
           noToolbar
           emptyMessage="لا توجد سجلات"
           emptyIcon={<ScrollText className="h-8 w-8 mx-auto mb-2 text-gray-300" />}

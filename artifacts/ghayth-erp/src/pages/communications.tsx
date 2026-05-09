@@ -43,7 +43,7 @@ export default function Communications() {
 
 function StatsCards() {
   const { data: stats, isError } = useApiQuery(["comm-stats"], "/communications/stats");
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   return (
     <div className="grid gap-4 md:grid-cols-5">
       <Card><CardHeader className="pb-2"><CardTitle className="text-sm">إجمالي الاتصالات</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.total || 0}</div></CardContent></Card>

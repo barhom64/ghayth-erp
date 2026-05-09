@@ -147,7 +147,7 @@ export function SecurityLogTab() {
         data={rows}
         isLoading={isLoading}
         isError={isError}
-        onRetry={() => window.location.reload()}
+       
         searchPlaceholder="بحث بالمستخدم أو المسار..."
         emptyMessage="لا توجد محاولات وصول مرفوضة"
         pageSize={pageSize}

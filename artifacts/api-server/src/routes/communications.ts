@@ -5,7 +5,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, Integ
 import { Router } from "express";
 import { logger } from "../lib/logger.js";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { sendNotification } from "../lib/notificationService.js";
@@ -296,17 +296,20 @@ router.post("/pbx/incoming", async (req, res): Promise<void> => {
 
     const sender = await matchSenderToEntity(callerNumber, companyId);
 
-    const { insertId: pbxId } = await rawExecute(
-      `INSERT INTO pbx_calls ("companyId","callId","callerNumber","calledNumber",direction,status,"createdAt")
-       VALUES ($1,$2,$3,$4,$5,'ringing',NOW())`,
-      [companyId, callId, callerNumber, calledNumber, direction]
-    );
-
-    await rawExecute(
-      `INSERT INTO communications_log ("companyId",channel,direction,"fromNumber","toNumber",subject,body,status,"relatedType","relatedId","createdAt")
-       VALUES ($1,'pbx',$2,$3,$4,$5,$6,'received','pbx_call',$7,NOW())`,
-      [companyId, direction, callerNumber, calledNumber, `PBX Call from ${sender.name}`, `Incoming call from ${callerNumber} identified as ${sender.name} (${sender.type})`, pbxId]
-    );
+    let pbxId!: number;
+    await withTransaction(async (client) => {
+      const result = await client.query(
+        `INSERT INTO pbx_calls ("companyId","callId","callerNumber","calledNumber",direction,status,"createdAt")
+         VALUES ($1,$2,$3,$4,$5,'ringing',NOW()) RETURNING id`,
+        [companyId, callId, callerNumber, calledNumber, direction]
+      );
+      pbxId = result.rows[0].id;
+      await client.query(
+        `INSERT INTO communications_log ("companyId",channel,direction,"fromNumber","toNumber",subject,body,status,"relatedType","relatedId","createdAt")
+         VALUES ($1,'pbx',$2,$3,$4,$5,$6,'received','pbx_call',$7,NOW())`,
+        [companyId, direction, callerNumber, calledNumber, `PBX Call from ${sender.name}`, `Incoming call from ${callerNumber} identified as ${sender.name} (${sender.type})`, pbxId]
+      );
+    });
 
     await sendNotification({
       companyId,
@@ -361,7 +364,6 @@ router.post("/pbx/completed", async (req, res): Promise<void> => {
 
     if (status === "no_answer" || duration === 0) {
       const sender = await matchSenderToEntity(call.callerNumber, companyId);
-
       await rawExecute(
         `INSERT INTO tasks ("companyId",title,description,type,status,priority,"createdAt")
          VALUES ($1,$2,$3,'follow_up','pending','high',NOW())`,
@@ -406,7 +408,7 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
       return;
     }
     await rawExecute(
-      `UPDATE pbx_calls SET status=$1, "answeredBy"=$2, "updatedAt"=NOW() WHERE id=$3`,
+      `UPDATE pbx_calls SET status=$1, "answeredBy"=$2 WHERE id=$3`,
       [status ?? "in_progress", answeredBy ?? null, call.id]
     );
 
@@ -425,7 +427,7 @@ router.get("/log", authorize({ feature: "communications", action: "list" }), asy
     const { channel, direction, limit: lim, offset: off } = req.query as any;
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
-    const conditions = [`"companyId" = $1`];
+    const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (channel) { params.push(channel); conditions.push(`channel = $${params.length}`); }
     if (direction) { params.push(direction); conditions.push(`direction = $${params.length}`); }
@@ -577,40 +579,37 @@ router.post("/log/:id/convert", authorize({ feature: "communications", action: "
     const fullTitle = `${prefixMap[targetType]}: ${commTitle}`;
     const fullDesc = `مصدر: ${logEntry.channel} — من: ${logEntry.fromNumber || "-"}\n${commDesc}`;
 
-    if (targetType === "task") {
-      const { insertId } = await rawExecute(
-        `INSERT INTO tasks ("companyId", title, description, type, status, priority)
-         VALUES ($1, $2, $3, 'follow_up', 'pending', 'medium')`,
-        [scope.companyId, fullTitle, fullDesc]
-      );
-      createdId = insertId;
-      targetPath = "/tasks";
-    } else if (targetType === "ticket") {
-      const { insertId } = await rawExecute(
-        `INSERT INTO support_tickets ("companyId", title, description, status, priority, ref)
-         VALUES ($1, $2, $3, 'open', 'medium', $4)`,
-        [scope.companyId, fullTitle, fullDesc, `TKT-COMM-${logId}`]
-      );
-      createdId = insertId;
-      targetPath = "/support/tickets";
-    } else {
-      const { insertId } = await rawExecute(
-        `INSERT INTO requests ("companyId", title, description, status, priority, "requesterName")
-         VALUES ($1, $2, $3, 'pending', 'medium', $4)`,
-        [scope.companyId, fullTitle, fullDesc, logEntry.fromNumber || "من اتصال"]
-      );
-      createdId = insertId;
-      targetPath = "/requests";
-    }
-
-    try {
-      await rawExecute(
+    await withTransaction(async (client) => {
+      if (targetType === "task") {
+        const result = await client.query(
+          `INSERT INTO tasks ("companyId", title, description, type, status, priority)
+           VALUES ($1, $2, $3, 'follow_up', 'pending', 'medium') RETURNING id`,
+          [scope.companyId, fullTitle, fullDesc]
+        );
+        createdId = result.rows[0].id;
+        targetPath = "/tasks";
+      } else if (targetType === "ticket") {
+        const result = await client.query(
+          `INSERT INTO support_tickets ("companyId", title, description, status, priority, ref)
+           VALUES ($1, $2, $3, 'open', 'medium', $4) RETURNING id`,
+          [scope.companyId, fullTitle, fullDesc, `TKT-COMM-${logId}`]
+        );
+        createdId = result.rows[0].id;
+        targetPath = "/support/tickets";
+      } else {
+        const result = await client.query(
+          `INSERT INTO requests ("companyId", title, description, status, priority, "requesterName")
+           VALUES ($1, $2, $3, 'pending', 'medium', $4) RETURNING id`,
+          [scope.companyId, fullTitle, fullDesc, logEntry.fromNumber || "من اتصال"]
+        );
+        createdId = result.rows[0].id;
+        targetPath = "/requests";
+      }
+      await client.query(
         `UPDATE communications_log SET "relatedType"=$1, "relatedId"=$2 WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
         [targetType, createdId, logId, scope.companyId]
       );
-    } catch (e) {
-      logger.warn(e, "communications: relatedType/relatedId columns may not exist yet");
-    }
+    });
 
     const typeLabels: Record<string, string> = { task: "مهمة متابعة", ticket: "تذكرة دعم", request: "طلب داخلي" };
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: targetType, entityId: createdId!, after: { sourceLogId: logId, targetType } }).catch((e) => logger.error(e, "communications background task failed"));

@@ -270,7 +270,7 @@ router.get("/products", authorize({ feature: "warehouse", action: "list" }), asy
     const scope = req.scope!;
     const { search, status, page = "1", limit: lim = "50" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
     const filters = parseScopeFilters(req);
     if (search) { filters.search = String(search); filters.searchColumns = ['p.name', 'p.sku']; }
@@ -818,19 +818,21 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
 
   let effectiveAssignmentId = assignmentId;
   if (!effectiveAssignmentId) {
-    const [asgn] = await rawQuery<any>(`SELECT id FROM employee_assignments WHERE "userId" = $1 AND status = 'active' LIMIT 1`, [userId]);
+    const [asgn] = await rawQuery<any>(`SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND status = 'active' LIMIT 1`, [userId]);
     effectiveAssignmentId = asgn?.id || userId;
   }
-  const { insertId: prId } = await rawExecute(
-    `INSERT INTO purchase_requests ("companyId","supplierId",ref,status,"totalAmount","requestedBy",notes) VALUES ($1,$2,$3,'pending',$4,$5,$6)`,
-    [companyId, supplierId, ref, estimatedTotal, effectiveAssignmentId, `طلب شراء تلقائي - مخزون منخفض: ${product.name}`]
-  );
-  if (prId) {
-    await rawExecute(
+  let prId = 0;
+  await withTransaction(async (client) => {
+    const result = await client.query(
+      `INSERT INTO purchase_requests ("companyId","supplierId",ref,status,"totalAmount","requestedBy",notes) VALUES ($1,$2,$3,'pending',$4,$5,$6) RETURNING id`,
+      [companyId, supplierId, ref, estimatedTotal, effectiveAssignmentId, `طلب شراء تلقائي - مخزون منخفض: ${product.name}`]
+    );
+    prId = result.rows[0].id;
+    await client.query(
       `INSERT INTO purchase_request_items ("requestId","productId",quantity,"unitPrice","totalPrice") VALUES ($1,$2,$3,$4,$5)`,
       [prId, product.id, reorderQty, estimatedUnitCost, estimatedTotal]
     );
-  }
+  });
   return prId || null;
 }
 
@@ -925,7 +927,7 @@ router.get("/categories", authorize({ feature: "warehouse", action: "list" }), a
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
     const [countRow] = await rawQuery<any>(
@@ -994,7 +996,7 @@ router.get("/suppliers", authorize({ feature: "warehouse", action: "list" }), as
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
     const [countRow] = await rawQuery<any>(

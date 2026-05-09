@@ -40,7 +40,7 @@ export default function GovernanceCapa() {
   const rows = asList(data?.data || data);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <div className="space-y-6">

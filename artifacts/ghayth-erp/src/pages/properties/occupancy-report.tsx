@@ -24,7 +24,7 @@ export default function OccupancyReportPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["occupancy-report"], "/properties/occupancy-report");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const units = asList(data?.units || []);
   const pieData = [

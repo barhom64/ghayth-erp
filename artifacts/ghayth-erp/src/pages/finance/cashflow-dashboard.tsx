@@ -59,7 +59,7 @@ export default function CashflowDashboard() {
   const isError = summaryError || budgetError;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const summary = summaryData?.data || summaryData || {};
   const budget = budgetData?.data || budgetData || {};

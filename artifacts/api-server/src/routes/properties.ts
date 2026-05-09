@@ -2045,7 +2045,7 @@ router.post("/late-rent/escalate", authorize({ feature: "properties", action: "c
         // H11 fix: use proper 2-decimal financial rounding.
         const penaltyResult = await withTransaction(async (client) => {
           const lockRes = await client.query(
-            `SELECT id, amount FROM rent_payments WHERE id = $1 FOR UPDATE`,
+            `SELECT id, amount FROM rent_payments WHERE id = $1 AND "deletedAt" IS NULL FOR UPDATE`,
             [payment.id]
           );
           const locked = lockRes.rows[0];
@@ -2303,7 +2303,7 @@ router.patch("/maintenance-requests/:id/approve", authorize({ feature: "properti
     const { approved, notes } = zodParse(approveMaintenanceSchema.safeParse(req.body));
 
     const [mr] = await rawQuery<any>(
-      `SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`,
+      `SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!mr) throw new NotFoundError("طلب الصيانة غير موجود");
@@ -2368,7 +2368,7 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(completeMaintenanceSchema.safeParse(req.body)) as any;
-    const [mr] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [mr] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!mr) throw new NotFoundError("الطلب غير موجود");
 
     // Closure preconditions — report + after photos + cost + materials.
@@ -2463,7 +2463,7 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
     if (mr.assignedTo) {
       try {
         const completedCount = await rawQuery<any>(
-          `SELECT COUNT(*) AS cnt FROM maintenance_requests WHERE "assignedTo"=$1 AND status='completed' AND "companyId"=$2`,
+          `SELECT COUNT(*) AS cnt FROM maintenance_requests WHERE "assignedTo"=$1 AND status='completed' AND "companyId"=$2 AND "deletedAt" IS NULL`,
           [mr.assignedTo, scope.companyId]
         );
         const newRating = Math.min(5, 3 + Math.log10(Number(completedCount[0]?.cnt || 1) + 1));
@@ -2710,7 +2710,7 @@ router.get("/buildings/:id", authorize({ feature: "properties", action: "list" }
         COUNT(u.id) FILTER (WHERE u.status='available') AS "availableUnits"
        FROM property_buildings b
        LEFT JOIN property_units u ON (u."buildingId"=b.id OR u."buildingName"=b.name) AND u."companyId"=b."companyId"
-       WHERE b.id=$1 AND b."companyId"=$2
+       WHERE b.id=$1 AND b."companyId"=$2 AND b."deletedAt" IS NULL
        GROUP BY b.id`,
       [id, scope.companyId]
     );
@@ -3045,7 +3045,7 @@ router.patch("/maintenance-requests/:id", authorize({ feature: "properties", act
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الطلب غير موجود");
     const b = zodParse(updateMaintenanceRequestSchema.safeParse(req.body)) as any;
 
@@ -3320,7 +3320,7 @@ router.patch("/owners/:id", authorize({ feature: "properties", action: "update" 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المالك غير موجود");
     const b = zodParse(updateOwnerSchema.safeParse(req.body)) as any;
     const fields: string[] = [];

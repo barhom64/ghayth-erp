@@ -170,7 +170,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         [companies, today]
       );
       const [pendingLeaves] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM hr_leave_requests WHERE "companyId" = ANY($1::int[]) AND status='pending'`,
+        `SELECT COUNT(*) AS total FROM hr_leave_requests WHERE "companyId" = ANY($1::int[]) AND "deletedAt" IS NULL AND status='pending'`,
         [companies]
       );
       const [expiringDocs] = await rawQuery<any>(
@@ -281,7 +281,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
            EXTRACT(EPOCH FROM (NOW() - "slaDeadline"))/3600 AS "hoursOverdue",
            priority, status
          FROM support_tickets
-         WHERE ${where} AND status='open' AND "slaDeadline" IS NOT NULL AND "slaDeadline" < NOW()
+         WHERE ${where} AND "deletedAt" IS NULL AND status='open' AND "slaDeadline" IS NOT NULL AND "slaDeadline" < NOW()
          ORDER BY "slaDeadline" LIMIT 10`,
         params
       );
@@ -299,7 +299,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
            "createdAt" AS "slaDeadline",
            EXTRACT(EPOCH FROM (NOW() - "createdAt"))/3600 AS "hoursOverdue"
          FROM hr_leave_requests
-         WHERE "companyId" = ANY($1::int[]) AND status='pending'
+         WHERE "companyId" = ANY($1::int[]) AND "deletedAt" IS NULL AND status='pending'
            AND "createdAt" < NOW() - INTERVAL '1 hour' * $2
          ORDER BY "createdAt" LIMIT 10`,
         [companies, slaHours]
@@ -315,7 +315,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
            "createdAt" AS "slaDeadline",
            EXTRACT(EPOCH FROM (NOW() - "createdAt"))/3600 AS "hoursOverdue"
          FROM expense_claims
-         WHERE "companyId" = ANY($1::int[]) AND status='pending'
+         WHERE "companyId" = ANY($1::int[]) AND "deletedAt" IS NULL AND status='pending'
            AND "createdAt" < NOW() - INTERVAL '1 hour' * $2
          ORDER BY "createdAt" LIMIT 10`,
         [companies, slaHours]
@@ -365,7 +365,7 @@ async function buildChecklistItems(scope: any, where: string, params: any[], com
       const [att] = await rawQuery<any>(
         `SELECT
            (SELECT COUNT(*) FROM employee_assignments WHERE "companyId" = ANY($1::int[]) AND status='active') AS expected,
-           (SELECT COUNT(DISTINCT "assignmentId") FROM attendance WHERE "companyId" = ANY($1::int[]) AND date=$2) AS actual`,
+           (SELECT COUNT(DISTINCT "assignmentId") FROM attendance WHERE "companyId" = ANY($1::int[]) AND "deletedAt" IS NULL AND date=$2) AS actual`,
         [companies, today]
       );
       const expected = Number(att?.expected ?? 0);
@@ -383,7 +383,7 @@ async function buildChecklistItems(scope: any, where: string, params: any[], com
 
     try {
       const [pending] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM hr_leave_requests WHERE "companyId" = ANY($1::int[]) AND status='pending'`,
+        `SELECT COUNT(*) AS total FROM hr_leave_requests WHERE "companyId" = ANY($1::int[]) AND "deletedAt" IS NULL AND status='pending'`,
         [companies]
       );
       const val = Number(pending?.total ?? 0);

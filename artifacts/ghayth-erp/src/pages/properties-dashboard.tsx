@@ -23,7 +23,7 @@ export default function PropertiesDashboard() {
     `/properties/stats?${scopeQueryString || ""}`
   );
 
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (isLoading) return (
     <div className="space-y-6">
       <Skeleton className="h-10 w-64" />

@@ -200,7 +200,7 @@ VALUES
   ('finance_purchase_create_approve', 'فصل صلاحية إنشاء واعتماد طلب الشراء', 'finance.purchase', 'create', 'finance.purchase', 'approve', 'high'),
   ('hr_payroll_calculate_approve', 'فصل صلاحية احتساب واعتماد الرواتب', 'hr.payroll.runs', 'create', 'hr.payroll.runs', 'approve', 'critical'),
   ('hr_employee_create_self_approve', 'الموظف لا يعتمد ملفه', 'hr.employees', 'create', 'hr.employees', 'approve', 'medium')
-ON CONFLICT (rule_key) WHERE "companyId" IS NULL DO NOTHING;
+ON CONFLICT ("companyId", rule_key) DO NOTHING;
 
 -- ─── Cache invalidation marker — bumped on any role/grant change ───────────
 CREATE TABLE IF NOT EXISTS rbac_cache_version (

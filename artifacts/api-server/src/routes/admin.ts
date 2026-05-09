@@ -804,7 +804,7 @@ router.get("/system-health", authorize({ feature: "admin", action: "list" }), as
     const [userCount] = await rawQuery<any>(`SELECT COUNT(*) as count FROM users`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
     const [companyCount] = await rawQuery<any>(`SELECT COUNT(*) as count FROM companies`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
     const [employeeCount] = await rawQuery<any>(
-      `SELECT COUNT(DISTINCT e.id) as count FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE ea."companyId"=$1`,
+      `SELECT COUNT(DISTINCT e.id) as count FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE ea."companyId"=$1 AND e."deletedAt" IS NULL`,
       [cid]
     ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
 
@@ -1070,21 +1070,23 @@ router.post("/role-permissions", authorize({ feature: "admin", action: "update" 
       [role, permission, scope.companyId]
     );
     invalidatePermissionCache(role, scope.companyId);
-    createAuditLog({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "create", entity: "role_permissions", entityId: r.insertId,
-      after: { role, permission },
-    }).catch((e) => logger.error(e, "admin background task failed"));
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "admin.role_permission.created",
-      entity: "role_permissions",
-      entityId: r.insertId,
-      details: JSON.stringify({ role, permission }),
-    }).catch((e) => logger.error(e, "admin background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM role_permissions WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
-    res.status(201).json(row || { id: r.insertId });
+    if (r.insertId) {
+      createAuditLog({
+        companyId: scope.companyId, userId: scope.userId,
+        action: "create", entity: "role_permissions", entityId: r.insertId,
+        after: { role, permission },
+      }).catch((e) => logger.error(e, "admin background task failed"));
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "admin.role_permission.created",
+        entity: "role_permissions",
+        entityId: r.insertId,
+        details: JSON.stringify({ role, permission }),
+      }).catch((e) => logger.error(e, "admin background task failed"));
+    }
+    const [row] = await rawQuery<any>(`SELECT * FROM role_permissions WHERE id=$1 AND "companyId"=$2`, [r.insertId || 0, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, role, permission });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -1283,34 +1285,38 @@ router.delete("/governance/event-dlq/:id", authorize({ feature: "admin", action:
 });
 
 router.get("/governance/event-catalog", authorize({ feature: "admin", action: "list" }), async (req, res) => {
-  const scope = req.scope!;
-  const byDomain = countEventsByDomain();
-  const recentEvents = await rawQuery<any>(
-    `SELECT action, entity, "createdAt" FROM event_logs
-     WHERE "companyId" = $1 ORDER BY "createdAt" DESC LIMIT 20`,
-    [scope.companyId]
-  );
-  res.json({
-    total: EVENT_CATALOG.length,
-    byDomain,
-    catalog: EVENT_CATALOG.map(e => ({ action: e.name, domain: e.domain, label: e.label, critical: e.critical })),
-    recentEvents,
-  });
+  try {
+    const scope = req.scope!;
+    const byDomain = countEventsByDomain();
+    const recentEvents = await rawQuery<any>(
+      `SELECT action, entity, "createdAt" FROM event_logs
+       WHERE "companyId" = $1 ORDER BY "createdAt" DESC LIMIT 20`,
+      [scope.companyId]
+    );
+    res.json({
+      total: EVENT_CATALOG.length,
+      byDomain,
+      catalog: EVENT_CATALOG.map(e => ({ action: e.name, domain: e.domain, label: e.label, critical: e.critical })),
+      recentEvents,
+    });
+  } catch (err) { handleRouteError(err, res, "Event catalog error:"); }
 });
 
 router.get("/governance/rbac-matrix", authorize({ feature: "admin", action: "list" }), async (req, res) => {
-  const scope = req.scope!;
-  const customPerms = await rawQuery<any>(
-    `SELECT role, permission FROM role_permissions WHERE "companyId" = $1 LIMIT 500`,
-    [scope.companyId]
-  );
-  res.json({
-    permissions: PERMISSIONS,
-    roleDefaults: ROLE_PERMISSIONS,
-    customPermissions: customPerms,
-    totalPermissions: PERMISSIONS.length,
-    totalRoles: Object.keys(ROLE_PERMISSIONS).length,
-  });
+  try {
+    const scope = req.scope!;
+    const customPerms = await rawQuery<any>(
+      `SELECT role, permission FROM role_permissions WHERE "companyId" = $1 LIMIT 500`,
+      [scope.companyId]
+    );
+    res.json({
+      permissions: PERMISSIONS,
+      roleDefaults: ROLE_PERMISSIONS,
+      customPermissions: customPerms,
+      totalPermissions: PERMISSIONS.length,
+      totalRoles: Object.keys(ROLE_PERMISSIONS).length,
+    });
+  } catch (err) { handleRouteError(err, res, "RBAC matrix error:"); }
 });
 
 // ── System Master Registry endpoints ──

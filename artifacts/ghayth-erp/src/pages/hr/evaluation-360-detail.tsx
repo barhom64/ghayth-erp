@@ -466,7 +466,7 @@ export default function Evaluation360DetailPage() {
       entityId={cycleId}
       isLoading={isLoading}
       error={isError || (!isLoading && !data?.cycle) ? true : undefined}
-      onRetry={() => window.location.reload()}
+     
       overview={overview}
       actions={actions}
       createdAt={cycle?.createdAt}

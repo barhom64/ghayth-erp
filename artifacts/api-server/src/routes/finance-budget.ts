@@ -76,7 +76,7 @@ budgetRouter.get("/budget", authorize({ feature: "finance.budget", action: "list
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) {
+  } catch (_e) { logger.error(_e, "budget list query failed");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
 });
@@ -113,7 +113,7 @@ budgetRouter.get("/budget-vs-actual", authorize({ feature: "finance", action: "l
       [scope.companyId, startDate.slice(0, 7), endDate.slice(0, 7)]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) {
+  } catch (_e) { logger.error(_e, "budget-vs-actual query failed");
     res.json({ data: [], total: 0 });
   }
 });
@@ -130,25 +130,27 @@ budgetRouter.post("/budget", authorize({ feature: "finance.budget", action: "cre
       [scope.companyId, branchId ?? scope.branchId, accountCode, period, Number(amount)]
     );
 
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "budget.created",
-      entity: "budgets",
-      entityId: insertId,
-      details: JSON.stringify({ accountCode, period, amount: Number(amount) }),
-    }).catch((err) => pushToDLQ("event", { action: "budget.created", entityId: insertId }, err, scope.companyId));
+    if (insertId) {
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "budget.created",
+        entity: "budgets",
+        entityId: insertId,
+        details: JSON.stringify({ accountCode, period, amount: Number(amount) }),
+      }).catch((err) => pushToDLQ("event", { action: "budget.created", entityId: insertId }, err, scope.companyId));
 
-    createAuditLog({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "create",
-      entity: "budgets",
-      entityId: insertId,
-      after: { accountCode, period, amount: Number(amount) },
-    }).catch((err) => logger.error(err, "[audit] budget.created:"));
+      createAuditLog({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "create",
+        entity: "budgets",
+        entityId: insertId,
+        after: { accountCode, period, amount: Number(amount) },
+      }).catch((err) => logger.error(err, "[audit] budget.created:"));
+    }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM budgets WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM budgets WHERE id=$1 AND "companyId"=$2`, [insertId || 0, scope.companyId]);
     res.status(201).json(row || { id: insertId, accountCode, period, amount: Number(amount), branchId: branchId ?? scope.branchId });
   } catch (err) {
     handleRouteError(err, res, "Create budget error:");

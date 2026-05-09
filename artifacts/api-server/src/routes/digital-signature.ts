@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
@@ -107,13 +107,14 @@ router.post("/verify", authorize({ feature: "documents", action: "create" }), as
       throw new ValidationError("رمز التحقق غير صحيح أو منتهي الصلاحية");
     }
 
-    await rawExecute(`UPDATE digital_signature_otps SET used=true, "usedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [record.id, scope.companyId]);
-
     const signatureRef = generateTimeRef("SIG");
-    await rawExecute(
-      `INSERT INTO digital_signature_logs ("companyId","userId","documentId","entityType","entityId",action,"signatureRef","ipAddress","deviceFingerprint","userAgent","otpRef") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [scope.companyId, scope.userId, String(entityId), entityType, String(entityId), action, signatureRef, ip, deviceFingerprint, userAgent, record.id]
-    );
+    await withTransaction(async (client) => {
+      await client.query(`UPDATE digital_signature_otps SET used=true, "usedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [record.id, scope.companyId]);
+      await client.query(
+        `INSERT INTO digital_signature_logs ("companyId","userId","documentId","entityType","entityId",action,"signatureRef","ipAddress","deviceFingerprint","userAgent","otpRef") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [scope.companyId, scope.userId, String(entityId), entityType, String(entityId), action, signatureRef, ip, deviceFingerprint, userAgent, record.id]
+      );
+    });
 
     createAuditLog({
       companyId: scope.companyId,

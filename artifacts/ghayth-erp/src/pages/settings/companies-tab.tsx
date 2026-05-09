@@ -59,7 +59,7 @@ export function CompaniesTab() {
   ];
 
   if (isLoading) return <DataTable columns={companyColumns} data={[]} isLoading={true} searchPlaceholder={null} noToolbar />;
-  if (isError) return <DataTable columns={companyColumns} data={[]} isError={true} onRetry={() => window.location.reload()} searchPlaceholder={null} noToolbar />;
+  if (isError) return <DataTable columns={companyColumns} data={[]} isError={true} searchPlaceholder={null} noToolbar />;
 
   const resetForm = () => {
     setForm({ name: "", nameEn: "", taxNumber: "", crNumber: "" });

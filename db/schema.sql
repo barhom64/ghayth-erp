@@ -6318,6 +6318,8 @@ CREATE TABLE public.invoices (
     "postedBy" integer,
     "postedAt" timestamp with time zone,
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "lastDunningStage" integer DEFAULT 0,
+    "lastDunningAt" timestamp without time zone,
     CONSTRAINT chk_invoices_status CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('sent'::character varying)::text, ('partial'::character varying)::text, ('partially_paid'::character varying)::text, ('paid'::character varying)::text, ('overdue'::character varying)::text, ('void'::character varying)::text, ('rejected'::character varying)::text, ('cancelled'::character varying)::text, ('returned'::character varying)::text, ('delivered'::character varying)::text, ('ordered'::character varying)::text, ('posted'::character varying)::text, ('closed'::character varying)::text, ('invoiced'::character varying)::text])))
 );
 

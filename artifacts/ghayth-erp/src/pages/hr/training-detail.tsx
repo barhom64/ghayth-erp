@@ -257,7 +257,7 @@ export default function TrainingDetailPage() {
       entityId={id ?? ""}
       isLoading={isLoading}
       error={isError || (!isLoading && !program) ? true : undefined}
-      onRetry={() => window.location.reload()}
+     
       overview={overview}
       status={program?.status ? { label: program.status, tone: STATUS_TONE_MAP[program.status] ?? "default" } : undefined}
       createdAt={program?.createdAt}

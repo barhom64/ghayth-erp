@@ -99,7 +99,7 @@ accountsRouter.get("/accounts", authorize({ feature: "finance", action: "list" }
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) {
+  } catch (_e) { logger.error(_e, "accounts list query failed");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
 });
@@ -259,7 +259,7 @@ accountsRouter.get("/journal", authorize({ feature: "finance", action: "list" })
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) {
+  } catch (_e) { logger.error(_e, "journal list query failed");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
 });

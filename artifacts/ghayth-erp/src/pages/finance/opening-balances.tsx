@@ -29,7 +29,7 @@ export default function OpeningBalancesPage() {
     `/finance/opening-balances${scopeSuffix}`
   );
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const items: OpeningBalance[] = (data?.data || []).map((r: any) => ({
     ...r,

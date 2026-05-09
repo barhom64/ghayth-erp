@@ -571,7 +571,7 @@ export async function createSubsidiaryAccountsForEntity(
 
     for (const acc of accountsToCreate) {
       const [parentAccount] = await rawQuery<any>(
-        `SELECT id, code FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2`,
+        `SELECT id, code FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL`,
         [companyId, acc.parentCode]
       );
       if (!parentAccount) continue;
@@ -583,7 +583,7 @@ export async function createSubsidiaryAccountsForEntity(
       const seq = Number(seqRes[0]?.cnt ?? 0) + 1;
       const newCode = `${acc.parentCode}-${String(entityId).padStart(4, "0")}`;
       const [existingAcc] = await rawQuery<any>(
-        `SELECT id FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2`,
+        `SELECT id FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL`,
         [companyId, newCode]
       );
 

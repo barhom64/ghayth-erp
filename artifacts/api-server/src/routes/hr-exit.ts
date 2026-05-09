@@ -484,25 +484,25 @@ router.patch("/exit/clearance/:id", authorize({ feature: "hr", action: "update" 
     if (!item) throw new NotFoundError("عنصر إخلاء الطرف غير موجود");
 
     const newStatus = b.status === "cleared" ? "cleared" : "rejected";
-    await rawExecute(
-      `UPDATE hr_exit_clearance
-       SET status = $1, "clearedBy" = $2, "clearedAt" = NOW(), notes = $3
-       WHERE id = $4 AND "companyId" = $5 AND status = 'pending'`,
-      [newStatus, scope.userId, b.notes || null, item.id, scope.companyId]
-    );
-
-    // التحقق: هل اكتمل إخلاء الطرف بالكامل؟
-    const remaining = await rawQuery<any>(
-      `SELECT COUNT(*) AS cnt FROM hr_exit_clearance
-       WHERE "exitRequestId" = $1 AND "companyId" = $2 AND status = 'pending'`,
-      [item.exitRequestId, scope.companyId]
-    );
-    if (Number(remaining[0]?.cnt) === 0) {
-      await rawExecute(
-        `UPDATE hr_exit_requests SET "clearanceCompleted" = TRUE, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status NOT IN ('rejected') AND "deletedAt" IS NULL`,
+    await withTransaction(async (client) => {
+      await client.query(
+        `UPDATE hr_exit_clearance
+         SET status = $1, "clearedBy" = $2, "clearedAt" = NOW(), notes = $3
+         WHERE id = $4 AND "companyId" = $5 AND status = 'pending'`,
+        [newStatus, scope.userId, b.notes || null, item.id, scope.companyId]
+      );
+      const { rows: remaining } = await client.query(
+        `SELECT COUNT(*) AS cnt FROM hr_exit_clearance
+         WHERE "exitRequestId" = $1 AND "companyId" = $2 AND status = 'pending'`,
         [item.exitRequestId, scope.companyId]
       );
-    }
+      if (Number(remaining[0]?.cnt) === 0) {
+        await client.query(
+          `UPDATE hr_exit_requests SET "clearanceCompleted" = TRUE, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status NOT IN ('rejected') AND "deletedAt" IS NULL`,
+          [item.exitRequestId, scope.companyId]
+        );
+      }
+    });
 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "exit.clearance_updated", entity: "hr_exit_clearance", entityId: item.id, details: JSON.stringify({ status: newStatus, exitRequestId: item.exitRequestId }) }).catch((e) => logger.error(e, "hr-exit background task failed"));
     createAuditLog({

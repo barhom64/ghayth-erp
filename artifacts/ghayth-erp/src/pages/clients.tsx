@@ -55,7 +55,7 @@ export default function Clients() {
   });
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const editFields = [
     { key: "name", label: "اسم العميل" },

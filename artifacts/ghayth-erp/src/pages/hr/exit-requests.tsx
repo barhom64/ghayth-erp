@@ -38,7 +38,7 @@ export default function ExitRequestsPage() {
   });
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleApprove = async (id: number) => {
     await approveMut.mutateAsync({ __url: `/hr/exit/${id}/approve` } as any);

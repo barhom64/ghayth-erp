@@ -106,6 +106,14 @@ fi
 echo "  Creating test admin user (owner@local.test / Test1234!)..."
 PGPASSWORD="$DB_PASSWORD" psql "$DSN" -v ON_ERROR_STOP=1 -q -f "$ADMIN_FILE"
 
+# 7b. seed an open fiscal period per company so GL posting is unblocked.
+# Without this, every journal posting attempt fails the period guard.
+PERIODS_FILE="$REPO_ROOT/db/seed-financial-periods.sql"
+if [ -f "$PERIODS_FILE" ]; then
+  echo "  Seeding open fiscal period(s) for current year..."
+  PGPASSWORD="$DB_PASSWORD" psql "$DSN" -v ON_ERROR_STOP=1 -q -f "$PERIODS_FILE"
+fi
+
 # 8. mark every existing migration as applied so runMigrations skips them
 # on the first server boot. Otherwise they'd try to ALTER TABLE on a
 # baseline that already has those columns.

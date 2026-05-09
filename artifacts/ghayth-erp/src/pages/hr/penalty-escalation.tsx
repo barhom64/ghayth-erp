@@ -13,7 +13,7 @@ export default function PenaltyEscalationPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["violations"], "/hr/violations");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const items = (data?.data || []).filter((v: any) => v.status === "active");
 

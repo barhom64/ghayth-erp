@@ -250,7 +250,7 @@ router.get("/templates", authorize({ feature: "marketing", action: "list" }), as
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
-      `SELECT * FROM document_templates WHERE "companyId" = $1 AND category = 'marketing' ORDER BY "createdAt" DESC LIMIT 500`,
+      `SELECT * FROM document_templates WHERE "companyId" = $1 AND category = 'marketing' AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows });

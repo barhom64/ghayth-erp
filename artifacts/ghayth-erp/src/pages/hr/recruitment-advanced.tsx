@@ -18,7 +18,7 @@ export default function RecruitmentAdvancedPage() {
   const isError = statsError || appsError;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const apps = appsData?.data || [];
 

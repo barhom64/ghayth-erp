@@ -16,7 +16,7 @@ export function RolePermissionsTab() {
   const [editModules, setEditModules] = useState<string[]>([]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const allModules = [
     { key: "home", label: "الرئيسية" }, { key: "hr", label: "الموارد البشرية" },
