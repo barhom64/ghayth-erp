@@ -767,7 +767,8 @@ router.patch("/units/:id", requirePermission("property:update"), async (req, res
     }
     params.push(id);
     params.push(scope.companyId);
-    await rawExecute(`UPDATE property_units SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE property_units SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("الوحدة غير موجودة");
     const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
@@ -827,7 +828,8 @@ router.delete("/units/:id", authorize({ feature: "properties.units", action: "de
       );
     }
 
-    await rawExecute(`UPDATE property_units SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE property_units SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("الوحدة غير موجودة");
 
     emitEvent({
       companyId: scope.companyId,
@@ -1388,7 +1390,8 @@ router.delete("/contracts/:id", authorize({ feature: "properties.contracts", act
         { field: "status", fix: "أنهِ العقد عبر /contracts/:id/terminate قبل الحذف" }
       );
     }
-    await rawExecute(`UPDATE rental_contracts SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE rental_contracts SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("العقد غير موجود");
 
     emitEvent({
       companyId: scope.companyId,
@@ -1812,7 +1815,8 @@ router.delete("/tenants/:id", requirePermission("property:delete"), async (req, 
       );
     }
 
-    await rawExecute(`UPDATE tenants SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE tenants SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("المستأجر غير موجود");
 
     emitEvent({
       companyId: scope.companyId,
@@ -2844,7 +2848,8 @@ router.patch("/buildings/:id", requirePermission("property:update"), async (req,
     // sets already starts with `"updatedAt"=NOW()` — do not append a second
     // assignment or PostgreSQL raises 42601 "multiple assignments to same column".
     params.push(scope.companyId);
-    await rawExecute(`UPDATE property_buildings SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE property_buildings SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("المبنى غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
@@ -2894,7 +2899,8 @@ router.delete("/buildings/:id", requirePermission("property:delete"), async (req
       );
     }
 
-    await rawExecute(`UPDATE property_buildings SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE property_buildings SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("المبنى غير موجود");
 
     emitEvent({
       companyId: scope.companyId,
@@ -3398,7 +3404,8 @@ router.delete("/owners/:id", requirePermission("property:delete"), async (req, r
       );
     }
 
-    await rawExecute(`UPDATE property_owners SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE property_owners SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("المالك غير موجود");
 
     emitEvent({
       companyId: scope.companyId,

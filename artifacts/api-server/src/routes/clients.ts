@@ -301,7 +301,8 @@ router.patch("/:id", requirePermission("crm:update"), async (req, res) => {
     if (b.isBlacklisted !== undefined) { params.push(b.isBlacklisted); sets.push(`"isBlacklisted" = $${params.length}`); }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id, scope.companyId);
-    await rawExecute(`UPDATE clients SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE clients SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("العميل غير موجود");
     const [updated] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!updated) throw new NotFoundError("العميل غير موجود");
 
@@ -388,7 +389,8 @@ router.delete("/:id", authorize({ feature: "crm.clients", action: "delete", reso
       );
     }
 
-    await rawExecute(`UPDATE clients SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE clients SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("العميل غير موجود");
 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.deleted", entity: "clients", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "clients background task failed"));
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delete", entity: "clients", entityId: id }).catch((e) => logger.error(e, "clients background task failed"));

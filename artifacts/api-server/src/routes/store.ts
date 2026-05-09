@@ -141,7 +141,8 @@ router.patch("/products/:id", requirePermission("store:write"), async (req, res)
     if (b.imageUrl !== undefined) { params.push(b.imageUrl); sets.push(`"imageUrl"=$${params.length}`); }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE store_products SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE store_products SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "store_products", entityId: id, after: b }).catch((e) => logger.error(e, "store background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.product.updated", entity: "store_products", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "store background task failed"));
@@ -155,7 +156,8 @@ router.delete("/products/:id", requirePermission("store:write"), async (req, res
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المنتج غير موجود");
-    await rawExecute(`UPDATE store_products SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE store_products SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "store_products", entityId: id, before: existing }).catch((e) => logger.error(e, "store background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.product.deleted", entity: "store_products", entityId: id, details: JSON.stringify({ name: existing.name }) }).catch((e) => logger.error(e, "store background task failed"));
     res.json({ message: "تم حذف المنتج بنجاح" });
@@ -296,7 +298,8 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
       if (b.status === "cancelled" && existing.status !== "cancelled") {
         const itemsRes = await client.query(`SELECT "productId", quantity FROM store_order_items WHERE "orderId" = $1`, [id]);
         for (const item of itemsRes.rows) {
-          await client.query(`UPDATE store_products SET quantity = quantity + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [item.quantity, item.productId, scope.companyId]);
+          const stockRes = await client.query(`UPDATE store_products SET quantity = quantity + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [item.quantity, item.productId, scope.companyId]);
+          if (!stockRes.rowCount) logger.warn({ productId: item.productId, orderId: id }, "stock restore on cancel affected 0 rows");
         }
       }
 
@@ -328,10 +331,12 @@ router.delete("/orders/:id", requirePermission("store:write"), async (req, res) 
       if (existing.status !== "cancelled") {
         const itemsRes = await client.query(`SELECT "productId", quantity FROM store_order_items WHERE "orderId" = $1`, [id]);
         for (const item of itemsRes.rows) {
-          await client.query(`UPDATE store_products SET quantity = quantity + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [item.quantity, item.productId, scope.companyId]);
+          const stockRes = await client.query(`UPDATE store_products SET quantity = quantity + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [item.quantity, item.productId, scope.companyId]);
+          if (!stockRes.rowCount) logger.warn({ productId: item.productId, orderId: id }, "stock restore on delete affected 0 rows");
         }
       }
-      await client.query(`UPDATE store_orders SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+      const delRes = await client.query(`UPDATE store_orders SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+      if (!delRes.rowCount) throw new NotFoundError("السجل غير موجود");
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "store_orders", entityId: id, before: existing }).catch((e) => logger.error(e, "store background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.order.deleted", entity: "store_orders", entityId: id, details: JSON.stringify({ orderNumber: existing.orderNumber }) }).catch((e) => logger.error(e, "store background task failed"));
