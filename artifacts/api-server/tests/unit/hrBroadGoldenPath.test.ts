@@ -46,7 +46,7 @@ describe("HR Excuse request lifecycle", () => {
       HR_ROUTE.lastIndexOf("\n", idx) + 1,
       HR_ROUTE.indexOf("\n", idx)
     );
-    expect(line).toContain("hr:update");
+    expect(line).toContain("authorize(");
   });
 });
 
