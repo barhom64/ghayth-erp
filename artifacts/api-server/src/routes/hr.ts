@@ -2154,11 +2154,11 @@ router.get("/leave-requests/:id/stages", authorize({ feature: "hr", action: "lis
     const stages = await rawQuery<any>(
       `SELECT las.*, e.name AS "decidedByName"
        FROM leave_approval_stages las
-       LEFT JOIN employee_assignments ea ON ea.id = las."decidedBy"
+       LEFT JOIN employee_assignments ea ON ea.id = las."decidedBy" AND ea."companyId" = $2
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE las."leaveRequestId" = $1
        ORDER BY las.stage ASC`,
-      [id]
+      [id, scope.companyId]
     );
 
     // Also get the configured chain steps for context
@@ -2326,10 +2326,10 @@ router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view
     const lines = await rawQuery<any>(
       `SELECT pl.*, e.name AS "employeeName"
        FROM payroll_lines pl
-       LEFT JOIN employee_assignments ea ON ea.id = pl."assignmentId"
+       LEFT JOIN employee_assignments ea ON ea.id = pl."assignmentId" AND ea."companyId" = $2
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY pl.id LIMIT 1000`,
-      [id]
+      [id, scope.companyId]
     );
     const totalBasic = lines.reduce((s: number, l: any) => s + Number(l.basicSalary || 0), 0);
     const totalAllowances = lines.reduce((s: number, l: any) => s + Number(l.allowances || 0), 0);
@@ -2364,10 +2364,10 @@ router.get("/payroll/:id/lines", authorize({ feature: "hr.payroll.runs", action:
     const lines = await rawQuery<any>(
       `SELECT pl.*, e.name AS "employeeName", e."empNumber"
        FROM payroll_lines pl
-       JOIN employee_assignments ea ON ea.id = pl."assignmentId"
+       JOIN employee_assignments ea ON ea.id = pl."assignmentId" AND ea."companyId" = $2
        JOIN employees e ON e.id = ea."employeeId"
        WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY e.name LIMIT 1000`,
-      [Number(id)]
+      [Number(id), scope.companyId]
     );
     const data = lines.map((l: any) => ({
       ...l, basic: Number(l.basic), grossSalary: Number(l.grossSalary),
@@ -5251,9 +5251,9 @@ router.get("/evaluation-cycles/:id", authorize({ feature: "hr", action: "view" }
       `SELECT pe.*, e.name AS "evaluatorName", ea."jobTitle" AS "evaluatorTitle"
        FROM peer_evaluations pe
        JOIN employees e ON e.id = pe."evaluatorId"
-       LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+       LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active' AND ea."companyId" = $2
        WHERE pe."cycleId" = $1`,
-      [cycleId]
+      [cycleId, scope.companyId]
     );
 
     const participants = await rawQuery<any>(

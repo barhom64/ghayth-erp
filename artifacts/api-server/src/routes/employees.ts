@@ -629,10 +629,10 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
               ea."jobTitle", ea.role, ea.salary, ea."branchId",
               b.name AS "branchName"
        FROM employees e
-       JOIN employee_assignments ea ON ea."employeeId" = e.id
-       LEFT JOIN branches b ON b.id = ea."branchId"
+       JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $2
+       LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = $2
        WHERE e.id = $1 AND e."deletedAt" IS NULL`,
-      [empId]
+      [empId, scope.companyId]
     );
 
     res.status(201).json({
@@ -786,9 +786,9 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
       rawQuery<any>(
         `SELECT a.id, a.date, a."checkIn", a."checkOut", a."lateMinutes", a.status
          FROM attendance a
-         WHERE a."assignmentId" = $1
+         WHERE a."assignmentId" = $1 AND a."companyId" = $2
          ORDER BY a.date DESC LIMIT 30`,
-        [employee.assignmentId]
+        [employee.assignmentId, scope.companyId]
       ),
       rawQuery<any>(
         `SELECT lr.id, lr.status, lr."startDate", lr."endDate", lr.days, lr.reason,
@@ -1090,10 +1090,10 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
               COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
               ea.role, ea.salary, ea."branchId", ea."departmentId", ea."managerId"
          FROM employees e
-         JOIN employee_assignments ea ON ea.id = $2
+         JOIN employee_assignments ea ON ea.id = $2 AND ea."companyId" = $3
          LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
         WHERE e.id = $1 AND e."deletedAt" IS NULL`,
-      [id, employee.assignmentId]
+      [id, employee.assignmentId, scope.companyId]
     );
 
     // Build a field-level diff for the audit log so operators can see what

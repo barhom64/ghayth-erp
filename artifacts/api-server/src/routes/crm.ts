@@ -1016,8 +1016,8 @@ router.post("/followup-check", authorize({ feature: "crm", action: "create" }), 
     if (uniqueEmployeeIds.length > 0) {
       try {
         const asgnRows = await rawQuery<any>(
-          `SELECT DISTINCT ON ("employeeId") id, "employeeId" FROM employee_assignments WHERE "employeeId" = ANY($1) AND status='active'`,
-          [uniqueEmployeeIds]
+          `SELECT DISTINCT ON ("employeeId") id, "employeeId" FROM employee_assignments WHERE "employeeId" = ANY($1) AND "companyId" = $2 AND status='active'`,
+          [uniqueEmployeeIds, scope.companyId]
         );
         for (const row of asgnRows) {
           assignmentMap.set(row.employeeId, row.id);
