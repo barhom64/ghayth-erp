@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +41,29 @@ export default function ContractDetailPage() {
   const [, navigate] = useLocation();
   const id = params?.id || "";
   const queryClient = useQueryClient();
+  const [terminateOpen, setTerminateOpen] = useState(false);
+
+  const submitTerminate = async (reason: string) => {
+    setTerminateOpen(false);
+    try {
+      await apiFetch(`/properties/contracts/${id}/terminate`, {
+        method: "POST",
+        body: JSON.stringify({
+          reason,
+          terminationDate: todayLocal(),
+        }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["properties-contract", id] });
+      toast({ title: "تم إنهاء العقد بنجاح" });
+      navigate("/properties/contracts");
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "تعذر إنهاء العقد",
+        description: err.message || "حدث خطأ أثناء إنهاء العقد",
+      });
+    }
+  };
 
   const { data: contract, isLoading, isError, refetch } = useApiQuery<any>(
     ["properties-contract", id],
@@ -222,6 +247,7 @@ export default function ContractDetailPage() {
   const notFound = !isLoading && !contract;
 
   return (
+    <>
     <EntityDetailPage
       title={contract?.ejarNumber ? `عقد ${contract.ejarNumber}` : contract ? `عقد #${contract.id}` : notFound ? "العقد غير موجود" : "..."}
       subtitle={contract?.tenantName || undefined}
@@ -278,28 +304,7 @@ export default function ContractDetailPage() {
           label: "إنهاء",
           icon: XCircle,
           variant: "outline",
-          onClick: async () => {
-            try {
-              const reason = window.prompt("سبب إنهاء العقد:");
-              if (!reason) return;
-              await apiFetch(`/properties/contracts/${id}/terminate`, {
-                method: "POST",
-                body: JSON.stringify({
-                  reason,
-                  terminationDate: todayLocal(),
-                }),
-              });
-              queryClient.invalidateQueries({ queryKey: ["properties-contract", id] });
-              toast({ title: "تم إنهاء العقد بنجاح" });
-              navigate("/properties/contracts");
-            } catch (err: any) {
-              toast({
-                variant: "destructive",
-                title: "تعذر إنهاء العقد",
-                description: err.message || "حدث خطأ أثناء إنهاء العقد",
-              });
-            }
-          },
+          onClick: () => setTerminateOpen(true),
         },
       ]}
       kpis={[
@@ -331,6 +336,15 @@ export default function ContractDetailPage() {
       tabs={tabs}
       defaultTab="overview"
     />
+    <PromptDialog
+      open={terminateOpen}
+      title="إنهاء العقد"
+      description="يرجى إدخال سبب إنهاء العقد. سيتم تسجيل العقد كمنتهٍ بتاريخ اليوم."
+      confirmLabel="تأكيد الإنهاء"
+      onSubmit={submitTerminate}
+      onClose={() => setTerminateOpen(false)}
+    />
+    </>
   );
 }
 

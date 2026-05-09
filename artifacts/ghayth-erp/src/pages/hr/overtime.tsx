@@ -18,6 +18,8 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { OVERTIME_STATUS } from "@/lib/hr-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PromptDialog } from "@/components/shared/prompt-dialog";
+import { useState } from "react";
 
 const STATUS_OPTIONS = Object.entries(OVERTIME_STATUS).map(([value, { label }]) => ({ value, label }));
 const STATUS_MAP = OVERTIME_STATUS;
@@ -27,6 +29,7 @@ export default function OvertimePage() {
   const [filters, setFilters] = useFilters();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [rejectingId, setRejectingId] = useState<number | null>(null);
 
   const { data, isLoading, isError } = useApiQuery<{ data: any[]; stats: any; total: number }>(
     ["hr-overtime"],
@@ -47,8 +50,12 @@ export default function OvertimePage() {
     await approveMut.mutateAsync({ __url: `/hr/overtime/${id}/approve` } as any);
     queryClient.invalidateQueries({ queryKey: ["hr-overtime"] });
   };
-  const handleReject = async (id: number) => {
-    const reason = window.prompt("سبب الرفض (اختياري):");
+  const handleReject = (id: number) => setRejectingId(id);
+
+  const submitRejection = async (reason: string) => {
+    if (rejectingId === null) return;
+    const id = rejectingId;
+    setRejectingId(null);
     await rejectMut.mutateAsync({ __url: `/hr/overtime/${id}/reject`, reason } as any);
     queryClient.invalidateQueries({ queryKey: ["hr-overtime"] });
   };
@@ -283,6 +290,15 @@ export default function OvertimePage() {
         emptyMessage="لا توجد طلبات وقت إضافي — سجّل طلب جديد للبدء"
         pageSize={20}
         onRowClick={(item) => navigate(`/hr/overtime/${item.id}`)}
+      />
+      <PromptDialog
+        open={rejectingId !== null}
+        title="رفض طلب الوقت الإضافي"
+        description="يمكنك إضافة سبب الرفض (اختياري)."
+        optional
+        confirmLabel="تأكيد الرفض"
+        onSubmit={submitRejection}
+        onClose={() => setRejectingId(null)}
       />
     </PageShell>
   );
