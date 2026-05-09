@@ -821,16 +821,18 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
     const [asgn] = await rawQuery<any>(`SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND status = 'active' LIMIT 1`, [userId]);
     effectiveAssignmentId = asgn?.id || userId;
   }
-  const { insertId: prId } = await rawExecute(
-    `INSERT INTO purchase_requests ("companyId","supplierId",ref,status,"totalAmount","requestedBy",notes) VALUES ($1,$2,$3,'pending',$4,$5,$6)`,
-    [companyId, supplierId, ref, estimatedTotal, effectiveAssignmentId, `طلب شراء تلقائي - مخزون منخفض: ${product.name}`]
-  );
-  if (prId) {
-    await rawExecute(
+  let prId = 0;
+  await withTransaction(async (client) => {
+    const result = await client.query(
+      `INSERT INTO purchase_requests ("companyId","supplierId",ref,status,"totalAmount","requestedBy",notes) VALUES ($1,$2,$3,'pending',$4,$5,$6) RETURNING id`,
+      [companyId, supplierId, ref, estimatedTotal, effectiveAssignmentId, `طلب شراء تلقائي - مخزون منخفض: ${product.name}`]
+    );
+    prId = result.rows[0].id;
+    await client.query(
       `INSERT INTO purchase_request_items ("requestId","productId",quantity,"unitPrice","totalPrice") VALUES ($1,$2,$3,$4,$5)`,
       [prId, product.id, reorderQty, estimatedUnitCost, estimatedTotal]
     );
-  }
+  });
   return prId || null;
 }
 

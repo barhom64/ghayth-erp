@@ -8,7 +8,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
@@ -336,20 +336,26 @@ router.post("/tickets/:id/replies", requirePermission("support:create"), async (
     const [ticket] = await rawQuery<any>(`SELECT id, ref, title, "firstResponseAt", "slaDeadline", priority FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO ticket_replies ("ticketId","authorId","authorName",message,"isInternal") VALUES ($1,$2,$3,$4,$5)`,
-      [ticketId, scope.userId, b.authorName, b.message, b.isInternal || false]
-    );
-    if (!b.isInternal && !ticket.firstResponseAt) {
-      await rawExecute(`UPDATE support_tickets SET "firstResponseAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
-    }
-
-    if (ticket.slaDeadline && new Date() > new Date(ticket.slaDeadline)) {
-      try {
-        await rawExecute(
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const result = await client.query(
+        `INSERT INTO ticket_replies ("ticketId","authorId","authorName",message,"isInternal") VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+        [ticketId, scope.userId, b.authorName, b.message, b.isInternal || false]
+      );
+      insertId = result.rows[0].id;
+      if (!b.isInternal && !ticket.firstResponseAt) {
+        await client.query(`UPDATE support_tickets SET "firstResponseAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
+      }
+      if (ticket.slaDeadline && new Date() > new Date(ticket.slaDeadline)) {
+        await client.query(
           `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND priority != 'critical' AND "deletedAt" IS NULL`,
           [ticketId, scope.companyId]
         );
+      }
+    });
+
+    if (ticket.slaDeadline && new Date() > new Date(ticket.slaDeadline)) {
+      try {
         await createNotification({
           companyId: scope.companyId,
           assignmentId: scope.activeAssignmentId,

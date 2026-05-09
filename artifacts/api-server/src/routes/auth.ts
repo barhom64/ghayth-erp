@@ -1,7 +1,7 @@
 import { handleRouteError, ValidationError, ForbiddenError, NotFoundError } from "../lib/errorHandler.js";
 import { Router, type Response as ExpressResponse } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { signToken, signRefreshToken, verifyPassword, hashPassword } from "../lib/auth.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import rateLimit from "express-rate-limit";
@@ -312,14 +312,15 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
 
     setAccessTokenCookie(res, newToken);
 
-    await rawQuery(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE id = $1 AND "revokedAt" IS NULL`, [rt.id]);
-
     const newRefreshToken = signRefreshToken();
     const newExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
-    await rawExecute(
-      `INSERT INTO refresh_tokens (token, "userId", "expiresAt", "userAgent", "ipAddress") VALUES ($1, $2, $3, $4, $5)`,
-      [newRefreshToken, rt.userId, newExpiresAt.toISOString(), req.headers["user-agent"] ?? null, req.ip ?? null]
-    );
+    await withTransaction(async (client) => {
+      await client.query(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE id = $1 AND "revokedAt" IS NULL`, [rt.id]);
+      await client.query(
+        `INSERT INTO refresh_tokens (token, "userId", "expiresAt", "userAgent", "ipAddress") VALUES ($1, $2, $3, $4, $5)`,
+        [newRefreshToken, rt.userId, newExpiresAt.toISOString(), req.headers["user-agent"] ?? null, req.ip ?? null]
+      );
+    });
     setRefreshTokenCookie(res, newRefreshToken);
 
     emitEvent({ companyId: 0, userId: rt.userId, action: "auth.refresh", entity: "users", entityId: rt.userId }).catch((e) => logger.error(e, "auth background task failed"));
@@ -372,26 +373,21 @@ router.post("/switch-assignment", authMiddleware, authedUserLimiter, async (req,
       throw new NotFoundError("التعيين غير موجود أو غير نشط");
     }
 
-    // Revoke all existing refresh tokens to prevent session fixation (C9)
-    await rawExecute(
-      'UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE "userId"=$1 AND "revokedAt" IS NULL',
-      [scope.userId]
-    );
-
     const token = signToken({ userId: scope.userId, assignmentId: Number(assignmentId), role: assignment.role });
     setAccessTokenCookie(res, token);
 
-    // Issue a new refresh token for the switched assignment
     const refreshToken = signRefreshToken();
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
     const userAgent = req.headers["user-agent"] ?? null;
     const ipAddress = req.ip ?? null;
 
-    await rawExecute(
-      `INSERT INTO refresh_tokens (token, "userId", "expiresAt", "userAgent", "ipAddress")
-       VALUES ($1, $2, $3, $4, $5)`,
-      [refreshToken, scope.userId, expiresAt.toISOString(), userAgent, ipAddress]
-    );
+    await withTransaction(async (client) => {
+      await client.query('UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE "userId"=$1 AND "revokedAt" IS NULL', [scope.userId]);
+      await client.query(
+        `INSERT INTO refresh_tokens (token, "userId", "expiresAt", "userAgent", "ipAddress") VALUES ($1, $2, $3, $4, $5)`,
+        [refreshToken, scope.userId, expiresAt.toISOString(), userAgent, ipAddress]
+      );
+    });
 
     setRefreshTokenCookie(res, refreshToken);
 
