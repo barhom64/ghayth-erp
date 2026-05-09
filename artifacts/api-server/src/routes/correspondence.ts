@@ -3,6 +3,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
   ValidationError,
@@ -61,7 +62,7 @@ async function generateCorrespondenceRef(direction: "outgoing" | "incoming", com
 }
 
 // ── List correspondence ──
-correspondenceRouter.get("/", requirePermission("communications:read"), async (req, res) => {
+correspondenceRouter.get("/", authorize({ feature: "communications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { direction, entityType, entityId, search, status } = req.query as Record<string, string>;
@@ -106,7 +107,7 @@ correspondenceRouter.get("/", requirePermission("communications:read"), async (r
 });
 
 // ── Get single correspondence ──
-correspondenceRouter.get("/:id", requirePermission("communications:read"), async (req, res) => {
+correspondenceRouter.get("/:id", authorize({ feature: "communications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -126,7 +127,7 @@ correspondenceRouter.get("/:id", requirePermission("communications:read"), async
 });
 
 // ── Create correspondence ──
-correspondenceRouter.post("/", requirePermission("communications:write"), async (req, res) => {
+correspondenceRouter.post("/", authorize({ feature: "communications", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const data = createSchema.parse(req.body);
@@ -162,7 +163,7 @@ correspondenceRouter.post("/", requirePermission("communications:write"), async 
 });
 
 // ── Update correspondence (draft only) ──
-correspondenceRouter.patch("/:id", requirePermission("communications:write"), async (req, res) => {
+correspondenceRouter.patch("/:id", authorize({ feature: "communications", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -207,7 +208,7 @@ correspondenceRouter.patch("/:id", requirePermission("communications:write"), as
 });
 
 // ── Send correspondence ──
-correspondenceRouter.post("/:id/send", requirePermission("communications:write"), async (req, res) => {
+correspondenceRouter.post("/:id/send", authorize({ feature: "communications", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -238,7 +239,7 @@ correspondenceRouter.post("/:id/send", requirePermission("communications:write")
 });
 
 // ── Record response to correspondence ──
-correspondenceRouter.post("/:id/respond", requirePermission("communications:write"), async (req, res) => {
+correspondenceRouter.post("/:id/respond", authorize({ feature: "communications", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -290,7 +291,7 @@ correspondenceRouter.post("/:id/respond", requirePermission("communications:writ
 });
 
 // ── Dashboard stats ──
-correspondenceRouter.get("/stats/summary", requirePermission("communications:read"), async (req, res) => {
+correspondenceRouter.get("/stats/summary", authorize({ feature: "communications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [stats] = await rawQuery<any>(

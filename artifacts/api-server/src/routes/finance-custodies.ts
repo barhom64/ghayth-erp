@@ -148,7 +148,7 @@ custodiesRouter.get("/custodies", authorize({ feature: "finance.custodies", acti
   }
 });
 
-custodiesRouter.get("/custodies/report", requirePermission("finance:read"), async (req, res) => {
+custodiesRouter.get("/custodies/report", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -246,7 +246,7 @@ custodiesRouter.get("/custodies/report", requirePermission("finance:read"), asyn
   }
 });
 
-custodiesRouter.get("/custodies/summary", requirePermission("finance:read"), async (req, res) => {
+custodiesRouter.get("/custodies/summary", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -521,7 +521,7 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
   }
 });
 
-custodiesRouter.post("/custodies/settle", requirePermission("finance:create"), async (req, res) => {
+custodiesRouter.post("/custodies/settle", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -659,7 +659,7 @@ custodiesRouter.post("/custodies/settle", requirePermission("finance:create"), a
   }
 });
 
-custodiesRouter.post("/custodies/:id/settle", requirePermission("finance:create"), async (req, res) => {
+custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 

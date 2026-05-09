@@ -10,6 +10,7 @@ import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { emitEvent, createAuditLog, todayISO } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
@@ -62,7 +63,7 @@ const updateRecurringJournalSchema = z.object({
   templateLines: z.array(recurringJournalLineSchema).optional(),
 });
 
-recurringRouter.get("/recurring-journals", requirePermission("finance:read"), async (req, res) => {
+recurringRouter.get("/recurring-journals", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -93,7 +94,7 @@ recurringRouter.get("/recurring-journals", requirePermission("finance:read"), as
   }
 });
 
-recurringRouter.get("/recurring-journals/:id", requirePermission("finance:read"), async (req, res) => {
+recurringRouter.get("/recurring-journals/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -142,7 +143,7 @@ function validateTemplateLines(lines: any): { ok: true; lines: any[] } | { ok: f
   };
 }
 
-recurringRouter.post("/recurring-journals", requirePermission("finance:create"), async (req, res) => {
+recurringRouter.post("/recurring-journals", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -204,7 +205,7 @@ recurringRouter.post("/recurring-journals", requirePermission("finance:create"),
   }
 });
 
-recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:update"), async (req, res) => {
+recurringRouter.patch("/recurring-journals/:id", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -291,7 +292,7 @@ recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:upda
   }
 });
 
-recurringRouter.post("/recurring-journals/:id/run-now", requirePermission("finance:create"), async (req, res) => {
+recurringRouter.post("/recurring-journals/:id/run-now", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -343,7 +344,7 @@ recurringRouter.post("/recurring-journals/:id/run-now", requirePermission("finan
   }
 });
 
-recurringRouter.delete("/recurring-journals/:id", requirePermission("finance:delete"), async (req, res) => {
+recurringRouter.delete("/recurring-journals/:id", authorize({ feature: "finance", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
 

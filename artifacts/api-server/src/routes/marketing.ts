@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError,
   parseId,
   zodParse,
@@ -52,7 +53,7 @@ const updateRevenueSchema = z.object({
 
 const router = Router();
 
-router.get("/campaigns", requirePermission("marketing:read"), async (req, res) => {
+router.get("/campaigns", authorize({ feature: "marketing", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
@@ -60,7 +61,7 @@ router.get("/campaigns", requirePermission("marketing:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
 
-router.post("/campaigns", requirePermission("marketing:create"), async (req, res) => {
+router.post("/campaigns", authorize({ feature: "marketing", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createCampaignSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -100,7 +101,7 @@ router.post("/campaigns", requirePermission("marketing:create"), async (req, res
   } catch (err) { handleRouteError(err, res, "Create campaign error:"); }
 });
 
-router.get("/campaigns/:id", requirePermission("marketing:read"), async (req, res) => {
+router.get("/campaigns/:id", authorize({ feature: "marketing", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -110,7 +111,7 @@ router.get("/campaigns/:id", requirePermission("marketing:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
 
-router.patch("/campaigns/:id", requirePermission("marketing:update"), async (req, res) => {
+router.patch("/campaigns/:id", authorize({ feature: "marketing", action: "update" }), async (req, res) => {
   try {
     const parsed = zodParse(updateCampaignSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -140,7 +141,7 @@ router.patch("/campaigns/:id", requirePermission("marketing:update"), async (req
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
 
-router.delete("/campaigns/:id", requirePermission("marketing:delete"), async (req, res) => {
+router.delete("/campaigns/:id", authorize({ feature: "marketing", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -153,7 +154,7 @@ router.delete("/campaigns/:id", requirePermission("marketing:delete"), async (re
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
 
-router.get("/stats", requirePermission("marketing:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "marketing", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -181,7 +182,7 @@ router.get("/stats", requirePermission("marketing:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
 
-router.get("/campaigns/:id/roas", requirePermission("marketing:read"), async (req, res) => {
+router.get("/campaigns/:id/roas", authorize({ feature: "marketing", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -205,7 +206,7 @@ router.get("/campaigns/:id/roas", requirePermission("marketing:read"), async (re
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
 
-router.get("/funnel", requirePermission("marketing:read"), async (req, res) => {
+router.get("/funnel", authorize({ feature: "marketing", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -231,7 +232,7 @@ router.get("/funnel", requirePermission("marketing:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
 
-router.patch("/campaigns/:id/revenue", requirePermission("marketing:update"), async (req, res) => {
+router.patch("/campaigns/:id/revenue", authorize({ feature: "marketing", action: "update" }), async (req, res) => {
   try {
     const parsed = zodParse(updateRevenueSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -245,7 +246,7 @@ router.patch("/campaigns/:id/revenue", requirePermission("marketing:update"), as
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
 
-router.get("/templates", requirePermission("marketing:read"), async (req, res) => {
+router.get("/templates", authorize({ feature: "marketing", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(

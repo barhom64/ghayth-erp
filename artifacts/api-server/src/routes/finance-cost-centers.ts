@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -34,7 +35,7 @@ const updateCostCenterSchema = z.object({
   status: z.string().optional(),
 });
 
-router.get("/cost-centers", requirePermission("finance:read"), async (req, res) => {
+router.get("/cost-centers", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -56,7 +57,7 @@ router.get("/cost-centers", requirePermission("finance:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "List cost centers error"); }
 });
 
-router.get("/cost-centers/:id", requirePermission("finance:read"), async (req, res) => {
+router.get("/cost-centers/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -69,7 +70,7 @@ router.get("/cost-centers/:id", requirePermission("finance:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "Get cost center error"); }
 });
 
-router.post("/cost-centers", requirePermission("finance:create"), async (req, res) => {
+router.post("/cost-centers", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = zodParse(createCostCenterSchema.safeParse(req.body));
@@ -98,7 +99,7 @@ router.post("/cost-centers", requirePermission("finance:create"), async (req, re
   } catch (err) { handleRouteError(err, res, "Create cost center error"); }
 });
 
-router.patch("/cost-centers/:id", requirePermission("finance:update"), async (req, res) => {
+router.patch("/cost-centers/:id", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -136,7 +137,7 @@ router.patch("/cost-centers/:id", requirePermission("finance:update"), async (re
   } catch (err) { handleRouteError(err, res, "Update cost center error"); }
 });
 
-router.delete("/cost-centers/:id", requirePermission("finance:delete"), async (req, res) => {
+router.delete("/cost-centers/:id", authorize({ feature: "finance", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

@@ -6,6 +6,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError, ValidationError, ForbiddenError, ConflictError , zodParse } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
 
 // ── Zod validation schemas ──────────────────────────────────────────
@@ -85,7 +86,7 @@ function severity(value: number, warnThreshold: number, critThreshold: number): 
   return "ok";
 }
 
-router.get("/", requirePermission("operations:read"), async (req, res) => {
+router.get("/", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { where, params } = buildFilter(scope, req);
@@ -498,7 +499,7 @@ async function buildChecklistItems(scope: any, where: string, params: any[], com
     return items;
 }
 
-router.get("/daily-close/checklist", requirePermission("operations:read"), async (req, res) => {
+router.get("/daily-close/checklist", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const companies = scope.allowedCompanies;
@@ -527,7 +528,7 @@ router.get("/daily-close/checklist", requirePermission("operations:read"), async
   }
 });
 
-router.post("/daily-close/execute", requirePermission("finance:write"), async (req, res) => {
+router.post("/daily-close/execute", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(dailyCloseExecuteSchema.safeParse(req.body));
     const scope = req.scope!;

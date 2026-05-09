@@ -171,7 +171,7 @@ async function logCommunication(companyId: number, direction: string, subject: s
   }
 }
 
-router.get("/", requirePermission("requests:read"), async (req, res) => {
+router.get("/", authorize({ feature: "requests", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const isManager = HR_APPROVAL_ROLES.includes(scope.role);
@@ -258,7 +258,7 @@ router.post("/", authorize({ feature: "requests.my", action: "create" }), async 
   } catch (err) { handleRouteError(err, res, "Create request error:"); }
 });
 
-router.get("/catalog", requirePermission("requests:read"), async (req, res) => {
+router.get("/catalog", authorize({ feature: "requests", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const role = scope.role;
@@ -327,7 +327,7 @@ router.get("/catalog", requirePermission("requests:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.get("/types", requirePermission("requests:read"), async (req, res) => {
+router.get("/types", authorize({ feature: "requests", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM request_types WHERE "isActive"=true AND ("companyId"=$1 OR "companyId" IS NULL) ORDER BY name LIMIT 500`, [scope.companyId]);
@@ -335,7 +335,7 @@ router.get("/types", requirePermission("requests:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.post("/types", requirePermission("requests:write"), async (req, res) => {
+router.post("/types", authorize({ feature: "requests", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createRequestTypeSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -351,7 +351,7 @@ router.post("/types", requirePermission("requests:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.get("/workflows", requirePermission("requests:read"), async (req, res) => {
+router.get("/workflows", authorize({ feature: "requests", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM workflows WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
@@ -359,7 +359,7 @@ router.get("/workflows", requirePermission("requests:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.post("/workflows", requirePermission("requests:write"), async (req, res) => {
+router.post("/workflows", authorize({ feature: "requests", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createWorkflowSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -375,7 +375,7 @@ router.post("/workflows", requirePermission("requests:write"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.get("/stats", requirePermission("requests:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "requests", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -582,7 +582,7 @@ router.post("/:id/approve", authorize({ feature: "requests", action: "approve", 
   }
 });
 
-router.post("/:id/reject", requirePermission("requests:write"), async (req, res) => {
+router.post("/:id/reject", authorize({ feature: "requests", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(rejectRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
@@ -643,7 +643,7 @@ router.post("/:id/reject", requirePermission("requests:write"), async (req, res)
   }
 });
 
-router.post("/:id/return", requirePermission("requests:write"), async (req, res) => {
+router.post("/:id/return", authorize({ feature: "requests", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(returnRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
@@ -705,7 +705,7 @@ router.post("/:id/return", requirePermission("requests:write"), async (req, res)
   }
 });
 
-router.get("/:id/actions", requirePermission("requests:read"), async (req, res) => {
+router.get("/:id/actions", authorize({ feature: "requests", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -765,7 +765,7 @@ router.delete("/:id", authorize({ feature: "requests", action: "delete", resourc
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.post("/:id/convert", requirePermission("requests:write"), async (req, res) => {
+router.post("/:id/convert", authorize({ feature: "requests", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(convertRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;

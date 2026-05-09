@@ -65,7 +65,7 @@ vendorsRouter.get("/vendors", authorize({ feature: "finance.vendors", action: "l
   }
 });
 
-vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, res) => {
+vendorsRouter.post("/vendors", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { name, contactPerson, phone, email, taxNumber, address, paymentTerms, category } = zodParse(createVendorSchema.safeParse(req.body ?? {}));
@@ -100,7 +100,7 @@ vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, 
   }
 });
 
-vendorsRouter.patch("/vendors/:id", requirePermission("finance:update"), async (req, res) => {
+vendorsRouter.patch("/vendors/:id", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const vendorId = parseId(req.params.id, "id");
@@ -151,7 +151,7 @@ vendorsRouter.patch("/vendors/:id", requirePermission("finance:update"), async (
   }
 });
 
-vendorsRouter.delete("/vendors/:id", requirePermission("finance:delete"), async (req, res) => {
+vendorsRouter.delete("/vendors/:id", authorize({ feature: "finance", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -216,7 +216,7 @@ vendorsRouter.delete("/vendors/:id", requirePermission("finance:delete"), async 
   }
 });
 
-vendorsRouter.get("/stats", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/stats", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -246,7 +246,7 @@ vendorsRouter.get("/stats", requirePermission("finance:read"), async (req, res) 
   }
 });
 
-vendorsRouter.get("/receivables", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/receivables", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -266,7 +266,7 @@ vendorsRouter.get("/receivables", requirePermission("finance:read"), async (req,
   }
 });
 
-vendorsRouter.get("/receivables/:id", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/receivables/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -282,7 +282,7 @@ vendorsRouter.get("/receivables/:id", requirePermission("finance:read"), async (
   } catch (err) { handleRouteError(err, res, "Receivable detail error:"); }
 });
 
-vendorsRouter.get("/payments", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/payments", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -303,7 +303,7 @@ vendorsRouter.get("/payments", requirePermission("finance:read"), async (req, re
   }
 });
 
-vendorsRouter.get("/commitments", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/commitments", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -322,7 +322,7 @@ vendorsRouter.get("/commitments", requirePermission("finance:read"), async (req,
   }
 });
 
-vendorsRouter.get("/commitments/:id", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/commitments/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -338,7 +338,7 @@ vendorsRouter.get("/commitments/:id", requirePermission("finance:read"), async (
   } catch (err) { handleRouteError(err, res, "Commitment detail error:"); }
 });
 
-vendorsRouter.get("/financial-requests/:id", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/financial-requests/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -355,7 +355,7 @@ vendorsRouter.get("/financial-requests/:id", requirePermission("finance:read"), 
   } catch (err) { handleRouteError(err, res, "Financial request detail error:"); }
 });
 
-vendorsRouter.get("/financial-requests", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/financial-requests", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -378,7 +378,7 @@ vendorsRouter.get("/financial-requests", requirePermission("finance:read"), asyn
 // Phase 7.1 — migrated from finance.ts (canonical ownership consolidation)
 // ─────────────────────────────────────────────────────────────────────────────
 
-vendorsRouter.get("/vendors/:id", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/vendors/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = (req as any).scope!;
     const id = parseId(req.params.id, "id");
@@ -407,7 +407,7 @@ vendorsRouter.get("/vendors/:id", requirePermission("finance:read"), async (req,
 // APPROVAL ENDPOINTS — commitments, receivables, vouchers, financial-requests, budgets
 // ─────────────────────────────────────────────────────────────────────────────
 
-vendorsRouter.patch("/commitments/:id/approve", requirePermission("finance:update"), async (req, res) => {
+vendorsRouter.patch("/commitments/:id/approve", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -434,7 +434,7 @@ vendorsRouter.patch("/commitments/:id/approve", requirePermission("finance:updat
   } catch (err) { handleRouteError(err, res, "Commitment approval error:"); }
 });
 
-vendorsRouter.patch("/receivables/:id/approve", requirePermission("finance:update"), async (req, res) => {
+vendorsRouter.patch("/receivables/:id/approve", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -461,7 +461,7 @@ vendorsRouter.patch("/receivables/:id/approve", requirePermission("finance:updat
   } catch (err) { handleRouteError(err, res, "Receivable approval error:"); }
 });
 
-vendorsRouter.patch("/vouchers/:id/approve", requirePermission("finance:update"), async (req, res) => {
+vendorsRouter.patch("/vouchers/:id/approve", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -488,7 +488,7 @@ vendorsRouter.patch("/vouchers/:id/approve", requirePermission("finance:update")
   } catch (err) { handleRouteError(err, res, "Voucher approval error:"); }
 });
 
-vendorsRouter.patch("/financial-requests/:id/approve", requirePermission("finance:update"), async (req, res) => {
+vendorsRouter.patch("/financial-requests/:id/approve", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -514,7 +514,7 @@ vendorsRouter.patch("/financial-requests/:id/approve", requirePermission("financ
   } catch (err) { handleRouteError(err, res, "Financial request approval error:"); }
 });
 
-vendorsRouter.patch("/budgets/:id/approve", requirePermission("finance:update"), async (req, res) => {
+vendorsRouter.patch("/budgets/:id/approve", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

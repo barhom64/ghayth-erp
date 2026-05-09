@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, zodParse } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -25,7 +26,7 @@ interface ImpactItem {
   detail: string;
 }
 
-router.post("/", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const parsed = zodParse(impactPreviewSchema.safeParse(req.body));

@@ -5,6 +5,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import dns from "node:dns/promises";
 import { z } from "zod";
@@ -86,7 +87,7 @@ function maskConfig(config: any): any {
 
 const GOV_SAFE_COLUMNS = `id, "companyId", type, name, status, enabled, "lastCheckedAt", "lastCheckStatus", "lastCheckMessage", "createdAt", "updatedAt"`;
 
-router.get("/", requirePermission("admin:write"), async (req, res) => {
+router.get("/", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -111,7 +112,7 @@ router.get("/", requirePermission("admin:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Gov integrations list error:"); }
 });
 
-router.put("/:id", requirePermission("admin:write"), async (req, res) => {
+router.put("/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(updateIntegrationSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -168,7 +169,7 @@ router.put("/:id", requirePermission("admin:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Gov integration update error:"); }
 });
 
-router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/test", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     zodParse(testIntegrationSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -278,7 +279,7 @@ router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Gov integration test error:"); }
 });
 
-router.get("/expiring/iqama", requirePermission("admin:write"), async (req, res) => {
+router.get("/expiring/iqama", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 30;
@@ -306,7 +307,7 @@ router.get("/expiring/iqama", requirePermission("admin:write"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Expiring iqama error:"); }
 });
 
-router.get("/expiring/registration", requirePermission("admin:write"), async (req, res) => {
+router.get("/expiring/registration", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 30;
@@ -329,7 +330,7 @@ router.get("/expiring/registration", requirePermission("admin:write"), async (re
   } catch (err) { handleRouteError(err, res, "Expiring registration error:"); }
 });
 
-router.get("/links", requirePermission("admin:write"), async (req, res) => {
+router.get("/links", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.query as any;
@@ -352,7 +353,7 @@ router.get("/links", requirePermission("admin:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Gov links list error:"); }
 });
 
-router.post("/links", requirePermission("admin:write"), async (req, res) => {
+router.post("/links", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(createLinkSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -395,7 +396,7 @@ router.post("/links", requirePermission("admin:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Gov link create error:"); }
 });
 
-router.patch("/links/:id", requirePermission("admin:write"), async (req, res) => {
+router.patch("/links/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(patchLinkSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -430,7 +431,7 @@ router.patch("/links/:id", requirePermission("admin:write"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Gov link update error:"); }
 });
 
-router.delete("/links/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/links/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

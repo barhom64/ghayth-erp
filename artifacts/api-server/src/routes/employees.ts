@@ -654,7 +654,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
   }
 });
 
-router.get("/onboarding-tasks", requirePermission("hr:read"), async (req, res) => {
+router.get("/onboarding-tasks", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { employeeId, status } = req.query as any;
@@ -674,7 +674,7 @@ router.get("/onboarding-tasks", requirePermission("hr:read"), async (req, res) =
   } catch (err) { logger.error(err, "Onboarding tasks error:"); res.json({ data: [], total: 0 }); }
 });
 
-router.patch("/onboarding-tasks/:id", requirePermission("hr:update"), async (req, res) => {
+router.patch("/onboarding-tasks/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(patchOnboardingTaskSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -702,7 +702,7 @@ router.patch("/onboarding-tasks/:id", requirePermission("hr:update"), async (req
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/job-titles", requirePermission("hr:read"), async (req, res) => {
+router.get("/job-titles", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -713,7 +713,7 @@ router.get("/job-titles", requirePermission("hr:read"), async (req, res) => {
   } catch (err) { res.json({ data: [], total: 0 }); }
 });
 
-router.get("/documents", requirePermission("hr:read"), async (req, res) => {
+router.get("/documents", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -1274,7 +1274,7 @@ router.delete("/:id", authorize({ feature: "hr.employees", action: "delete", res
  * Seed obligations for all existing employees with future expiry dates.
  * Safe to re-run — dedupeKey prevents duplicates.
  */
-router.post("/obligations/seed", requirePermission("hr:update"), async (req, res) => {
+router.post("/obligations/seed", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     zodParse(seedObligationsSchema.safeParse(req.body));
     const scope = req.scope!;

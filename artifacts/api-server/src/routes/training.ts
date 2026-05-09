@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -77,7 +78,7 @@ const patchEnrollmentSchema = z.object({
 
 const router = Router();
 
-router.get("/programs", requirePermission("hr:read"), async (req, res) => {
+router.get("/programs", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM training_programs WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
@@ -85,7 +86,7 @@ router.get("/programs", requirePermission("hr:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
-router.post("/programs", requirePermission("hr:create"), async (req, res) => {
+router.post("/programs", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(createProgramSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -117,7 +118,7 @@ router.post("/programs", requirePermission("hr:create"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create training program error:"); }
 });
 
-router.get("/programs/:id", requirePermission("hr:read"), async (req, res) => {
+router.get("/programs/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -127,7 +128,7 @@ router.get("/programs/:id", requirePermission("hr:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
-router.patch("/programs/:id", requirePermission("hr:update"), async (req, res) => {
+router.patch("/programs/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const b = zodParse(patchProgramSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -170,7 +171,7 @@ router.patch("/programs/:id", requirePermission("hr:update"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
-router.patch("/programs/:id/approve", requirePermission("hr:update"), async (req, res) => {
+router.patch("/programs/:id/approve", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(approveSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -200,7 +201,7 @@ router.patch("/programs/:id/approve", requirePermission("hr:update"), async (req
   }
 });
 
-router.patch("/programs/:id/reject", requirePermission("hr:update"), async (req, res) => {
+router.patch("/programs/:id/reject", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(rejectSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -233,7 +234,7 @@ router.patch("/programs/:id/reject", requirePermission("hr:update"), async (req,
   }
 });
 
-router.delete("/programs/:id", requirePermission("hr:delete"), async (req, res) => {
+router.delete("/programs/:id", authorize({ feature: "hr", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -250,7 +251,7 @@ router.delete("/programs/:id", requirePermission("hr:delete"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
-router.get("/enrollments", requirePermission("hr:read"), async (req, res) => {
+router.get("/enrollments", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { programId } = req.query;
@@ -262,7 +263,7 @@ router.get("/enrollments", requirePermission("hr:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
-router.post("/enrollments", requirePermission("hr:create"), async (req, res) => {
+router.post("/enrollments", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(createEnrollmentSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -314,7 +315,7 @@ router.post("/enrollments", requirePermission("hr:create"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Create training enrollment error:"); }
 });
 
-router.get("/enrollments/:id", requirePermission("hr:read"), async (req, res) => {
+router.get("/enrollments/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -324,7 +325,7 @@ router.get("/enrollments/:id", requirePermission("hr:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
-router.patch("/enrollments/:id", requirePermission("hr:update"), async (req, res) => {
+router.patch("/enrollments/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const b = zodParse(patchEnrollmentSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -349,7 +350,7 @@ router.patch("/enrollments/:id", requirePermission("hr:update"), async (req, res
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
-router.delete("/enrollments/:id", requirePermission("hr:delete"), async (req, res) => {
+router.delete("/enrollments/:id", authorize({ feature: "hr", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -369,7 +370,7 @@ router.delete("/enrollments/:id", requirePermission("hr:delete"), async (req, re
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
-router.get("/stats", requirePermission("hr:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;

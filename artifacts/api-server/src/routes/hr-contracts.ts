@@ -3,6 +3,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
   ValidationError,
@@ -50,7 +51,7 @@ const renewContractSchema = z.object({
 const updateContractSchema = createContractSchema.partial();
 
 // ── List all contracts ──
-contractsRouter.get("/", requirePermission("hr:read"), async (req, res) => {
+contractsRouter.get("/", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, employeeId, search } = req.query as Record<string, string>;
@@ -88,7 +89,7 @@ contractsRouter.get("/", requirePermission("hr:read"), async (req, res) => {
 });
 
 // ── Get single contract ──
-contractsRouter.get("/:id", requirePermission("hr:read"), async (req, res) => {
+contractsRouter.get("/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -114,7 +115,7 @@ contractsRouter.get("/:id", requirePermission("hr:read"), async (req, res) => {
 });
 
 // ── Create contract ──
-contractsRouter.post("/", requirePermission("hr:create"), async (req, res) => {
+contractsRouter.post("/", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const data = createContractSchema.parse(req.body);
@@ -168,7 +169,7 @@ contractsRouter.post("/", requirePermission("hr:create"), async (req, res) => {
 });
 
 // ── Update contract (draft only) ──
-contractsRouter.patch("/:id", requirePermission("hr:update"), async (req, res) => {
+contractsRouter.patch("/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -213,7 +214,7 @@ contractsRouter.patch("/:id", requirePermission("hr:update"), async (req, res) =
 });
 
 // ── Submit for approval ──
-contractsRouter.post("/:id/submit", requirePermission("hr:create"), async (req, res) => {
+contractsRouter.post("/:id/submit", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -241,7 +242,7 @@ contractsRouter.post("/:id/submit", requirePermission("hr:create"), async (req, 
 });
 
 // ── Approve contract ──
-contractsRouter.post("/:id/approve", requirePermission("hr:approve"), async (req, res) => {
+contractsRouter.post("/:id/approve", authorize({ feature: "hr", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -272,7 +273,7 @@ contractsRouter.post("/:id/approve", requirePermission("hr:approve"), async (req
 });
 
 // ── Reject contract ──
-contractsRouter.post("/:id/reject", requirePermission("hr:approve"), async (req, res) => {
+contractsRouter.post("/:id/reject", authorize({ feature: "hr", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -304,7 +305,7 @@ contractsRouter.post("/:id/reject", requirePermission("hr:approve"), async (req,
 });
 
 // ─�� Sign by company ──
-contractsRouter.post("/:id/sign-company", requirePermission("hr:approve"), async (req, res) => {
+contractsRouter.post("/:id/sign-company", authorize({ feature: "hr", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -368,7 +369,7 @@ contractsRouter.post("/:id/sign-employee", async (req, res) => {
 });
 
 // ── Activate contract (after both signatures) ──
-contractsRouter.post("/:id/activate", requirePermission("hr:update"), async (req, res) => {
+contractsRouter.post("/:id/activate", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -397,7 +398,7 @@ contractsRouter.post("/:id/activate", requirePermission("hr:update"), async (req
 });
 
 // ── Terminate contract ──
-contractsRouter.post("/:id/terminate", requirePermission("hr:update"), async (req, res) => {
+contractsRouter.post("/:id/terminate", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -429,7 +430,7 @@ contractsRouter.post("/:id/terminate", requirePermission("hr:update"), async (re
 });
 
 // ── Renew contract ──
-contractsRouter.post("/:id/renew", requirePermission("hr:create"), async (req, res) => {
+contractsRouter.post("/:id/renew", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

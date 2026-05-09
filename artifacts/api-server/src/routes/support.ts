@@ -90,7 +90,7 @@ function detectPriority(text: string): string {
   return 'medium';
 }
 
-router.get("/tickets", requirePermission("support:read"), async (req, res) => {
+router.get("/tickets", authorize({ feature: "support", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, priority } = req.query as any;
@@ -257,7 +257,7 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
   } catch (err) { handleRouteError(err, res, "Create ticket error:"); }
 });
 
-router.post("/tickets/check-sla", requirePermission("support:read"), async (req, res) => {
+router.post("/tickets/check-sla", authorize({ feature: "support", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const breached = await rawQuery<any>(
@@ -327,7 +327,7 @@ router.get("/tickets/:id", authorize({ feature: "support.tickets", action: "view
   } catch (err) { handleRouteError(err, res, "Get ticket error:"); }
 });
 
-router.post("/tickets/:id/replies", requirePermission("support:create"), async (req, res) => {
+router.post("/tickets/:id/replies", authorize({ feature: "support", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createReplySchema.safeParse(req.body)) as any;
@@ -377,7 +377,7 @@ router.post("/tickets/:id/replies", requirePermission("support:create"), async (
   } catch (err) { handleRouteError(err, res, "Create reply error:"); }
 });
 
-router.post("/tickets/:id/field-visit", requirePermission("support:write"), async (req, res) => {
+router.post("/tickets/:id/field-visit", authorize({ feature: "support", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const ticketId = parseId(req.params.id, "id");
@@ -616,7 +616,7 @@ router.delete("/tickets/:id", authorize({ feature: "support.tickets", action: "d
   } catch (err) { handleRouteError(err, res, "Delete ticket error:"); }
 });
 
-router.get("/replies", requirePermission("support:read"), async (req, res) => {
+router.get("/replies", authorize({ feature: "support", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -638,7 +638,7 @@ router.get("/replies", requirePermission("support:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Support replies error:"); }
 });
 
-router.get("/stats", requirePermission("support:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "support", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -657,7 +657,7 @@ router.get("/stats", requirePermission("support:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Support stats error:"); }
 });
 
-router.post("/tickets/:id/csat", requirePermission("support:write"), async (req, res) => {
+router.post("/tickets/:id/csat", authorize({ feature: "support", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const ticketId = parseId(req.params.id, "id");
@@ -687,7 +687,7 @@ router.post("/tickets/:id/csat", requirePermission("support:write"), async (req,
   } catch (err) { handleRouteError(err, res, "CSAT error:"); }
 });
 
-router.get("/csat", requirePermission("support:read"), async (req, res) => {
+router.get("/csat", authorize({ feature: "support", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -710,7 +710,7 @@ router.get("/csat", requirePermission("support:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "CSAT list error:"); }
 });
 
-router.get("/kb", requirePermission("support:read"), async (req, res) => {
+router.get("/kb", authorize({ feature: "support", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { q, category } = req.query as any;
@@ -723,7 +723,7 @@ router.get("/kb", requirePermission("support:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "KB list error:"); }
 });
 
-router.get("/kb/:id", requirePermission("support:read"), async (req, res) => {
+router.get("/kb/:id", authorize({ feature: "support", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -734,7 +734,7 @@ router.get("/kb/:id", requirePermission("support:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "KB article error:"); }
 });
 
-router.post("/kb", requirePermission("support:write"), async (req, res) => {
+router.post("/kb", authorize({ feature: "support", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createKbSchema.safeParse(req.body)) as any;
@@ -754,7 +754,7 @@ router.post("/kb", requirePermission("support:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "KB create error:"); }
 });
 
-router.patch("/kb/:id", requirePermission("support:write"), async (req, res) => {
+router.patch("/kb/:id", authorize({ feature: "support", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -779,7 +779,7 @@ router.patch("/kb/:id", requirePermission("support:write"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "KB update error:"); }
 });
 
-router.delete("/kb/:id", requirePermission("support:delete"), async (req, res) => {
+router.delete("/kb/:id", authorize({ feature: "support", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -802,7 +802,7 @@ router.delete("/kb/:id", requirePermission("support:delete"), async (req, res) =
 // scope pattern at line 612: validate the article is visible to the
 // caller (own company OR global) before incrementing, and scope the
 // UPDATE the same way.
-router.post("/kb/:id/feedback", requirePermission("support:read"), async (req, res) => {
+router.post("/kb/:id/feedback", authorize({ feature: "support", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

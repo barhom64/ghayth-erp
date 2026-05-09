@@ -2,11 +2,12 @@ import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
 
-router.get("/", requirePermission("operations:read"), async (req, res) => {
+router.get("/", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { q = "", type = "all" } = req.query as any;

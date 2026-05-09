@@ -3,6 +3,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { requireRole } from "../middlewares/roleGuard.js";
 import { aiEngine } from "../lib/aiEngine.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
@@ -79,7 +80,7 @@ const smartAssignSchema = z.object({
 
 const router = Router();
 
-router.get("/alerts", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/alerts", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { severity, isRead } = req.query as any;
@@ -92,7 +93,7 @@ router.get("/alerts", requirePermission("admin:read"), async (req, res): Promise
   } catch (err) { handleRouteError(err, res, "Alerts error:"); }
 });
 
-router.post("/alerts/scan", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/alerts/scan", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const result = await runSmartAlerts(scope.companyId);
@@ -110,7 +111,7 @@ router.post("/alerts/scan", requirePermission("admin:write"), async (req, res): 
   } catch (err) { handleRouteError(err, res, "Alert scan error:"); }
 });
 
-router.patch("/alerts/:id/read", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.patch("/alerts/:id/read", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -132,7 +133,7 @@ router.patch("/alerts/:id/read", requirePermission("admin:write"), async (req, r
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/kpis", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/kpis", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { employeeId, metricName } = req.query as any;
@@ -145,7 +146,7 @@ router.get("/kpis", requirePermission("admin:read"), async (req, res): Promise<v
   } catch (err) { handleRouteError(err, res, "KPIs error:"); }
 });
 
-router.get("/kpis/employee/:employeeId", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/kpis/employee/:employeeId", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");
@@ -155,7 +156,7 @@ router.get("/kpis/employee/:employeeId", requirePermission("admin:read"), async 
   } catch (err) { handleRouteError(err, res, "Employee KPI error:"); }
 });
 
-router.get("/daily-schedule", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/daily-schedule", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -165,7 +166,7 @@ router.get("/daily-schedule", requirePermission("admin:read"), async (req, res):
   } catch (err) { handleRouteError(err, res, "Daily schedule error:"); }
 });
 
-router.get("/daily-schedule/employee/:employeeId", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/daily-schedule/employee/:employeeId", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");
@@ -175,7 +176,7 @@ router.get("/daily-schedule/employee/:employeeId", requirePermission("admin:read
   } catch (err) { handleRouteError(err, res, "Employee schedule error:"); }
 });
 
-router.get("/overview", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/overview", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -396,7 +397,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
   } catch (err) { handleRouteError(err, res, "Smart suggestions"); }
 });
 
-router.post("/ai/categorize", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/categorize", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(aiCategorizeSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -416,7 +417,7 @@ router.post("/ai/categorize", requirePermission("admin:write"), async (req, res)
   } catch (err) { handleRouteError(err, res, "AI categorize error:"); }
 });
 
-router.post("/ai/draft-reply", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/draft-reply", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(aiDraftReplySchema.safeParse(req.body));
     const scope = req.scope!;
@@ -436,7 +437,7 @@ router.post("/ai/draft-reply", requirePermission("admin:write"), async (req, res
   } catch (err) { handleRouteError(err, res, "AI draft reply error:"); }
 });
 
-router.post("/ai/translate", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/translate", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(aiTranslateSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -456,7 +457,7 @@ router.post("/ai/translate", requirePermission("admin:write"), async (req, res):
   } catch (err) { handleRouteError(err, res, "AI translate error:"); }
 });
 
-router.post("/ai/summarize", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/summarize", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(aiSummarizeSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -476,7 +477,7 @@ router.post("/ai/summarize", requirePermission("admin:write"), async (req, res):
   } catch (err) { handleRouteError(err, res, "AI summarize error:"); }
 });
 
-router.post("/ai/evaluate-rules", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/evaluate-rules", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(aiEvaluateRulesSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -496,7 +497,7 @@ router.post("/ai/evaluate-rules", requirePermission("admin:write"), async (req, 
   } catch (err) { handleRouteError(err, res, "AI rules engine error:"); }
 });
 
-router.post("/ai/forecast", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/forecast", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(aiForecastSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -516,7 +517,7 @@ router.post("/ai/forecast", requirePermission("admin:write"), async (req, res): 
   } catch (err) { handleRouteError(err, res, "AI forecast error:"); }
 });
 
-router.post("/algorithms/haversine", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/algorithms/haversine", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(haversineSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -539,7 +540,7 @@ router.post("/algorithms/haversine", requirePermission("admin:write"), async (re
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.post("/algorithms/moving-average", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/algorithms/moving-average", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(movingAverageSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -562,7 +563,7 @@ router.post("/algorithms/moving-average", requirePermission("admin:write"), asyn
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.post("/algorithms/load-balance", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/algorithms/load-balance", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(loadBalanceSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -634,7 +635,7 @@ router.get("/seasonal-patterns", requireRole("branch_manager", "general_manager"
 
 // ── Smart Recommendations ─────────────────────────────────────────────────────
 
-router.get("/recommendations", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/recommendations", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const recs = await getPersonalizedRecommendations(

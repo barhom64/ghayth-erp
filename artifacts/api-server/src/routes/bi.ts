@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, ConflictError,
   parseId,
   zodParse,
@@ -44,7 +45,7 @@ const muteAlertSchema = z.object({
   reason: z.string().optional().nullable(),
 });
 
-router.get("/dashboards", requirePermission("bi:read"), async (req, res) => {
+router.get("/dashboards", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM bi_dashboards WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
@@ -52,7 +53,7 @@ router.get("/dashboards", requirePermission("bi:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.post("/dashboards", requirePermission("bi:write"), async (req, res) => {
+router.post("/dashboards", authorize({ feature: "bi", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const body = zodParse(createDashboardSchema.safeParse(req.body));
@@ -71,7 +72,7 @@ router.post("/dashboards", requirePermission("bi:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.get("/kpis", requirePermission("bi:read"), async (req, res) => {
+router.get("/kpis", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM bi_kpis WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY module, name LIMIT 500`, [scope.companyId]);
@@ -79,7 +80,7 @@ router.get("/kpis", requirePermission("bi:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.post("/kpis", requirePermission("bi:write"), async (req, res) => {
+router.post("/kpis", authorize({ feature: "bi", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const body = zodParse(createKpiSchema.safeParse(req.body));
@@ -98,7 +99,7 @@ router.post("/kpis", requirePermission("bi:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.get("/reports", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM bi_reports WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
@@ -106,7 +107,7 @@ router.get("/reports", requirePermission("bi:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.post("/reports", requirePermission("bi:write"), async (req, res) => {
+router.post("/reports", authorize({ feature: "bi", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const body = zodParse(createReportSchema.safeParse(req.body));
@@ -125,7 +126,7 @@ router.post("/reports", requirePermission("bi:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.get("/overview", requirePermission("bi:read"), async (req, res) => {
+router.get("/overview", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -152,7 +153,7 @@ router.get("/overview", requirePermission("bi:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.get("/operations/sla-delays", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/sla-delays", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -185,7 +186,7 @@ router.get("/operations/sla-delays", requirePermission("bi:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "SLA delays"); }
 });
 
-router.get("/operations/rejection-rate", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/rejection-rate", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -211,7 +212,7 @@ router.get("/operations/rejection-rate", requirePermission("bi:read"), async (re
   } catch (err) { handleRouteError(err, res, "Rejection rate"); }
 });
 
-router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/bottleneck", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -269,7 +270,7 @@ router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "Bottleneck analysis"); }
 });
 
-router.get("/operations/employee-productivity", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/employee-productivity", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -318,7 +319,7 @@ router.get("/operations/employee-productivity", requirePermission("bi:read"), as
   } catch (err) { handleRouteError(err, res, "Employee productivity"); }
 });
 
-router.get("/operations/approval-timeliness", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/approval-timeliness", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -351,7 +352,7 @@ router.get("/operations/approval-timeliness", requirePermission("bi:read"), asyn
   } catch (err) { handleRouteError(err, res, "Approval timeliness"); }
 });
 
-router.get("/operations/avg-completion-time", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/avg-completion-time", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -382,7 +383,7 @@ router.get("/operations/avg-completion-time", requirePermission("bi:read"), asyn
   } catch (err) { handleRouteError(err, res, "Avg completion time"); }
 });
 
-router.get("/operations/trend", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/trend", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -414,7 +415,7 @@ router.get("/operations/trend", requirePermission("bi:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Operations trend"); }
 });
 
-router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res) => {
+router.get("/admin-reports/daily", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -493,7 +494,7 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "Daily report"); }
 });
 
-router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, res) => {
+router.get("/admin-reports/weekly", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -586,7 +587,7 @@ router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "Weekly report"); }
 });
 
-router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, res) => {
+router.get("/admin-reports/monthly", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -717,7 +718,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
 });
 
 
-router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
+router.get("/ceo-dashboard", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -843,7 +844,7 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "CEO dashboard"); }
 });
 
-router.get("/reports/branch-performance", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/branch-performance", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -927,7 +928,7 @@ router.get("/reports/branch-performance", requirePermission("bi:read"), async (r
   } catch (err) { handleRouteError(err, res, "Branch performance report"); }
 });
 
-router.get("/reports/vendor-performance", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/vendor-performance", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -977,7 +978,7 @@ router.get("/reports/vendor-performance", requirePermission("bi:read"), async (r
   } catch (err) { handleRouteError(err, res, "Vendor performance report"); }
 });
 
-router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/fleet-tco", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1045,7 +1046,7 @@ router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Fleet TCO report"); }
 });
 
-router.get("/reports/department-leave-balance", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/department-leave-balance", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1099,7 +1100,7 @@ router.get("/reports/department-leave-balance", requirePermission("bi:read"), as
   } catch (err) { handleRouteError(err, res, "Department leave balance"); }
 });
 
-router.get("/reports/property-occupancy", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/property-occupancy", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1145,7 +1146,7 @@ router.get("/reports/property-occupancy", requirePermission("bi:read"), async (r
   } catch (err) { handleRouteError(err, res, "Property occupancy report"); }
 });
 
-router.get("/reports/training-roi", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/training-roi", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1201,7 +1202,7 @@ router.get("/reports/training-roi", requirePermission("bi:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "Training ROI report"); }
 });
 
-router.get("/ai-insights", requirePermission("bi:read"), async (req, res) => {
+router.get("/ai-insights", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1262,7 +1263,7 @@ router.get("/ai-insights", requirePermission("bi:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "AI insights"); }
 });
 
-router.patch("/ai-insights/:id/dismiss", requirePermission("bi:write"), async (req, res) => {
+router.patch("/ai-insights/:id/dismiss", authorize({ feature: "bi", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1276,7 +1277,7 @@ router.patch("/ai-insights/:id/dismiss", requirePermission("bi:write"), async (r
   } catch (err) { handleRouteError(err, res, "Dismiss insight"); }
 });
 
-router.patch("/ai-insights/:id/read", requirePermission("bi:write"), async (req, res) => {
+router.patch("/ai-insights/:id/read", authorize({ feature: "bi", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1290,7 +1291,7 @@ router.patch("/ai-insights/:id/read", requirePermission("bi:write"), async (req,
   } catch (err) { handleRouteError(err, res, "Mark insight read"); }
 });
 
-router.get("/alert-fatigue/settings", requirePermission("bi:read"), async (req, res) => {
+router.get("/alert-fatigue/settings", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -1301,7 +1302,7 @@ router.get("/alert-fatigue/settings", requirePermission("bi:read"), async (req, 
   } catch (err) { handleRouteError(err, res, "Alert fatigue settings"); }
 });
 
-router.post("/alert-fatigue/mute", requirePermission("bi:write"), async (req, res) => {
+router.post("/alert-fatigue/mute", authorize({ feature: "bi", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const body = zodParse(muteAlertSchema.safeParse(req.body));
@@ -1320,7 +1321,7 @@ router.post("/alert-fatigue/mute", requirePermission("bi:write"), async (req, re
   } catch (err) { handleRouteError(err, res, "Mute alert type"); }
 });
 
-router.delete("/alert-fatigue/mute/:alertType", requirePermission("bi:write"), async (req, res) => {
+router.delete("/alert-fatigue/mute/:alertType", authorize({ feature: "bi", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { alertType } = req.params;
@@ -1334,7 +1335,7 @@ router.delete("/alert-fatigue/mute/:alertType", requirePermission("bi:write"), a
   } catch (err) { handleRouteError(err, res, "Unmute alert type"); }
 });
 
-router.get("/alert-fatigue/daily-count", requirePermission("bi:read"), async (req, res) => {
+router.get("/alert-fatigue/daily-count", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(

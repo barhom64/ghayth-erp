@@ -2,6 +2,7 @@ import { handleRouteError, NotFoundError, parseId, zodParse } from "../lib/error
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
@@ -16,7 +17,7 @@ const preferencesSchema = z.object({
 
 const router = Router();
 
-router.get("/", requirePermission("notifications:read"), async (req, res) => {
+router.get("/", authorize({ feature: "notifications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const page = Math.max(1, Number(req.query.page) || 1);
@@ -41,7 +42,7 @@ router.get("/", requirePermission("notifications:read"), async (req, res) => {
   }
 });
 
-router.patch("/:id/read", requirePermission("notifications:write"), async (req, res) => {
+router.patch("/:id/read", authorize({ feature: "notifications", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -69,7 +70,7 @@ router.patch("/:id/read", requirePermission("notifications:write"), async (req, 
   }
 });
 
-router.get("/unread-count", requirePermission("notifications:read"), async (req, res) => {
+router.get("/unread-count", authorize({ feature: "notifications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<{ count: string }>(
@@ -83,7 +84,7 @@ router.get("/unread-count", requirePermission("notifications:read"), async (req,
   }
 });
 
-router.get("/preferences", requirePermission("notifications:read"), async (req, res) => {
+router.get("/preferences", authorize({ feature: "notifications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -96,7 +97,7 @@ router.get("/preferences", requirePermission("notifications:read"), async (req, 
   }
 });
 
-router.post("/preferences", requirePermission("notifications:write"), async (req, res) => {
+router.post("/preferences", authorize({ feature: "notifications", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(preferencesSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -123,7 +124,7 @@ router.post("/preferences", requirePermission("notifications:write"), async (req
   }
 });
 
-router.patch("/mark-all-read", requirePermission("notifications:write"), async (req, res) => {
+router.patch("/mark-all-read", authorize({ feature: "notifications", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { affectedRows } = await rawExecute(

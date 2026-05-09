@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, NotFoundError,
   parseId,
   zodParse,
@@ -98,7 +99,7 @@ const slaDefinitionSchema = z.object({
 
 const router = Router();
 
-router.post("/submit", requirePermission("admin:write"), async (req, res) => {
+router.post("/submit", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(submitSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -122,7 +123,7 @@ router.post("/submit", requirePermission("admin:write"), async (req, res) => {
   }
 });
 
-router.post("/:id/approve", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/approve", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(approveSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -143,7 +144,7 @@ router.post("/:id/approve", requirePermission("admin:write"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Workflow approve error:"); }
 });
 
-router.post("/:id/reject", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/reject", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(rejectSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -163,7 +164,7 @@ router.post("/:id/reject", requirePermission("admin:write"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Workflow reject error:"); }
 });
 
-router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/refer", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(referSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -186,7 +187,7 @@ router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Workflow refer error:"); }
 });
 
-router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/escalate", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(escalateSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -206,7 +207,7 @@ router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Workflow escalate error:"); }
 });
 
-router.post("/:id/return", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/return", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(returnSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -226,7 +227,7 @@ router.post("/:id/return", requirePermission("admin:write"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Workflow return error:"); }
 });
 
-router.get("/:id/timeline", requirePermission("admin:read"), async (req, res) => {
+router.get("/:id/timeline", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -235,7 +236,7 @@ router.get("/:id/timeline", requirePermission("admin:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Workflow timeline error:"); }
 });
 
-router.get("/timeline/:refTable/:refId", requirePermission("admin:read"), async (req, res) => {
+router.get("/timeline/:refTable/:refId", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const refId = parseId(req.params.refId, "refId");
@@ -246,7 +247,7 @@ router.get("/timeline/:refTable/:refId", requirePermission("admin:read"), async 
   }
 });
 
-router.get("/", requirePermission("admin:read"), async (req, res) => {
+router.get("/", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, requestType } = req.query as any;
@@ -277,7 +278,7 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
   }
 });
 
-router.get("/pending", requirePermission("admin:read"), async (req, res) => {
+router.get("/pending", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -304,7 +305,7 @@ router.get("/pending", requirePermission("admin:read"), async (req, res) => {
   }
 });
 
-router.get("/definitions", requirePermission("admin:read"), async (req, res) => {
+router.get("/definitions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const defs = await rawQuery<any>(
@@ -320,7 +321,7 @@ router.get("/definitions", requirePermission("admin:read"), async (req, res) => 
   }
 });
 
-router.get("/definitions/:id", requirePermission("admin:read"), async (req, res) => {
+router.get("/definitions/:id", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -339,7 +340,7 @@ router.get("/definitions/:id", requirePermission("admin:read"), async (req, res)
   }
 });
 
-router.post("/definitions", requirePermission("admin:write"), async (req, res) => {
+router.post("/definitions", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(createDefinitionSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -373,7 +374,7 @@ router.post("/definitions", requirePermission("admin:write"), async (req, res) =
   }
 });
 
-router.put("/definitions/:id", requirePermission("admin:write"), async (req, res) => {
+router.put("/definitions/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(updateDefinitionSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -413,7 +414,7 @@ router.put("/definitions/:id", requirePermission("admin:write"), async (req, res
   }
 });
 
-router.delete("/definitions/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/definitions/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -427,7 +428,7 @@ router.delete("/definitions/:id", requirePermission("admin:write"), async (req, 
   }
 });
 
-router.get("/sla-definitions", requirePermission("admin:read"), async (req, res) => {
+router.get("/sla-definitions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -440,7 +441,7 @@ router.get("/sla-definitions", requirePermission("admin:read"), async (req, res)
   }
 });
 
-router.post("/sla-definitions", requirePermission("admin:write"), async (req, res) => {
+router.post("/sla-definitions", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(slaDefinitionSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -463,7 +464,7 @@ router.post("/sla-definitions", requirePermission("admin:write"), async (req, re
   }
 });
 
-router.get("/stats", requirePermission("admin:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [total] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [scope.companyId]);

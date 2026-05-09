@@ -7,6 +7,7 @@ import { handleRouteError, NotFoundError,
 } from "../lib/errorHandler.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { emitEvent } from "../lib/businessHelpers.js";
 import {
   ensureObligationsTable,
@@ -43,7 +44,7 @@ const entityActionSchema = z.object({
 });
 
 // List obligations (filtered)
-obligationsRouter.get("/", requirePermission("operations:read"), async (req, res) => {
+obligationsRouter.get("/", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, status, assignedTo, dueBefore, dueAfter, limit } = req.query as any;
@@ -66,7 +67,7 @@ obligationsRouter.get("/", requirePermission("operations:read"), async (req, res
   }
 });
 
-obligationsRouter.get("/summary", requirePermission("operations:read"), async (req, res) => {
+obligationsRouter.get("/summary", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const summary = await obligationSummary(scope.companyId);
@@ -77,7 +78,7 @@ obligationsRouter.get("/summary", requirePermission("operations:read"), async (r
 });
 
 // Manually create an obligation (useful for ad-hoc reminders)
-obligationsRouter.post("/", requirePermission("operations:write"), async (req, res) => {
+obligationsRouter.post("/", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, obligationType, title, dueAt, assignedTo, escalationSteps, metadata, dedupeKey } = zodParse(createObligationSchema.safeParse(req.body));
@@ -103,7 +104,7 @@ obligationsRouter.post("/", requirePermission("operations:write"), async (req, r
 });
 
 // Mark as met (called when underlying event happens)
-obligationsRouter.post("/:id/met", requirePermission("operations:write"), async (req, res) => {
+obligationsRouter.post("/:id/met", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -122,7 +123,7 @@ obligationsRouter.post("/:id/met", requirePermission("operations:write"), async 
 });
 
 // Mark as met by entity (used internally by event handlers)
-obligationsRouter.post("/met-by-entity", requirePermission("operations:write"), async (req, res) => {
+obligationsRouter.post("/met-by-entity", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, obligationType } = zodParse(entityActionSchema.safeParse(req.body));
@@ -139,7 +140,7 @@ obligationsRouter.post("/met-by-entity", requirePermission("operations:write"), 
   }
 });
 
-obligationsRouter.post("/:id/cancel", requirePermission("operations:write"), async (req, res) => {
+obligationsRouter.post("/:id/cancel", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -157,7 +158,7 @@ obligationsRouter.post("/:id/cancel", requirePermission("operations:write"), asy
   }
 });
 
-obligationsRouter.post("/cancel-by-entity", requirePermission("operations:write"), async (req, res) => {
+obligationsRouter.post("/cancel-by-entity", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, obligationType } = zodParse(entityActionSchema.safeParse(req.body));
@@ -175,7 +176,7 @@ obligationsRouter.post("/cancel-by-entity", requirePermission("operations:write"
 });
 
 // Manual trigger for the scanner (normally runs via cron)
-obligationsRouter.post("/scan", requirePermission("operations:create"), async (req, res) => {
+obligationsRouter.post("/scan", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const result = await scanObligations(scope.companyId);

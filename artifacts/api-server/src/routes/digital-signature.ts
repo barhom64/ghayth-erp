@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { handleRouteError, ValidationError , zodParse } from "../lib/errorHandler.js";
 import { logger } from "../lib/logger.js";
@@ -44,7 +45,7 @@ function getClientIP(req: Request): string {
   return req.socket?.remoteAddress || req.ip || "unknown";
 }
 
-router.post("/request-otp", requirePermission("documents:write"), async (req, res: Response) => {
+router.post("/request-otp", authorize({ feature: "documents", action: "create" }), async (req, res: Response) => {
   try {
     const body = zodParse(requestOtpSchema.safeParse(req.body));
     const scope = (req as any).scope!;
@@ -84,7 +85,7 @@ router.post("/request-otp", requirePermission("documents:write"), async (req, re
   }
 });
 
-router.post("/verify", requirePermission("documents:write"), async (req, res: Response) => {
+router.post("/verify", authorize({ feature: "documents", action: "create" }), async (req, res: Response) => {
   try {
     const body = zodParse(verifySignatureSchema.safeParse(req.body));
     const scope = (req as any).scope!;
@@ -141,7 +142,7 @@ router.post("/verify", requirePermission("documents:write"), async (req, res: Re
   }
 });
 
-router.get("/logs", requirePermission("documents:write"), async (req, res: Response) => {
+router.get("/logs", authorize({ feature: "documents", action: "create" }), async (req, res: Response) => {
   try {
     const scope = (req as any).scope!;
     const { entityType, entityId } = req.query as any;

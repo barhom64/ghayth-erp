@@ -15,6 +15,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -320,7 +321,7 @@ const createPenaltySchema = z.object({
   status: z.string().optional(),
 });
 
-router.get("/seasons", requirePermission("umrah:read"), async (req, res) => {
+router.get("/seasons", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM umrah_seasons WHERE "companyId"=$1 ORDER BY "startDate" DESC LIMIT 100`, [scope.companyId]);
@@ -328,7 +329,7 @@ router.get("/seasons", requirePermission("umrah:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List seasons error"); }
 });
 
-router.get("/seasons/:id", requirePermission("umrah:read"), async (req, res) => {
+router.get("/seasons/:id", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -341,7 +342,7 @@ router.get("/seasons/:id", requirePermission("umrah:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Season detail error"); }
 });
 
-router.post("/seasons", requirePermission("umrah:write"), async (req, res) => {
+router.post("/seasons", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createSeasonSchema.safeParse(req.body)) as any;
@@ -356,7 +357,7 @@ router.post("/seasons", requirePermission("umrah:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create season error"); }
 });
 
-router.patch("/seasons/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.patch("/seasons/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -413,7 +414,7 @@ router.patch("/seasons/:id", requirePermission("umrah:write"), async (req, res):
   } catch (err) { handleRouteError(err, res, "Update season error"); }
 });
 
-router.get("/agents", requirePermission("umrah:read"), async (req, res) => {
+router.get("/agents", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM umrah_agents WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
@@ -421,7 +422,7 @@ router.get("/agents", requirePermission("umrah:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List agents error"); }
 });
 
-router.get("/agents/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+router.get("/agents/:id", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -437,7 +438,7 @@ router.get("/agents/:id", requirePermission("umrah:read"), async (req, res): Pro
   } catch (err) { handleRouteError(err, res, "Get agent error"); }
 });
 
-router.post("/agents", requirePermission("umrah:write"), async (req, res) => {
+router.post("/agents", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createAgentSchema.safeParse(req.body)) as any;
@@ -452,7 +453,7 @@ router.post("/agents", requirePermission("umrah:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create agent error"); }
 });
 
-router.patch("/agents/:id", requirePermission("umrah:write"), async (req, res) => {
+router.patch("/agents/:id", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -489,7 +490,7 @@ router.patch("/agents/:id", requirePermission("umrah:write"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Update agent error"); }
 });
 
-router.delete("/agents/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.delete("/agents/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -506,7 +507,7 @@ router.delete("/agents/:id", requirePermission("umrah:write"), async (req, res):
   } catch (err) { handleRouteError(err, res, "Delete agent error"); }
 });
 
-router.get("/packages", requirePermission("umrah:read"), async (req, res) => {
+router.get("/packages", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT p.*, s.title as "seasonTitle" FROM umrah_packages p LEFT JOIN umrah_seasons s ON p."seasonId"=s.id WHERE p."companyId"=$1 AND p."deletedAt" IS NULL ORDER BY p.name LIMIT 500`, [scope.companyId]);
@@ -514,7 +515,7 @@ router.get("/packages", requirePermission("umrah:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List packages error"); }
 });
 
-router.post("/packages", requirePermission("umrah:write"), async (req, res) => {
+router.post("/packages", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createPackageSchema.safeParse(req.body)) as any;
@@ -530,7 +531,7 @@ router.post("/packages", requirePermission("umrah:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create package error"); }
 });
 
-router.get("/packages/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+router.get("/packages/:id", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -549,7 +550,7 @@ router.get("/packages/:id", requirePermission("umrah:read"), async (req, res): P
   } catch (err) { handleRouteError(err, res, "Get package error"); }
 });
 
-router.patch("/packages/:id", requirePermission("umrah:write"), async (req, res) => {
+router.patch("/packages/:id", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -570,7 +571,7 @@ router.patch("/packages/:id", requirePermission("umrah:write"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Update package error"); }
 });
 
-router.delete("/packages/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.delete("/packages/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -592,7 +593,7 @@ router.delete("/packages/:id", requirePermission("umrah:write"), async (req, res
   } catch (err) { handleRouteError(err, res, "Delete package error"); }
 });
 
-router.get("/pilgrims", requirePermission("umrah:read"), async (req, res) => {
+router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { seasonId, status, agentId, search, page = "1", limit = "20" } = req.query as any;
@@ -628,7 +629,7 @@ router.get("/pilgrims", requirePermission("umrah:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List pilgrims error"); }
 });
 
-router.post("/pilgrims", requirePermission("umrah:write"), async (req, res) => {
+router.post("/pilgrims", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createPilgrimSchema.safeParse(req.body)) as any;
@@ -712,7 +713,7 @@ router.post("/pilgrims", requirePermission("umrah:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create pilgrim error"); }
 });
 
-router.patch("/pilgrims/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const b = zodParse(patchPilgrimSchema.safeParse(req.body));
@@ -785,7 +786,7 @@ router.patch("/pilgrims/:id", requirePermission("umrah:write"), async (req, res)
   }
 });
 
-router.get("/pilgrims/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+router.get("/pilgrims/:id", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -804,7 +805,7 @@ router.get("/pilgrims/:id", requirePermission("umrah:read"), async (req, res): P
   } catch (err) { handleRouteError(err, res, "Get pilgrim error"); }
 });
 
-router.delete("/pilgrims/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.delete("/pilgrims/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -825,7 +826,7 @@ router.delete("/pilgrims/:id", requirePermission("umrah:write"), async (req, res
   } catch (err) { handleRouteError(err, res, "Delete pilgrim error"); }
 });
 
-router.post("/import/preview", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.post("/import/preview", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { seasonId, rows: importRows, fileType } = zodParse(importPreviewSchema.safeParse(req.body));
@@ -856,7 +857,7 @@ router.post("/import/preview", requirePermission("umrah:write"), async (req, res
   } catch (err) { handleRouteError(err, res, "Import preview error"); }
 });
 
-router.post("/import/mutamers", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.post("/import/mutamers", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { seasonId, rows: importRows } = zodParse(importMutamersSchema.safeParse(req.body));
@@ -868,7 +869,7 @@ router.post("/import/mutamers", requirePermission("umrah:write"), async (req, re
   } catch (err) { handleRouteError(err, res, "Import mutamers error"); }
 });
 
-router.post("/import/vouchers", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { seasonId, rows: importRows } = zodParse(importVouchersSchema.safeParse(req.body));
@@ -953,7 +954,7 @@ async function doImport(scope: any, body: { seasonId: number; rows: any[]; fileT
   return { importLogId: logId, batchId: logId, total: importRows.length, new: newCount, updated: updateCount, duplicates: dupCount, errors: errCount, errorDetails: errors };
 }
 
-router.post("/import", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.post("/import", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const result = await doImport(scope, zodParse(importSchema.safeParse(req.body)));
@@ -961,7 +962,7 @@ router.post("/import", requirePermission("umrah:write"), async (req, res): Promi
   } catch (err) { handleRouteError(err, res, "Import error"); }
 });
 
-router.get("/dashboard", requirePermission("umrah:read"), async (req, res) => {
+router.get("/dashboard", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { seasonId } = req.query as any;
@@ -1011,7 +1012,7 @@ router.get("/dashboard", requirePermission("umrah:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Dashboard error"); }
 });
 
-router.post("/run-daily-status", requirePermission("umrah:write"), async (req, res) => {
+router.post("/run-daily-status", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const today = todayISO();
@@ -1071,7 +1072,7 @@ router.post("/run-daily-status", requirePermission("umrah:write"), async (req, r
   } catch (err) { handleRouteError(err, res, "Daily status error"); }
 });
 
-router.post("/run-penalty-engine", requirePermission("umrah:write"), async (req, res) => {
+router.post("/run-penalty-engine", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { overstayDays = 3, dailyRate = 500 } = zodParse(runPenaltyEngineSchema.safeParse(req.body));
@@ -1123,7 +1124,7 @@ router.post("/run-penalty-engine", requirePermission("umrah:write"), async (req,
   } catch (err) { handleRouteError(err, res, "Penalty engine error"); }
 });
 
-router.get("/penalties", requirePermission("umrah:read"), async (req, res) => {
+router.get("/penalties", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { seasonId, status } = req.query as any;
@@ -1142,7 +1143,7 @@ router.get("/penalties", requirePermission("umrah:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List penalties error"); }
 });
 
-router.get("/penalties/:id", requirePermission("umrah:read"), async (req, res) => {
+router.get("/penalties/:id", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1159,7 +1160,7 @@ router.get("/penalties/:id", requirePermission("umrah:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Penalty detail error"); }
 });
 
-router.patch("/penalties/:id/waive", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.patch("/penalties/:id/waive", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1195,7 +1196,7 @@ router.patch("/penalties/:id/waive", requirePermission("umrah:write"), async (re
   }
 });
 
-router.post("/agent-invoices/:id/record-payment", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.post("/agent-invoices/:id/record-payment", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1226,7 +1227,7 @@ router.post("/agent-invoices/:id/record-payment", requirePermission("umrah:write
   }
 });
 
-router.post("/agent-invoices/generate", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { agentId, seasonId } = zodParse(generateInvoiceSchema.safeParse(req.body));
@@ -1312,7 +1313,7 @@ router.post("/agent-invoices/generate", requirePermission("umrah:write"), async 
   } catch (err) { handleRouteError(err, res, "Generate invoice error"); }
 });
 
-router.get("/agent-invoices", requirePermission("umrah:read"), async (req, res) => {
+router.get("/agent-invoices", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { agentId, seasonId } = req.query as any;
@@ -1331,7 +1332,7 @@ router.get("/agent-invoices", requirePermission("umrah:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "List agent invoices error"); }
 });
 
-router.get("/agent-invoices/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+router.get("/agent-invoices/:id", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1357,7 +1358,7 @@ router.get("/agent-invoices/:id", requirePermission("umrah:read"), async (req, r
 // It does NOT duplicate fleet management; it records transport assignments
 // specific to umrah pilgrim groups. Vehicle/driver validation is delegated
 // to fleet tables. Events emitted: umrah.transport.created/status_changed/deleted.
-router.get("/transport", requirePermission("umrah:read"), async (req, res) => {
+router.get("/transport", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
@@ -1372,7 +1373,7 @@ router.get("/transport", requirePermission("umrah:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List transport error"); }
 });
 
-router.get("/transport/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+router.get("/transport/:id", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1394,7 +1395,7 @@ router.get("/transport/:id", requirePermission("umrah:read"), async (req, res): 
   } catch (err) { handleRouteError(err, res, "Get transport error"); }
 });
 
-router.delete("/transport/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.delete("/transport/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1410,7 +1411,7 @@ router.delete("/transport/:id", requirePermission("umrah:write"), async (req, re
   } catch (err) { handleRouteError(err, res, "Delete transport error"); }
 });
 
-router.post("/transport", requirePermission("umrah:write"), async (req, res) => {
+router.post("/transport", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createTransportSchema.safeParse(req.body)) as any;
@@ -1462,7 +1463,7 @@ router.post("/transport", requirePermission("umrah:write"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Create transport error"); }
 });
 
-router.patch("/transport/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.patch("/transport/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1523,7 +1524,7 @@ router.patch("/transport/:id", requirePermission("umrah:write"), async (req, res
   }
 });
 
-router.post("/transport/:id/assign-pilgrims", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.post("/transport/:id/assign-pilgrims", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const transportId = parseId(req.params.id, "id");
@@ -1552,7 +1553,7 @@ router.post("/transport/:id/assign-pilgrims", requirePermission("umrah:write"), 
   } catch (err) { handleRouteError(err, res, "Assign pilgrims to transport error"); }
 });
 
-router.get("/import-logs", requirePermission("umrah:read"), async (req, res) => {
+router.get("/import-logs", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM umrah_import_logs WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 50`, [scope.companyId]);
@@ -1560,7 +1561,7 @@ router.get("/import-logs", requirePermission("umrah:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "List import logs error"); }
 });
 
-router.get("/unassigned", requirePermission("umrah:read"), async (req, res) => {
+router.get("/unassigned", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { seasonId } = req.query as any;
@@ -1572,7 +1573,7 @@ router.get("/unassigned", requirePermission("umrah:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List unassigned error"); }
 });
 
-router.post("/assign-bulk", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.post("/assign-bulk", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { pilgrimIds, agentId } = zodParse(bulkAssignSchema.safeParse(req.body));
@@ -1591,7 +1592,7 @@ router.post("/assign-bulk", requirePermission("umrah:write"), async (req, res): 
 // VIOLATIONS CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/violations", requirePermission("umrah:read"), async (req, res) => {
+router.get("/violations", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
@@ -1611,7 +1612,7 @@ router.get("/violations", requirePermission("umrah:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List violations error"); }
 });
 
-router.get("/violations/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+router.get("/violations/:id", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1632,7 +1633,7 @@ router.get("/violations/:id", requirePermission("umrah:read"), async (req, res):
   } catch (err) { handleRouteError(err, res, "Get violation error"); }
 });
 
-router.post("/violations", requirePermission("umrah:write"), async (req, res) => {
+router.post("/violations", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createViolationSchema.safeParse(req.body));
@@ -1647,7 +1648,7 @@ router.post("/violations", requirePermission("umrah:write"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Create violation error"); }
 });
 
-router.patch("/violations/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.patch("/violations/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1670,7 +1671,7 @@ router.patch("/violations/:id", requirePermission("umrah:write"), async (req, re
   } catch (err) { handleRouteError(err, res, "Update violation error"); }
 });
 
-router.delete("/violations/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.delete("/violations/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1689,7 +1690,7 @@ router.delete("/violations/:id", requirePermission("umrah:write"), async (req, r
 // MANUAL PENALTY CREATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.post("/penalties", requirePermission("umrah:write"), async (req, res) => {
+router.post("/penalties", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createPenaltySchema.safeParse(req.body));

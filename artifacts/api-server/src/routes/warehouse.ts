@@ -265,7 +265,7 @@ async function postInventoryMovementGl(params: {
   }
 }
 
-router.get("/products", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/products", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search, status, page = "1", limit: lim = "50" } = req.query as any;
@@ -298,7 +298,7 @@ router.get("/products", requirePermission("warehouse:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Warehouse products error:"); }
 });
 
-router.post("/products", requirePermission("warehouse:create"), async (req, res) => {
+router.post("/products", authorize({ feature: "warehouse", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createProductSchema.safeParse(req.body));
@@ -369,7 +369,7 @@ router.get("/products/:id", authorize({ feature: "warehouse.inventory", action: 
   } catch (err) { handleRouteError(err, res, "Get product error:"); }
 });
 
-router.patch("/products/:id", requirePermission("warehouse:update"), async (req, res) => {
+router.patch("/products/:id", authorize({ feature: "warehouse", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -545,7 +545,7 @@ router.delete("/products/:id", authorize({ feature: "warehouse.inventory", actio
   }
 });
 
-router.get("/movements", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/movements", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { productId } = req.query as any;
@@ -579,7 +579,7 @@ router.get("/movements/:id", authorize({ feature: "warehouse.transfers", action:
   } catch (err) { handleRouteError(err, res, "Warehouse movement detail error:"); }
 });
 
-router.post("/movements", requirePermission("warehouse:create"), async (req, res): Promise<void> => {
+router.post("/movements", authorize({ feature: "warehouse", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const b = zodParse(createMovementSchema.safeParse(req.body));
@@ -834,7 +834,7 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
   return prId || null;
 }
 
-router.post("/transfers", requirePermission("warehouse:create"), async (req, res): Promise<void> => {
+router.post("/transfers", authorize({ feature: "warehouse", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const b = zodParse(createTransferSchema.safeParse(req.body));
@@ -920,7 +920,7 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
   }
 });
 
-router.get("/categories", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/categories", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
@@ -940,7 +940,7 @@ router.get("/categories", requirePermission("warehouse:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Warehouse categories error:"); }
 });
 
-router.get("/categories/:id", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/categories/:id", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -953,7 +953,7 @@ router.get("/categories/:id", requirePermission("warehouse:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "Warehouse category detail error:"); }
 });
 
-router.post("/categories", requirePermission("warehouse:create"), async (req, res) => {
+router.post("/categories", authorize({ feature: "warehouse", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createCategorySchema.safeParse(req.body));
@@ -989,7 +989,7 @@ router.post("/categories", requirePermission("warehouse:create"), async (req, re
   } catch (err) { handleRouteError(err, res, "Create category error:"); }
 });
 
-router.get("/suppliers", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/suppliers", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
@@ -1009,7 +1009,7 @@ router.get("/suppliers", requirePermission("warehouse:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Suppliers error:"); }
 });
 
-router.get("/suppliers/:id", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/suppliers/:id", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1022,7 +1022,7 @@ router.get("/suppliers/:id", requirePermission("warehouse:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "Supplier detail error:"); }
 });
 
-router.post("/suppliers", requirePermission("warehouse:create"), async (req, res) => {
+router.post("/suppliers", authorize({ feature: "warehouse", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createSupplierSchema.safeParse(req.body));
@@ -1061,7 +1061,7 @@ router.post("/suppliers", requirePermission("warehouse:create"), async (req, res
   } catch (err) { handleRouteError(err, res, "Create supplier error:"); }
 });
 
-router.patch("/categories/:id", requirePermission("warehouse:update"), async (req, res) => {
+router.patch("/categories/:id", authorize({ feature: "warehouse", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1092,7 +1092,7 @@ router.patch("/categories/:id", requirePermission("warehouse:update"), async (re
   } catch (err) { handleRouteError(err, res, "Update category error:"); }
 });
 
-router.delete("/categories/:id", requirePermission("warehouse:delete"), async (req, res) => {
+router.delete("/categories/:id", authorize({ feature: "warehouse", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1142,7 +1142,7 @@ router.delete("/categories/:id", requirePermission("warehouse:delete"), async (r
   } catch (err) { handleRouteError(err, res, "Delete category error:"); }
 });
 
-router.patch("/suppliers/:id", requirePermission("warehouse:update"), async (req, res) => {
+router.patch("/suppliers/:id", authorize({ feature: "warehouse", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1179,7 +1179,7 @@ router.patch("/suppliers/:id", requirePermission("warehouse:update"), async (req
   } catch (err) { handleRouteError(err, res, "Update supplier error:"); }
 });
 
-router.delete("/suppliers/:id", requirePermission("warehouse:delete"), async (req, res) => {
+router.delete("/suppliers/:id", authorize({ feature: "warehouse", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1204,7 +1204,7 @@ router.delete("/suppliers/:id", requirePermission("warehouse:delete"), async (re
   } catch (err) { handleRouteError(err, res, "Delete supplier error:"); }
 });
 
-router.get("/stats", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1219,7 +1219,7 @@ router.get("/stats", requirePermission("warehouse:read"), async (req, res) => {
 // INVENTORY COUNT — جرد المخزن
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/inventory-counts", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/inventory-counts", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -1238,7 +1238,7 @@ router.get("/inventory-counts", requirePermission("warehouse:read"), async (req,
   } catch (err) { handleRouteError(err, res, "Inventory counts error:"); }
 });
 
-router.post("/inventory-counts", requirePermission("warehouse:create"), async (req, res) => {
+router.post("/inventory-counts", authorize({ feature: "warehouse", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createInventoryCountSchema.safeParse(req.body));
@@ -1269,7 +1269,7 @@ router.post("/inventory-counts", requirePermission("warehouse:create"), async (r
   } catch (err) { handleRouteError(err, res, "Create count error:"); }
 });
 
-router.get("/inventory-counts/:id/items", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/inventory-counts/:id/items", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const countId = parseId(req.params.id, "id");
@@ -1314,7 +1314,7 @@ router.get("/inventory-counts/:id/items", requirePermission("warehouse:read"), a
   } catch (err) { handleRouteError(err, res, "Count items error:"); }
 });
 
-router.post("/inventory-counts/:id/items", requirePermission("warehouse:create"), async (req, res) => {
+router.post("/inventory-counts/:id/items", authorize({ feature: "warehouse", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const countId = parseId(req.params.id, "id");
@@ -1374,7 +1374,7 @@ router.post("/inventory-counts/:id/items", requirePermission("warehouse:create")
   } catch (err) { handleRouteError(err, res, "Count item error:"); }
 });
 
-router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create"), async (req, res) => {
+router.post("/inventory-counts/:id/approve", authorize({ feature: "warehouse", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const countId = parseId(req.params.id, "id");

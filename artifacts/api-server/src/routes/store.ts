@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -72,7 +73,7 @@ const updateStoreOrderSchema = z.object({
 
 const router = Router();
 
-router.get("/products", requirePermission("store:read"), async (req, res) => {
+router.get("/products", authorize({ feature: "store", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
@@ -92,7 +93,7 @@ router.get("/products", requirePermission("store:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List store products"); }
 });
 
-router.post("/products", requirePermission("store:write"), async (req, res) => {
+router.post("/products", authorize({ feature: "store", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { name, description, sku, price, costPrice, quantity, category, status, imageUrl } = zodParse(createStoreProductSchema.safeParse(req.body));
@@ -107,7 +108,7 @@ router.post("/products", requirePermission("store:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create store product"); }
 });
 
-router.get("/products/:id", requirePermission("store:read"), async (req, res) => {
+router.get("/products/:id", authorize({ feature: "store", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -121,7 +122,7 @@ router.get("/products/:id", requirePermission("store:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Get store product"); }
 });
 
-router.patch("/products/:id", requirePermission("store:write"), async (req, res) => {
+router.patch("/products/:id", authorize({ feature: "store", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -149,7 +150,7 @@ router.patch("/products/:id", requirePermission("store:write"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Update store product"); }
 });
 
-router.delete("/products/:id", requirePermission("store:write"), async (req, res) => {
+router.delete("/products/:id", authorize({ feature: "store", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -162,7 +163,7 @@ router.delete("/products/:id", requirePermission("store:write"), async (req, res
   } catch (err) { handleRouteError(err, res, "Delete store product"); }
 });
 
-router.get("/orders", requirePermission("store:read"), async (req, res) => {
+router.get("/orders", authorize({ feature: "store", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { productId, status } = req.query as any;
@@ -181,7 +182,7 @@ router.get("/orders", requirePermission("store:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List store orders"); }
 });
 
-router.post("/orders", requirePermission("store:write"), async (req, res) => {
+router.post("/orders", authorize({ feature: "store", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { orderNumber, customerName, customerPhone, status, totalAmount, items, notes, branchId } = zodParse(createStoreOrderSchema.safeParse(req.body));
@@ -234,7 +235,7 @@ router.post("/orders", requirePermission("store:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create store order"); }
 });
 
-router.get("/orders/:id", requirePermission("store:read"), async (req, res) => {
+router.get("/orders/:id", authorize({ feature: "store", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -258,7 +259,7 @@ router.get("/orders/:id", requirePermission("store:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Get store order"); }
 });
 
-router.patch("/orders/:id", requirePermission("store:write"), async (req, res) => {
+router.patch("/orders/:id", authorize({ feature: "store", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -318,7 +319,7 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Update store order"); }
 });
 
-router.delete("/orders/:id", requirePermission("store:write"), async (req, res) => {
+router.delete("/orders/:id", authorize({ feature: "store", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -339,7 +340,7 @@ router.delete("/orders/:id", requirePermission("store:write"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Delete store order"); }
 });
 
-router.get("/stats", requirePermission("store:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "store", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;

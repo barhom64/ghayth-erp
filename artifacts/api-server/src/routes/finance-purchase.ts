@@ -13,6 +13,7 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import {
   emitEvent,
   createAuditLog,
@@ -118,7 +119,7 @@ const schedulePaymentSchema = z.object({
 });
 
 // Impact preview — shows what will happen when the purchase request is created
-purchaseRouter.post("/purchase-requests/impact-preview", requirePermission("finance:create"), async (req, res) => {
+purchaseRouter.post("/purchase-requests/impact-preview", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(purchaseImpactPreviewSchema.safeParse(req.body ?? {}));
@@ -205,7 +206,7 @@ purchaseRouter.post("/purchase-requests/impact-preview", requirePermission("fina
   }
 });
 
-purchaseRouter.get("/purchase-requests", requirePermission("finance:read"), async (req, res) => {
+purchaseRouter.get("/purchase-requests", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -248,7 +249,7 @@ purchaseRouter.get("/purchase-requests", requirePermission("finance:read"), asyn
   }
 });
 
-purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), async (req, res) => {
+purchaseRouter.post("/purchase-requests", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -361,7 +362,7 @@ purchaseRouter.post("/purchase-requests", requirePermission("finance:create"), a
   }
 });
 
-purchaseRouter.patch("/purchase-requests/:id/approve", requirePermission("finance:update"), async (req, res) => {
+purchaseRouter.patch("/purchase-requests/:id/approve", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -418,7 +419,7 @@ purchaseRouter.patch("/purchase-requests/:id/approve", requirePermission("financ
   }
 });
 
-purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance:create"), async (req, res) => {
+purchaseRouter.post("/purchase-requests/:id/convert", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -495,7 +496,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", requirePermission("finance
   }
 });
 
-purchaseRouter.get("/purchase-orders", requirePermission("finance:read"), async (req, res) => {
+purchaseRouter.get("/purchase-orders", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -534,7 +535,7 @@ purchaseRouter.get("/purchase-orders", requirePermission("finance:read"), async 
   }
 });
 
-purchaseRouter.post("/purchase-orders", requirePermission("finance:create"), async (req, res) => {
+purchaseRouter.post("/purchase-orders", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -633,9 +634,9 @@ async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rej
     handleRouteError(err, res, "Finance purchase error:");
   }
 }
-purchaseRouter.patch("/purchase-orders/:id/approve", requirePermission("finance:update"), (req, res) => poApprovalAction(req, res, "approved"));
-purchaseRouter.patch("/purchase-orders/:id/reject", requirePermission("finance:update"), (req, res) => poApprovalAction(req, res, "rejected"));
-purchaseRouter.patch("/purchase-orders/:id/return", requirePermission("finance:update"), (req, res) => poApprovalAction(req, res, "returned"));
+purchaseRouter.patch("/purchase-orders/:id/approve", authorize({ feature: "finance", action: "update" }), (req, res) => poApprovalAction(req, res, "approved"));
+purchaseRouter.patch("/purchase-orders/:id/reject", authorize({ feature: "finance", action: "update" }), (req, res) => poApprovalAction(req, res, "rejected"));
+purchaseRouter.patch("/purchase-orders/:id/return", authorize({ feature: "finance", action: "update" }), (req, res) => poApprovalAction(req, res, "returned"));
 
 /**
  * Record goods receipt (GRN) against a purchase order.
@@ -644,7 +645,7 @@ purchaseRouter.patch("/purchase-orders/:id/return", requirePermission("finance:u
  * not-invoiced liability) which is cleared later when the supplier invoice
  * is matched and approved. Three-way match ties PO → GRN → Invoice.
  */
-purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:update"), async (req, res) => {
+purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -854,7 +855,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", requirePermission("finance:
 /**
  * List GRNs for a purchase order (for three-way match UI & audit).
  */
-purchaseRouter.get("/purchase-orders/:id/receipts", requirePermission("finance:read"), async (req, res) => {
+purchaseRouter.get("/purchase-orders/:id/receipts", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const poId = parseId(req.params.id, "id");
@@ -883,7 +884,7 @@ purchaseRouter.get("/purchase-orders/:id/receipts", requirePermission("finance:r
  * Three-way match preview for a PO: shows per-line PO qty vs received vs
  * invoiced so an accountant can see what is safe to invoice.
  */
-purchaseRouter.get("/purchase-orders/:id/match", requirePermission("finance:read"), async (req, res) => {
+purchaseRouter.get("/purchase-orders/:id/match", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const poId = parseId(req.params.id, "id");
@@ -938,7 +939,7 @@ purchaseRouter.get("/purchase-orders/:id/match", requirePermission("finance:read
  * Returns all POs in status 'invoice_matched' with an outstanding balance,
  * optionally filtered by due date on or before a cutoff.
  */
-purchaseRouter.get("/payment-run/pending", requirePermission("finance:read"), async (req, res) => {
+purchaseRouter.get("/payment-run/pending", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -981,7 +982,7 @@ purchaseRouter.get("/payment-run/pending", requirePermission("finance:read"), as
  * PO and mark them paid. All GL postings happen in one transaction so partial
  * failures roll back.
  */
-purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"), async (req, res) => {
+purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1143,7 +1144,7 @@ purchaseRouter.post("/payment-run/execute", requirePermission("finance:create"),
   }
 });
 
-purchaseRouter.get("/payment-run", requirePermission("finance:read"), async (req, res) => {
+purchaseRouter.get("/payment-run", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1165,7 +1166,7 @@ purchaseRouter.get("/payment-run", requirePermission("finance:read"), async (req
 // Phase 7.1 — migrated from finance.ts (canonical ownership consolidation)
 // ─────────────────────────────────────────────────────────────────────────────
 
-purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("finance:create"), async (req, res) => {
+purchaseRouter.post("/purchase-requests/:id/convert-to-po", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1268,7 +1269,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
   }
 });
 
-purchaseRouter.get("/purchase-orders/pending-grn", requirePermission("finance:read"), async (req, res) => {
+purchaseRouter.get("/purchase-orders/pending-grn", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -1285,7 +1286,7 @@ purchaseRouter.get("/purchase-orders/pending-grn", requirePermission("finance:re
   } catch (err) { handleRouteError(err, res, "PO pending GRN error:"); }
 });
 
-purchaseRouter.get("/purchase-orders/:id", requirePermission("finance:read"), async (req, res) => {
+purchaseRouter.get("/purchase-orders/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1317,7 +1318,7 @@ purchaseRouter.get("/purchase-orders/:id", requirePermission("finance:read"), as
   }
 });
 
-purchaseRouter.patch("/purchase-orders/:id/vendor-confirm", requirePermission("finance:update"), async (req, res) => {
+purchaseRouter.patch("/purchase-orders/:id/vendor-confirm", authorize({ feature: "finance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1357,7 +1358,7 @@ purchaseRouter.patch("/purchase-orders/:id/vendor-confirm", requirePermission("f
   }
 });
 
-purchaseRouter.post("/purchase-orders/:id/match-invoice", requirePermission("finance:create"), async (req, res) => {
+purchaseRouter.post("/purchase-orders/:id/match-invoice", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1459,7 +1460,7 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", requirePermission("fin
   }
 });
 
-purchaseRouter.post("/purchase-orders/:id/schedule-payment", requirePermission("finance:create"), async (req, res) => {
+purchaseRouter.post("/purchase-orders/:id/schedule-payment", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 

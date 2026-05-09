@@ -8,6 +8,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, toDateISO } from "../lib/businessHelpers.js";
 import { z } from "zod";
 import rateLimit from "express-rate-limit";
@@ -176,7 +177,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, pdplUserLimiter,
   }
 });
 
-router.post("/data-request", authMiddleware, pdplUserLimiter, requirePermission("admin:write"), async (req, res) => {
+router.post("/data-request", authMiddleware, pdplUserLimiter, authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(dataRequestSchema.safeParse(req.body));
     const scope = req.scope!;

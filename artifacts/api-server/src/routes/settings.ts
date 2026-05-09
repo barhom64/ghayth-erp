@@ -5,6 +5,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import {
   resolveSettings,
   getSettingsByScope,
@@ -124,7 +125,7 @@ publicRouter.get("/display", async (_req, res) => {
 const router = Router();
 router.use(publicRouter);
 
-router.get("/resolve", requirePermission("settings:read"), async (req, res) => {
+router.get("/resolve", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { key } = req.query as { key: string };
@@ -138,7 +139,7 @@ router.get("/resolve", requirePermission("settings:read"), async (req, res) => {
   }
 });
 
-router.get("/", requirePermission("settings:read"), async (req, res) => {
+router.get("/", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { scopeOverride } = req.query as { scopeOverride?: SettingScope };
@@ -158,7 +159,7 @@ router.get("/", requirePermission("settings:read"), async (req, res) => {
   }
 });
 
-router.put("/", requirePermission("settings:write"), async (req, res) => {
+router.put("/", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(settingUpsertSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -186,7 +187,7 @@ router.put("/", requirePermission("settings:write"), async (req, res) => {
   }
 });
 
-router.delete("/", requirePermission("settings:write"), async (req, res) => {
+router.delete("/", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(settingDeleteSchema.safeParse(req.body ?? {}));
@@ -214,14 +215,14 @@ router.delete("/", requirePermission("settings:write"), async (req, res) => {
   }
 });
 
-router.get("/general", requirePermission("settings:read"), async (_req, res) => {
+router.get("/general", authorize({ feature: "settings", action: "view" }), async (_req, res) => {
   try {
     const rows = await rawQuery(`SELECT * FROM system_settings WHERE "companyId" IS NULL AND "branchId" IS NULL ORDER BY key LIMIT 500`);
     res.json({ data: maskSecretSettings(rows) });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/resolved", requirePermission("settings:read"), async (req, res) => {
+router.get("/resolved", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const systemRows = await rawQuery<any>(
@@ -260,7 +261,7 @@ router.get("/resolved", requirePermission("settings:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.put("/general", requirePermission("settings:write"), async (req, res) => {
+router.put("/general", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const entries: Record<string, string> = zodParse(generalSettingsSchema.safeParse(req.body));
     const hasTimezoneChange = "timezone" in entries;
@@ -287,7 +288,7 @@ router.put("/general", requirePermission("settings:write"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/branches", requirePermission("settings:read"), async (req, res) => {
+router.get("/branches", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
@@ -298,7 +299,7 @@ router.get("/branches", requirePermission("settings:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/branches/:id", requirePermission("settings:read"), async (req, res) => {
+router.get("/branches/:id", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -311,7 +312,7 @@ router.get("/branches/:id", requirePermission("settings:read"), async (req, res)
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/departments", requirePermission("settings:read"), async (req, res) => {
+router.get("/departments", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
@@ -322,7 +323,7 @@ router.get("/departments", requirePermission("settings:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/companies", requirePermission("settings:read"), async (req, res) => {
+router.get("/companies", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
@@ -333,7 +334,7 @@ router.get("/companies", requirePermission("settings:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/audit-log", requirePermission("settings:read"), async (req, res) => {
+router.get("/audit-log", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
@@ -344,7 +345,7 @@ router.get("/audit-log", requirePermission("settings:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.post("/branches", requirePermission("settings:write"), async (req, res) => {
+router.post("/branches", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(createBranchSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -365,7 +366,7 @@ router.post("/branches", requirePermission("settings:write"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.put("/branches/:id", requirePermission("settings:write"), async (req, res) => {
+router.put("/branches/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(updateBranchSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -401,7 +402,7 @@ router.put("/branches/:id", requirePermission("settings:write"), async (req, res
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.delete("/branches/:id", requirePermission("settings:write"), async (req, res) => {
+router.delete("/branches/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const branchId = parseId(req.params.id, "id");
     const scope = req.scope!;
@@ -438,7 +439,7 @@ router.delete("/branches/:id", requirePermission("settings:write"), async (req, 
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.post("/departments", requirePermission("settings:write"), async (req, res) => {
+router.post("/departments", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(createDepartmentSchema.safeParse(req.body));
     const { name, nameEn, manager } = body;
@@ -455,7 +456,7 @@ router.post("/departments", requirePermission("settings:write"), async (req, res
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.put("/departments/:id", requirePermission("settings:write"), async (req, res) => {
+router.put("/departments/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(updateDepartmentSchema.safeParse(req.body));
     const id = parseId(req.params.id, "id");
@@ -472,7 +473,7 @@ router.put("/departments/:id", requirePermission("settings:write"), async (req, 
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.delete("/departments/:id", requirePermission("settings:write"), async (req, res) => {
+router.delete("/departments/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const id = parseId(req.params.id, "id");
     const scope = req.scope!;
@@ -496,7 +497,7 @@ router.delete("/departments/:id", requirePermission("settings:write"), async (re
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.post("/companies", requirePermission("settings:write"), async (req, res) => {
+router.post("/companies", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(createCompanySchema.safeParse(req.body));
     const scope = req.scope!;
@@ -557,7 +558,7 @@ router.post("/companies", requirePermission("settings:write"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.put("/companies/:id", requirePermission("settings:write"), async (req, res) => {
+router.put("/companies/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(updateCompanySchema.safeParse(req.body));
     const id = parseId(req.params.id, "id");
@@ -577,7 +578,7 @@ router.put("/companies/:id", requirePermission("settings:write"), async (req, re
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.delete("/companies/:id", requirePermission("settings:write"), async (req, res) => {
+router.delete("/companies/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const id = parseId(req.params.id, "id");
     const scope = req.scope!;
@@ -599,7 +600,7 @@ router.delete("/companies/:id", requirePermission("settings:write"), async (req,
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/timezone", requirePermission("settings:read"), async (_req, res) => {
+router.get("/timezone", authorize({ feature: "settings", action: "view" }), async (_req, res) => {
   try {
     const rows = await rawQuery(`SELECT value FROM system_settings WHERE key='timezone' AND "companyId" IS NULL AND "branchId" IS NULL`);
     const timezone = rows.length > 0 ? rows[0].value : "Asia/Riyadh";
@@ -610,7 +611,7 @@ router.get("/timezone", requirePermission("settings:read"), async (_req, res) =>
   }
 });
 
-router.get("/system-controls", requirePermission("settings:read"), async (req, res) => {
+router.get("/system-controls", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
@@ -625,7 +626,7 @@ router.get("/system-controls", requirePermission("settings:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.put("/system-controls", requirePermission("settings:write"), async (req, res) => {
+router.put("/system-controls", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const entries: Record<string, unknown> = zodParse(systemControlsSchema.safeParse(req.body));
@@ -660,7 +661,7 @@ router.put("/system-controls", requirePermission("settings:write"), async (req, 
 // user_roles for exactly this reason; the rest of the codebase
 // (admin.ts:95, :167, :363, :195) already scopes inserts/deletes
 // the same way. These two routes were the last hold-outs.
-router.get("/role-modules", requirePermission("settings:read"), async (req, res) => {
+router.get("/role-modules", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const roles = await rawQuery(
@@ -671,7 +672,7 @@ router.get("/role-modules", requirePermission("settings:read"), async (req, res)
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.put("/role-modules/:roleKey", requirePermission("settings:write"), async (req, res) => {
+router.put("/role-modules/:roleKey", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(roleModulesSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -691,7 +692,7 @@ router.put("/role-modules/:roleKey", requirePermission("settings:write"), async 
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/approval-config", requirePermission("settings:read"), async (req, res) => {
+router.get("/approval-config", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const chains = await rawQuery(
@@ -702,7 +703,7 @@ router.get("/approval-config", requirePermission("settings:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.post("/approval-config", requirePermission("settings:write"), async (req, res) => {
+router.post("/approval-config", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(approvalConfigSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -722,7 +723,7 @@ router.post("/approval-config", requirePermission("settings:write"), async (req,
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.delete("/approval-config/:id", requirePermission("settings:write"), async (req, res) => {
+router.delete("/approval-config/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -757,7 +758,7 @@ const CHANNEL_SETTING_KEYS = [
   "push_enabled",
 ];
 
-router.get("/channels", requirePermission("settings:read"), async (req, res) => {
+router.get("/channels", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<{ key: string; value: string }>(
@@ -779,7 +780,7 @@ router.get("/channels", requirePermission("settings:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.put("/channels", requirePermission("settings:write"), async (req, res) => {
+router.put("/channels", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const entries: Record<string, string | null> = zodParse(channelsSchema.safeParse(req.body));
     const scope = req.scope!;

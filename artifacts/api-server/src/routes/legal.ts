@@ -162,7 +162,7 @@ const VALID_CASE_TRANSITIONS: Record<string, readonly string[]> = {
 
 const CASE_STATUSES = ["open", "in_progress", "judgment", "execution", "closed"] as const;
 
-router.get("/contracts", requirePermission("legal:read"), async (req, res) => {
+router.get("/contracts", authorize({ feature: "legal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -175,7 +175,7 @@ router.get("/contracts", requirePermission("legal:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Legal contracts error:"); }
 });
 
-router.post("/contracts", requirePermission("legal:create"), async (req, res) => {
+router.post("/contracts", authorize({ feature: "legal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createContractSchema.safeParse(req.body)) as any;
@@ -243,7 +243,7 @@ router.post("/contracts", requirePermission("legal:create"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Create legal contract error:"); }
 });
 
-router.get("/contracts/renewal-alerts", requirePermission("legal:read"), async (req, res) => {
+router.get("/contracts/renewal-alerts", authorize({ feature: "legal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -293,7 +293,7 @@ router.get("/contracts/:id", authorize({ feature: "legal.contracts", action: "vi
   } catch (err) { handleRouteError(err, res, "Get contract error:"); }
 });
 
-router.patch("/contracts/:id", requirePermission("legal:write"), async (req, res) => {
+router.patch("/contracts/:id", authorize({ feature: "legal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -432,7 +432,7 @@ router.delete("/contracts/:id", authorize({ feature: "legal.contracts", action: 
 // Lifecycle endpoints: renew and terminate
 // ---------------------------------------------------------------------------
 
-router.post("/contracts/:id/renew", requirePermission("legal:write"), async (req, res) => {
+router.post("/contracts/:id/renew", authorize({ feature: "legal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -503,7 +503,7 @@ router.post("/contracts/:id/renew", requirePermission("legal:write"), async (req
   }
 });
 
-router.post("/contracts/:id/terminate", requirePermission("legal:write"), async (req, res) => {
+router.post("/contracts/:id/terminate", authorize({ feature: "legal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -551,7 +551,7 @@ router.post("/contracts/:id/terminate", requirePermission("legal:write"), async 
   }
 });
 
-router.get("/cases", requirePermission("legal:read"), async (req, res) => {
+router.get("/cases", authorize({ feature: "legal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -564,7 +564,7 @@ router.get("/cases", requirePermission("legal:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Legal cases error:"); }
 });
 
-router.post("/cases", requirePermission("legal:create"), async (req, res) => {
+router.post("/cases", authorize({ feature: "legal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createCaseSchema.safeParse(req.body)) as any;
@@ -650,7 +650,7 @@ router.get("/cases/:id", authorize({ feature: "legal.cases", action: "view", res
   } catch (err) { handleRouteError(err, res, "Get case error:"); }
 });
 
-router.patch("/cases/:id", requirePermission("legal:write"), async (req, res) => {
+router.patch("/cases/:id", authorize({ feature: "legal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -767,7 +767,7 @@ router.delete("/cases/:id", authorize({ feature: "legal.cases", action: "delete"
 });
 
 /** Close a legal case — cancels all outstanding obligations and emits event */
-router.post("/cases/:id/close", requirePermission("legal:write"), async (req, res) => {
+router.post("/cases/:id/close", authorize({ feature: "legal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -797,7 +797,7 @@ router.post("/cases/:id/close", requirePermission("legal:write"), async (req, re
   }
 });
 
-router.get("/cases/:caseId/sessions", requirePermission("legal:read"), async (req, res) => {
+router.get("/cases/:caseId/sessions", authorize({ feature: "legal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
@@ -808,7 +808,7 @@ router.get("/cases/:caseId/sessions", requirePermission("legal:read"), async (re
   } catch (err) { handleRouteError(err, res, "Legal sessions error:"); }
 });
 
-router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async (req, res) => {
+router.post("/cases/:caseId/sessions", authorize({ feature: "legal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createSessionSchema.safeParse(req.body)) as any;
@@ -979,7 +979,7 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
   } catch (err) { handleRouteError(err, res, "Create session error:"); }
 });
 
-router.get("/stats", requirePermission("legal:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "legal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -997,7 +997,7 @@ router.get("/stats", requirePermission("legal:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Legal stats error:"); }
 });
 
-router.get("/cases/:caseId/correspondence", requirePermission("legal:read"), async (req, res) => {
+router.get("/cases/:caseId/correspondence", authorize({ feature: "legal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
@@ -1008,7 +1008,7 @@ router.get("/cases/:caseId/correspondence", requirePermission("legal:read"), asy
   } catch (err) { handleRouteError(err, res, "Legal correspondence error:"); }
 });
 
-router.post("/cases/:caseId/correspondence", requirePermission("legal:create"), async (req, res) => {
+router.post("/cases/:caseId/correspondence", authorize({ feature: "legal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
@@ -1041,7 +1041,7 @@ router.post("/cases/:caseId/correspondence", requirePermission("legal:create"), 
 });
 
 // ─── Case Costs — مصاريف القضية ─────────────────────────────────────────────
-router.post("/cases/:caseId/costs", requirePermission("legal:create"), async (req, res) => {
+router.post("/cases/:caseId/costs", authorize({ feature: "legal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
@@ -1094,7 +1094,7 @@ router.post("/cases/:caseId/costs", requirePermission("legal:create"), async (re
   } catch (err) { handleRouteError(err, res, "Create case cost error:"); }
 });
 
-router.get("/cases/:caseId/judgments", requirePermission("legal:read"), async (req, res) => {
+router.get("/cases/:caseId/judgments", authorize({ feature: "legal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
@@ -1105,7 +1105,7 @@ router.get("/cases/:caseId/judgments", requirePermission("legal:read"), async (r
   } catch (err) { handleRouteError(err, res, "Legal judgments error:"); }
 });
 
-router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async (req, res) => {
+router.post("/cases/:caseId/judgments", authorize({ feature: "legal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
@@ -1200,7 +1200,7 @@ router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async
   } catch (err) { handleRouteError(err, res, "Create judgment error:"); }
 });
 
-router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), async (req, res) => {
+router.patch("/cases/:caseId/judgments/:id", authorize({ feature: "legal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1265,7 +1265,7 @@ router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), a
   } catch (err) { handleRouteError(err, res, "Update judgment error:"); }
 });
 
-router.patch("/cases/:id/financial-risk", requirePermission("legal:write"), async (req, res) => {
+router.patch("/cases/:id/financial-risk", authorize({ feature: "legal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1320,7 +1320,7 @@ router.patch("/cases/:id/financial-risk", requirePermission("legal:write"), asyn
   } catch (err) { handleRouteError(err, res, "Financial risk update error:"); }
 });
 
-router.get("/sessions/:id", requirePermission("legal:read"), async (req, res) => {
+router.get("/sessions/:id", authorize({ feature: "legal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1336,7 +1336,7 @@ router.get("/sessions/:id", requirePermission("legal:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Legal session detail error:"); }
 });
 
-router.get("/judgments/:id", requirePermission("legal:read"), async (req, res) => {
+router.get("/judgments/:id", authorize({ feature: "legal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1352,7 +1352,7 @@ router.get("/judgments/:id", requirePermission("legal:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Legal judgment detail error:"); }
 });
 
-router.get("/correspondence/:id", requirePermission("legal:read"), async (req, res) => {
+router.get("/correspondence/:id", authorize({ feature: "legal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1368,7 +1368,7 @@ router.get("/correspondence/:id", requirePermission("legal:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "Legal correspondence detail error:"); }
 });
 
-router.get("/sessions/upcoming", requirePermission("legal:read"), async (req, res) => {
+router.get("/sessions/upcoming", authorize({ feature: "legal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 14;
@@ -1389,7 +1389,7 @@ router.get("/sessions/upcoming", requirePermission("legal:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "Upcoming sessions error:"); }
 });
 
-router.get("/judgments/financial-report", requirePermission("legal:read"), async (req, res) => {
+router.get("/judgments/financial-report", authorize({ feature: "legal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -1419,7 +1419,7 @@ router.get("/judgments/financial-report", requirePermission("legal:read"), async
   } catch (err) { handleRouteError(err, res, "Judgments financial report error:"); }
 });
 
-router.get("/financial-report", requirePermission("legal:read"), async (req, res) => {
+router.get("/financial-report", authorize({ feature: "legal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cases = await rawQuery<any>(

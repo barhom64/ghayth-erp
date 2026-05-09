@@ -7,6 +7,7 @@ import { logger } from "../lib/logger.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { sendNotification } from "../lib/notificationService.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { aiEngine } from "../lib/aiEngine.js";
@@ -418,7 +419,7 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
   }
 });
 
-router.get("/log", requirePermission("communications:read"), async (req, res): Promise<void> => {
+router.get("/log", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { channel, direction, limit: lim, offset: off } = req.query as any;
@@ -436,7 +437,7 @@ router.get("/log", requirePermission("communications:read"), async (req, res): P
   } catch (err) { handleRouteError(err, res, "Communications log error:"); }
 });
 
-router.post("/send", requirePermission("communications:write"), async (req, res): Promise<void> => {
+router.post("/send", authorize({ feature: "communications", action: "create" }), async (req, res): Promise<void> => {
   try {
     const b = zodParse(sendCommunicationSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
@@ -474,7 +475,7 @@ router.post("/send", requirePermission("communications:write"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Send communication error:"); }
 });
 
-router.get("/whatsapp", requirePermission("communications:read"), async (req, res): Promise<void> => {
+router.get("/whatsapp", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { status, limit: lim, offset: off } = req.query as any;
@@ -491,7 +492,7 @@ router.get("/whatsapp", requirePermission("communications:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "WhatsApp queue error:"); }
 });
 
-router.get("/sms", requirePermission("communications:read"), async (req, res): Promise<void> => {
+router.get("/sms", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { status, limit: lim, offset: off } = req.query as any;
@@ -508,7 +509,7 @@ router.get("/sms", requirePermission("communications:read"), async (req, res): P
   } catch (err) { handleRouteError(err, res, "SMS queue error:"); }
 });
 
-router.get("/pbx", requirePermission("communications:read"), async (req, res): Promise<void> => {
+router.get("/pbx", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { limit: lim, offset: off } = req.query as any;
@@ -520,7 +521,7 @@ router.get("/pbx", requirePermission("communications:read"), async (req, res): P
   } catch (err) { handleRouteError(err, res, "PBX calls error:"); }
 });
 
-router.patch("/log/:id", requirePermission("communications:write"), async (req, res): Promise<void> => {
+router.patch("/log/:id", authorize({ feature: "communications", action: "create" }), async (req, res): Promise<void> => {
   try {
     const parsed = zodParse(updateLogSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
@@ -553,7 +554,7 @@ router.patch("/log/:id", requirePermission("communications:write"), async (req, 
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.post("/log/:id/convert", requirePermission("communications:write"), async (req, res): Promise<void> => {
+router.post("/log/:id/convert", authorize({ feature: "communications", action: "create" }), async (req, res): Promise<void> => {
   try {
     const parsed = zodParse(convertLogSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
@@ -631,7 +632,7 @@ router.post("/log/:id/convert", requirePermission("communications:write"), async
   } catch (err) { handleRouteError(err, res, "Communication convert error:"); }
 });
 
-router.delete("/log/:id", requirePermission("communications:write"), async (req, res): Promise<void> => {
+router.delete("/log/:id", authorize({ feature: "communications", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -653,7 +654,7 @@ router.delete("/log/:id", requirePermission("communications:write"), async (req,
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/stats", requirePermission("communications:read"), async (req, res): Promise<void> => {
+router.get("/stats", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -672,7 +673,7 @@ router.get("/stats", requirePermission("communications:read"), async (req, res):
   } catch (err) { handleRouteError(err, res, "Communications stats error:"); }
 });
 
-router.get("/queue-stats", requirePermission("communications:read"), async (req, res): Promise<void> => {
+router.get("/queue-stats", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -746,7 +747,7 @@ router.get("/push/vapid-key", async (_req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "VAPID key error:"); }
 });
 
-router.post("/push/subscribe", requirePermission("communications:write"), async (req, res): Promise<void> => {
+router.post("/push/subscribe", authorize({ feature: "communications", action: "create" }), async (req, res): Promise<void> => {
   try {
     const parsed = zodParse(pushSubscribeSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
@@ -781,7 +782,7 @@ router.post("/push/subscribe", requirePermission("communications:write"), async 
   } catch (err) { handleRouteError(err, res, "Push subscribe error:"); }
 });
 
-router.delete("/push/unsubscribe", requirePermission("communications:write"), async (req, res): Promise<void> => {
+router.delete("/push/unsubscribe", authorize({ feature: "communications", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { endpoint } = zodParse(pushUnsubscribeSchema.safeParse(req.body ?? {}));
@@ -805,7 +806,7 @@ router.delete("/push/unsubscribe", requirePermission("communications:write"), as
   } catch (err) { handleRouteError(err, res, "Push unsubscribe error:"); }
 });
 
-router.post("/push/test", requirePermission("communications:write"), async (req, res): Promise<void> => {
+router.post("/push/test", authorize({ feature: "communications", action: "create" }), async (req, res): Promise<void> => {
   try {
     const parsed = zodParse(z.object({}).safeParse(req.body));
     const scope = req.scope!;

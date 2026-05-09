@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError,
   parseId,
@@ -60,7 +61,7 @@ const closePostingSchema = z.object({
 
 const router = Router();
 
-router.get("/postings", requirePermission("hr:read"), async (req, res) => {
+router.get("/postings", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM job_postings WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
@@ -68,7 +69,7 @@ router.get("/postings", requirePermission("hr:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.post("/postings", requirePermission("hr:write"), async (req, res) => {
+router.post("/postings", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { title, department, location, type, description, requirements, salaryMin, salaryMax, status, closingDate } = zodParse(createPostingSchema.safeParse(req.body));
@@ -100,7 +101,7 @@ router.post("/postings", requirePermission("hr:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create job posting error:"); }
 });
 
-router.get("/postings/:id", requirePermission("hr:read"), async (req, res) => {
+router.get("/postings/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -110,7 +111,7 @@ router.get("/postings/:id", requirePermission("hr:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.patch("/postings/:id", requirePermission("hr:write"), async (req, res) => {
+router.patch("/postings/:id", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -145,7 +146,7 @@ router.patch("/postings/:id", requirePermission("hr:write"), async (req, res) =>
 });
 
 // Close a job posting with cascade to open applications + candidate notifications.
-router.post("/postings/:id/close", requirePermission("hr:write"), async (req, res) => {
+router.post("/postings/:id/close", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -195,7 +196,7 @@ router.post("/postings/:id/close", requirePermission("hr:write"), async (req, re
 });
 
 // Reopen a previously closed job posting.
-router.post("/postings/:id/reopen", requirePermission("hr:write"), async (req, res) => {
+router.post("/postings/:id/reopen", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -228,7 +229,7 @@ router.post("/postings/:id/reopen", requirePermission("hr:write"), async (req, r
   }
 });
 
-router.delete("/postings/:id", requirePermission("hr:write"), async (req, res) => {
+router.delete("/postings/:id", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -247,7 +248,7 @@ router.delete("/postings/:id", requirePermission("hr:write"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.get("/applications", requirePermission("hr:read"), async (req, res) => {
+router.get("/applications", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { postingId } = req.query;
@@ -259,7 +260,7 @@ router.get("/applications", requirePermission("hr:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.post("/applications", requirePermission("hr:write"), async (req, res) => {
+router.post("/applications", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { postingId, applicantName, email, phone, resumeUrl, status, notes, rating } = zodParse(createApplicationSchema.safeParse(req.body));
@@ -293,7 +294,7 @@ router.post("/applications", requirePermission("hr:write"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Create application error:"); }
 });
 
-router.get("/applications/:id", requirePermission("hr:read"), async (req, res) => {
+router.get("/applications/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -303,7 +304,7 @@ router.get("/applications/:id", requirePermission("hr:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.patch("/applications/:id", requirePermission("hr:write"), async (req, res) => {
+router.patch("/applications/:id", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -339,7 +340,7 @@ router.patch("/applications/:id", requirePermission("hr:write"), async (req, res
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.delete("/applications/:id", requirePermission("hr:write"), async (req, res) => {
+router.delete("/applications/:id", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -358,7 +359,7 @@ router.delete("/applications/:id", requirePermission("hr:write"), async (req, re
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.get("/stats", requirePermission("hr:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;

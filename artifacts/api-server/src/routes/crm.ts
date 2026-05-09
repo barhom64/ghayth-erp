@@ -102,7 +102,7 @@ const STAGE_AUTO_ACTIONS: Record<string, { followUpDays: number; description: st
   closed_lost: { followUpDays: 0, description: 'تسجيل سبب الخسارة + تحليل' },
 };
 
-router.get("/opportunities", requirePermission("crm:read"), async (req, res) => {
+router.get("/opportunities", authorize({ feature: "crm", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { stage, status } = req.query as any;
@@ -120,7 +120,7 @@ router.get("/opportunities", requirePermission("crm:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "CRM opportunities error:"); }
 });
 
-router.post("/opportunities", requirePermission("crm:create"), async (req, res) => {
+router.post("/opportunities", authorize({ feature: "crm", action: "create" }), async (req, res) => {
   // Phase C domain 2 — CRM opportunity creation, mirror of the HR Step 1
   // treatment. Adds input validation the old handler lacked (title,
   // contact-or-client, stage enum, numeric ranges), pre-checks the
@@ -309,7 +309,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Create opportunity error:"); }
 });
 
-router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, res) => {
+router.patch("/opportunities/:id", authorize({ feature: "crm", action: "update" }), async (req, res) => {
   try {
     const parsed = zodParse(updateOpportunitySchema.safeParse(req.body));
     const scope = req.scope!;
@@ -768,7 +768,7 @@ router.get("/opportunities/:id", authorize({ feature: "crm.opportunities", actio
 // won, runs the deal-won side-effects (client + contract + invoice), then
 // writes the lifecycle markers (convertedAt / convertedClientId) in the same
 // atomic transition via the lifecycle engine.
-router.post("/opportunities/:id/convert", requirePermission("crm:update"), async (req, res) => {
+router.post("/opportunities/:id/convert", authorize({ feature: "crm", action: "update" }), async (req, res) => {
   try {
     const parsed = zodParse(convertOpportunitySchema.safeParse(req.body));
     const scope = req.scope!;
@@ -862,7 +862,7 @@ router.delete("/opportunities/:id", authorize({ feature: "crm.opportunities", ac
 // Related deals for a given opportunity: other opportunities that share the
 // same clientId or contact name / phone / email. Used by the lead / opportunity
 // detail page instead of fetching the full list client-side.
-router.get("/opportunities/:id/related", requirePermission("crm:read"), async (req, res) => {
+router.get("/opportunities/:id/related", authorize({ feature: "crm", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -925,7 +925,7 @@ router.get("/opportunities/:id/related", requirePermission("crm:read"), async (r
 // leak). Fixed by pre-validating the opportunity exists in the
 // caller's scope — same pattern used by routes 257/687/742 in this
 // file for the opportunity PATCH/DELETE side.
-router.get("/opportunities/:id/activities", requirePermission("crm:read"), async (req, res) => {
+router.get("/opportunities/:id/activities", authorize({ feature: "crm", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const oppId = parseId(req.params.id, "id");
@@ -939,7 +939,7 @@ router.get("/opportunities/:id/activities", requirePermission("crm:read"), async
   } catch (err) { handleRouteError(err, res, "CRM activities error:"); }
 });
 
-router.post("/opportunities/:id/activities", requirePermission("crm:create"), async (req, res) => {
+router.post("/opportunities/:id/activities", authorize({ feature: "crm", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createActivitySchema.safeParse(req.body));
     const scope = req.scope!;
@@ -969,7 +969,7 @@ router.post("/opportunities/:id/activities", requirePermission("crm:create"), as
   } catch (err) { handleRouteError(err, res, "Create activity error:"); }
 });
 
-router.get("/pipeline", requirePermission("crm:read"), async (req, res) => {
+router.get("/pipeline", authorize({ feature: "crm", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const stageRows = await rawQuery<any>(
@@ -985,7 +985,7 @@ router.get("/pipeline", requirePermission("crm:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "CRM pipeline error:"); }
 });
 
-router.post("/followup-check", requirePermission("crm:create"), async (req, res) => {
+router.post("/followup-check", authorize({ feature: "crm", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(followupCheckSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -1054,7 +1054,7 @@ router.post("/followup-check", requirePermission("crm:create"), async (req, res)
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/analytics", requirePermission("crm:read"), async (req, res) => {
+router.get("/analytics", authorize({ feature: "crm", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1093,7 +1093,7 @@ router.get("/analytics", requirePermission("crm:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/stats", requirePermission("crm:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "crm", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;

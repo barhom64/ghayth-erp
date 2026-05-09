@@ -9,13 +9,14 @@ import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { currentPeriod, currentYear, toDateISO, todayISO, roundTo2 } from "../lib/businessHelpers.js";
 
 export const reportsRouter = Router();
 reportsRouter.use(authMiddleware);
 
-reportsRouter.get("/reports/entities/:entityType", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/entities/:entityType", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -33,7 +34,7 @@ reportsRouter.get("/reports/entities/:entityType", requirePermission("finance:re
   }
 });
 
-reportsRouter.get("/reports/trial-balance", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as any;
@@ -76,7 +77,7 @@ reportsRouter.get("/reports/trial-balance", requirePermission("finance:read"), a
   }
 });
 
-reportsRouter.get("/reports/income-statement", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/income-statement", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as any;
@@ -94,7 +95,7 @@ reportsRouter.get("/reports/income-statement", requirePermission("finance:read")
   }
 });
 
-reportsRouter.get("/reports/balance-sheet", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { asOfDate } = req.query as any;
@@ -139,7 +140,7 @@ reportsRouter.get("/reports/balance-sheet", requirePermission("finance:read"), a
 // Returns per-section line items + totals, plus opening/closing cash balance.
 // ─────────────────────────────────────────────────────────────────────────────
 
-reportsRouter.get("/reports/cash-flow", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as any;
@@ -297,7 +298,7 @@ reportsRouter.get("/reports/cash-flow", requirePermission("finance:read"), async
   }
 });
 
-reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -414,7 +415,7 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", requirePermission(
 // Returns: opening balance, invoice + payment movements in period, running
 // balance, aging buckets (0-30, 31-60, 61-90, 90+), and ending balance.
 // ─────────────────────────────────────────────────────────────────────────────
-reportsRouter.get("/reports/customer-statement/:clientId", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const clientId = parseId(req.params.clientId, "clientId");
@@ -533,7 +534,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", requirePermission("fi
 // Returns: opening balance, PO/invoice + scheduled-payment movements, running
 // balance, aging buckets on unpaid POs, and ending balance.
 // ─────────────────────────────────────────────────────────────────────────────
-reportsRouter.get("/reports/vendor-statement/:supplierId", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const supplierId = parseId(req.params.supplierId, "supplierId");
@@ -638,7 +639,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", requirePermission("fi
 // Phase 7.1 — migrated from finance.ts (canonical ownership consolidation)
 // ─────────────────────────────────────────────────────────────────────────────
 
-reportsRouter.get("/reports/entity-statement", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, startDate, endDate } = req.query as any;
@@ -713,7 +714,7 @@ reportsRouter.get("/reports/entity-statement", requirePermission("finance:read")
   }
 });
 
-reportsRouter.get("/reports/custody-advances", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate, branchId } = req.query as any;
@@ -772,7 +773,7 @@ reportsRouter.get("/reports/custody-advances", requirePermission("finance:read")
   }
 });
 
-reportsRouter.get("/reports/expenses-analysis", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate, branchId, departmentId, projectId, costCenterId, groupBy = "account" } = req.query as any;
@@ -818,7 +819,7 @@ reportsRouter.get("/reports/expenses-analysis", requirePermission("finance:read"
   }
 });
 
-reportsRouter.get("/reports/revenue-analysis", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate, branchId } = req.query as any;
@@ -863,7 +864,7 @@ reportsRouter.get("/reports/revenue-analysis", requirePermission("finance:read")
   }
 });
 
-reportsRouter.get("/reports/budget-variance", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/budget-variance", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { period, branchId } = req.query as any;
@@ -897,7 +898,7 @@ reportsRouter.get("/reports/budget-variance", requirePermission("finance:read"),
   }
 });
 
-reportsRouter.get("/reports/cash-bank-statement", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/cash-bank-statement", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate, accountCode = "1100", branchId } = req.query as any;

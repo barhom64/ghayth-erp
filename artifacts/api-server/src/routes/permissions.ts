@@ -3,6 +3,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { auditLog } from "../lib/audit.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -124,7 +125,7 @@ router.get("/my", async (req, res) => {
   }
 });
 
-router.get("/role-permissions", requirePermission("permissions:read"), async (req, res) => {
+router.get("/role-permissions", authorize({ feature: "admin.roles", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -137,7 +138,7 @@ router.get("/role-permissions", requirePermission("permissions:read"), async (re
   }
 });
 
-router.post("/role-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
+router.post("/role-permissions", authorize({ feature: "admin", action: "update" }), authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { role, permission } = zodParse(rolePermissionSchema.safeParse(req.body));
@@ -160,7 +161,7 @@ router.post("/role-permissions", requirePermission("admin:write"), requirePermis
   }
 });
 
-router.delete("/role-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
+router.delete("/role-permissions", authorize({ feature: "admin", action: "update" }), authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { role, permission } = zodParse(rolePermissionSchema.safeParse(req.body));
@@ -182,7 +183,7 @@ router.delete("/role-permissions", requirePermission("admin:write"), requirePerm
   }
 });
 
-router.get("/user-permissions", requirePermission("permissions:read"), async (req, res) => {
+router.get("/user-permissions", authorize({ feature: "admin.roles", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { userId } = req.query as { userId?: string };
@@ -201,7 +202,7 @@ router.get("/user-permissions", requirePermission("permissions:read"), async (re
   }
 });
 
-router.post("/user-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
+router.post("/user-permissions", authorize({ feature: "admin", action: "update" }), authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { userId, permission, type = "grant" } = zodParse(userPermissionCreateSchema.safeParse(req.body));
@@ -235,7 +236,7 @@ router.post("/user-permissions", requirePermission("admin:write"), requirePermis
   }
 });
 
-router.delete("/user-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
+router.delete("/user-permissions", authorize({ feature: "admin", action: "update" }), authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { userId, permission } = zodParse(userPermissionDeleteSchema.safeParse(req.body));

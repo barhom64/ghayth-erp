@@ -9,6 +9,7 @@ import { LOAN_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
   NotFoundError,
@@ -111,7 +112,7 @@ const approvalDecisionSchema = z.object({
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/loans — قائمة السلف
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/loans", requirePermission("hr:read"), async (req, res) => {
+router.get("/loans", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     await ensureLoanTables();
     const scope = req.scope!;
@@ -170,7 +171,7 @@ router.get("/loans", requirePermission("hr:read"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/loans/my — سلف الموظف الحالي (Self-Service)
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/loans/my", requirePermission("hr:read"), async (req, res) => {
+router.get("/loans/my", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     await ensureLoanTables();
     const scope = req.scope!;
@@ -191,7 +192,7 @@ router.get("/loans/my", requirePermission("hr:read"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/loans/:id — تفاصيل السلفة مع الأقساط
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/loans/:id", requirePermission("hr:read"), async (req, res) => {
+router.get("/loans/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     await ensureLoanTables();
     const scope = req.scope!;
@@ -224,7 +225,7 @@ router.get("/loans/:id", requirePermission("hr:read"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // POST /hr/loans — طلب سلفة جديدة
 // ═══════════════════════════════════════════════════════════════════════════════
-router.post("/loans", requirePermission("hr:create"), async (req, res) => {
+router.post("/loans", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     await ensureLoanTables();
     const scope = req.scope!;
@@ -339,7 +340,7 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/loans/:id/approve — اعتماد السلفة + توليد جدول الأقساط
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, res) => {
+router.patch("/loans/:id/approve", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const b = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
     const { approved = true, reason, notes } = b;
@@ -483,7 +484,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/loans/:id/reject — رفض السلفة
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, res) => {
+router.patch("/loans/:id/reject", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
