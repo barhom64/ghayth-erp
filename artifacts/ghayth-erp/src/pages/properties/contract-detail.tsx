@@ -142,7 +142,7 @@ export default function ContractDetailPage() {
           <InfoRow label="تاريخ البداية" value={contract?.startDate ? formatDateAr(contract.startDate) : undefined} />
           <InfoRow label="تاريخ النهاية" value={contract?.endDate ? formatDateAr(contract.endDate) : undefined} />
           <InfoRow label="الإيجار الشهري" value={monthlyRent ? formatCurrency(monthlyRent) : undefined} />
-          <InfoRow label="الإيجار السنوي" value={contract?.annualRent ? formatCurrency(Number(contract.annualRent)) : undefined} />
+          <InfoRow label="الإيجار السنوي" value={contract?.yearlyRent ? formatCurrency(Number(contract.yearlyRent)) : undefined} />
           <InfoRow label="نوع العقد" value={contract?.contractType} />
           <InfoRow label="دورة السداد" value={contract?.paymentFrequency} />
         </div>
@@ -207,7 +207,7 @@ export default function ContractDetailPage() {
       content: () => (
         <div className="space-y-6">
           <EntityFinancialProfile entityType="contract" entityId={id} />
-          <FinancialTab entityType="property" entityId={id} />
+          <FinancialTab entityType="property" entityId={contract?.unitId || id} />
         </div>
       ),
     },
@@ -277,14 +277,13 @@ export default function ContractDetailPage() {
               endDate.setFullYear(endDate.getFullYear() + 1);
               const newEnd = endDate.toISOString().split("T")[0];
 
-              const { id: _oldId, ...contractData } = contract || {};
-              const newContract = await apiFetch<any>("/properties/contracts", {
+              const newContract = await apiFetch<any>(`/properties/contracts/${id}/renew`, {
                 method: "POST",
                 body: JSON.stringify({
-                  ...contractData,
                   startDate: newStart,
                   endDate: newEnd,
-                  status: "active",
+                  monthlyRent: contract?.monthlyRent,
+                  yearlyRent: contract?.yearlyRent,
                 }),
               });
               queryClient.invalidateQueries({ queryKey: ["properties-contract"] });

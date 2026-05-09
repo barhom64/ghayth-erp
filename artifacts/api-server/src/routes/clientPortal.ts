@@ -78,7 +78,7 @@ function signPortalToken(payload: { accountId: number; clientId: number; company
 }
 
 function verifyPortalToken(token: string): PortalScope {
-  return jwt.verify(token, SECRET!) as any;
+  return jwt.verify(token, SECRET!, { algorithms: ["HS256"] }) as any;
 }
 
 async function portalAuthMiddleware(req: Request & { portalScope?: PortalScope }, res: Response, next: NextFunction): Promise<void> {

@@ -109,7 +109,7 @@ export default function Employees() {
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/employees",
-    queryKeys: [["employees", filters.search, String(page)]],
+    queryKeys: [["employees", filters.search, filters.status, String(page), scopeQueryString]],
     onSuccess: () => refetch(),
   });
 

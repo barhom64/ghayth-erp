@@ -152,7 +152,7 @@ router.get("/settings/display", async (req, res) => {
       try {
         const jwt = await import("jsonwebtoken");
         const SECRET = process.env.JWT_SECRET;
-        const payload: any = jwt.default.verify(rawToken, SECRET!);
+        const payload: any = jwt.default.verify(rawToken, SECRET!, { algorithms: ["HS256"] });
         if (payload?.companyId && payload?.type !== "client_portal") companyId = payload.companyId;
       } catch (e) { logger.debug(e, "public-settings JWT decode (optional)"); }
     }

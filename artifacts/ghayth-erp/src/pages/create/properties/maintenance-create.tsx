@@ -45,11 +45,11 @@ export default function PropertyMaintenanceCreate() {
         category: form.category || undefined,
         description: form.description,
         priority: form.priority,
-        cost: form.cost ? Number(form.cost) : undefined,
+        estimatedCost: form.cost ? Number(form.cost) : undefined,
       });
       clearDraft();
       toast({ title: "تم إنشاء طلب الصيانة بنجاح" });
-      setLocation("/properties");
+      setLocation("/properties/maintenance");
     } catch (err: any) {
       setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الطلب", description: err?.fix ?? err?.message });
@@ -57,7 +57,7 @@ export default function PropertyMaintenanceCreate() {
   };
 
   return (
-    <CreatePageLayout title="طلب صيانة جديد" backPath="/properties">
+    <CreatePageLayout title="طلب صيانة جديد" backPath="/properties/maintenance">
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
