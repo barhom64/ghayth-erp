@@ -95,7 +95,7 @@ accountsRouter.get("/accounts", authorize({ feature: "finance.accounts", action:
     }
 
     const rows = await rawQuery(
-      `SELECT * FROM chart_of_accounts WHERE ${where} AND "deletedAt" IS NULL${extraWhere} ORDER BY code LIMIT 5000`,
+      `SELECT c.*, (SELECT p.id FROM chart_of_accounts p WHERE p.code = c."parentCode" AND p."companyId" = c."companyId" AND p."deletedAt" IS NULL LIMIT 1) AS "parentId" FROM chart_of_accounts c WHERE ${where} AND c."deletedAt" IS NULL${extraWhere} ORDER BY c.code LIMIT 5000`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -117,6 +117,16 @@ accountsRouter.post("/accounts", authorize({ feature: "finance.accounts", action
       [scope.companyId, b.code, b.name, b.type, b.parentCode ?? null, b.nameEn ?? null, b.nature, b.allowPosting, b.isAnalytical]
     );
     if (!row) throw new ConflictError("رمز الحساب مستخدم مسبقاً", { field: "code", fix: "استخدم رمزاً مختلفاً للحساب" });
+
+    // Compute parentId from parentCode
+    if (b.parentCode) {
+      await rawExecute(
+        `UPDATE chart_of_accounts SET "parentId" = (
+          SELECT p.id FROM chart_of_accounts p WHERE p.code = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL
+        ) WHERE id = $3`,
+        [b.parentCode, scope.companyId, row.id]
+      );
+    }
 
     emitEvent({
       companyId: scope.companyId,
@@ -339,8 +349,13 @@ accountsRouter.get("/ledger/:accountCode", authorize({ feature: "finance.account
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
 
+    const [accountRow] = await rawQuery<any>(
+      `SELECT name, type, code FROM chart_of_accounts WHERE code = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [accountCode, scope.companyId]
+    );
+
     const rows = await rawQuery<any>(
-      `SELECT je.id, je.ref, je.description, je."createdAt",
+      `SELECT je.id, je.ref, je.description, je."createdAt" AS date,
               jl.debit, jl.credit
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = $2 AND jl."deletedAt" IS NULL
@@ -358,10 +373,29 @@ accountsRouter.get("/ledger/:accountCode", authorize({ feature: "finance.account
     const totalDebit = rows.reduce((s: number, r: any) => s + Number(r.debit), 0);
     const totalCredit = rows.reduce((s: number, r: any) => s + Number(r.credit), 0);
 
-    res.json({ movements, summary: { totalDebit, totalCredit, netBalance: totalDebit - totalCredit, count: movements.length } });
+    res.json({
+      account: { code: accountCode, name: accountRow?.name, type: accountRow?.type },
+      entries: movements,
+      summary: { totalDebit, totalCredit, balance: totalDebit - totalCredit, count: movements.length }
+    });
   } catch (err) {
     handleRouteError(err, res, "Ledger error:");
   }
+});
+
+accountsRouter.get("/stats", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [inv] = await rawQuery<any>(
+      `SELECT COALESCE(SUM(total),0) AS "totalRevenue",
+              COALESCE(SUM("paidAmount") FILTER(WHERE "paidAt" >= date_trunc('month', CURRENT_DATE)),0) AS "paidThisMonth",
+              COALESCE(SUM(total - "paidAmount") FILTER(WHERE status IN ('sent','partial')),0) AS "pendingAmount",
+              COALESCE(SUM(total - "paidAmount") FILTER(WHERE status = 'overdue'),0) AS "overdueAmount"
+       FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+      [scope.companyId]
+    );
+    res.json(inv || { totalRevenue: 0, paidThisMonth: 0, pendingAmount: 0, overdueAmount: 0 });
+  } catch (err) { handleRouteError(err, res, "finance stats error"); }
 });
 
 accountsRouter.get("/summary", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
