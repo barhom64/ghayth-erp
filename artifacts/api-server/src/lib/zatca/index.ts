@@ -26,3 +26,34 @@ export {
 } from "./canonicalize.js";
 export type { CsrInput, GeneratedCsr } from "./csr.js";
 export { generateCsr } from "./csr.js";
+export {
+  fatoraaBaseUrl,
+  buildFatoraUrl,
+  COMPLIANCE_CSID_PATH,
+  COMPLIANCE_INVOICE_CHECK_PATH,
+  PRODUCTION_CSID_PATH,
+  PRODUCTION_CSID_RENEW_PATH,
+  CLEARANCE_SINGLE_PATH,
+  REPORTING_SINGLE_PATH,
+} from "./endpoints.js";
+export type { ZatcaCredentials } from "./auth.js";
+export { basicAuthHeader, commonFatoraHeaders } from "./auth.js";
+export { parseClearanceResponse } from "./response.js";
+export type { InvoiceSubmission } from "./client.js";
+export {
+  clearStandardInvoice,
+  reportSimplifiedInvoice,
+  requestComplianceCsid,
+  complianceInvoiceCheck,
+  requestProductionCsid,
+  ZatcaTransportError,
+} from "./client.js";
+export type { RetryRow } from "./retry.js";
+export {
+  enqueueRetry,
+  readDueRetries,
+  recordSuccess,
+  recordFailure,
+  requeue,
+  queueStats,
+} from "./retry.js";
