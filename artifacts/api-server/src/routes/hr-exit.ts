@@ -486,8 +486,8 @@ router.patch("/exit/clearance/:id", requirePermission("hr:update"), async (req, 
     await rawExecute(
       `UPDATE hr_exit_clearance
        SET status = $1, "clearedBy" = $2, "clearedAt" = NOW(), notes = $3
-       WHERE id = $4 AND status = 'pending'`,
-      [newStatus, scope.userId, b.notes || null, item.id]
+       WHERE id = $4 AND "companyId" = $5 AND status = 'pending'`,
+      [newStatus, scope.userId, b.notes || null, item.id, scope.companyId]
     );
 
     // التحقق: هل اكتمل إخلاء الطرف بالكامل؟

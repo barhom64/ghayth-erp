@@ -710,8 +710,8 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
     // Pre-compute penalty details before the transition
     const [assignment] = await rawQuery<any>(
       `SELECT id, "companyId", "branchId", "employeeId", salary
-         FROM employee_assignments WHERE id = $1`,
-      [memo.assignmentId]
+         FROM employee_assignments WHERE id = $1 AND "companyId" = $2`,
+      [memo.assignmentId, scope.companyId]
     );
     if (!assignment) throw new NotFoundError("التعيين غير موجود");
 

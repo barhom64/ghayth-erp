@@ -845,8 +845,6 @@ router.post("/policies/:id/compliance-actions", requirePermission("governance:wr
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-// Duplicate PATCH /compliance-actions/:id removed — merged into /:actionId handler above
-});
 
 router.patch("/risks/:id/treatment", requirePermission("governance:write"), async (req, res) => {
   try {

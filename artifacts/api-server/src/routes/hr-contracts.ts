@@ -342,7 +342,7 @@ contractsRouter.post("/:id/sign-employee", async (req, res) => {
     const [contract] = await rawQuery<any>(
       `SELECT ec.* FROM employee_contracts ec
        JOIN employee_assignments ea ON ea.id = ec."assignmentId"
-       WHERE ec.id = $1 AND ec."companyId" = $2
+       WHERE ec.id = $1 AND ec."companyId" = $2 AND ec."deletedAt" IS NULL
          AND ea."employeeId" = $3`,
       [id, scope.companyId, scope.employeeId]
     );

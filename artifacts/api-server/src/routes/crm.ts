@@ -951,7 +951,7 @@ router.post("/opportunities/:id/activities", requirePermission("crm:create"), as
       `INSERT INTO crm_activities ("opportunityId",type,description,"scheduledAt","createdBy") VALUES ($1,$2,$3,$4,$5)`,
       [oppId, b.type, b.description, b.scheduledAt, scope.userId]
     );
-    const [row] = await rawQuery<any>(`SELECT ca.* FROM crm_activities ca JOIN crm_opportunities co ON co.id = ca."opportunityId" WHERE ca.id=$1 AND co."companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT ca.* FROM crm_activities ca JOIN crm_opportunities co ON co.id = ca."opportunityId" WHERE ca.id=$1 AND co."companyId"=$2 AND co."deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "crm.activity.created", entity: "crm_activities", entityId: insertId,
@@ -1095,7 +1095,7 @@ router.get("/stats", requirePermission("crm:read"), async (req, res) => {
     const cid = scope.companyId;
     const [opp] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) as "wonValue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) as "pipelineValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [overdue] = await rawQuery<any>(
-      `SELECT COUNT(*) as count FROM crm_activities ca JOIN crm_opportunities co ON co.id=ca."opportunityId" WHERE co."companyId"=$1 AND ca."completedAt" IS NULL AND ca."scheduledAt" < NOW()`,
+      `SELECT COUNT(*) as count FROM crm_activities ca JOIN crm_opportunities co ON co.id=ca."opportunityId" WHERE co."companyId"=$1 AND co."deletedAt" IS NULL AND ca."completedAt" IS NULL AND ca."scheduledAt" < NOW()`,
       [cid]
     );
     res.json({

@@ -219,7 +219,7 @@ router.get("/crm", async (req, res) => {
     ]);
 
     const pipeline = await safeQuery(
-      `SELECT ps.name, ps."order", COUNT(o.id) AS count, COALESCE(SUM(o.value), 0) AS value FROM crm_pipeline_stages ps LEFT JOIN crm_opportunities o ON o."pipelineStageId" = ps.id AND o."companyId" = $1 WHERE ps."companyId" = $1 GROUP BY ps.id, ps.name, ps."order" ORDER BY ps."order"`, [cid]
+      `SELECT ps.name, ps."order", COUNT(o.id) AS count, COALESCE(SUM(o.value), 0) AS value FROM crm_pipeline_stages ps LEFT JOIN crm_opportunities o ON o."pipelineStageId" = ps.id AND o."companyId" = $1 AND o."deletedAt" IS NULL WHERE ps."companyId" = $1 GROUP BY ps.id, ps.name, ps."order" ORDER BY ps."order"`, [cid]
     );
 
     res.json({

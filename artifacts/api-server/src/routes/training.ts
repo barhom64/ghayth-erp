@@ -159,7 +159,7 @@ router.patch("/programs/:id", requirePermission("hr:update"), async (req, res) =
       updateWhere += ` AND status=$${params.length}`;
     }
     await rawExecute(`UPDATE training_programs SET ${sets.join(",")} WHERE ${updateWhere} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "training_programs", entityId: id,
@@ -309,7 +309,7 @@ router.post("/enrollments", requirePermission("hr:create"), async (req, res) => 
       after: { programId: Number(programId), employeeId: employeeId ? Number(employeeId) : null, employeeName: employeeName ?? null, status: status ?? "enrolled" },
     }).catch((e) => logger.error(e, "training background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.enrollment.created", entity: "training_enrollments", entityId: r.insertId, details: JSON.stringify({ programId, employeeId }) }).catch((e) => logger.error(e, "training background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM training_enrollments WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT e.* FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [r.insertId, scope.companyId]);
     res.status(201).json(row || { id: r.insertId, programId: Number(programId), employeeId: employeeId ?? null, status: status ?? "enrolled" });
   } catch (err) { handleRouteError(err, res, "Create training enrollment error:"); }
 });
@@ -338,7 +338,7 @@ router.patch("/enrollments/:id", requirePermission("hr:update"), async (req, res
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id);
     await rawExecute(`UPDATE training_enrollments SET ${sets.join(",")} WHERE id=$${params.length} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM training_enrollments WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT e.* FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2 AND e."deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "training_enrollments", entityId: id,

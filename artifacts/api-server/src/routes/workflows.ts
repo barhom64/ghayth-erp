@@ -367,7 +367,7 @@ router.post("/definitions", requirePermission("admin:write"), async (req, res) =
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "workflow_definitions", entityId: insertId, details: JSON.stringify({ requestType, requestTypeLabel }) }).catch((e) => logger.error(e, "workflows background task failed"));
     const [row] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     const defSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId"=$1 ORDER BY "stepOrder" LIMIT 500`, [insertId]);
-    res.status(201).json({ ...row, steps: defSteps } || { id: insertId });
+    res.status(201).json(row ? { ...row, steps: defSteps } : { id: insertId });
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
