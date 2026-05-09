@@ -1597,7 +1597,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
         `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
          FROM approval_chains ac
          JOIN approval_chain_steps acs ON acs."chainId" = ac.id
-         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true
+         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true AND ac."deletedAt" IS NULL
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
@@ -1921,7 +1921,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
          FROM approval_chains ac
          JOIN approval_chain_steps acs ON acs."chainId" = ac.id
-         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true
+         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true AND ac."deletedAt" IS NULL
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
@@ -2168,7 +2168,7 @@ router.get("/leave-requests/:id/stages", requirePermission("hr:read"), async (re
         `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
          FROM approval_chains ac
          JOIN approval_chain_steps acs ON acs."chainId" = ac.id
-         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true
+         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true AND ac."deletedAt" IS NULL
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
@@ -4877,7 +4877,7 @@ router.get("/employees-status", requirePermission("hr:read"), async (req, res) =
       `SELECT e.id AS "employeeId", ea.id AS "assignmentId"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
-       WHERE e.status = 'active'
+       WHERE e.status = 'active' AND e."deletedAt" IS NULL
        LIMIT 500`,
       [scope.companyId]
     );
@@ -6759,7 +6759,8 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (e."workPermitExpiry"::date - CURRENT_DATE) AS "daysLeft"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-       WHERE e."workPermitExpiry" IS NOT NULL
+       WHERE e."deletedAt" IS NULL
+         AND e."workPermitExpiry" IS NOT NULL
          AND e."workPermitExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
     );
@@ -6770,7 +6771,8 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (e."iqamaExpiry"::date - CURRENT_DATE) AS "daysLeft"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-       WHERE e."iqamaExpiry" IS NOT NULL
+       WHERE e."deletedAt" IS NULL
+         AND e."iqamaExpiry" IS NOT NULL
          AND e."iqamaExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
     );
@@ -6781,7 +6783,8 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (e."passportExpiry"::date - CURRENT_DATE) AS "daysLeft"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-       WHERE e."passportExpiry" IS NOT NULL
+       WHERE e."deletedAt" IS NULL
+         AND e."passportExpiry" IS NOT NULL
          AND e."passportExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
     );
@@ -6821,7 +6824,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (fv."registrationExpiry"::date - CURRENT_DATE) AS "daysLeft",
               'vehicle' AS "entityType"
        FROM fleet_vehicles fv
-       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped' AND fv."deletedAt" IS NULL
          AND fv."registrationExpiry" IS NOT NULL
          AND fv."registrationExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
@@ -6835,7 +6838,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (fv."insuranceExpiry"::date - CURRENT_DATE) AS "daysLeft",
               'vehicle' AS "entityType"
        FROM fleet_vehicles fv
-       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped' AND fv."deletedAt" IS NULL
          AND fv."insuranceExpiry" IS NOT NULL
          AND fv."insuranceExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
@@ -6849,7 +6852,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (fv."nextInspectionDate"::date - CURRENT_DATE) AS "daysLeft",
               'vehicle' AS "entityType"
        FROM fleet_vehicles fv
-       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped' AND fv."deletedAt" IS NULL
          AND fv."nextInspectionDate" IS NOT NULL
          AND fv."nextInspectionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]

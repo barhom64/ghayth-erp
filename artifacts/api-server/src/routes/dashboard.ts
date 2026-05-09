@@ -387,6 +387,7 @@ router.get("/charts/attendance", async (req, res) => {
          COUNT(*) FILTER (WHERE status = 'late') AS late
        FROM attendance
        WHERE ${where}
+         AND "deletedAt" IS NULL
          AND date >= (CURRENT_DATE - INTERVAL '7 days')
        GROUP BY dow
        ORDER BY dow`,
