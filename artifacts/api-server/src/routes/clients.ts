@@ -224,7 +224,7 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
          UNION ALL
          SELECT sq.id, sq."recipientPhone" AS phone, sq.message, sq.status, sq."createdAt", 'sms' AS channel
          FROM sms_queue sq
-         WHERE sq."clientId" = $1 AND sq."companyId" = $2
+         WHERE sq."companyId" = $2 AND sq."recipientPhone" = (SELECT phone FROM clients WHERE id = $1 AND "companyId" = $2 LIMIT 1)
          ORDER BY "createdAt" DESC LIMIT 20`,
         [id, scope.companyId]
       ).catch((e) => { logger.error(e, "clients query failed"); return []; }),
@@ -250,7 +250,7 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
         `SELECT id, title, "endDate" FROM legal_contracts
          WHERE "companyId" = $2 AND status = 'active' AND "deletedAt" IS NULL
            AND ("partyName" = $3 OR id IN (
-             SELECT "contractId" FROM rental_contracts WHERE "tenantName" = $3 AND "companyId" = $2 AND "deletedAt" IS NULL
+             SELECT id FROM rental_contracts WHERE "tenantName" = $3 AND "companyId" = $2 AND "deletedAt" IS NULL
            ))
          LIMIT 10`,
         [id, scope.companyId, client.name]

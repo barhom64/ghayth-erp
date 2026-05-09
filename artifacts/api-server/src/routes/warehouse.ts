@@ -815,7 +815,7 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
 
   let effectiveAssignmentId = assignmentId;
   if (!effectiveAssignmentId) {
-    const [asgn] = await rawQuery<any>(`SELECT id FROM employee_assignments WHERE "userId" = $1 AND status = 'active' LIMIT 1`, [userId]);
+    const [asgn] = await rawQuery<any>(`SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND status = 'active' LIMIT 1`, [userId]);
     effectiveAssignmentId = asgn?.id || userId;
   }
   const { insertId: prId } = await rawExecute(

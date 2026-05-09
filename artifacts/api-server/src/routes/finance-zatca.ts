@@ -405,7 +405,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), asy
     );
 
     const [invoice] = await rawQuery<any>(
-      `SELECT i.*, c.name AS "clientName", c."taxNumber" AS "clientVat",
+      `SELECT i.*, c.name AS "clientName", NULL AS "clientVat",
               b.name AS "branchName", b."taxNumber" AS "branchVat"
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
@@ -496,7 +496,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
     }
 
     const [invoice] = await rawQuery<any>(
-      `SELECT i.*, c.name AS "clientName", c."taxNumber" AS "clientVat",
+      `SELECT i.*, c.name AS "clientName", NULL AS "clientVat",
               b.name AS "branchName", b."taxNumber" AS "branchVat"
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL

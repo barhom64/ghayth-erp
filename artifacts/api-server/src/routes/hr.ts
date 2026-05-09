@@ -6462,8 +6462,8 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
     }
 
     const employees = await rawQuery<any>(
-      `SELECT ea."employeeId", ea.salary, ea."startDate",
-              COALESCE(ec."startDate", ea."startDate") AS "contractStart"
+      `SELECT ea."employeeId", ea.salary, ea."hireDate",
+              COALESCE(ec."startDate", ea."hireDate") AS "contractStart"
        FROM employee_assignments ea
        LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId"
                                       AND ec."companyId"=$1 AND ec.status='active'
