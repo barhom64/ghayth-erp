@@ -200,8 +200,8 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
 
     if (assigneeId) {
       const [assigneeAssignment] = await rawQuery<any>(
-        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND status = 'active' LIMIT 1`,
-        [assigneeId]
+        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+        [assigneeId, scope.companyId]
       );
       if (assigneeAssignment) {
         createNotification({
@@ -273,8 +273,8 @@ router.post("/tickets/check-sla", requirePermission("support:read"), async (req,
         let notifAssignmentId = scope.activeAssignmentId;
         if (ticket.assigneeId) {
           const [asgn] = await rawQuery<any>(
-            `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND status = 'active' LIMIT 1`,
-            [ticket.assigneeId]
+            `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+            [ticket.assigneeId, scope.companyId]
           );
           if (asgn) notifAssignmentId = asgn.id;
         }
@@ -400,8 +400,8 @@ router.post("/tickets/:id/field-visit", requirePermission("support:write"), asyn
     if (row.assigneeId) {
       try {
         const [asgn] = await rawQuery<any>(
-          `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND status='active' LIMIT 1`,
-          [row.assigneeId]
+          `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
+          [row.assigneeId, scope.companyId]
         );
         if (asgn) {
           createNotification({
@@ -624,7 +624,7 @@ router.get("/replies", requirePermission("support:read"), async (req, res) => {
       `SELECT tr.id, t.ref AS "ticketId", t.title AS "ticketTitle", tr.message AS reply, tr."authorName" AS agent, tr."createdAt" AS date, t.status
        FROM ticket_replies tr
        JOIN support_tickets t ON t.id = tr."ticketId"
-       WHERE ${baseWhere}
+       WHERE ${baseWhere} AND tr."deletedAt" IS NULL AND t."deletedAt" IS NULL
        ORDER BY tr."createdAt" DESC
        LIMIT 500`,
       params
@@ -702,7 +702,7 @@ router.get("/csat", requirePermission("support:read"), async (req, res) => {
       `SELECT cr."assigneeId", e.name AS "assigneeName", AVG(cr.score) AS avg, COUNT(*) AS total
        FROM ticket_csat_ratings cr LEFT JOIN employees e ON e.id=cr."assigneeId" AND e."deletedAt" IS NULL
        WHERE cr."companyId"=$1 AND cr."assigneeId" IS NOT NULL
-       GROUP BY cr."assigneeId", e.name ORDER BY avg DESC`,
+       GROUP BY cr."assigneeId", e.name ORDER BY avg DESC LIMIT 200`,
       [scope.companyId]
     );
     res.json({ data: rows, avg: avg?.avg ? Number(avg.avg).toFixed(2) : null, total: Number(avg?.total || 0), agentStats });

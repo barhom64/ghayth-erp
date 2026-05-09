@@ -137,8 +137,8 @@ router.post("/", requirePermission("crm:create"), async (req, res) => {
     });
 
     const [client] = await rawQuery<any>(
-      `SELECT * FROM clients WHERE id = $1 AND "deletedAt" IS NULL`,
-      [insertedId]
+      `SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [insertedId, scope.companyId]
     );
     if (!client) throw new NotFoundError("فشل في استرجاع العميل");
 
@@ -148,13 +148,13 @@ router.post("/", requirePermission("crm:create"), async (req, res) => {
       userId: scope.userId,
       action: "create",
       entity: "clients",
-      entityId: insertId,
+      entityId: insertedId,
       after: { name, phone, email, classification, source },
     }).catch((e) => logger.error(e, "clients background task failed"));
 
-    createSubsidiaryAccountsForEntity(scope.companyId, "client", insertId, name).catch((e) => logger.error(e, "clients background task failed"));
+    createSubsidiaryAccountsForEntity(scope.companyId, "client", insertedId, name).catch((e) => logger.error(e, "clients background task failed"));
 
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "clients", entityId: insertId, details: JSON.stringify({ name, phone, email, classification, source }) }).catch((e) => logger.error(e, "clients background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "clients", entityId: insertedId, details: JSON.stringify({ name, phone, email, classification, source }) }).catch((e) => logger.error(e, "clients background task failed"));
 
     res.status(201).json(client);
   } catch (err) {
@@ -446,8 +446,8 @@ router.post("/:id/portal-account", requirePermission("crm:write"), async (req, r
     }
 
     const [emailTaken] = await rawQuery<any>(
-      `SELECT id FROM client_portal_accounts WHERE email = $1`,
-      [email]
+      `SELECT id FROM client_portal_accounts WHERE email = $1 AND "companyId" = $2`,
+      [email, scope.companyId]
     );
     if (emailTaken) {
       throw new ConflictError("هذا البريد الإلكتروني مستخدم بالفعل في بوابة العملاء");

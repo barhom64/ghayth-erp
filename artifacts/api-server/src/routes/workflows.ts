@@ -311,7 +311,7 @@ router.get("/definitions", requirePermission("admin:read"), async (req, res) => 
       `SELECT wd.*, (SELECT COUNT(*) FROM workflow_steps ws WHERE ws."definitionId" = wd.id) AS "stepCount"
        FROM workflow_definitions wd
        WHERE wd."companyId" = $1
-       ORDER BY wd."requestTypeLabel"`,
+       ORDER BY wd."requestTypeLabel" LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: defs, total: defs.length });
@@ -386,7 +386,7 @@ router.put("/definitions/:id", requirePermission("admin:write"), async (req, res
          description = COALESCE($2, description), "isReturnable" = COALESCE($3, "isReturnable"),
          "enableEscalation" = COALESCE($4, "enableEscalation"), "defaultSlaHours" = COALESCE($5, "defaultSlaHours"),
          "isActive" = COALESCE($6, "isActive"), "updatedAt" = NOW()
-         WHERE id = $7 AND "companyId" = $8 AND "deletedAt" IS NULL`,
+         WHERE id = $7 AND "companyId" = $8`,
         [requestTypeLabel ?? null, description ?? null, isReturnable ?? null, enableEscalation ?? null, defaultSlaHours ?? null, isActive ?? null, id, scope.companyId]
       );
 
@@ -431,7 +431,7 @@ router.get("/sla-definitions", requirePermission("admin:read"), async (req, res)
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT * FROM sla_definitions WHERE "companyId" = $1 ORDER BY "requestType"`,
+      `SELECT * FROM sla_definitions WHERE "companyId" = $1 ORDER BY "requestType" LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
