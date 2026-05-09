@@ -162,6 +162,40 @@ curl -X POST http://localhost:5000/api/rbac/v2/simulate \
 
 ---
 
+## 8.5 ABAC Conditions — شروط ديناميكية على الصلاحية
+
+كل grant في `rbac_role_grants.conditions` يقدر يحمل JSON يضيّق متى تنطبق
+الصلاحية. الشروط المدعومة:
+
+```jsonc
+{
+  "statusIn":      ["draft", "pending"],     // حالة السجل ضمن قائمة
+  "statusNotIn":   ["closed", "cancelled"],
+  "amountMax":     10000,                    // المبلغ ≤ سقف
+  "amountMin":     100,
+  "ownRecord":     true,                     // المنشئ = المستخدم
+  "ownDepartment": true,                     // قسم السجل = قسم المستخدم
+  "ownBranch":     true,
+  "businessHours": { "from": 8, "to": 18 },  // ضمن ساعات العمل
+  "daysOfWeek":    [0,1,2,3,4],              // أحد..خميس (دوام السعودية)
+  "ipPrefixIn":    ["10.0.0.","192.168."],   // IP من شبكة محددة
+  "emergencyDisabled": true                  // مُجمَّد في حالة طوارئ
+}
+```
+
+كل الشروط **AND-combined** — أي شرط يفشل → الـgrant يُرفض. المحرّك يجرّب
+كل matching grants ويختار الأول الذي تنجح شروطه؛ إن فشلت كلها يُرجع
+الرفض الأكثر تفصيلاً.
+
+أمثلة عملية:
+- **مدير لا يعتمد إلا الفواتير في حالة draft**: `{ statusIn: ["draft"] }`
+- **محاسب لا يعتمد إلا حتى 5,000 ر.س**: `{ amountMax: 5000 }`
+- **صلاحية مؤقتة في ساعات الدوام فقط**: `{ businessHours: { from: 8, to: 17 } }`
+- **مدير لا يعتمد طلبه**: `{ ownRecord: false }` على الـapprove
+- **اعتماد مالي حصراً من شبكة المكتب**: `{ ipPrefixIn: ["10.0.0."] }`
+
+---
+
 ## 9. وصفة ترحيل route قديم إلى `authorize()`
 
 كل ملف route من ملفات الـ80 يمكن ترحيله بنفس النمط. مثال على `GET /hr/leaves/:id`:
