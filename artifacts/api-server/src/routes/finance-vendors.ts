@@ -10,6 +10,7 @@ import {
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { emitEvent, createAuditLog, currentPeriod } from "../lib/businessHelpers.js";
 import { applyTransition } from "../lib/lifecycleEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -46,7 +47,10 @@ const approvalSchema = z.object({
 export const vendorsRouter = Router();
 vendorsRouter.use(authMiddleware);
 
-vendorsRouter.get("/vendors", requirePermission("finance:read"), async (req, res) => {
+// RBAC v2: vendors carry sensitive fields (bankAccount, taxNumber).
+// finance.vendors field policies will mask them per role; the engine
+// applies maskFields() over the response automatically.
+vendorsRouter.get("/vendors", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -55,7 +59,7 @@ vendorsRouter.get("/vendors", requirePermission("finance:read"), async (req, res
       `SELECT * FROM suppliers WHERE ${where} ORDER BY name LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (_e) {
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }

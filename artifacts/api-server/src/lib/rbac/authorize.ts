@@ -52,8 +52,13 @@ export interface AuthorizeOptions {
   /**
    * For approve actions, where the amount lives. Used to enforce
    * `rbac_approval_limits.max_amount`.
+   *
+   * `from: "resource"` reads the amount from the loaded resource record
+   * (the column named `field` must be in `resource.columns`). Use this
+   * for amounts that live in the DB record (invoice.total) rather than
+   * the request body.
    */
-  amount?: { from: "body" | "params" | "query"; field: string; currency?: string };
+  amount?: { from: "body" | "params" | "query" | "resource"; field: string; currency?: string };
 }
 
 export function authorize(opts: AuthorizeOptions) {
@@ -85,8 +90,17 @@ export function authorize(opts: AuthorizeOptions) {
 
     // Resolve amount (for approve actions).
     if (opts.amount) {
-      const src = opts.amount.from === "body" ? req.body : opts.amount.from === "params" ? req.params : req.query;
-      const value = Number((src as any)?.[opts.amount.field]);
+      let src: any;
+      if (opts.amount.from === "resource") {
+        src = spec.resource?.record;
+      } else if (opts.amount.from === "body") {
+        src = req.body;
+      } else if (opts.amount.from === "params") {
+        src = req.params;
+      } else {
+        src = req.query;
+      }
+      const value = Number(src?.[opts.amount.field]);
       if (!isNaN(value)) {
         spec.amount = { value, currency: opts.amount.currency || "SAR" };
       }
