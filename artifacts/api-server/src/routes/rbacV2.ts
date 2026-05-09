@@ -235,6 +235,25 @@ router.put("/roles/:id/grants", authorize({ feature: "admin.roles", action: "upd
 });
 
 // ─── Field policies ─────────────────────────────────────────────────────────
+router.get("/roles/:id/field-policies", authorize({ feature: "admin.roles", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [{ count }] = await rawQuery<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM rbac_roles WHERE id = $1 AND ("companyId" = $2 OR is_template)`,
+      [id, scope.companyId]
+    );
+    if (Number(count) === 0) return void res.status(404).json({ error: "الدور غير موجود" });
+    const policies = await rawQuery<any>(
+      `SELECT feature_key, field_name, mode FROM rbac_field_policies WHERE role_id = $1 ORDER BY feature_key, field_name`,
+      [id]
+    );
+    res.json({ policies });
+  } catch (err) {
+    handleRouteError(err, res, "list field policies");
+  }
+});
+
 const fieldPoliciesSchema = z.object({
   policies: z.array(z.object({
     featureKey: z.string(),
@@ -275,6 +294,26 @@ router.put("/roles/:id/field-policies", authorize({ feature: "admin.roles", acti
 });
 
 // ─── Approval limits ────────────────────────────────────────────────────────
+router.get("/roles/:id/approval-limits", authorize({ feature: "admin.roles", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const [{ count }] = await rawQuery<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM rbac_roles WHERE id = $1 AND ("companyId" = $2 OR is_template)`,
+      [id, scope.companyId]
+    );
+    if (Number(count) === 0) return void res.status(404).json({ error: "الدور غير موجود" });
+    const limits = await rawQuery<any>(
+      `SELECT feature_key, action, currency, max_amount, requires_dual_control
+         FROM rbac_approval_limits WHERE role_id = $1 ORDER BY feature_key, action`,
+      [id]
+    );
+    res.json({ limits });
+  } catch (err) {
+    handleRouteError(err, res, "list approval limits");
+  }
+});
+
 const approvalLimitsSchema = z.object({
   limits: z.array(z.object({
     featureKey: z.string(),

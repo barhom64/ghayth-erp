@@ -130,6 +130,16 @@ export function RbacV2Tab() {
     selectedRoleId ? `/rbac/v2/roles/${selectedRoleId}/grants` : "/rbac/v2/roles/0/grants",
     !!selectedRoleId
   );
+  const { data: fieldsData } = useApiQuery<{ policies: FieldPolicy[] }>(
+    ["rbac-role-fields", String(selectedRoleId || "")],
+    selectedRoleId ? `/rbac/v2/roles/${selectedRoleId}/field-policies` : "/rbac/v2/roles/0/field-policies",
+    !!selectedRoleId
+  );
+  const { data: limitsData } = useApiQuery<{ limits: ApprovalLimit[] }>(
+    ["rbac-role-limits", String(selectedRoleId || "")],
+    selectedRoleId ? `/rbac/v2/roles/${selectedRoleId}/approval-limits` : "/rbac/v2/roles/0/approval-limits",
+    !!selectedRoleId
+  );
   const { data: sodData } = useApiQuery<{ violations: any[] }>(["rbac-sod"], "/rbac/v2/sod");
 
   const features = featuresData?.features || [];
@@ -151,6 +161,22 @@ export function RbacV2Tab() {
     for (const g of grants) map.set(g.feature_key, { ...g });
     setEditingGrants(map);
   }, [grants]);
+
+  useEffect(() => {
+    const map = new Map<string, FieldPolicy>();
+    for (const p of fieldsData?.policies || []) {
+      map.set(`${p.feature_key}::${p.field_name}`, { ...p });
+    }
+    setEditingFields(map);
+  }, [fieldsData]);
+
+  useEffect(() => {
+    const map = new Map<string, ApprovalLimit>();
+    for (const l of limitsData?.limits || []) {
+      map.set(`${l.feature_key}::${l.action}::${l.currency}`, { ...l });
+    }
+    setEditingLimits(map);
+  }, [limitsData]);
 
   const updateGrant = (featureKey: string, patch: Partial<Grant>) => {
     setEditingGrants((prev) => {

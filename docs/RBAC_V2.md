@@ -162,10 +162,69 @@ curl -X POST http://localhost:5000/api/rbac/v2/simulate \
 
 ---
 
-## 9. ما يلي
+## 9. وصفة ترحيل route قديم إلى `authorize()`
 
-- [ ] تحويل الـ80 route file تدريجياً من `requirePermission` إلى `authorize()` (3-4 أسابيع)
-- [ ] إضافة GET للـfield-policies + approval-limits (الواجهة تتعبأ من البداية بدلاً من الفراغ)
+كل ملف route من ملفات الـ80 يمكن ترحيله بنفس النمط. مثال على `GET /hr/leaves/:id`:
+
+**قبل** (legacy):
+```ts
+router.get("/leaves/:id", requirePermission("hr:read"), async (req, res) => {
+  const scope = req.scope!;
+  const id = parseId(req.params.id, "id");
+  const [item] = await rawQuery(
+    `SELECT ... FROM hr_leave_requests
+     WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+    [id, scope.companyId]
+  );
+  if (!item) throw new NotFoundError("...");
+  res.json(item);
+});
+```
+
+**بعد** (v2):
+```ts
+router.get("/leaves/:id",
+  authorize({
+    feature: "hr.leaves",
+    action: "view",
+    resource: { table: "hr_leave_requests", idParam: "id" },  // 🔑 تفعيل scope check
+  }),
+  async (req, res) => {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [item] = await rawQuery(
+      `SELECT ... FROM hr_leave_requests
+       WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!item) throw new NotFoundError("...");
+    // 🔑 يخفي تلقائياً الحقول الحساسة وفق سياسة دور المستخدم
+    res.json(maskFields(req, item));
+  }
+);
+```
+
+**ما يكسبه الـroute:**
+- ✅ يحترم scope الدور (لا حاجة لـ`requireOwnership` يدوياً)
+- ✅ يخفي الحقول حسب `rbac_field_policies`
+- ✅ خطأ 403 يرجع رسالة عربية + code قابل للقراءة + اقتراح حل
+
+**خطوات الترحيل لكل route:**
+1. حدّد الميزة المناسبة من `featureCatalog.ts` (أو أضِف ميزة جديدة).
+2. حدّد الـaction (`view` لـGET، `create` لـPOST، إلخ).
+3. أضِف `resource: { table, idParam }` إذا الـroute يقرأ سجلاً واحداً.
+4. لـapprove actions، أضِف `amount: { from: "body", field: "amount" }`.
+5. غلّف الـresponse بـ`maskFields(req, payload)`.
+6. احذف `requirePermission` و`requireOwnership` القديمة.
+
+**نمط الترحيل الجماعي**:
+احذف الترحيل الجماعي. اتبع المسار التدريجي ملف-بملف، عبر PRs صغيرة (5-10 routes/PR) لتسهيل المراجعة.
+
+---
+
+## 10. ما يلي
+
+- [ ] تحويل الـ80 route file تدريجياً من `requirePermission` إلى `authorize()` (3-4 أسابيع، PRs صغيرة)
 - [ ] Distributed cache invalidation (Redis pub/sub) للنشر متعدد العمليات
 - [ ] ABAC conditions (`{ statusIn: ["draft"] }`) في `rbac_role_grants.conditions`
 - [ ] إضافة قواعد SoD مخصصة لكل قطاع
