@@ -41,7 +41,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
       const rows = await rawQuery<any>(
         `SELECT code, name, "currentBalance"
          FROM chart_of_accounts
-         WHERE "companyId"=$1 AND code LIKE '11%' AND type='asset'
+         WHERE "companyId"=$1 AND code LIKE '11%' AND type='asset' AND "deletedAt" IS NULL
          ORDER BY code`,
         [companyId]
       );
@@ -105,7 +105,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
       const [workflow] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM workflow_instances
          WHERE "companyId"=$1 AND status IN ('pending','in_review','escalated')
-           AND "slaStatus" IN ('breached','at_risk')`,
+           AND "slaStatus" IN ('breached','at_risk') AND "deletedAt" IS NULL`,
         [companyId]
       ).catch((e) => { logger.error(e, "exec dashboard query failed"); return [{ n: 0 }]; });
       return {
@@ -119,7 +119,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
       const [r] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM workflow_instances
          WHERE "companyId"=$1 AND status IN ('pending','in_review')
-           AND "createdAt" < NOW() - INTERVAL '3 days'`,
+           AND "createdAt" < NOW() - INTERVAL '3 days' AND "deletedAt" IS NULL`,
         [companyId]
       );
       return Number(r?.n ?? 0);

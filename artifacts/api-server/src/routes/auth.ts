@@ -415,7 +415,7 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
        LEFT JOIN companies c ON c.id = ea."companyId"
        LEFT JOIN branches b ON b.id = ea."branchId"
        LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
-       WHERE ea.id = $1`,
+       WHERE ea.id = $1 AND e."deletedAt" IS NULL`,
       [scope.activeAssignmentId]
     );
 

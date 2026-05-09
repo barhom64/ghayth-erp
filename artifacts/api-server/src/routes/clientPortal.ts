@@ -241,7 +241,7 @@ protectedRouter.get("/me", withPortalScope(async (req, res) => {
               cpa.email AS "portalEmail", cpa."mustChangePassword", cpa."lastLoginAt"
        FROM clients c
        JOIN client_portal_accounts cpa ON cpa."clientId" = c.id AND cpa."companyId" = c."companyId"
-       WHERE ${where}`,
+       WHERE ${where} AND c."deletedAt" IS NULL`,
       params
     );
     if (!client) throw new NotFoundError("العميل غير موجود");
@@ -308,7 +308,7 @@ protectedRouter.get("/invoices", withPortalScope(async (req, res) => {
     const scope = req.portalScope;
     const { status, page = "1", limit: lim = "20" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 20;
+    const perPage = Math.min(Number(lim) || 20, 500);
     const offset = (pageNum - 1) * perPage;
 
     const extra: string[] = ["\"deletedAt\" IS NULL"];
@@ -368,7 +368,7 @@ protectedRouter.get("/tickets", withPortalScope(async (req, res) => {
     const scope = req.portalScope;
     const { status, page = "1", limit: lim = "20" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 20;
+    const perPage = Math.min(Number(lim) || 20, 500);
     const offset = (pageNum - 1) * perPage;
 
     const extraParams: any[] = [];

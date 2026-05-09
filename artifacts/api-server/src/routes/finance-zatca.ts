@@ -696,7 +696,7 @@ zatcaRouter.get("/zatca/submissions", requirePermission("finance:read"), async (
     const scope = req.scope!;
 
     const { page = "1", limit: lim = "20", status = "" } = req.query as any;
-    const safeLim = Number(lim) || 50;
+    const safeLim = Math.min(Number(lim) || 50, 500);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLim;
 
     let whereExtra = "";

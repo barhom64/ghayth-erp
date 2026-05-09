@@ -77,7 +77,7 @@ router.get("/products", requirePermission("store:read"), async (req, res) => {
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
     const [countRow] = await rawQuery<any>(
@@ -273,7 +273,7 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
 
     const row = await withTransaction(async (client) => {
       const lockRes = await client.query(
-        `SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2 FOR UPDATE`,
+        `SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL FOR UPDATE`,
         [id, scope.companyId]
       );
       const existing = lockRes.rows[0];

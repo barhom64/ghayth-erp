@@ -293,7 +293,7 @@ router.get("/expiring/iqama", requirePermission("admin:write"), async (req, res)
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
        LEFT JOIN branches b ON b.id = ea."branchId"
-       WHERE ea."companyId" = $1 AND e.status = 'active'
+       WHERE ea."companyId" = $1 AND e.status = 'active' AND e."deletedAt" IS NULL
          AND (
            (e."iqamaExpiry" IS NOT NULL AND e."iqamaExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::INTERVAL)
            OR (e."visaExpiry" IS NOT NULL AND e."visaExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::INTERVAL)

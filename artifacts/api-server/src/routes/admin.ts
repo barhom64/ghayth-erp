@@ -803,7 +803,7 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
     const [userCount] = await rawQuery<any>(`SELECT COUNT(*) as count FROM users`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
     const [companyCount] = await rawQuery<any>(`SELECT COUNT(*) as count FROM companies`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
     const [employeeCount] = await rawQuery<any>(
-      `SELECT COUNT(DISTINCT e.id) as count FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE ea."companyId"=$1`,
+      `SELECT COUNT(DISTINCT e.id) as count FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE ea."companyId"=$1 AND e."deletedAt" IS NULL`,
       [cid]
     ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
 
@@ -1284,34 +1284,38 @@ router.delete("/governance/event-dlq/:id", requirePermission("admin:write"), asy
 });
 
 router.get("/governance/event-catalog", requirePermission("admin:read"), async (req, res) => {
-  const scope = req.scope!;
-  const byDomain = countEventsByDomain();
-  const recentEvents = await rawQuery<any>(
-    `SELECT action, entity, "createdAt" FROM event_logs
-     WHERE "companyId" = $1 ORDER BY "createdAt" DESC LIMIT 20`,
-    [scope.companyId]
-  );
-  res.json({
-    total: EVENT_CATALOG.length,
-    byDomain,
-    catalog: EVENT_CATALOG.map(e => ({ action: e.name, domain: e.domain, label: e.label, critical: e.critical })),
-    recentEvents,
-  });
+  try {
+    const scope = req.scope!;
+    const byDomain = countEventsByDomain();
+    const recentEvents = await rawQuery<any>(
+      `SELECT action, entity, "createdAt" FROM event_logs
+       WHERE "companyId" = $1 ORDER BY "createdAt" DESC LIMIT 20`,
+      [scope.companyId]
+    );
+    res.json({
+      total: EVENT_CATALOG.length,
+      byDomain,
+      catalog: EVENT_CATALOG.map(e => ({ action: e.name, domain: e.domain, label: e.label, critical: e.critical })),
+      recentEvents,
+    });
+  } catch (err) { handleRouteError(err, res, "Event catalog error:"); }
 });
 
 router.get("/governance/rbac-matrix", requirePermission("admin:read"), async (req, res) => {
-  const scope = req.scope!;
-  const customPerms = await rawQuery<any>(
-    `SELECT role, permission FROM role_permissions WHERE "companyId" = $1 LIMIT 500`,
-    [scope.companyId]
-  );
-  res.json({
-    permissions: PERMISSIONS,
-    roleDefaults: ROLE_PERMISSIONS,
-    customPermissions: customPerms,
-    totalPermissions: PERMISSIONS.length,
-    totalRoles: Object.keys(ROLE_PERMISSIONS).length,
-  });
+  try {
+    const scope = req.scope!;
+    const customPerms = await rawQuery<any>(
+      `SELECT role, permission FROM role_permissions WHERE "companyId" = $1 LIMIT 500`,
+      [scope.companyId]
+    );
+    res.json({
+      permissions: PERMISSIONS,
+      roleDefaults: ROLE_PERMISSIONS,
+      customPermissions: customPerms,
+      totalPermissions: PERMISSIONS.length,
+      totalRoles: Object.keys(ROLE_PERMISSIONS).length,
+    });
+  } catch (err) { handleRouteError(err, res, "RBAC matrix error:"); }
 });
 
 // ── System Master Registry endpoints ──

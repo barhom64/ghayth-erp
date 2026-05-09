@@ -14,7 +14,7 @@ router.get("/", requirePermission("audit:read"), async (req, res) => {
       dateFrom, dateTo,
     } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
     const conditions = [`al."companyId" = $1`];

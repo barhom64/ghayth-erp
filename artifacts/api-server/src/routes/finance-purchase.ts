@@ -211,7 +211,7 @@ purchaseRouter.get("/purchase-requests", requirePermission("finance:read"), asyn
     const filters = parseScopeFilters(req);
     const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'pr."companyId"', branchColumn: 'pr."branchId"', enforceBranchScope: true });
     const { status: filterStatus, page = "1", limit: lim = "20" } = req.query as any;
-    const safeLimPR = Number(lim) || 50;
+    const safeLimPR = Math.min(Number(lim) || 50, 500);
 
     let extraWhere = "";
     let paramIdx = nextParamIndex;
@@ -501,7 +501,7 @@ purchaseRouter.get("/purchase-orders", requirePermission("finance:read"), async 
     const filters = parseScopeFilters(req);
     const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'po."companyId"', branchColumn: 'po."branchId"', enforceBranchScope: true, softDeleteColumn: 'po."deletedAt"' });
     const { status: filterStatus, page = "1", limit: lim = "20" } = req.query as any;
-    const safeLim = Number(lim) || 50;
+    const safeLim = Math.min(Number(lim) || 50, 500);
 
     let extraWhere = "";
     let paramIdx = nextParamIndex;

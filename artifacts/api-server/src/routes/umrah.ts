@@ -1417,7 +1417,7 @@ router.post("/transport", requirePermission("umrah:write"), async (req, res) => 
     if (b.seasonId) await requireOpenSeason(Number(b.seasonId), scope.companyId);
     if (b.vehicleId) {
       const [vehicle] = await rawQuery<any>(
-        `SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2`,
+        `SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [b.vehicleId, scope.companyId]
       );
       if (!vehicle) throw new ValidationError("المركبة غير موجودة في الأسطول");
@@ -1425,7 +1425,7 @@ router.post("/transport", requirePermission("umrah:write"), async (req, res) => 
     }
     if (b.driverId) {
       const [driver] = await rawQuery<any>(
-        `SELECT id, status, "licenseExpiry" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2`,
+        `SELECT id, status, "licenseExpiry" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [b.driverId, scope.companyId]
       );
       if (!driver) throw new ValidationError("السائق غير موجود في الأسطول");
@@ -1468,12 +1468,12 @@ router.patch("/transport/:id", requirePermission("umrah:write"), async (req, res
     const id = parseId(req.params.id, "id");
     const b = zodParse(patchTransportSchema.safeParse(req.body));
     if (b.vehicleId) {
-      const [vehicle] = await rawQuery<any>(`SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2`, [b.vehicleId, scope.companyId]);
+      const [vehicle] = await rawQuery<any>(`SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.vehicleId, scope.companyId]);
       if (!vehicle) throw new ValidationError("المركبة غير موجودة في الأسطول");
       if (vehicle.status === "maintenance") throw new ConflictError("المركبة قيد الصيانة");
     }
     if (b.driverId) {
-      const [driver] = await rawQuery<any>(`SELECT id, status, "licenseExpiry" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2`, [b.driverId, scope.companyId]);
+      const [driver] = await rawQuery<any>(`SELECT id, status, "licenseExpiry" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.driverId, scope.companyId]);
       if (!driver) throw new ValidationError("السائق غير موجود في الأسطول");
       if (driver.status === "inactive") throw new ConflictError("السائق غير نشط");
     }

@@ -252,7 +252,7 @@ invoicesRouter.get("/invoices", requirePermission("finance:read"), async (req, r
   try {
     const scope = req.scope!;
     const { status = "", page = "1", limit: lim = "20" } = req.query as any;
-    const safeLim = Number(lim) || 50;
+    const safeLim = Math.min(Number(lim) || 50, 500);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLim;
 
     const filters = parseScopeFilters(req);
@@ -922,7 +922,7 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
     await withTransaction(async (client: any) => {
       if (je) {
         const { rows: lines } = await client.query(
-          `SELECT "accountCode", debit, credit FROM journal_lines WHERE "journalId" = $1`,
+          `SELECT "accountCode", debit, credit FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL`,
           [Number(je.id)]
         );
         for (const line of lines) {

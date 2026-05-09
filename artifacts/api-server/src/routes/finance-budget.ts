@@ -75,7 +75,7 @@ budgetRouter.get("/budget", requirePermission("finance:read"), async (req, res) 
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) {
+  } catch (_e) { logger.error(_e, "budget list query failed");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
 });
@@ -112,7 +112,7 @@ budgetRouter.get("/budget-vs-actual", requirePermission("finance:read"), async (
       [scope.companyId, startDate.slice(0, 7), endDate.slice(0, 7)]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) {
+  } catch (_e) { logger.error(_e, "budget-vs-actual query failed");
     res.json({ data: [], total: 0 });
   }
 });

@@ -356,7 +356,7 @@ router.patch("/:id", authorize({ feature: "tasks", action: "update", resource: {
     let currentStatus: string | undefined;
     if (status) {
       const [current] = await rawQuery<{ status: string }>(
-        `SELECT status FROM tasks WHERE id = $1 AND "companyId" = $2`,
+        `SELECT status FROM tasks WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
       if (!current) throw new NotFoundError("المهمة غير موجودة");

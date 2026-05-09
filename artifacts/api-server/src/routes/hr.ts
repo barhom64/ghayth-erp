@@ -507,7 +507,7 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
     if (!shift) {
       const [defaultShift] = await rawQuery<any>(
         `SELECT id, "startTime", "endTime", days, "shiftType", "remoteAllowed", "flexStartEarliest", "flexStartLatest" FROM shifts
-         WHERE "companyId" = $1 AND status = 'active'
+         WHERE "companyId" = $1 AND status = 'active' AND "deletedAt" IS NULL
          ORDER BY "isDefault" DESC LIMIT 1`,
         [scope.companyId]
       );
@@ -853,7 +853,7 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     } else {
       const [defaultShift] = await rawQuery<any>(
         `SELECT "endTime", "startTime" FROM shifts
-         WHERE "companyId" = $1 AND status = 'active'
+         WHERE "companyId" = $1 AND status = 'active' AND "deletedAt" IS NULL
          ORDER BY "isDefault" DESC LIMIT 1`,
         [scope.companyId]
       );
@@ -1120,7 +1120,7 @@ router.get("/attendance/:id", requirePermission("hr:read"), async (req, res) => 
        FROM attendance a
        JOIN employee_assignments ea ON ea.id = a."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
-       WHERE a.id = $1 AND a."companyId" = $2`,
+       WHERE a.id = $1 AND a."companyId" = $2 AND a."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("سجل الحضور غير موجود");
@@ -1351,7 +1351,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
       `SELECT SUM(LEAST("endDate"::date, $2::date) - GREATEST("startDate"::date, $1::date) + 1) AS "holidayDays"
        FROM public_holidays
        WHERE "companyId"=$3
-         AND "startDate" <= $2::date AND "endDate" >= $1::date`,
+         AND "startDate" <= $2::date AND "endDate" >= $1::date AND "deletedAt" IS NULL`,
       [startDate, endDate, scope.companyId]
     );
     const holidayDays = Math.max(0, Number(holidayOverlap[0]?.holidayDays ?? 0));
@@ -1597,7 +1597,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
         `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
          FROM approval_chains ac
          JOIN approval_chain_steps acs ON acs."chainId" = ac.id
-         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true
+         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true AND ac."deletedAt" IS NULL
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
@@ -1745,7 +1745,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
       `SELECT lr.*, lt.name AS "leaveTypeName"
        FROM hr_leave_requests lr
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-       WHERE lr.id = $1 AND lr."companyId" = $2`,
+       WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!request) throw new NotFoundError("الطلب غير موجود");
@@ -1921,7 +1921,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
          FROM approval_chains ac
          JOIN approval_chain_steps acs ON acs."chainId" = ac.id
-         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true
+         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true AND ac."deletedAt" IS NULL
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
@@ -2168,7 +2168,7 @@ router.get("/leave-requests/:id/stages", requirePermission("hr:read"), async (re
         `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
          FROM approval_chains ac
          JOIN approval_chain_steps acs ON acs."chainId" = ac.id
-         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true
+         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true AND ac."deletedAt" IS NULL
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
@@ -2198,7 +2198,7 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
     }
 
     const [request] = await rawQuery<any>(
-      `SELECT * FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
+      `SELECT * FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!request) {
@@ -2535,7 +2535,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     const absenceRows = await rawQuery<any>(
       `SELECT a."assignmentId", COUNT(*) AS "absentDays"
        FROM attendance a
-       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a.status = 'absent'
+       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a.status = 'absent' AND a."deletedAt" IS NULL
        GROUP BY a."assignmentId"`,
       [scope.companyId, targetPeriod]
     );
@@ -2570,7 +2570,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     const overtimeRows = await rawQuery<any>(
       `SELECT a."assignmentId", COALESCE(SUM(a."overtimeMinutes"), 0) AS "totalOvertimeMinutes"
        FROM attendance a
-       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a."overtimeMinutes" > 0
+       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a."overtimeMinutes" > 0 AND a."deletedAt" IS NULL
        GROUP BY a."assignmentId"`,
       [scope.companyId, targetPeriod]
     );
@@ -2581,7 +2581,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     const hrOtRows = await rawQuery<any>(
       `SELECT "assignmentId", COALESCE(SUM("totalAmount"), 0) AS "otAmount"
        FROM hr_overtime_requests
-       WHERE "companyId" = $1 AND TO_CHAR("overtimeDate", 'YYYY-MM') = $2 AND status = 'approved'
+       WHERE "companyId" = $1 AND TO_CHAR("overtimeDate", 'YYYY-MM') = $2 AND status = 'approved' AND "deletedAt" IS NULL
        GROUP BY "assignmentId"`,
       [scope.companyId, targetPeriod]
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
@@ -2876,7 +2876,7 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
       `SELECT m.id, m."memoNumber", m.status, m."appliedPenaltyLabel" AS "penaltyLabel",
               m."appliedDeductionAmount" AS "baseDeductionAmount", m."appliedExtraDeduction", m."createdAt"
        FROM hr_inquiry_memos m
-       WHERE m."violationId" = $1 AND m."companyId" = $2
+       WHERE m."violationId" = $1 AND m."companyId" = $2 AND m."deletedAt" IS NULL
        ORDER BY m."createdAt" DESC`,
       [item.id, scope.companyId]
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
@@ -3214,7 +3214,7 @@ router.get("/attendance-stats", requirePermission("hr:read"), async (req, res) =
       totalEmployees: Number(totalEmp?.count ?? 0),
       month,
     });
-  } catch (_e) { res.json({ present: 0, absent: 0, late: 0, totalEmployees: 0 }); }
+  } catch (_e) { logger.error(_e, "attendance-stats query failed"); res.json({ present: 0, absent: 0, late: 0, totalEmployees: 0 }); }
 });
 
 router.get("/leave-stats", requirePermission("hr:read"), async (req, res) => {
@@ -3238,7 +3238,7 @@ router.get("/leave-stats", requirePermission("hr:read"), async (req, res) => {
       rejected: Number(rejected?.count ?? 0),
       total: Number(total?.count ?? 0),
     });
-  } catch (_e) { res.json({ pending: 0, approved: 0, rejected: 0, total: 0 }); }
+  } catch (_e) { logger.error(_e, "leave-stats query failed"); res.json({ pending: 0, approved: 0, rejected: 0, total: 0 }); }
 });
 
 router.get("/salary-components", requirePermission("hr:read"), async (req, res) => {
@@ -3248,7 +3248,7 @@ router.get("/salary-components", requirePermission("hr:read"), async (req, res) 
       `SELECT * FROM salary_components WHERE "companyId"=$1 ORDER BY name LIMIT 500`, [scope.companyId]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "salary-components query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.post("/salary-components", requirePermission("hr:create"), async (req, res) => {
@@ -3290,7 +3290,7 @@ router.get("/approval-chains", requirePermission("hr:read"), async (req, res) =>
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "approval-chains query failed"); res.json({ data: [], total: 0 }); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3305,13 +3305,13 @@ router.get("/approval-chain-definitions", requirePermission("hr:read"), async (r
               json_agg(json_build_object('id', acs.id, 'stepOrder', acs."stepOrder", 'requiredRole', acs."requiredRole", 'timeoutHours', acs."timeoutHours", 'autoApproveOnTimeout', acs."autoApproveOnTimeout") ORDER BY acs."stepOrder") AS steps
        FROM approval_chains ac
        LEFT JOIN approval_chain_steps acs ON acs."chainId" = ac.id
-       WHERE ac."companyId" = $1
+       WHERE ac."companyId" = $1 AND ac."deletedAt" IS NULL
        GROUP BY ac.id
        ORDER BY ac."chainType", ac."minAmount" LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: chains, total: chains.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "approval-chain-definitions query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.post("/approval-chain-definitions", requirePermission("hr:create"), async (req, res) => {
@@ -3389,7 +3389,7 @@ router.get("/approval-requests", requirePermission("hr:read"), async (req, res) 
       [scope.companyId, statusFilter]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "approval-requests query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), async (req, res) => {
@@ -3649,7 +3649,7 @@ router.get("/violations-stats", requirePermission("hr:read"), async (req, res) =
       thisMonth: Number(thisMonthRow?.count ?? 0),
       totalDeductions: Number(totalDeductions?.total ?? 0),
     });
-  } catch (_e) { res.json({ total: 0, thisMonth: 0, totalDeductions: 0 }); }
+  } catch (_e) { logger.error(_e, "violations-stats query failed"); res.json({ total: 0, thisMonth: 0, totalDeductions: 0 }); }
 });
 
 router.patch("/violations/:id", requirePermission("hr:update"), async (req, res) => {
@@ -3800,7 +3800,7 @@ router.get("/shift-assignments", requirePermission("hr:read"), async (req, res) 
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "shift-assignments query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.post("/shift-assignments", requirePermission("hr:create"), async (req, res) => {
@@ -3873,7 +3873,7 @@ router.get("/official-letters", requirePermission("hr:read"), async (req, res) =
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "official-letters query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.post("/official-letters", requirePermission("hr:create"), async (req, res) => {
@@ -3978,7 +3978,7 @@ router.get("/monthly-attendance", requirePermission("hr:read"), async (req, res)
       [scope.companyId, month]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "monthly-attendance query failed"); res.json({ data: [], total: 0 }); }
 });
 
 // ─── Leave requests general PATCH/DELETE ──────────────────────
@@ -4039,7 +4039,7 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
       `SELECT lr.*, lt.name AS "leaveTypeName"
        FROM hr_leave_requests lr
        LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-       WHERE lr.id = $1 AND lr."companyId" = $2`,
+       WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!request) throw new NotFoundError("طلب الإجازة غير موجود");
@@ -4119,7 +4119,7 @@ router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req,
     const id = parseId(req.params.id, "id");
     const [leaveReq] = await rawQuery<any>(
       `SELECT lr.id, lr."employeeId", lr."leaveTypeId", lr.days, lr."startDate", lr.status
-       FROM hr_leave_requests lr WHERE lr.id = $1 AND lr."companyId" = $2`,
+       FROM hr_leave_requests lr WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!leaveReq) throw new NotFoundError("طلب الإجازة غير موجود");
@@ -4697,7 +4697,7 @@ router.get("/stats", requirePermission("hr:read"), async (req, res) => {
       `SELECT COUNT(*) AS total,
               COUNT(*) FILTER(WHERE status='pending') AS pending,
               COUNT(*) FILTER(WHERE status='approved') AS approved
-       FROM hr_leave_requests WHERE "companyId" = $1`,
+       FROM hr_leave_requests WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [scope.companyId]
     );
     const [violationCount] = await rawQuery<any>(
@@ -4733,7 +4733,7 @@ router.get("/deductions", requirePermission("hr:read"), async (req, res) => {
       [scope.companyId, month]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "deductions query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.get("/onboarding-steps", requirePermission("hr:read"), async (req, res) => {
@@ -4877,7 +4877,7 @@ router.get("/employees-status", requirePermission("hr:read"), async (req, res) =
       `SELECT e.id AS "employeeId", ea.id AS "assignmentId"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
-       WHERE e.status = 'active'
+       WHERE e.status = 'active' AND e."deletedAt" IS NULL
        LIMIT 500`,
       [scope.companyId]
     );
@@ -5810,7 +5810,7 @@ router.get("/public-holidays", requirePermission("hr:read"), async (req, res) =>
   try {
     const scope = req.scope!;
     const { year } = req.query as any;
-    const conditions = [`"companyId" = $1`];
+    const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (year) { params.push(Number(year)); conditions.push(`year = $${params.length}`); }
     const rows = await rawQuery<any>(
@@ -6286,7 +6286,7 @@ router.get("/idp", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { employeeId } = req.query as any;
-    const conditions = [`idp."companyId"=$1`];
+    const conditions = [`idp."companyId"=$1`, `idp."deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (employeeId) { params.push(Number(employeeId)); conditions.push(`idp."employeeId"=$${params.length}`); }
     else if (scope.role === "employee" && scope.employeeId) {
@@ -6759,7 +6759,8 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (e."workPermitExpiry"::date - CURRENT_DATE) AS "daysLeft"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-       WHERE e."workPermitExpiry" IS NOT NULL
+       WHERE e."deletedAt" IS NULL
+         AND e."workPermitExpiry" IS NOT NULL
          AND e."workPermitExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
     );
@@ -6770,7 +6771,8 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (e."iqamaExpiry"::date - CURRENT_DATE) AS "daysLeft"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-       WHERE e."iqamaExpiry" IS NOT NULL
+       WHERE e."deletedAt" IS NULL
+         AND e."iqamaExpiry" IS NOT NULL
          AND e."iqamaExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
     );
@@ -6781,7 +6783,8 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (e."passportExpiry"::date - CURRENT_DATE) AS "daysLeft"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-       WHERE e."passportExpiry" IS NOT NULL
+       WHERE e."deletedAt" IS NULL
+         AND e."passportExpiry" IS NOT NULL
          AND e."passportExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
     );
@@ -6821,7 +6824,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (fv."registrationExpiry"::date - CURRENT_DATE) AS "daysLeft",
               'vehicle' AS "entityType"
        FROM fleet_vehicles fv
-       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped' AND fv."deletedAt" IS NULL
          AND fv."registrationExpiry" IS NOT NULL
          AND fv."registrationExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
@@ -6835,7 +6838,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (fv."insuranceExpiry"::date - CURRENT_DATE) AS "daysLeft",
               'vehicle' AS "entityType"
        FROM fleet_vehicles fv
-       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped' AND fv."deletedAt" IS NULL
          AND fv."insuranceExpiry" IS NOT NULL
          AND fv."insuranceExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
@@ -6849,7 +6852,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (fv."nextInspectionDate"::date - CURRENT_DATE) AS "daysLeft",
               'vehicle' AS "entityType"
        FROM fleet_vehicles fv
-       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped' AND fv."deletedAt" IS NULL
          AND fv."nextInspectionDate" IS NOT NULL
          AND fv."nextInspectionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
@@ -6908,7 +6911,7 @@ router.get("/company-documents", requirePermission("hr:read"), async (req, res) 
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
     const [countRow] = await rawQuery<any>(
@@ -6956,7 +6959,7 @@ router.get("/employee-documents", requirePermission("hr:read"), async (req, res)
     const scope = req.scope!;
     const { employeeId, page = "1", limit: lim = "50" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
     let paramIdx = 1;

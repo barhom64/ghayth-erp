@@ -448,7 +448,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
 
       // ── Step 5: Assign default shift and attendance policy ──
       const defaultShiftRes = await client.query(
-        `SELECT id FROM shifts WHERE "companyId" = $1 AND "isDefault" = true AND status = 'active' LIMIT 1`,
+        `SELECT id FROM shifts WHERE "companyId" = $1 AND "isDefault" = true AND status = 'active' AND "deletedAt" IS NULL LIMIT 1`,
         [effectiveCompanyId]
       );
       if (defaultShiftRes.rows.length > 0) {
