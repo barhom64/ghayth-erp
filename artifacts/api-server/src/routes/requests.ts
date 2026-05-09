@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError,
   parseId,
@@ -389,7 +390,7 @@ router.get("/stats", requirePermission("requests:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.get("/:id", requirePermission("requests:read"), async (req, res) => {
+router.get("/:id", authorize({ feature: "requests", action: "view", resource: { table: "service_requests", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

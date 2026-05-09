@@ -6,6 +6,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { loadBalanceAssign } from "../lib/algorithms.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
@@ -192,7 +193,7 @@ router.get("/entity-search", requirePermission("tasks:read"), async (req, res) =
   }
 });
 
-router.get("/:id", requirePermission("tasks:read"), async (req, res) => {
+router.get("/:id", authorize({ feature: "tasks", action: "view", resource: { table: "tasks", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
