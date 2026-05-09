@@ -302,7 +302,7 @@ invoicesRouter.get("/invoices", requirePermission("finance:read"), async (req, r
   }
 });
 
-invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req, res) => {
+invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -805,7 +805,7 @@ invoicesRouter.get("/invoices/:id", authorize({ feature: "finance.invoices", act
   }
 });
 
-invoicesRouter.patch("/invoices/:id", requirePermission("finance:update"), async (req, res) => {
+invoicesRouter.patch("/invoices/:id", authorize({ feature: "finance.invoices", action: "update", resource: { table: "invoices", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
 

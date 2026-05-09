@@ -50,7 +50,7 @@ const updatePortalAccountSchema = z.object({
 
 const router = Router();
 
-router.get("/", requirePermission("crm:read"), async (req, res) => {
+router.get("/", authorize({ feature: "crm.clients", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search = "", classification = "", page = "1", limit: lim = "20" } = req.query as any;
@@ -90,7 +90,7 @@ router.get("/", requirePermission("crm:read"), async (req, res) => {
       countParams
     );
 
-    res.json({ data: clients, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
+    res.json(maskFields(req, { data: clients, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) }));
   } catch (err) {
     handleRouteError(err, res, "List clients error:");
   }
