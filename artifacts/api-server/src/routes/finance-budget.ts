@@ -12,6 +12,7 @@ import {
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { emitEvent, createAuditLog, currentPeriod, currentYear, toDateISO, roundTo2, validateBudget } from "../lib/businessHelpers.js";
@@ -61,7 +62,7 @@ const decideApprovalSchema = z.object({
 export const budgetRouter = Router();
 budgetRouter.use(authMiddleware);
 
-budgetRouter.get("/budget", requirePermission("finance:read"), async (req, res) => {
+budgetRouter.get("/budget", authorize({ feature: "finance.budget", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -117,7 +118,7 @@ budgetRouter.get("/budget-vs-actual", requirePermission("finance:read"), async (
   }
 });
 
-budgetRouter.post("/budget", requirePermission("finance:create"), async (req, res) => {
+budgetRouter.post("/budget", authorize({ feature: "finance.budget", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -195,7 +196,7 @@ budgetRouter.post("/budget/validate", requirePermission("finance:create"), async
   }
 });
 
-budgetRouter.patch("/budget/:id", requirePermission("finance:update"), async (req, res) => {
+budgetRouter.patch("/budget/:id", authorize({ feature: "finance.budget", action: "update", resource: { table: "budgets", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -239,7 +240,7 @@ budgetRouter.patch("/budget/:id", requirePermission("finance:update"), async (re
   } catch (err) { handleRouteError(err, res, "Update budget error:"); }
 });
 
-budgetRouter.delete("/budget/:id", requirePermission("finance:delete"), async (req, res) => {
+budgetRouter.delete("/budget/:id", authorize({ feature: "finance.budget", action: "delete", resource: { table: "budgets", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -430,7 +431,8 @@ budgetRouter.get("/budget/approval-requests", requirePermission("finance:read"),
   }
 });
 
-budgetRouter.post("/budget/approval-requests/:id/decide", requirePermission("finance:create"), async (req, res) => {
+// RBAC v2: budget approval — approval_limits apply to amount in body if configured.
+budgetRouter.post("/budget/approval-requests/:id/decide", authorize({ feature: "finance.budget", action: "approve", resource: { table: "budget_approval_requests", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const requestId = parseId(req.params.id, "id");
@@ -580,7 +582,7 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
   }
 });
 
-budgetRouter.get("/budget/:id", requirePermission("finance:read"), async (req, res) => {
+budgetRouter.get("/budget/:id", authorize({ feature: "finance.budget", action: "view", resource: { table: "budgets", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

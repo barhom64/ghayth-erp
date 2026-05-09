@@ -2367,7 +2367,9 @@ router.get("/payroll/:id/lines", requireAnyPermission("hr:payroll", "hr:read"), 
   }
 });
 
-router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
+// RBAC v2: payroll runs are SoD-critical via the seeded
+// hr_payroll_calculate_approve rule.
+router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     // Payroll execution requires HR, Finance, Director or Owner role
@@ -2796,7 +2798,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
   }
 });
 
-router.post("/payroll/:id/approve", requirePermission("hr:create"), async (req, res) => {
+router.post("/payroll/:id/approve", authorize({ feature: "hr.payroll.runs", action: "approve", resource: { table: "payroll_runs", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!PAYROLL_ROLES.includes(scope.role)) {
@@ -3001,7 +3003,7 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create violation error:"); }
 });
 
-router.get("/shifts", requirePermission("hr:read"), async (req, res) => {
+router.get("/shifts", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(`SELECT * FROM shifts WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
@@ -3009,7 +3011,7 @@ router.get("/shifts", requirePermission("hr:read"), async (req, res) => {
   } catch (err) { logger.error(err, "Get shifts error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
 
-router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
+router.post("/shifts", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = zodParse(shiftSchema.safeParse(req.body));
@@ -3711,7 +3713,7 @@ router.patch("/violations/:id/approve", requirePermission("hr:update"), (req, re
 router.patch("/violations/:id/reject", requirePermission("hr:update"), (req, res) => violationApprovalAction(req, res, "rejected"));
 router.patch("/violations/:id/return", requirePermission("hr:update"), (req, res) => violationApprovalAction(req, res, "returned"));
 
-router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => {
+router.patch("/shifts/:id", authorize({ feature: "hr", action: "update", resource: { table: "shifts", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -3751,7 +3753,7 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Patch shift error:"); }
 });
 
-router.delete("/shifts/:id", requirePermission("hr:delete"), async (req, res) => {
+router.delete("/shifts/:id", authorize({ feature: "hr", action: "delete", resource: { table: "shifts", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -4153,7 +4155,7 @@ router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req,
 });
 
 // ─── Payroll PATCH/DELETE ──────────────────────
-router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) => {
+router.patch("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "update", resource: { table: "payroll_runs", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -4284,7 +4286,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) => {
+router.delete("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "delete", resource: { table: "payroll_runs", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!HR_ROLES.includes(scope.role)) {
