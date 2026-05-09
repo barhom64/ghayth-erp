@@ -3817,7 +3817,14 @@ router.post("/shift-assignments", requirePermission("hr:create"), async (req, re
       after: { assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null },
     }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.assignment.created", entity: "hr_shift_assignments", entityId: insertId, details: JSON.stringify({ assignmentId: Number(assignmentId), shiftId: Number(shiftId) }) }).catch((e) => logger.error(e, "hr background task failed"));
-    const [row] = await rawQuery<any>(`SELECT esa.*, s.name AS "shiftName" FROM employee_shift_assignments esa LEFT JOIN shifts s ON s.id=esa."shiftId" WHERE esa.id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(
+      `SELECT esa.*, s.name AS "shiftName"
+         FROM employee_shift_assignments esa
+         JOIN employee_assignments ea ON ea.id = esa."assignmentId" AND ea."companyId" = $2
+         LEFT JOIN shifts s ON s.id = esa."shiftId"
+        WHERE esa.id = $1`,
+      [insertId, scope.companyId]
+    );
     res.status(201).json(row || { id: insertId, assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null });
   } catch (err) { handleRouteError(err, res, "Create shift assignment error:"); }
 });
@@ -5557,12 +5564,16 @@ router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async
     );
 
     let [summary] = await rawQuery<any>(
-      `SELECT * FROM evaluation_summaries WHERE "cycleId" = $1`, [cycleId]
+      `SELECT * FROM evaluation_summaries WHERE "cycleId" = $1 AND "companyId" = $2`,
+      [cycleId, scope.companyId]
     );
 
     if (!summary) {
       await recomputeSummary(cycleId, scope.companyId, cycle.employeeId);
-      [summary] = await rawQuery<any>(`SELECT * FROM evaluation_summaries WHERE "cycleId" = $1`, [cycleId]);
+      [summary] = await rawQuery<any>(
+        `SELECT * FROM evaluation_summaries WHERE "cycleId" = $1 AND "companyId" = $2`,
+        [cycleId, scope.companyId]
+      );
     }
 
     const upwardCount = Number(upwardRow?.count ?? 0);
