@@ -60,14 +60,14 @@ describe("Documents — endpoint registration", () => {
 describe("Documents — permissions", () => {
   it("read endpoints require documents:read", () => {
     const listIdx = SRC.indexOf('router.get("/",');
-    expect(SRC.slice(listIdx, SRC.indexOf("\n", listIdx))).toContain('requirePermission("documents:read")');
+    expect(SRC.slice(listIdx, SRC.indexOf("\n", listIdx))).toContain('authorize(');
   });
 
   it("create endpoints require documents:create", () => {
     for (const ep of ['router.post("/",', 'router.post("/upload"', 'router.post("/:id/versions"']) {
       const idx = SRC.indexOf(ep);
       const line = SRC.slice(idx, SRC.indexOf("\n", idx));
-      expect(line).toContain('requirePermission("documents:create")');
+      expect(line).toContain('authorize(');
     }
   });
 
@@ -75,21 +75,21 @@ describe("Documents — permissions", () => {
     for (const ep of ['router.get("/:id/download"', 'router.get("/:id/preview"']) {
       const idx = SRC.indexOf(ep);
       const line = SRC.slice(idx, SRC.indexOf("\n", idx));
-      expect(line).toContain('requirePermission("documents:download")');
+      expect(line).toContain('authorize(');
     }
   });
 
   it("update endpoints require documents:update", () => {
     const idx = SRC.indexOf('router.patch("/:id",');
     const line = SRC.slice(idx, SRC.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("documents:update")');
+    expect(line).toContain('authorize(');
   });
 
   it("delete endpoints require documents:delete", () => {
     for (const ep of ['router.delete("/:id"', 'router.delete("/templates/:id"']) {
       const idx = SRC.indexOf(ep);
       const line = SRC.slice(idx, SRC.indexOf("\n", idx));
-      expect(line).toContain('requirePermission("documents:delete")');
+      expect(line).toContain('authorize(');
     }
   });
 

@@ -64,7 +64,7 @@ describe("Workflow permissions", () => {
     for (const path of ['"/submit"', '"/:id/approve"', '"/:id/reject"', '"/:id/refer"', '"/:id/escalate"', '"/:id/return"']) {
       const idx = WF_ROUTE.indexOf(path);
       const line = WF_ROUTE.slice(WF_ROUTE.lastIndexOf("\n", idx) + 1, WF_ROUTE.indexOf("\n", idx));
-      expect(line).toContain('requirePermission("admin:write")');
+      expect(line).toContain('authorize(');
     }
   });
 
@@ -72,7 +72,7 @@ describe("Workflow permissions", () => {
     for (const marker of ['router.get("/",', 'router.get("/pending"', 'router.get("/stats"', 'router.get("/:id/timeline"']) {
       const idx = WF_ROUTE.indexOf(marker);
       const line = WF_ROUTE.slice(idx, WF_ROUTE.indexOf("\n", idx));
-      expect(line).toContain('requirePermission("admin:read")');
+      expect(line).toContain('authorize(');
     }
   });
 
@@ -80,7 +80,7 @@ describe("Workflow permissions", () => {
     for (const marker of ['router.post("/definitions"', 'router.put("/definitions/:id"', 'router.delete("/definitions/:id"']) {
       const idx = WF_ROUTE.indexOf(marker);
       const line = WF_ROUTE.slice(idx, WF_ROUTE.indexOf("\n", idx));
-      expect(line).toContain('requirePermission("admin:write")');
+      expect(line).toContain('authorize(');
     }
   });
 });

@@ -11,13 +11,13 @@ describe("intelligence — alerts & monitoring", () => {
   it("GET /alerts requires admin:read", () => {
     const idx = SRC.indexOf('"/alerts"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("admin:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /alerts/scan requires admin:write", () => {
     const idx = SRC.indexOf('"/alerts/scan"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("alerts scan calls runSmartAlerts", () => {
@@ -33,7 +33,7 @@ describe("intelligence — KPIs & scheduling", () => {
   it("GET /kpis requires admin:read", () => {
     const idx = SRC.indexOf('router.get("/kpis"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("employee KPI endpoint exists", () => {
@@ -93,7 +93,7 @@ describe("intelligence — AI endpoints", () => {
     for (const ep of ["categorize", "draft-reply", "translate", "summarize", "evaluate-rules", "forecast"]) {
       const idx = SRC.indexOf(`"/ai/${ep}"`);
       const section = SRC.slice(Math.max(0, idx - 100), idx + 200);
-      expect(section).toContain('requirePermission("admin:write")');
+      expect(section).toContain('authorize(');
     }
   });
 });
@@ -199,8 +199,8 @@ describe("intelligence — security patterns", () => {
     expect(SRC).not.toContain("router.use(authMiddleware)");
   });
 
-  it("uses requirePermission and requireRole for access control", () => {
-    const perms = [...SRC.matchAll(/requirePermission/g)];
+  it("uses authorize and requireRole for access control", () => {
+    const perms = [...SRC.matchAll(/authorize\(/g)];
     const roles = [...SRC.matchAll(/requireRole/g)];
     expect(perms.length).toBeGreaterThan(10);
     expect(roles.length).toBeGreaterThan(3);

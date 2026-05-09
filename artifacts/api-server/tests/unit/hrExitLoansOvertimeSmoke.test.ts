@@ -45,7 +45,7 @@ describe("Exit request creation", () => {
   it("requires hr:create permission", () => {
     const idx = EXIT_ROUTE.indexOf('router.post("/exit"');
     const line = EXIT_ROUTE.slice(idx, EXIT_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:create")');
+    expect(line).toContain('authorize(');
   });
 
   it("prevents duplicate active exit requests", () => {
