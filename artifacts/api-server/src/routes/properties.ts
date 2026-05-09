@@ -2188,6 +2188,18 @@ router.post("/maintenance-requests", authorize({ feature: "properties.maintenanc
 
     let assignedTechnicianId = b.assignedTo || null;
     let techDistance: number | null = null;
+    if (assignedTechnicianId) {
+      const [tech] = await rawQuery<{ id: number }>(
+        `SELECT id FROM technicians WHERE id = $1 AND "companyId" = $2 AND status != 'inactive'`,
+        [assignedTechnicianId, scope.companyId]
+      );
+      if (!tech) {
+        throw new ValidationError("الفني المختار غير موجود", {
+          field: "assignedTo",
+          fix: "اختر فنياً مسجلاً ونشطاً في الشركة",
+        });
+      }
+    }
     if (!assignedTechnicianId && technicians.length > 0) {
       let best = technicians[0];
       let bestScore = -Infinity;
@@ -2226,8 +2238,8 @@ router.post("/maintenance-requests", authorize({ feature: "properties.maintenanc
       try {
         const [techEmp] = await rawQuery<any>(
           `SELECT t."employeeId", ea.id AS "assignmentId" FROM technicians t
-           LEFT JOIN employee_assignments ea ON ea."employeeId"=t."employeeId" AND ea.status='active'
-           WHERE t.id=$1`, [assignedTechnicianId]);
+           LEFT JOIN employee_assignments ea ON ea."employeeId"=t."employeeId" AND ea.status='active' AND ea."companyId"=$2
+           WHERE t.id=$1 AND t."companyId"=$2`, [assignedTechnicianId, scope.companyId]);
         if (techEmp?.assignmentId) {
           createNotification({
             companyId: scope.companyId,
@@ -2267,8 +2279,8 @@ router.post("/maintenance-requests", authorize({ feature: "properties.maintenanc
       let techAssignmentId = null;
       if (assignedTechnicianId) {
         const [techEmp] = await rawQuery<any>(
-          `SELECT ea.id FROM technicians t LEFT JOIN employee_assignments ea ON ea."employeeId"=t."employeeId" AND ea.status='active' WHERE t.id=$1`,
-          [assignedTechnicianId]
+          `SELECT ea.id FROM technicians t LEFT JOIN employee_assignments ea ON ea."employeeId"=t."employeeId" AND ea.status='active' AND ea."companyId"=$2 WHERE t.id=$1 AND t."companyId"=$2`,
+          [assignedTechnicianId, scope.companyId]
         );
         if (techEmp) techAssignmentId = techEmp.id;
       }

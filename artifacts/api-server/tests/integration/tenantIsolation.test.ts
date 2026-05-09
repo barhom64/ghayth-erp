@@ -41,12 +41,14 @@ const PUBLIC_ROUTE_FILES = new Set([
 // list small and review every entry. Adding here means "this query is
 // supposed to span tenants — usually owner/super_admin reporting".
 // (file, line, table) precision so that adding a new unscoped query
-// in any of these files at a different line still fails loudly. The
-// 17 entries tagged "PENDING DAY 3-5 TRIAGE" capture the candidates
-// surfaced by the initial run (see docs/freeze/freeze-day-2-findings.md).
-// Each one must be either resolved (fix the query) or have its reason
-// rewritten to a real approval (read-after-write, auth bootstrap, etc.)
-// before the freeze go/no-go decision on Day 14.
+// in any of these files at a different line still fails loudly. Every
+// entry is a *deliberate* exception — adding one without a clear
+// reason is a review red flag. Day 3-5 of the freeze closed the
+// remaining triage by either fixing the query (defense-in-depth
+// companyId predicate added to the JOIN/WHERE) or, for read-after-write
+// patterns where the insertId came from a verified-scoped INSERT in
+// the same handler, leaving the read as-is and capturing the rule
+// here.
 type Allow = { file: string; line: number; table: string; reason: string };
 const ALLOWLIST: Allow[] = [
   {
@@ -56,27 +58,20 @@ const ALLOWLIST: Allow[] = [
     reason:
       "Refresh-token bootstrap. Runs before req.scope is built; the tenant boundary is the verified refresh token's employeeId, not scope.companyId.",
   },
-  // ── PENDING DAY 3-5 TRIAGE ──────────────────────────────────────
-  // Removing or rewriting an entry's `reason` is the Day 3-5 unit of
-  // work. Order roughly matches `docs/freeze/freeze-day-2-findings.md`.
-  { file: "accounting-engine.ts", line: 307, table: "chart_of_accounts",    reason: "PENDING DAY 3-5 TRIAGE — confirm parent journal_entry_template companyId scope" },
-  { file: "accounting-engine.ts", line: 355, table: "chart_of_accounts",    reason: "PENDING DAY 3-5 TRIAGE — same template join pattern, different handler" },
-  { file: "accounting-engine.ts", line: 411, table: "chart_of_accounts",    reason: "PENDING DAY 3-5 TRIAGE — same template join pattern, different handler" },
-  { file: "crm.ts",               line: 1016, table: "employee_assignments", reason: "PENDING DAY 3-5 TRIAGE — verify employeeId ANY array source is already-scoped" },
-  { file: "employees.ts",         line: 627,  table: "employee_assignments", reason: "PENDING DAY 3-5 TRIAGE — read-after-INSERT, formalise read-after-write rule" },
-  { file: "employees.ts",         line: 627,  table: "branches",             reason: "PENDING DAY 3-5 TRIAGE — branches join inside read-after-INSERT row" },
-  { file: "employees.ts",         line: 786,  table: "attendance",           reason: "PENDING DAY 3-5 TRIAGE — employee.assignmentId from prior scoped fetch" },
-  { file: "employees.ts",         line: 1084, table: "employee_assignments", reason: "PENDING DAY 3-5 TRIAGE — read-after-UPDATE row, key was scoped earlier" },
-  { file: "finance-custodies.ts", line: 441,  table: "employee_assignments", reason: "PENDING DAY 3-5 TRIAGE — HIGH: resolvedAssignmentId from request, no companyId check before journal write" },
-  { file: "hr.ts",                line: 1702, table: "hr_leave_requests",    reason: "PENDING DAY 3-5 TRIAGE — read-after-INSERT of insertId (leave request)" },
-  { file: "hr.ts",                line: 1702, table: "hr_leave_types",       reason: "PENDING DAY 3-5 TRIAGE — joined leave-type id; confirm tenant scope" },
-  { file: "hr.ts",                line: 2154, table: "employee_assignments", reason: "PENDING DAY 3-5 TRIAGE — leave_approval_stages join" },
-  { file: "hr.ts",                line: 2326, table: "employee_assignments", reason: "PENDING DAY 3-5 TRIAGE — payroll_lines join" },
-  { file: "hr.ts",                line: 2364, table: "employee_assignments", reason: "PENDING DAY 3-5 TRIAGE — payroll_lines join, alternate shape" },
-  { file: "hr.ts",                line: 5246, table: "employee_assignments", reason: "PENDING DAY 3-5 TRIAGE — peer_evaluations join" },
-  { file: "properties.ts",        line: 2223, table: "employee_assignments", reason: "PENDING DAY 3-5 TRIAGE — MEDIUM: assignedTechnicianId from req.body, returns employeeId cross-tenant" },
-  { file: "properties.ts",        line: 2265, table: "employee_assignments", reason: "PENDING DAY 3-5 TRIAGE — MEDIUM: same pattern, different handler" },
-  { file: "warehouse.ts",         line: 821,  table: "employee_assignments", reason: "PENDING DAY 3-5 TRIAGE — userId is helper-function arg; trace caller" },
+  {
+    file: "hr.ts",
+    line: 1702,
+    table: "hr_leave_requests",
+    reason:
+      "Read-after-INSERT. `insertId` was just produced by INSERT INTO hr_leave_requests at hr.ts:1649 with an explicit companyId column, so the row is structurally tenant-bound.",
+  },
+  {
+    file: "hr.ts",
+    line: 1702,
+    table: "hr_leave_types",
+    reason:
+      "Joined to the read-after-INSERT row above; the leave type id was validated upstream against scope.companyId during the request validation (see hr.ts ~L1620).",
+  },
 ];
 
 interface SchemaInfo {
