@@ -938,7 +938,7 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
       }
     });
 
-    const [row] = await rawQuery<any>(`SELECT * FROM project_tasks WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT pt.* FROM project_tasks pt JOIN projects p ON p.id=pt."projectId" WHERE pt.id=$1 AND p."companyId"=$2 AND pt."deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     if (b.assigneeId) {
       const [assigneeAssignment] = await rawQuery<any>(
@@ -1662,7 +1662,7 @@ router.patch("/risks/:riskId", requirePermission("projects:update"), async (req,
     if (sets.length === 0) { res.json({ success: true }); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(
-      `UPDATE project_risks SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
+      `UPDATE project_risks SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
     if (!rows[0]) throw new NotFoundError("المخاطرة غير موجودة");

@@ -2466,7 +2466,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
           [mr.assignedTo, scope.companyId]
         );
         const newRating = Math.min(5, 3 + Math.log10(Number(completedCount[0]?.cnt || 1) + 1));
-        await rawExecute(`UPDATE technicians SET rating=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [parseFloat(newRating.toFixed(2)), mr.assignedTo, scope.companyId]);
+        await rawExecute(`UPDATE technicians SET rating=$1 WHERE id=$2 AND "companyId"=$3`, [parseFloat(newRating.toFixed(2)), mr.assignedTo, scope.companyId]);
       } catch (ratingErr) {
         logger.error(ratingErr, "Failed to update technician rating:");
       }
@@ -3624,7 +3624,7 @@ router.patch("/inspections/:id", requirePermission("property:update"), async (re
       }
       params.push(id); params.push(scope.companyId);
       await rawQuery<any>(
-        `UPDATE property_inspections SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
+        `UPDATE property_inspections SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
         params
       );
 
