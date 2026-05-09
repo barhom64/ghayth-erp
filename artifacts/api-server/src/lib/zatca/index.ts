@@ -17,3 +17,12 @@ export * from "./types.js";
 export * from "./qr.js";
 export { reserveNextIcv, currentIcv } from "./icv.js";
 export { readNextPih, advancePih, PIH_CHAIN_HEAD } from "./pih.js";
+export { signSha256, verifySha256, extractEcdsaPublicKeySpki } from "./signing.js";
+export { sha256Base64, invoiceHashBase64, signedPropertiesHashBase64 } from "./hash.js";
+export {
+  canonicalizeInvoiceForHashing,
+  canonicalizeSignedProperties,
+  embedUblExtensions,
+} from "./canonicalize.js";
+export type { CsrInput, GeneratedCsr } from "./csr.js";
+export { generateCsr } from "./csr.js";
