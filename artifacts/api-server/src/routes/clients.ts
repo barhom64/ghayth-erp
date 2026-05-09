@@ -360,7 +360,7 @@ router.post("/auto-create", requirePermission("crm:create"), async (req, res) =>
   }
 });
 
-router.delete("/:id", requirePermission("crm:delete"), async (req, res) => {
+router.delete("/:id", authorize({ feature: "crm.clients", action: "delete", resource: { table: "clients", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

@@ -391,7 +391,7 @@ router.patch("/contracts/:id", requirePermission("legal:write"), async (req, res
   } catch (err) { handleRouteError(err, res, "Update contract error:"); }
 });
 
-router.delete("/contracts/:id", requirePermission("legal:delete"), async (req, res) => {
+router.delete("/contracts/:id", authorize({ feature: "legal.contracts", action: "delete", resource: { table: "legal_contracts", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -729,7 +729,7 @@ router.patch("/cases/:id", requirePermission("legal:write"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Update case error:"); }
 });
 
-router.delete("/cases/:id", requirePermission("legal:delete"), async (req, res) => {
+router.delete("/cases/:id", authorize({ feature: "legal.cases", action: "delete", resource: { table: "legal_cases", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

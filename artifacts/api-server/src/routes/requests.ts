@@ -717,7 +717,7 @@ router.get("/:id/actions", requirePermission("requests:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.delete("/:id", requirePermission("requests:write"), async (req, res) => {
+router.delete("/:id", authorize({ feature: "requests", action: "delete", resource: { table: "service_requests", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
