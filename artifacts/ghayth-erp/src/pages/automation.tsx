@@ -12,13 +12,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-
-const MODULE_LABELS: Record<string, string> = {
-  hr: "الموارد البشرية",
-  finance: "المالية",
-  fleet: "الأسطول",
-  property: "العقارات",
-};
+import { moduleLabel } from "@/lib/module-labels";
 
 const AUTOMATION_TYPE_LABELS: Record<string, string> = {
   employee_contract_expiry: "تجديد عقد موظف",
@@ -169,7 +163,7 @@ export default function Automation() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <h3 className="font-semibold text-sm">{rule.nameAr || rule.name}</h3>
-                            <Badge variant="outline" className="text-xs">{MODULE_LABELS[rule.module] || rule.module}</Badge>
+                            <Badge variant="outline" className="text-xs">{moduleLabel(rule.module)}</Badge>
                           </div>
                           <p className="text-xs text-muted-foreground">{rule.descriptionAr || rule.description}</p>
                           <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
