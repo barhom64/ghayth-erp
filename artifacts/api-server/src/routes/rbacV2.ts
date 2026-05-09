@@ -32,7 +32,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { bumpCacheVersion, checkAccess } from "../lib/rbac/authzEngine.js";
 import { FEATURE_CATALOG, FEATURE_INDEX } from "../lib/rbac/featureCatalog.js";
-import { handleRouteError, ValidationError, parseId, zodParse } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, parseId, zodParse } from "../lib/errorHandler.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -448,7 +448,8 @@ router.delete("/sod/:id", authorize({ feature: "admin.roles", action: "delete" }
     const [rule] = await rawQuery<any>(`SELECT * FROM rbac_sod_rules WHERE id = $1`, [id]);
     if (!rule) return void res.status(404).json({ error: "القاعدة غير موجودة" });
     if (rule.companyId == null) return void res.status(403).json({ error: "لا يمكن حذف القواعد النظامية، عطّلها بدلاً من ذلك" });
-    await rawExecute(`DELETE FROM rbac_sod_rules WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`DELETE FROM rbac_sod_rules WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("قاعدة فصل المهام غير موجودة");
     res.json({ deleted: 1 });
   } catch (err) {
     handleRouteError(err, res, "delete SoD rule");

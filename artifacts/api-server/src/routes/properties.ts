@@ -3112,7 +3112,8 @@ router.patch("/maintenance-requests/:id", authorize({ feature: "properties", act
     }
     params.push(id);
     params.push(scope.companyId);
-    await rawExecute(`UPDATE maintenance_requests SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE maintenance_requests SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("طلب الصيانة غير موجود");
     if (b.status && b.status !== existing.status) {
       await createAuditLog({
         userId: scope.userId, entity: "maintenance_requests", entityId: id,

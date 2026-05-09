@@ -419,7 +419,8 @@ router.delete("/definitions/:id", authorize({ feature: "admin", action: "update"
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
-    await rawExecute(`DELETE FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`DELETE FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("التعريف غير موجود");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "workflow_definitions", entityId: id, before }).catch((e) => logger.error(e, "workflows background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.deleted", entity: "workflow_definitions", entityId: id, details: JSON.stringify({ requestType: before?.requestType }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json({ message: "تم الحذف" });

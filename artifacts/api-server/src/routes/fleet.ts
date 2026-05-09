@@ -2354,7 +2354,8 @@ router.delete("/fuel-logs/:id", authorize({ feature: "fleet", action: "delete" }
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("سجل الوقود غير موجود");
-    await rawExecute(`UPDATE fleet_fuel_logs SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE fleet_fuel_logs SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
 
     emitEvent({
       companyId: scope.companyId,
@@ -2461,7 +2462,8 @@ router.delete("/insurance/:id", authorize({ feature: "fleet", action: "delete" }
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM fleet_insurance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("سجل التأمين غير موجود");
-    await rawExecute(`UPDATE fleet_insurance SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE fleet_insurance SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
 
     emitEvent({
       companyId: scope.companyId,

@@ -434,7 +434,8 @@ router.delete("/journal-templates/:id", authorize({ feature: "finance", action: 
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("القالب غير موجود");
-    await rawExecute(`UPDATE journal_entry_templates SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE journal_entry_templates SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "journal_entry_templates", entityId: id, before: existing }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.deleted", entity: "journal_entry_templates", entityId: id, details: JSON.stringify({ name: existing.name }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     res.json({ message: "تم حذف القالب" });
