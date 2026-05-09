@@ -3385,7 +3385,37 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "monthly_fx_revaluation_reminder", description: "تذكير CFO بترحيل إعادة تقييم العملات", schedule: "0 9 28 * *", handler: monthlyFxRevaluationReminder },
   { name: "daily_budget_variance_alert", description: "تنبيه تجاوز الميزانية اليومي", schedule: "0 10 * * *", handler: dailyBudgetVarianceAlert },
   { name: "rate_limit_fallback_alert", description: "تنبيه عند انتقال حدود الطلبات إلى الذاكرة المحلية (Redis fallback)", schedule: "*/2 * * * *", handler: rateLimitFallbackAlertCheck },
+  { name: "rbac_v2_expired_grants_cleanup", description: "تنظيف منح RBAC v2 منتهية الصلاحية", schedule: "0 3 * * *", handler: rbacV2ExpiredGrantsCleanup },
 ];
+
+async function rbacV2ExpiredGrantsCleanup(): Promise<string> {
+  // Drop user-level grants whose expires_at has passed. We delete rather
+  // than mark as expired so the engine's hot-path query (which only
+  // selects rows with expires_at IS NULL OR expires_at > NOW()) doesn't
+  // grow unbounded.
+  const userGrants = await rawExecute(
+    `DELETE FROM rbac_user_grants
+      WHERE expires_at IS NOT NULL AND expires_at < NOW() - INTERVAL '7 days'`
+  );
+
+  // Same for time-bound role assignments (rbac_user_roles.expires_at).
+  // We keep them for a 7-day grace period after expiry for forensics,
+  // then remove them.
+  const userRoles = await rawExecute(
+    `DELETE FROM rbac_user_roles
+      WHERE expires_at IS NOT NULL AND expires_at < NOW() - INTERVAL '7 days'`
+  );
+
+  // Bump cache version on every company that lost grants/roles so the
+  // engine refreshes its in-memory cache.
+  if ((userGrants.affectedRows ?? 0) > 0 || (userRoles.affectedRows ?? 0) > 0) {
+    await rawExecute(
+      `UPDATE rbac_cache_version SET version = version + 1, "updatedAt" = NOW()`
+    );
+  }
+
+  return `Removed ${userGrants.affectedRows ?? 0} expired user-grants, ${userRoles.affectedRows ?? 0} expired user-roles`;
+}
 
 export async function seedCronJobs(): Promise<void> {
   for (const job of JOB_DEFINITIONS) {
