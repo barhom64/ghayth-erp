@@ -50,15 +50,17 @@ Therefore "migrate to `buildScopedWhere`" is a **maintainability** preference, n
 
 ## Outstanding LIST endpoints (post-freeze cleanup)
 
-Files with `router.get("/")` LIST endpoints that filter by companyId but don't yet use `buildScopedWhere`. Most are small and low-traffic; migrating them is mechanical but yields nothing during the freeze:
+Files with `router.get("/")` LIST endpoints that filter by companyId but don't yet use `buildScopedWhere`. Migration status as of 2026-05-09 (post-freeze sweep #1):
 
-- `documents.ts` — has search + pagination, would benefit if migrated
-- `requests.ts` — list of requests, similar
-- `workflows.ts` — list of workflow definitions
-- `gov-integrations.ts` — list of government integrations
-- `search.ts` — global search (special case; arguably not a candidate)
+| File | Status | Why |
+| --- | --- | --- |
+| `workflows.ts` | ✅ Migrated 2026-05-09 | Clean fit: `wi."companyId" = $1` + soft-delete + status/requestType filters. Used `companyColumn`, `disableBranchScope`, `softDeleteColumn`. |
+| `gov-integrations.ts` | ✅ Migrated 2026-05-09 | Single-condition list, no branch/search. Mechanical but consistent. |
+| `documents.ts` | ⏸ Skipped (policy #4) | Cross-tenant fallback `("companyId"=$1 OR "companyId" IS NULL)`. Helper has no flag for this and the policy forbids muddying its contract. |
+| `requests.ts` | ⏸ Skipped (policy #4) | Same `OR "companyId" IS NULL` system-wide-templates pattern. |
+| `search.ts` | ⏸ Skipped | Global search, special-cased; not a single-table list endpoint. |
 
-These are tracked for a post-freeze sweep, not for this 14-day window.
+The two `OR IS NULL` cases would require a new `includeSystemRows: true` option on the helper. Not worth adding for two routes — keep them as-is.
 
 ## Why this is the right scope
 

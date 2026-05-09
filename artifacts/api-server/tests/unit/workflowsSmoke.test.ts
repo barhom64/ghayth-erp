@@ -153,7 +153,11 @@ describe("Workflow parameterized SQL", () => {
   it("list instances uses parameterized filters for status and requestType", () => {
     const idx = WF_ROUTE.indexOf('router.get("/",');
     const section = WF_ROUTE.slice(idx, idx + 3000);
-    expect(section).toContain("$${params.length}");
+    // After buildScopedWhere migration the route uses `$${paramIdx++}`
+    // for the optional filters instead of `$${params.length}`. Both are
+    // parameterized; the test now checks for either form so it doesn't
+    // pin the implementation detail.
+    expect(section).toMatch(/\$\$\{params\.length\}|\$\$\{paramIdx\+\+\}/);
     expect(section).toContain("params.push(status)");
     expect(section).toContain("params.push(requestType)");
   });
