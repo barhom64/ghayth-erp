@@ -68,3 +68,6 @@ audit/report/*.txt
 /existing_pages.txt
 /imported_components.txt
 /imported_pages.txt
+
+# Local DB backups produced by scripts/backup.sh
+/backups/
