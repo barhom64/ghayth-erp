@@ -1069,21 +1069,23 @@ router.post("/role-permissions", requirePermission("admin:write"), async (req, r
       [role, permission, scope.companyId]
     );
     invalidatePermissionCache(role, scope.companyId);
-    createAuditLog({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "create", entity: "role_permissions", entityId: r.insertId,
-      after: { role, permission },
-    }).catch((e) => logger.error(e, "admin background task failed"));
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "admin.role_permission.created",
-      entity: "role_permissions",
-      entityId: r.insertId,
-      details: JSON.stringify({ role, permission }),
-    }).catch((e) => logger.error(e, "admin background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM role_permissions WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
-    res.status(201).json(row || { id: r.insertId });
+    if (r.insertId) {
+      createAuditLog({
+        companyId: scope.companyId, userId: scope.userId,
+        action: "create", entity: "role_permissions", entityId: r.insertId,
+        after: { role, permission },
+      }).catch((e) => logger.error(e, "admin background task failed"));
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "admin.role_permission.created",
+        entity: "role_permissions",
+        entityId: r.insertId,
+        details: JSON.stringify({ role, permission }),
+      }).catch((e) => logger.error(e, "admin background task failed"));
+    }
+    const [row] = await rawQuery<any>(`SELECT * FROM role_permissions WHERE id=$1 AND "companyId"=$2`, [r.insertId || 0, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, role, permission });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 

@@ -129,25 +129,27 @@ budgetRouter.post("/budget", requirePermission("finance:create"), async (req, re
       [scope.companyId, branchId ?? scope.branchId, accountCode, period, Number(amount)]
     );
 
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "budget.created",
-      entity: "budgets",
-      entityId: insertId,
-      details: JSON.stringify({ accountCode, period, amount: Number(amount) }),
-    }).catch((err) => pushToDLQ("event", { action: "budget.created", entityId: insertId }, err, scope.companyId));
+    if (insertId) {
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "budget.created",
+        entity: "budgets",
+        entityId: insertId,
+        details: JSON.stringify({ accountCode, period, amount: Number(amount) }),
+      }).catch((err) => pushToDLQ("event", { action: "budget.created", entityId: insertId }, err, scope.companyId));
 
-    createAuditLog({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "create",
-      entity: "budgets",
-      entityId: insertId,
-      after: { accountCode, period, amount: Number(amount) },
-    }).catch((err) => logger.error(err, "[audit] budget.created:"));
+      createAuditLog({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "create",
+        entity: "budgets",
+        entityId: insertId,
+        after: { accountCode, period, amount: Number(amount) },
+      }).catch((err) => logger.error(err, "[audit] budget.created:"));
+    }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM budgets WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM budgets WHERE id=$1 AND "companyId"=$2`, [insertId || 0, scope.companyId]);
     res.status(201).json(row || { id: insertId, accountCode, period, amount: Number(amount), branchId: branchId ?? scope.branchId });
   } catch (err) {
     handleRouteError(err, res, "Create budget error:");
