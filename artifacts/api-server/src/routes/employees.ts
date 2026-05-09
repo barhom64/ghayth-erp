@@ -1152,7 +1152,7 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
   }
 });
 
-router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
+router.delete("/:id", authorize({ feature: "hr.employees", action: "delete", resource: { table: "employees", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

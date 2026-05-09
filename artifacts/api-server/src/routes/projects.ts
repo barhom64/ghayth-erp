@@ -698,7 +698,7 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Update project error:"); }
 });
 
-router.delete("/:id", requirePermission("projects:delete"), async (req, res) => {
+router.delete("/:id", authorize({ feature: "projects.list", action: "delete", resource: { table: "projects", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

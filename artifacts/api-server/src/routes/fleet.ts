@@ -657,7 +657,7 @@ router.patch("/vehicles/:id", requirePermission("fleet:update"), async (req, res
   } catch (err) { handleRouteError(err, res, "Update vehicle error:"); }
 });
 
-router.delete("/vehicles/:id", requirePermission("fleet:delete"), async (req, res) => {
+router.delete("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "vehicles", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -809,7 +809,9 @@ router.patch("/drivers/:id", requirePermission("fleet:update"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Update driver error:"); }
 });
 
-router.delete("/drivers/:id", requirePermission("fleet:delete"), async (req, res) => {
+// Drivers fall under the parent "fleet" feature; no dedicated catalog
+// entry yet. Delete checks scope against the drivers table.
+router.delete("/drivers/:id", authorize({ feature: "fleet", action: "delete", resource: { table: "drivers", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

@@ -550,7 +550,7 @@ journalRouter.patch("/expenses/:id", requirePermission("finance:update"), async 
   }
 });
 
-journalRouter.delete("/expenses/:id", requirePermission("finance:delete"), async (req, res) => {
+journalRouter.delete("/expenses/:id", authorize({ feature: "finance.journal", action: "delete", resource: { table: "expenses", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

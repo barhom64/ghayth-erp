@@ -429,7 +429,7 @@ router.patch("/:id", authorize({ feature: "tasks", action: "update", resource: {
   }
 });
 
-router.delete("/:id", requirePermission("tasks:write"), async (req, res) => {
+router.delete("/:id", authorize({ feature: "tasks", action: "delete", resource: { table: "tasks", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

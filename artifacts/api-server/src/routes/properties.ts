@@ -796,7 +796,7 @@ router.patch("/units/:id", requirePermission("property:update"), async (req, res
   } catch (err) { handleRouteError(err, res, "Update unit error:"); }
 });
 
-router.delete("/units/:id", requirePermission("property:delete"), async (req, res) => {
+router.delete("/units/:id", authorize({ feature: "properties.units", action: "delete", resource: { table: "property_units", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1373,7 +1373,7 @@ router.patch("/contracts/:id", requirePermission("property:update"), async (req,
   } catch (err) { handleRouteError(err, res, "Update contract error:"); }
 });
 
-router.delete("/contracts/:id", requirePermission("property:delete"), async (req, res) => {
+router.delete("/contracts/:id", authorize({ feature: "properties.contracts", action: "delete", resource: { table: "property_contracts", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

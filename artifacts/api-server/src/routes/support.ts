@@ -593,7 +593,7 @@ router.patch("/tickets/:id", authorize({ feature: "support.tickets", action: "up
   }
 });
 
-router.delete("/tickets/:id", requirePermission("support:delete"), async (req, res) => {
+router.delete("/tickets/:id", authorize({ feature: "support.tickets", action: "delete", resource: { table: "support_tickets", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

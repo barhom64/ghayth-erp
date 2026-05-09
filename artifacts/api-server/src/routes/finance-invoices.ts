@@ -895,7 +895,7 @@ invoicesRouter.patch("/invoices/:id", authorize({ feature: "finance.invoices", a
   }
 });
 
-invoicesRouter.delete("/invoices/:id", requirePermission("finance:delete"), async (req, res) => {
+invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", action: "delete", resource: { table: "invoices", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
 

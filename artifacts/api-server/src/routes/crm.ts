@@ -835,7 +835,7 @@ router.post("/opportunities/:id/convert", requirePermission("crm:update"), async
   }
 });
 
-router.delete("/opportunities/:id", requirePermission("crm:delete"), async (req, res) => {
+router.delete("/opportunities/:id", authorize({ feature: "crm.opportunities", action: "delete", resource: { table: "crm_opportunities", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

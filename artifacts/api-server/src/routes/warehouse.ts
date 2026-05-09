@@ -505,7 +505,7 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
   }
 });
 
-router.delete("/products/:id", requirePermission("warehouse:delete"), async (req, res) => {
+router.delete("/products/:id", authorize({ feature: "warehouse.inventory", action: "delete", resource: { table: "warehouse_products", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
