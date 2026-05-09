@@ -1,0 +1,33 @@
+# docker-compose for the Day 12-13 dynamic tenant-isolation harness.
+#
+# Spins a disposable Postgres seeded with `db/bootstrap.sh`'s defaults so
+# every CI job (and every local dev box that wants to run the dynamic
+# integration tests) gets the same baseline. Volumes are not declared:
+# the container is intentionally ephemeral.
+#
+# Local usage:
+#   docker compose -f artifacts/api-server/tests/integration/postgres/docker-compose.yml up -d
+#   export DATABASE_URL=postgres://ghayth_erp:ghayth_erp@127.0.0.1:54329/ghayth_erp
+#   export JWT_SECRET=test-secret-with-at-least-thirty-two-characters-aaaaaaaaaaaaa
+#   bash db/bootstrap.sh
+#   pnpm --filter @workspace/api-server test tests/integration/tenantIsolation.dynamic.test.ts
+#
+# CI usage: see `docs/freeze/freeze-day-12-13-dynamic-tests.md` for the
+# guard.yml job snippet that adds the same wiring.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ghayth-erp-test-pg
+    restart: "no"
+    environment:
+      POSTGRES_DB: ghayth_erp
+      POSTGRES_USER: ghayth_erp
+      POSTGRES_PASSWORD: ghayth_erp
+    ports:
+      - "54329:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ghayth_erp -d ghayth_erp"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
