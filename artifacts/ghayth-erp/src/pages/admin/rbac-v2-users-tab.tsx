@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, UserPlus, X, Calendar } from "lucide-react";
+import { Search, UserPlus, X, Calendar, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -104,8 +104,48 @@ export function UserRoleAssignmentTab() {
     }
   };
 
+  const syncAllRoles = async () => {
+    try {
+      const result = await apiFetch<{ added: number; totalRoles: number }>(
+        "/rbac/v2/admin/sync-all-roles",
+        { method: "POST" }
+      );
+      toast({
+        title: "تم تحديث الأدوار",
+        description: `أُضيف ${result.added} دور — لديك الآن ${result.totalRoles} دور للتنقل بينها`,
+      });
+      qc.invalidateQueries({ queryKey: ["rbac-users"] });
+      qc.invalidateQueries({ queryKey: ["rbac-user-bindings"] });
+    } catch (err: any) {
+      toast({
+        title: "فشل التحديث",
+        description: err?.message || "تأكد أنك المالك أو المدير العام",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
-    <div className="grid grid-cols-12 gap-4">
+    <div className="space-y-4">
+      <Card className="border-amber-200 bg-amber-50">
+        <CardContent className="p-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm">
+            <Sparkles className="h-4 w-4 text-amber-600" />
+            <div>
+              <p className="font-semibold text-amber-900">للاختبار: امنح حسابك كل الأدوار</p>
+              <p className="text-xs text-amber-700">
+                يفعّل قائمة التنقّل بين الأدوار في الـheader حتى تجرّب كل دور بنفسك بدون تسجيل خروج
+              </p>
+            </div>
+          </div>
+          <Button size="sm" onClick={syncAllRoles}>
+            <Sparkles className="h-4 w-4 me-1" />
+            مزامنة كل الأدوار لي
+          </Button>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-12 gap-4">
       <div className="col-span-5">
         <Card>
           <CardHeader className="pb-2">
@@ -233,6 +273,7 @@ export function UserRoleAssignmentTab() {
             </CardContent>
           </Card>
         )}
+      </div>
       </div>
     </div>
   );
