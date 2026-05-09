@@ -457,9 +457,10 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
       });
     }
 
-    const baseAmount = roundTo2(Number(amount));
-    const vatRateVal = rawVatRate != null ? Number(rawVatRate) : 0;
-    const computedVat = roundTo2(rawVatAmount != null ? Number(rawVatAmount) : computeVat(baseAmount, vatRateVal));
+    const baseAmount = roundTo2(Number(amount) || 0);
+    if (!baseAmount || isNaN(baseAmount)) throw new ValidationError("المبلغ غير صالح", { field: "amount" });
+    const vatRateVal = rawVatRate != null ? (Number(rawVatRate) || 0) : 0;
+    const computedVat = roundTo2(rawVatAmount != null ? (Number(rawVatAmount) || 0) : computeVat(baseAmount, vatRateVal));
     const totalWithVat = roundTo2(baseAmount + computedVat);
 
     let finalDescription = description;
@@ -744,9 +745,10 @@ journalRouter.post("/vouchers", requirePermission("finance:create"), async (req,
       );
     }
 
-    const baseAmount = roundTo2(Number(amount));
-    const vatRateVal = rawVatRate != null ? Number(rawVatRate) : 0;
-    const computedVat = roundTo2(rawVatAmount != null ? Number(rawVatAmount) : computeVat(baseAmount, vatRateVal));
+    const baseAmount = roundTo2(Number(amount) || 0);
+    if (!baseAmount || isNaN(baseAmount)) throw new ValidationError("المبلغ غير صالح", { field: "amount" });
+    const vatRateVal = rawVatRate != null ? (Number(rawVatRate) || 0) : 0;
+    const computedVat = roundTo2(rawVatAmount != null ? (Number(rawVatAmount) || 0) : computeVat(baseAmount, vatRateVal));
     const totalWithVat = roundTo2(baseAmount + computedVat);
 
     const isReceipt = type === "receipt";

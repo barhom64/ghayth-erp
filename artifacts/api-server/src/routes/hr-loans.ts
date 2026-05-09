@@ -232,6 +232,7 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
 
     const amount = b.amount;
     const installmentCount = b.installmentCount;
+    if (!installmentCount || installmentCount <= 0) throw new ValidationError("عدد الأقساط يجب أن يكون أكبر من صفر", { field: "installmentCount" });
     const installmentAmount = roundTo2(amount / installmentCount);
 
     // التحقق من عدم وجود سلفة نشطة

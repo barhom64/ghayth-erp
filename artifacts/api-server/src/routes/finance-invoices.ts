@@ -406,7 +406,7 @@ invoicesRouter.post("/invoices", requirePermission("finance:create"), async (req
     ]);
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('invoice_number_seq') AS seq`);
-    const seqNum = Number(seqRow.seq);
+    const seqNum = Number(seqRow?.seq ?? Date.now() % 1000000);
     const year = currentYear();
     const month = currentMonthPadded();
     const ref = `INV-${year}${month}-${String(seqNum).padStart(4, "0")}`;
@@ -1931,6 +1931,7 @@ invoicesRouter.post("/dunning/send", requirePermission("finance:create"), async 
       );
       if (!inv) { results.push({ invoiceId: invId, status: "skipped", reason: "not_found_or_paid" }); continue; }
 
+      if (!inv.dueDate) { results.push({ invoiceId: invId, status: "skipped", reason: "no_due_date" }); continue; }
       const days = Math.max(
         0,
         Math.floor((new Date(today).getTime() - new Date(inv.dueDate).getTime()) / 86400000)
