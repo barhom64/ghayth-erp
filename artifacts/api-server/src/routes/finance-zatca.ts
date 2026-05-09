@@ -423,8 +423,8 @@ zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), asy
       [id]
     );
 
-    const issueDate = toDateISO(invoice.createdAt);
-    const issueTime = new Date(invoice.createdAt).toISOString().split("T")[1].substring(0, 8);
+    const issueDate = toDateISO(invoice.createdAt || new Date());
+    const issueTime = new Date(invoice.createdAt || new Date()).toISOString().split("T")[1].substring(0, 8);
 
     let uuid = invoice.zatcaUuid;
     if (!uuid) {
@@ -518,8 +518,8 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
       [id]
     );
 
-    const issueDate = toDateISO(invoice.createdAt);
-    const issueTime = new Date(invoice.createdAt).toISOString().split("T")[1].substring(0, 8);
+    const issueDate = toDateISO(invoice.createdAt || new Date());
+    const issueTime = new Date(invoice.createdAt || new Date()).toISOString().split("T")[1].substring(0, 8);
     const uuid = invoice.zatcaUuid || crypto.randomUUID();
 
     const xml = generateZatcaXml({

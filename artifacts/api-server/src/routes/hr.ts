@@ -1625,6 +1625,19 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
          )`,
         [scope.companyId, scope.employeeId, scope.activeAssignmentId, leaveTypeId, year, entitled]
       );
+      const balLock = await client.query(
+        `SELECT entitled, used, reserved FROM hr_leave_balances
+         WHERE "companyId" = $1 AND "employeeId" = $2 AND "leaveTypeId" = $3 AND year = $4
+         FOR UPDATE`,
+        [scope.companyId, scope.employeeId, leaveTypeId, year]
+      );
+      if (balLock.rows[0]) {
+        const r = balLock.rows[0];
+        const rem = Math.max(0, Number(r.entitled) - Number(r.used) - Number(r.reserved));
+        if (rem < days) {
+          throw new ConflictError(`رصيد الإجازة غير كافٍ. المتبقي: ${rem} يوم، المطلوب: ${days} يوم`, { field: "days" });
+        }
+      }
       await client.query(
         `UPDATE hr_leave_balances
          SET reserved = reserved + $1
@@ -2472,7 +2485,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     );
     const gosiSettingsMap = new Map(gosiSettings.map((r) => [r.key, r.value]));
     const gosiComponent = salaryComponents.find((c: any) => c.isGosi && c.type === 'deduction');
-    const GOSI_EMPLOYEE_RATE = gosiComponent
+    const GOSI_EMPLOYEE_RATE = gosiComponent && Number(gosiComponent.value) > 0
       ? Number(gosiComponent.value) / 100
       : Number(gosiSettingsMap.get("gosiEmployeeRate") ?? "9.75") / 100;
     const GOSI_EMPLOYER_RATE = Number(gosiSettingsMap.get("gosiEmployerRate") ?? "11.75") / 100;
