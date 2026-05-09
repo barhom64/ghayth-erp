@@ -346,9 +346,9 @@ custodiesRouter.get("/custodies/:id", requirePermission("finance:read"), async (
          FROM approval_actions aa
          LEFT JOIN users u ON u.id = aa."actionBy"
          LEFT JOIN employees e ON e.id = u."employeeId"
-         WHERE aa."entityType" = 'custody' AND aa."entityId" = $1
+         WHERE aa."entityType" = 'custody' AND aa."entityId" = $1 AND aa."companyId" = $2
          ORDER BY aa."createdAt" ASC`,
-        [id]
+        [id, scope.companyId]
       );
     } catch (e) { logger.error(e, "custody approval actions fetch error"); }
 

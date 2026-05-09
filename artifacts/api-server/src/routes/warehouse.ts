@@ -147,14 +147,15 @@ const COUNT_TRANSITIONS: Record<string, readonly string[]> = {
 // ─────────────────────────────────────────────────────────────────────────────
 async function updateWeightedAverageCost(
   productId: number,
+  companyId: number,
   qty: number,
   unitCost: number,
   direction: "in" | "out"
 ): Promise<void> {
   try {
     const [product] = await rawQuery<any>(
-      `SELECT "currentStock", "costPrice" FROM warehouse_products WHERE id=$1`,
-      [productId]
+      `SELECT "currentStock", "costPrice" FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [productId, companyId]
     );
     if (!product) return;
     const prevQty = Math.max(0, Number(product.currentStock ?? 0));
@@ -169,14 +170,13 @@ async function updateWeightedAverageCost(
           ? roundTo4(newTotalValue / newTotalQty)
           : movCost;
       await rawExecute(
-        `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2 AND "deletedAt" IS NULL`,
-        [newWa, productId]
+        `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+        [newWa, productId, companyId]
       );
     } else {
-      // "out": weighted-average stays the same; just refresh lastWaCost snapshot
       await rawExecute(
-        `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1 AND "deletedAt" IS NULL`,
-        [productId]
+        `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [productId, companyId]
       );
     }
   } catch (err) {

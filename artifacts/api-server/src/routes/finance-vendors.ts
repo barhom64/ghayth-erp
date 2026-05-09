@@ -89,7 +89,7 @@ vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, 
       after: { name },
     }).catch((err) => logger.error(err, "[audit] vendor.created:"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM vendors WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, name, contactPerson, phone, email, taxNumber, category });
   } catch (err) {
     handleRouteError(err, res, "Create vendor error:");
@@ -326,7 +326,7 @@ vendorsRouter.get("/commitments/:id", requirePermission("finance:read"), async (
       `SELECT po.*, s.name AS "supplierName"
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
-       WHERE po.id = $1 AND po."companyId" = $2`,
+       WHERE po.id = $1 AND po."companyId" = $2 AND po."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الالتزام غير موجود");
@@ -343,7 +343,7 @@ vendorsRouter.get("/financial-requests/:id", requirePermission("finance:read"), 
        FROM workflow_requests wr
        LEFT JOIN employee_assignments ea ON ea.id = wr."requestedBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       WHERE wr.id = $1 AND wr."companyId" = $2`,
+       WHERE wr.id = $1 AND wr."companyId" = $2 AND wr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الطلب المالي غير موجود");
@@ -360,7 +360,7 @@ vendorsRouter.get("/financial-requests", requirePermission("finance:read"), asyn
        FROM workflow_requests wr
        LEFT JOIN employee_assignments ea ON ea.id = wr."requestedBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       WHERE wr."companyId" = $1 AND wr."entityType" IN ('expense','salary_advance','custody','purchase_order')
+       WHERE wr."companyId" = $1 AND wr."deletedAt" IS NULL AND wr."entityType" IN ('expense','salary_advance','custody','purchase_order')
        ORDER BY wr."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );

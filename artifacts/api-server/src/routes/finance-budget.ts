@@ -548,8 +548,8 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
       }
       const variance = roundTo2(budgetAmount - actualAmount);
       const variancePct = budgetAmount > 0 ? roundTo2((variance / budgetAmount) * 100) : 0;
-      totalBudget += budgetAmount;
-      totalActual += actualAmount;
+      totalBudget = roundTo2(totalBudget + budgetAmount);
+      totalActual = roundTo2(totalActual + actualAmount);
       let status: string;
       if (budgetAmount === 0) status = "no_budget";
       else if (actualAmount > budgetAmount) status = "over_budget";

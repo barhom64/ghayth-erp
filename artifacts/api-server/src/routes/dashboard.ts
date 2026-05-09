@@ -101,10 +101,10 @@ router.get("/", async (req, res) => {
     const notifications = await rawQuery<any>(
       `SELECT id, type, title, body, priority, "isRead", "createdAt"
        FROM notifications
-       WHERE "assignmentId" = $1 AND "isRead" = false
+       WHERE "assignmentId" = $1 AND "companyId" = $2 AND "isRead" = false
        ORDER BY "createdAt" DESC
        LIMIT 8`,
-      [scope.activeAssignmentId]
+      [scope.activeAssignmentId, scope.companyId]
     );
 
     res.json({

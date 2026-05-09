@@ -106,9 +106,9 @@ recurringRouter.get("/recurring-journals/:id", requirePermission("finance:read")
       `SELECT rr.*, je.ref AS "journalRef", je.description AS "journalDescription"
        FROM recurring_journal_runs rr
        LEFT JOIN journal_entries je ON je.id = rr."journalEntryId"
-       WHERE rr."recurringJournalId" = $1
+       WHERE rr."recurringJournalId" = $1 AND rr."companyId" = $2
        ORDER BY rr."createdAt" DESC LIMIT 50`,
-      [id]
+      [id, scope.companyId]
     );
     res.json({ ...row, history });
   } catch (err) {

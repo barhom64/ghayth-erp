@@ -633,7 +633,7 @@ router.get("/units/:id", requirePermission("property:read"), async (req, res) =>
         [id, scope.companyId]
       ),
       rawQuery<any>(
-        `SELECT * FROM maintenance_requests WHERE "unitId"=$1 AND "companyId"=$2 ORDER BY id DESC LIMIT 20`,
+        `SELECT * FROM maintenance_requests WHERE "unitId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY id DESC LIMIT 20`,
         [id, scope.companyId]
       ),
       rawQuery<any>(
@@ -816,7 +816,7 @@ router.delete("/units/:id", requirePermission("property:delete"), async (req, re
       );
     }
     const [activeMaint] = await rawQuery<any>(
-      `SELECT id FROM maintenance_requests WHERE "unitId"=$1 AND "companyId"=$2 AND status NOT IN ('completed','closed','rejected','cancelled') LIMIT 1`,
+      `SELECT id FROM maintenance_requests WHERE "unitId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND status NOT IN ('completed','closed','rejected','cancelled') LIMIT 1`,
       [id, scope.companyId]
     );
     if (activeMaint) {
