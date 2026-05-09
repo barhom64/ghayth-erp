@@ -1256,8 +1256,8 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", requirePermission("f
       `SELECT po.*, s.name AS "supplierName", s.email AS "supplierEmail"
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
-       WHERE po.id = $1 AND po."deletedAt" IS NULL`,
-      [poId]
+       WHERE po.id = $1 AND po."companyId" = $2 AND po."deletedAt" IS NULL`,
+      [poId, scope.companyId]
     );
 
     res.status(201).json({ ...po, approval: approvalResult, supplierNotified: !!pr.supplierId });

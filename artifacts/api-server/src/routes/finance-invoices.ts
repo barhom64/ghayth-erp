@@ -1183,7 +1183,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", requirePermission("finance:crea
       guardId: memoId ?? 0,
     }));
     if (journalId && memoId) {
-      await rawExecute(`UPDATE credit_memos SET "journalEntryId" = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [journalId, memoId, scope.companyId]);
+      await rawExecute(`UPDATE credit_memos SET "journalEntryId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
     }
 
     emitEvent({
@@ -1388,11 +1388,12 @@ invoicesRouter.get("/bad-debt/preview", requirePermission("finance:read"), async
         : new Date(inv.createdAt).getTime() + 30 * 86400000;
       const daysOverdue = Math.floor((asOfMs - due) / 86400000);
       const amt = Number(inv.outstanding);
-      if (daysOverdue <= 0) buckets.current += amt;
-      else if (daysOverdue <= 30) buckets.d30 += amt;
-      else if (daysOverdue <= 60) buckets.d60 += amt;
-      else if (daysOverdue <= 90) buckets.d90 += amt;
-      else buckets.d90plus += amt;
+      const ra = roundTo2(amt);
+      if (daysOverdue <= 0) buckets.current = roundTo2(buckets.current + ra);
+      else if (daysOverdue <= 30) buckets.d30 = roundTo2(buckets.d30 + ra);
+      else if (daysOverdue <= 60) buckets.d60 = roundTo2(buckets.d60 + ra);
+      else if (daysOverdue <= 90) buckets.d90 = roundTo2(buckets.d90 + ra);
+      else buckets.d90plus = roundTo2(buckets.d90plus + ra);
     }
 
     const provision = {
@@ -1460,11 +1461,12 @@ invoicesRouter.post("/bad-debt/post", requirePermission("finance:create"), async
         : new Date(inv.createdAt).getTime() + 30 * 86400000;
       const d = Math.floor((asOfMs - due) / 86400000);
       const amt = Number(inv.outstanding);
-      if (d <= 0) buckets.current += amt;
-      else if (d <= 30) buckets.d30 += amt;
-      else if (d <= 60) buckets.d60 += amt;
-      else if (d <= 90) buckets.d90 += amt;
-      else buckets.d90plus += amt;
+      const ra = roundTo2(amt);
+      if (d <= 0) buckets.current = roundTo2(buckets.current + ra);
+      else if (d <= 30) buckets.d30 = roundTo2(buckets.d30 + ra);
+      else if (d <= 60) buckets.d60 = roundTo2(buckets.d60 + ra);
+      else if (d <= 90) buckets.d90 = roundTo2(buckets.d90 + ra);
+      else buckets.d90plus = roundTo2(buckets.d90plus + ra);
     }
     const total = roundTo2(
       buckets.current * r.current + buckets.d30 * r.d30 + buckets.d60 * r.d60 + buckets.d90 * r.d90 + buckets.d90plus * r.d90plus
@@ -1763,7 +1765,7 @@ invoicesRouter.get("/customer-advances", requirePermission("finance:read"), asyn
 // computes eligible invoices and produces the letters to send.
 
 async function ensureDunningTables() {
-  await rawExecute(`
+  await rawQuery(`
     CREATE TABLE IF NOT EXISTS dunning_letters (
       id SERIAL PRIMARY KEY,
       "companyId" INTEGER NOT NULL,
@@ -1773,19 +1775,20 @@ async function ensureDunningTables() {
       subject VARCHAR(500),
       body TEXT,
       "sentAt" TIMESTAMPTZ,
+      "deletedAt" TIMESTAMPTZ,
       status VARCHAR(50) DEFAULT 'pending'
     )
-  `);
-  await rawExecute(`
+  `, []);
+  await rawQuery(`
     CREATE INDEX IF NOT EXISTS idx_dunning_letters_invoice
       ON dunning_letters ("invoiceId")
-  `);
-  await rawExecute(`
+  `, []);
+  await rawQuery(`
     ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "lastDunningStage" INTEGER DEFAULT 0
-  `);
-  await rawExecute(`
+  `, []);
+  await rawQuery(`
     ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "lastDunningAt" TIMESTAMP
-  `);
+  `, []);
 }
 
 function stageFromDaysPastDue(days: number): { stage: number; title: string; tone: string } | null {

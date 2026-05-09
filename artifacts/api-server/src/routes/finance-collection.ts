@@ -54,7 +54,8 @@ collectionRouter.get("/collection", requirePermission("finance:read"), async (re
        WHERE ${where} AND i."deletedAt" IS NULL
          AND i.status IN ('sent','partial','overdue')
          AND i."dueDate" < CURRENT_DATE
-       ORDER BY i."dueDate" ASC`,
+       ORDER BY i."dueDate" ASC
+       LIMIT 500`,
       params
     );
 

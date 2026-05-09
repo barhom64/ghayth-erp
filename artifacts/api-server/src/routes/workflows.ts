@@ -311,7 +311,7 @@ router.get("/definitions", requirePermission("admin:read"), async (req, res) => 
       `SELECT wd.*, (SELECT COUNT(*) FROM workflow_steps ws WHERE ws."definitionId" = wd.id) AS "stepCount"
        FROM workflow_definitions wd
        WHERE wd."companyId" = $1
-       ORDER BY wd."requestTypeLabel"`,
+       ORDER BY wd."requestTypeLabel" LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: defs, total: defs.length });
@@ -367,7 +367,7 @@ router.post("/definitions", requirePermission("admin:write"), async (req, res) =
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "workflow_definitions", entityId: insertId, details: JSON.stringify({ requestType, requestTypeLabel }) }).catch((e) => logger.error(e, "workflows background task failed"));
     const [row] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     const defSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId"=$1 ORDER BY "stepOrder" LIMIT 500`, [insertId]);
-    res.status(201).json({ ...row, steps: defSteps } || { id: insertId });
+    res.status(201).json(row ? { ...row, steps: defSteps } : { id: insertId });
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
@@ -386,7 +386,7 @@ router.put("/definitions/:id", requirePermission("admin:write"), async (req, res
          description = COALESCE($2, description), "isReturnable" = COALESCE($3, "isReturnable"),
          "enableEscalation" = COALESCE($4, "enableEscalation"), "defaultSlaHours" = COALESCE($5, "defaultSlaHours"),
          "isActive" = COALESCE($6, "isActive"), "updatedAt" = NOW()
-         WHERE id = $7 AND "companyId" = $8 AND "deletedAt" IS NULL`,
+         WHERE id = $7 AND "companyId" = $8`,
         [requestTypeLabel ?? null, description ?? null, isReturnable ?? null, enableEscalation ?? null, defaultSlaHours ?? null, isActive ?? null, id, scope.companyId]
       );
 
@@ -431,7 +431,7 @@ router.get("/sla-definitions", requirePermission("admin:read"), async (req, res)
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT * FROM sla_definitions WHERE "companyId" = $1 ORDER BY "requestType"`,
+      `SELECT * FROM sla_definitions WHERE "companyId" = $1 ORDER BY "requestType" LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });

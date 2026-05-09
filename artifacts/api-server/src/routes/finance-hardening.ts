@@ -1122,7 +1122,8 @@ financeHardeningRouter.get("/projects", requirePermission("finance:read"), async
        LEFT JOIN journal_lines jl ON jl."journalId"=je.id AND jl.debit > 0
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
        GROUP BY p.id
-       ORDER BY p."createdAt" DESC`,
+       ORDER BY p."createdAt" DESC
+       LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });

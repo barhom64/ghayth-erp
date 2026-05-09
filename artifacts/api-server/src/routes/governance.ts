@@ -229,8 +229,8 @@ router.get("/policies/:id", requirePermission("governance:read"), async (req, re
     );
     if (!row) throw new NotFoundError("السياسة غير موجودة");
     const links = await rawQuery<any>(
-      `SELECT module FROM policy_module_links WHERE "policyId"=$1`,
-      [row.id]
+      `SELECT module FROM policy_module_links WHERE "policyId"=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      [row.id, scope.companyId]
     );
     row.modules = links.map((l: any) => l.module);
     const versions = await rawQuery<any>(
@@ -265,7 +265,7 @@ router.patch("/policies/:id", requirePermission("governance:write"), async (req,
       if ((updateRes.rowCount ?? 0) === 0) throw new NotFoundError("السياسة غير موجودة");
 
       if (b.modules && Array.isArray(b.modules)) {
-        await client.query(`DELETE FROM policy_module_links WHERE "policyId"=$1`, [id]);
+        await client.query(`DELETE FROM policy_module_links WHERE "policyId"=$1 AND "companyId"=$2`, [id, scope.companyId]);
         for (const mod of b.modules) {
           await client.query(
             `INSERT INTO policy_module_links ("policyId", module, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
@@ -306,7 +306,7 @@ router.post("/policies/:id/new-version", requirePermission("governance:write"), 
     const nextVersion = Number(maxVersion?.next || parent.version + 1);
 
     const b = zodParse(newPolicyVersionSchema.safeParse(req.body));
-    const existingLinks = await rawQuery<any>(`SELECT module FROM policy_module_links WHERE "policyId"=$1`, [parentId]);
+    const existingLinks = await rawQuery<any>(`SELECT module FROM policy_module_links WHERE "policyId"=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [parentId, scope.companyId]);
 
     let insertId!: number;
     await withTransaction(async (client) => {
@@ -779,6 +779,7 @@ router.patch("/compliance-actions/:actionId", requirePermission("governance:writ
     if (b.owner !== undefined) { params.push(b.owner); sets.push(`owner=$${params.length}`); }
     if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+    if ((b as any).description !== undefined) { params.push((b as any).description); sets.push(`description=$${params.length}`); }
     params.push(id); params.push(scope.companyId);
     await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
@@ -844,32 +845,6 @@ router.post("/policies/:id/compliance-actions", requirePermission("governance:wr
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.patch("/compliance-actions/:id", requirePermission("governance:write"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = parseId(req.params.id, "id");
-    const b = zodParse(updatePolicyComplianceActionSchema.safeParse(req.body ?? {}));
-    const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
-    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
-    if (b.action !== undefined || b.title !== undefined) { params.push(b.action ?? b.title); sets.push(`title=$${params.length}`); }
-    if (b.responsiblePerson !== undefined || b.owner !== undefined) { params.push(b.responsiblePerson ?? b.owner); sets.push(`owner=$${params.length}`); }
-    if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
-    if (b.notes !== undefined || b.description !== undefined) { params.push(b.notes ?? b.description); sets.push(`description=$${params.length}`); }
-    params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE policy_compliance_actions SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM policy_compliance_actions WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "policy_compliance_actions", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "governance.compliance_action.updated",
-      entity: "policy_compliance_actions",
-      entityId: id,
-    }).catch((e) => logger.error(e, "governance background task failed"));
-    res.json(row);
-  } catch (err) { handleRouteError(err, res, "governance"); }
-});
 
 router.patch("/risks/:id/treatment", requirePermission("governance:write"), async (req, res) => {
   try {
@@ -942,8 +917,8 @@ router.patch("/capa/:id", requirePermission("governance:write"), async (req, res
     if (b.responsiblePerson !== undefined) { params.push(b.responsiblePerson); sets.push(`"responsiblePerson"=$${params.length}`); }
     if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE governance_capa SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM governance_capa WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    await rawExecute(`UPDATE governance_capa SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const [row] = await rawQuery<any>(`SELECT * FROM governance_capa WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "governance_capa", entityId: id }).catch((e) => logger.error(e, "governance background task failed"));
     emitEvent({
       companyId: scope.companyId,
