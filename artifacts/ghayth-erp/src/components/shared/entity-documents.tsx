@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { notifyRateLimited, RateLimitError } from "@/lib/rate-limit-toast";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +44,7 @@ interface EntityDocumentsProps {
 }
 
 export function EntityDocuments({ entityType, entityId, title = "المستندات المرتبطة" }: EntityDocumentsProps) {
+  const { toast } = useToast();
   const { data: docsResp, refetch } = useApiQuery<any>(
     ["entity-docs", entityType, String(entityId)],
     `/documents?entity=${entityType}&entityId=${entityId}`,
@@ -74,7 +76,7 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
         // notifyRateLimited already showed the debounced rate-limit toast.
         return;
       }
-      alert(err.message);
+      toast({ variant: "destructive", title: "فشل التنزيل", description: err.message });
     }
   };
 
@@ -153,6 +155,7 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
 }
 
 function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType: string; entityId: number | string; onSuccess: () => void }) {
+  const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -199,11 +202,11 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
         // notifyRateLimited already showed the debounced rate-limit toast.
         return;
       }
-      alert(err.message || "حدث خطأ");
+      toast({ variant: "destructive", title: "فشل رفع المستند", description: err.message || "حدث خطأ" });
     } finally {
       setUploading(false);
     }
-  }, [file, form, entityType, entityId, onSuccess]);
+  }, [file, form, entityType, entityId, onSuccess, toast]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
