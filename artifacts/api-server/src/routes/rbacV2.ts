@@ -859,6 +859,46 @@ async function recordHistory(roleId: number | null, companyId: number, userId: n
   ).catch(() => undefined);
 }
 
+// ─── Admin convenience: re-sync all roles to current user ──────────────────
+//
+// Owners / GMs already bypass authorization, but having every role
+// listed in rbac_user_roles unlocks the frontend's role-switcher so
+// the admin can browse the system "as" each role to verify behaviour
+// without logging out and back in. Migration 141 does the same on
+// boot; this endpoint is the on-demand version (no restart needed).
+router.post("/admin/sync-all-roles", authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager") {
+      return void res.status(403).json({
+        error: "هذه العملية مقصورة على المالك أو المدير العام",
+        code: "FORBIDDEN",
+      });
+    }
+
+    const inserted = await rawExecute(
+      `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, is_primary, "assignedBy")
+       SELECT $1, $2, r.id, FALSE, $1
+         FROM rbac_roles r
+        WHERE r."companyId" = $2 AND r.is_active = TRUE AND r.is_template = FALSE
+       ON CONFLICT ("userId", "companyId", role_id) DO NOTHING`,
+      [scope.userId, scope.companyId]
+    );
+
+    const [{ count }] = await rawQuery<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+         FROM rbac_user_roles
+        WHERE "userId" = $1 AND "companyId" = $2`,
+      [scope.userId, scope.companyId]
+    );
+
+    await bumpCacheVersion(scope.companyId);
+    res.json({ added: inserted.affectedRows ?? 0, totalRoles: Number(count) });
+  } catch (err) {
+    handleRouteError(err, res, "sync all roles");
+  }
+});
+
 // ─── JIT (Just-in-Time) elevation ───────────────────────────────────────────
 //
 // An employee submits a request for a temporary permission they don't
