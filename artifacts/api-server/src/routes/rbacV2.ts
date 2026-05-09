@@ -31,6 +31,7 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { bumpCacheVersion, checkAccess } from "../lib/rbac/authzEngine.js";
+import { invalidateSodCache } from "../lib/rbac/sodEnforcement.js";
 import { FEATURE_CATALOG, FEATURE_INDEX } from "../lib/rbac/featureCatalog.js";
 import { handleRouteError, ValidationError, parseId, zodParse } from "../lib/errorHandler.js";
 
@@ -408,6 +409,7 @@ router.post("/sod", authorize({ feature: "admin.roles", action: "create" }), asy
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
       [scope.companyId, ruleKey, labelAr, featureA, actionA, featureB, actionB, severity, isActive]
     );
+    invalidateSodCache(scope.companyId);
     res.status(201).json({ id: result.insertId });
   } catch (err) {
     handleRouteError(err, res, "create SoD rule");
@@ -435,6 +437,7 @@ router.patch("/sod/:id", authorize({ feature: "admin.roles", action: "update" })
       `UPDATE rbac_sod_rules SET ${sets.join(", ")} WHERE id = $${idx++} AND ("companyId" = $${idx} OR "companyId" IS NULL)`,
       params
     );
+    invalidateSodCache(scope.companyId);
     res.json({ updated: 1 });
   } catch (err) {
     handleRouteError(err, res, "update SoD rule");
@@ -449,6 +452,7 @@ router.delete("/sod/:id", authorize({ feature: "admin.roles", action: "delete" }
     if (!rule) return void res.status(404).json({ error: "القاعدة غير موجودة" });
     if (rule.companyId == null) return void res.status(403).json({ error: "لا يمكن حذف القواعد النظامية، عطّلها بدلاً من ذلك" });
     await rawExecute(`DELETE FROM rbac_sod_rules WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    invalidateSodCache(scope.companyId);
     res.json({ deleted: 1 });
   } catch (err) {
     handleRouteError(err, res, "delete SoD rule");

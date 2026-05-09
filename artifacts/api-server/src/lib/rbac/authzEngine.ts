@@ -32,6 +32,7 @@ import {
   type Scope,
 } from "./featureCatalog.js";
 import { evaluateConditions, type AbacConditions } from "./abacConditions.js";
+import { enforceSoD } from "./sodEnforcement.js";
 
 export interface AccessSpec {
   feature: string;
@@ -407,6 +408,33 @@ export async function checkAccess(scope: RequestScope, spec: AccessSpec, columns
   }
   // Use the grant that passed conditions for downstream decisions.
   const winningGrant = chosenGrant;
+
+  // SoD runtime enforcement: block self-approval / maker-checker
+  // violations when an active SoD rule pairs this action with one
+  // the user already used on the same record. Detection-only SoD
+  // (admin report) still flags the role; this layer additionally
+  // stops the dangerous request at runtime.
+  const sodResult = await enforceSoD({
+    userId: scope.userId,
+    companyId: scope.companyId,
+    feature: spec.feature,
+    action: spec.action,
+    grants: grants.map((g) => ({ feature_key: g.feature_key, actions: g.actions })),
+    record: spec.resource?.record ?? null,
+  });
+  if (sodResult.blocked) {
+    return {
+      allowed: false,
+      reasonAr: sodResult.reasonAr || "هذه العملية تنتهك قاعدة فصل المهام",
+      code: "SOD_VIOLATION",
+      diagnostics: {
+        matchedRoleIds: matchingGrants.map((g) => g.role_id),
+        grantedActions: winningGrant.actions as Action[],
+        grantedScope: winningGrant.scope as Scope,
+        requiredFix: `لا يمكن لمنشئ السجل إجراء "${spec.action}" عليه — اطلب من شخص آخر`,
+      },
+    };
+  }
 
   // Approval limit (for approve action).
   let limitInfo: AccessResult["approvalLimit"] = null;
