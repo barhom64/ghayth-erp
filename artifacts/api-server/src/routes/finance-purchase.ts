@@ -438,32 +438,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", authorize({ feature: "fina
     const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch((e) => { logger.error(e, "finance purchase query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const poRef = generateRef("PO", seqRow.seq, 5);
 
-    const poId = await withTransaction(async (client) => {
-      const poRes = await client.query(
-        `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"createdBy")
-         VALUES ($1,$2,$3,'pending',$4,$5,$6,$7) RETURNING id`,
-        [scope.companyId, scope.branchId, poRef, totalAmount, pr.supplierId ?? null, pr.notes ?? null, scope.activeAssignmentId]
-      );
-      const newPoId = poRes.rows[0].id;
-
-      if (Array.isArray(items) && items.length > 0) {
-        const valuesSql: string[] = [];
-        const params: any[] = [];
-        for (const item of items) {
-          const base = params.length;
-          valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5})`);
-          params.push(newPoId, item.name, item.quantity, item.unitPrice, item.totalPrice);
-        }
-        await client.query(
-          `INSERT INTO purchase_order_items ("orderId","itemName",quantity,"unitPrice","lineTotal")
-           VALUES ${valuesSql.join(",")}`,
-          params
-        );
-      }
-
-      return newPoId;
-    });
-
+    let poId!: number;
     await applyTransition({
       entity: "purchase_requests",
       id,
@@ -471,7 +446,30 @@ purchaseRouter.post("/purchase-requests/:id/convert", authorize({ feature: "fina
       action: "purchase_request.converted",
       fromStates: ["approved"],
       toState: "converted",
-      after: { status: "converted", purchaseOrderId: poId, poRef, totalAmount },
+      after: { status: "converted", poRef, totalAmount },
+      onApply: async (_row: any, client: any) => {
+        const poRes = await client.query(
+          `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"createdBy")
+           VALUES ($1,$2,$3,'pending',$4,$5,$6,$7) RETURNING id`,
+          [scope.companyId, scope.branchId, poRef, totalAmount, pr.supplierId ?? null, pr.notes ?? null, scope.activeAssignmentId]
+        );
+        poId = poRes.rows[0].id;
+
+        if (Array.isArray(items) && items.length > 0) {
+          const valuesSql: string[] = [];
+          const params: any[] = [];
+          for (const item of items) {
+            const base = params.length;
+            valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5})`);
+            params.push(poId, item.name, item.quantity, item.unitPrice, item.totalPrice);
+          }
+          await client.query(
+            `INSERT INTO purchase_order_items ("orderId","itemName",quantity,"unitPrice","lineTotal")
+             VALUES ${valuesSql.join(",")}`,
+            params
+          );
+        }
+      },
     });
 
     // Record the PR→PO conversion explicitly so the chain audit/events
@@ -1188,22 +1186,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", authorize({ feature:
     const [poSeqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`);
     const poRef = generateRef("PO", Number(poSeqRow.seq));
 
-    const { insertId: poId } = await rawExecute(
-      `INSERT INTO purchase_orders ("companyId",ref,"supplierId","requestId",status,"totalAmount","expectedDelivery","createdBy",notes,"branchId")
-       VALUES ($1,$2,$3,$4,'pending',$5,$6,$7,$8,$9)`,
-      [
-        scope.companyId,
-        poRef,
-        pr.supplierId,
-        id,
-        Number(pr.totalAmount),
-        expectedDelivery ?? null,
-        scope.activeAssignmentId,
-        notes ?? null,
-        scope.branchId || null,
-      ]
-    );
-
+    let poId!: number;
     await applyTransition({
       entity: "purchase_requests",
       id,
@@ -1211,7 +1194,25 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", authorize({ feature:
       action: "purchase_request.converted",
       fromStates: ["approved"],
       toState: "converted",
-      after: { purchaseOrderId: poId, poRef },
+      after: { poRef },
+      onApply: async (_row: any, client: any) => {
+        const poRes = await client.query(
+          `INSERT INTO purchase_orders ("companyId",ref,"supplierId","requestId",status,"totalAmount","expectedDelivery","createdBy",notes,"branchId")
+           VALUES ($1,$2,$3,$4,'pending',$5,$6,$7,$8,$9) RETURNING id`,
+          [
+            scope.companyId,
+            poRef,
+            pr.supplierId,
+            id,
+            Number(pr.totalAmount),
+            expectedDelivery ?? null,
+            scope.activeAssignmentId,
+            notes ?? null,
+            scope.branchId || null,
+          ]
+        );
+        poId = poRes.rows[0].id;
+      },
     });
 
     const approvalResult = await initiateApprovalChain({

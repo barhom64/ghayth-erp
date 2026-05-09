@@ -1544,14 +1544,16 @@ router.post("/transport/:id/assign-pilgrims", authorize({ feature: "umrah", acti
       throw new ValidationError(`عدد المعتمرين (${newCount}) يتجاوز سعة المركبة (${transport.capacity || 45})`);
     }
     const placeholders = pilgrimIds.map((_: any, i: number) => `$${i + 2}`).join(",");
-    await rawExecute(
-      `UPDATE umrah_pilgrims SET "transportAssigned"=true, "updatedAt"=NOW() WHERE "companyId"=$1 AND "deletedAt" IS NULL AND id IN (${placeholders})`,
-      [scope.companyId, ...pilgrimIds]
-    );
-    await rawExecute(
-      `UPDATE umrah_transport SET "pilgrimCount"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
-      [newCount, transportId, scope.companyId]
-    );
+    await withTransaction(async (client) => {
+      await client.query(
+        `UPDATE umrah_pilgrims SET "transportAssigned"=true, "updatedAt"=NOW() WHERE "companyId"=$1 AND "deletedAt" IS NULL AND id IN (${placeholders})`,
+        [scope.companyId, ...pilgrimIds]
+      );
+      await client.query(
+        `UPDATE umrah_transport SET "pilgrimCount"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+        [newCount, transportId, scope.companyId]
+      );
+    });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_transport", entityId: transportId, after: { assignedPilgrims: pilgrimIds.length, totalCount: newCount } }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.pilgrims_assigned", entity: "umrah_transport", entityId: transportId, details: JSON.stringify({ pilgrimIds, count: pilgrimIds.length }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ transportId, assignedCount: pilgrimIds.length, totalPilgrimCount: newCount });
@@ -1700,6 +1702,14 @@ router.post("/penalties", authorize({ feature: "umrah", action: "create" }), asy
     const scope = req.scope!;
     const b = zodParse(createPenaltySchema.safeParse(req.body));
     if (!b.pilgrimId && !b.agentId) throw new ValidationError("يجب تحديد المعتمر أو الوكيل");
+    if (b.pilgrimId) {
+      const [p] = await rawQuery<any>(`SELECT id FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.pilgrimId, scope.companyId]);
+      if (!p) throw new NotFoundError("المعتمر غير موجود");
+    }
+    if (b.agentId) {
+      const [a] = await rawQuery<any>(`SELECT id FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.agentId, scope.companyId]);
+      if (!a) throw new NotFoundError("الوكيل غير موجود");
+    }
     const rows = await rawQuery(
       `INSERT INTO umrah_penalties ("companyId","pilgrimId","agentId","seasonId",type,amount,notes,status)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
@@ -1710,11 +1720,11 @@ router.post("/penalties", authorize({ feature: "umrah", action: "create" }), asy
         let pilgrimName = "غير محدد";
         let agentName: string | undefined;
         if (b.pilgrimId) {
-          const [p] = await rawQuery<any>(`SELECT "fullName" FROM umrah_pilgrims WHERE id=$1`, [b.pilgrimId]);
+          const [p] = await rawQuery<any>(`SELECT "fullName" FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2`, [b.pilgrimId, scope.companyId]);
           if (p) pilgrimName = p.fullName;
         }
         if (b.agentId) {
-          const [a] = await rawQuery<any>(`SELECT name FROM umrah_agents WHERE id=$1`, [b.agentId]);
+          const [a] = await rawQuery<any>(`SELECT name FROM umrah_agents WHERE id=$1 AND "companyId"=$2`, [b.agentId, scope.companyId]);
           if (a) agentName = a.name;
         }
         const { umrahEngine } = await import("../lib/engines/index.js");

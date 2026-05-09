@@ -385,7 +385,7 @@ contractsRouter.post("/:id/activate", authorize({ feature: "hr", action: "update
     const [updated] = await rawQuery<any>(
       `UPDATE employee_contracts
        SET "approvalStatus" = 'active', status = 'active', "updatedAt" = NOW()
-       WHERE id = $1 AND "companyId" = $2 RETURNING *`,
+       WHERE id = $1 AND "companyId" = $2 AND "approvalStatus" = 'signed' RETURNING *`,
       [id, scope.companyId]
     );
 
@@ -417,7 +417,7 @@ contractsRouter.post("/:id/terminate", authorize({ feature: "hr", action: "updat
       `UPDATE employee_contracts
        SET status = 'terminated', "approvalStatus" = 'terminated',
            notes = COALESCE($3, notes), "updatedBy" = $2, "updatedAt" = NOW()
-       WHERE id = $1 AND "companyId" = $4 RETURNING *`,
+       WHERE id = $1 AND "companyId" = $4 AND status = 'active' RETURNING *`,
       [id, scope.userId, reason || null, scope.companyId]
     );
 

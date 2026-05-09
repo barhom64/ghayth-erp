@@ -3,7 +3,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
   zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import {
@@ -791,33 +791,35 @@ router.put("/channels", authorize({ feature: "settings", action: "update" }), as
 
     const SECRET_KEYS_PUT = new Set(["sms_auth_token", "whatsapp_access_token"]);
     const allowedKeys = new Set(CHANNEL_SETTING_KEYS);
-    for (const [key, value] of Object.entries(entries)) {
-      if (!allowedKeys.has(key)) continue;
-      if (SECRET_KEYS_PUT.has(key) && value === "__configured__") continue;
+    await withTransaction(async (client) => {
+      for (const [key, value] of Object.entries(entries)) {
+        if (!allowedKeys.has(key)) continue;
+        if (SECRET_KEYS_PUT.has(key) && value === "__configured__") continue;
 
-      if (value === null || value === undefined || value === "") {
-        await rawExecute(
-          `DELETE FROM system_settings WHERE key=$1 AND "companyId"=$2`,
-          [key, scope.companyId]
-        );
-      } else {
-        const existing = await rawQuery(
-          `SELECT id FROM system_settings WHERE key=$1 AND "companyId"=$2`,
-          [key, scope.companyId]
-        );
-        if (existing.length > 0) {
-          await rawExecute(
-            `UPDATE system_settings SET value=$1, "updatedAt"=NOW() WHERE key=$2 AND "companyId"=$3`,
-            [value, key, scope.companyId]
+        if (value === null || value === undefined || value === "") {
+          await client.query(
+            `DELETE FROM system_settings WHERE key=$1 AND "companyId"=$2`,
+            [key, scope.companyId]
           );
         } else {
-          await rawExecute(
-            `INSERT INTO system_settings (key, value, "companyId") VALUES ($1, $2, $3)`,
-            [key, value, scope.companyId]
+          const existing = await client.query(
+            `SELECT id FROM system_settings WHERE key=$1 AND "companyId"=$2`,
+            [key, scope.companyId]
           );
+          if (existing.rows.length > 0) {
+            await client.query(
+              `UPDATE system_settings SET value=$1, "updatedAt"=NOW() WHERE key=$2 AND "companyId"=$3`,
+              [value, key, scope.companyId]
+            );
+          } else {
+            await client.query(
+              `INSERT INTO system_settings (key, value, "companyId") VALUES ($1, $2, $3)`,
+              [key, value, scope.companyId]
+            );
+          }
         }
       }
-    }
+    });
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_channels",

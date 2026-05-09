@@ -710,7 +710,7 @@ router.get("/job-titles", authorize({ feature: "hr", action: "list" }), async (r
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) { res.json({ data: [], total: 0 }); }
+  } catch (err) { logger.error(err, "job-titles query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.get("/documents", authorize({ feature: "hr", action: "list" }), async (req, res) => {

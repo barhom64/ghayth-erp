@@ -862,7 +862,7 @@ router.post("/memos/:id/cancel", authorize({ feature: "hr", action: "update" }),
       onApply: async (_row, _client) => {
         // إذا كان مرتبطاً بمخالفة، نُلغي ربطها
         if (memo.violationId) {
-          await rawExecute(
+          await _client.query(
             `UPDATE employee_violations SET status = 'cancelled'
               WHERE id = $1 AND "companyId" = $2 AND status IN ('pending', 'under_review') AND "deletedAt" IS NULL`,
             [memo.violationId, scope.companyId]
@@ -958,7 +958,7 @@ router.post("/memos/:id/appeal-decision", authorize({ feature: "hr.discipline", 
       after: { status: newStatus, decision, comment, memoNumber: memo.memoNumber },
       onApply: async (_row, _client) => {
         if (decision === "accepted" && memo.violationId) {
-          await rawExecute(
+          await _client.query(
             `UPDATE employee_violations SET status = 'appeal_accepted' WHERE id = $1 AND "companyId" = $2 AND status = 'approved' AND "deletedAt" IS NULL`,
             [memo.violationId, scope.companyId]
           );
@@ -1013,7 +1013,7 @@ router.post("/memos/:id/close", authorize({ feature: "hr", action: "update" }), 
       after: { status: "closed", previousStatus: memo.status, memoNumber: memo.memoNumber },
       onApply: async (_row, _client) => {
         if (memo.violationId) {
-          await rawExecute(
+          await _client.query(
             `UPDATE employee_violations SET status = 'closed' WHERE id = $1 AND "companyId" = $2 AND status IN ('approved', 'rejected', 'appeal_accepted', 'cancelled') AND "deletedAt" IS NULL`,
             [memo.violationId, scope.companyId]
           );

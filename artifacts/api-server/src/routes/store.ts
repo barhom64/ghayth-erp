@@ -326,10 +326,12 @@ router.delete("/orders/:id", authorize({ feature: "store", action: "create" }), 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!existing) throw new NotFoundError("الطلب غير موجود");
+    let existing: any;
     await withTransaction(async (client) => {
-      if (existing.status !== "cancelled") {
+      const { rows: [locked] } = await client.query(`SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL FOR UPDATE`, [id, scope.companyId]);
+      if (!locked) throw new NotFoundError("الطلب غير موجود");
+      existing = locked;
+      if (locked.status !== "cancelled") {
         const itemsRes = await client.query(`SELECT "productId", quantity FROM store_order_items WHERE "orderId" = $1`, [id]);
         for (const item of itemsRes.rows) {
           const stockRes = await client.query(`UPDATE store_products SET quantity = quantity + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [item.quantity, item.productId, scope.companyId]);
