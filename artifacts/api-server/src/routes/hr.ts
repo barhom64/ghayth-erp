@@ -507,7 +507,7 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
     if (!shift) {
       const [defaultShift] = await rawQuery<any>(
         `SELECT id, "startTime", "endTime", days, "shiftType", "remoteAllowed", "flexStartEarliest", "flexStartLatest" FROM shifts
-         WHERE "companyId" = $1 AND status = 'active'
+         WHERE "companyId" = $1 AND status = 'active' AND "deletedAt" IS NULL
          ORDER BY "isDefault" DESC LIMIT 1`,
         [scope.companyId]
       );
@@ -853,7 +853,7 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     } else {
       const [defaultShift] = await rawQuery<any>(
         `SELECT "endTime", "startTime" FROM shifts
-         WHERE "companyId" = $1 AND status = 'active'
+         WHERE "companyId" = $1 AND status = 'active' AND "deletedAt" IS NULL
          ORDER BY "isDefault" DESC LIMIT 1`,
         [scope.companyId]
       );
@@ -1120,7 +1120,7 @@ router.get("/attendance/:id", requirePermission("hr:read"), async (req, res) => 
        FROM attendance a
        JOIN employee_assignments ea ON ea.id = a."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
-       WHERE a.id = $1 AND a."companyId" = $2`,
+       WHERE a.id = $1 AND a."companyId" = $2 AND a."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("سجل الحضور غير موجود");
@@ -1745,7 +1745,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
       `SELECT lr.*, lt.name AS "leaveTypeName"
        FROM hr_leave_requests lr
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-       WHERE lr.id = $1 AND lr."companyId" = $2`,
+       WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!request) throw new NotFoundError("الطلب غير موجود");
@@ -2198,7 +2198,7 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
     }
 
     const [request] = await rawQuery<any>(
-      `SELECT * FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
+      `SELECT * FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!request) {
@@ -2876,7 +2876,7 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
       `SELECT m.id, m."memoNumber", m.status, m."appliedPenaltyLabel" AS "penaltyLabel",
               m."appliedDeductionAmount" AS "baseDeductionAmount", m."appliedExtraDeduction", m."createdAt"
        FROM hr_inquiry_memos m
-       WHERE m."violationId" = $1 AND m."companyId" = $2
+       WHERE m."violationId" = $1 AND m."companyId" = $2 AND m."deletedAt" IS NULL
        ORDER BY m."createdAt" DESC`,
       [item.id, scope.companyId]
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
@@ -4039,7 +4039,7 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
       `SELECT lr.*, lt.name AS "leaveTypeName"
        FROM hr_leave_requests lr
        LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-       WHERE lr.id = $1 AND lr."companyId" = $2`,
+       WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!request) throw new NotFoundError("طلب الإجازة غير موجود");
@@ -4119,7 +4119,7 @@ router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req,
     const id = parseId(req.params.id, "id");
     const [leaveReq] = await rawQuery<any>(
       `SELECT lr.id, lr."employeeId", lr."leaveTypeId", lr.days, lr."startDate", lr.status
-       FROM hr_leave_requests lr WHERE lr.id = $1 AND lr."companyId" = $2`,
+       FROM hr_leave_requests lr WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!leaveReq) throw new NotFoundError("طلب الإجازة غير موجود");

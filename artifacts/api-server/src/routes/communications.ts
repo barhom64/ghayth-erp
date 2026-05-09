@@ -426,7 +426,7 @@ router.get("/log", requirePermission("communications:read"), async (req, res): P
     const { channel, direction, limit: lim, offset: off } = req.query as any;
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
-    const conditions = [`"companyId" = $1`];
+    const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (channel) { params.push(channel); conditions.push(`channel = $${params.length}`); }
     if (direction) { params.push(direction); conditions.push(`direction = $${params.length}`); }

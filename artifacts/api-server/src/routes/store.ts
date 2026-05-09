@@ -273,7 +273,7 @@ router.patch("/orders/:id", requirePermission("store:write"), async (req, res) =
 
     const row = await withTransaction(async (client) => {
       const lockRes = await client.query(
-        `SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2 FOR UPDATE`,
+        `SELECT * FROM store_orders WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL FOR UPDATE`,
         [id, scope.companyId]
       );
       const existing = lockRes.rows[0];
