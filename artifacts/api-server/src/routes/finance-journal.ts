@@ -13,6 +13,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import {
   emitEvent,
   createAuditLog,
@@ -361,7 +362,9 @@ journalRouter.post("/expenses/impact-preview", requirePermission("finance:create
   }
 });
 
-journalRouter.post("/expenses", requirePermission("finance:create"), async (req, res) => {
+// RBAC v2: SoD-critical — finance.journal create vs approve are
+// guarded by the seeded `finance_journal_create_approve` SoD rule.
+journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -559,7 +562,7 @@ journalRouter.delete("/expenses/:id", requirePermission("finance:delete"), async
   }
 });
 
-journalRouter.patch("/expenses/:id/approve", requirePermission("finance:update"), async (req, res) => {
+journalRouter.patch("/expenses/:id/approve", authorize({ feature: "finance.journal", action: "approve", resource: { table: "expenses", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
 

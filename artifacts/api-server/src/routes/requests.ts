@@ -185,7 +185,9 @@ router.get("/", requirePermission("requests:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.post("/", requirePermission("requests:write"), async (req, res) => {
+// RBAC v2: requests are also self-service via requests.my (selfService:true)
+// so any employee can create their own request unconditionally.
+router.post("/", authorize({ feature: "requests.my", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createRequestSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -400,7 +402,7 @@ router.get("/:id", authorize({ feature: "requests", action: "view", resource: { 
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
+router.patch("/:id", authorize({ feature: "requests", action: "update", resource: { table: "service_requests", idParam: "id" } }), async (req, res) => {
   try {
     const parsed = zodParse(updateRequestSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -515,7 +517,9 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
   }
 });
 
-router.post("/:id/approve", requirePermission("requests:write"), async (req, res) => {
+// RBAC v2: approval action — approval limit applies if configured on
+// the role for requests:approve.
+router.post("/:id/approve", authorize({ feature: "requests", action: "approve", resource: { table: "service_requests", idParam: "id" } }), async (req, res) => {
   try {
     const parsed = zodParse(approveRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;

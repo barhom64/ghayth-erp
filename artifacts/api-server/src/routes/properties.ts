@@ -2542,7 +2542,7 @@ router.get("/technicians", requirePermission("property:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Technicians error:"); }
 });
 
-router.get("/tenants", requirePermission("property:read"), async (req, res) => {
+router.get("/tenants", authorize({ feature: "properties.tenants", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search } = req.query as any;
@@ -2554,7 +2554,7 @@ router.get("/tenants", requirePermission("property:read"), async (req, res) => {
       `SELECT id, name, phone, email, "nationalId", nationality, "idType", notes, "createdAt" FROM tenants WHERE ${whereClause} ORDER BY name LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Tenants error:"); }
 });
 

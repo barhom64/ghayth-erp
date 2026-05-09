@@ -108,7 +108,7 @@ router.get("/tickets", requirePermission("support:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Support tickets error:"); }
 });
 
-router.post("/tickets", requirePermission("support:create"), async (req, res) => {
+router.post("/tickets", authorize({ feature: "support.tickets", action: "create" }), async (req, res) => {
   // Phase C — Support domain audit, mirror of the HR Step 1 treatment.
   // Adds input validation the old handler lacked, a pre-check on the
   // client FK so a stale clientId produces a clean field-tagged error
@@ -451,7 +451,7 @@ const TICKET_TRANSITIONS: Record<string, readonly string[]> = {
   closed:            [],                           // terminal
 };
 
-router.patch("/tickets/:id", requirePermission("support:write"), async (req, res) => {
+router.patch("/tickets/:id", authorize({ feature: "support.tickets", action: "update", resource: { table: "support_tickets", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const ticketId = parseId(req.params.id, "id");

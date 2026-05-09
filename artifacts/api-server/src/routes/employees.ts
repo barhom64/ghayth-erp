@@ -149,7 +149,9 @@ async function registerEmployeeExpiryObligations(
 
 const router = Router();
 
-router.get("/", requirePermission("hr:read"), async (req, res) => {
+// RBAC v2: list with scope-aware response. maskFields applied so any
+// role-level field policy mass-masks salary/IBAN/etc. across the list.
+router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search = "", page = "1", limit: lim = "20" } = req.query as any;
@@ -207,13 +209,13 @@ router.get("/", requirePermission("hr:read"), async (req, res) => {
       countParams
     );
 
-    res.json({ data: employees, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
+    res.json(maskFields(req, { data: employees, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) }));
   } catch (err) {
     handleRouteError(err, res, "List employees error:");
   }
 });
 
-router.post("/", requirePermission("hr:create"), async (req, res) => {
+router.post("/", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(createEmployeeSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -845,7 +847,7 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
   }
 });
 
-router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
+router.patch("/:id", authorize({ feature: "hr.employees", action: "update", resource: { table: "employees", idParam: "id" } }), async (req, res) => {
   // Step 2 of the HR operational audit — PATCH /employees/:id.
   //
   // Fixes over the old handler:
