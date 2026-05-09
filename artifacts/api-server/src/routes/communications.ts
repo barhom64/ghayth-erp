@@ -405,7 +405,7 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
       return;
     }
     await rawExecute(
-      `UPDATE pbx_calls SET status=$1, "answeredBy"=$2, "updatedAt"=NOW() WHERE id=$3`,
+      `UPDATE pbx_calls SET status=$1, "answeredBy"=$2 WHERE id=$3`,
       [status ?? "in_progress", answeredBy ?? null, call.id]
     );
 
