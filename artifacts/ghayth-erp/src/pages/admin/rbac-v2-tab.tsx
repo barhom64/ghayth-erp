@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Shield, Plus, Save, AlertTriangle, Eye, History, Copy, Layers, EyeOff, DollarSign, ChevronDown, ChevronRight, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { ConditionsEditor } from "./rbac-v2-conditions-editor";
 
 interface Feature {
   feature_key: string;
@@ -42,6 +43,7 @@ interface Grant {
   feature_key: string;
   actions: string[];
   scope: string;
+  conditions?: any;
 }
 
 interface FieldPolicy {
@@ -214,6 +216,7 @@ export function RbacV2Tab() {
           featureKey: g.feature_key,
           actions: g.actions,
           scope: g.scope,
+          conditions: g.conditions ?? null,
         })),
       };
       await apiFetch(`/rbac/v2/roles/${selectedRoleId}/grants`, { method: "PUT", body: JSON.stringify(payload) });
@@ -381,6 +384,7 @@ export function RbacV2Tab() {
                       grants={editingGrants}
                       onToggleAction={toggleAction}
                       onScopeChange={(fk, scope) => updateGrant(fk, { scope })}
+                      onConditionsChange={(fk, conditions) => updateGrant(fk, { conditions })}
                     />
                   </TabsContent>
 
@@ -427,21 +431,22 @@ interface FeatureTreeProps {
   grants: Map<string, Grant>;
   onToggleAction: (feature: Feature, action: string) => void;
   onScopeChange: (featureKey: string, scope: string) => void;
+  onConditionsChange: (featureKey: string, conditions: any) => void;
 }
 
-function FeatureTree({ features, tree, grants, onToggleAction, onScopeChange }: FeatureTreeProps) {
+function FeatureTree({ features, tree, grants, onToggleAction, onScopeChange, onConditionsChange }: FeatureTreeProps) {
   const renderNode = (feature: Feature, depth: number) => {
     const grant = grants.get(feature.feature_key);
     const children = tree.get(feature.feature_key) || [];
     return (
       <div key={feature.feature_key} className="border-b last:border-b-0">
         <div className="grid grid-cols-12 gap-2 items-center py-2 hover:bg-gray-50" style={{ paddingInlineStart: `${depth * 20 + 8}px` }}>
-          <div className="col-span-4 flex items-center gap-2">
+          <div className="col-span-3 flex items-center gap-2">
             <span className="font-medium text-sm">{feature.label_ar}</span>
             {feature.is_self_service && <Badge variant="outline" className="text-xs bg-green-50 text-green-700">خدمة ذاتية</Badge>}
             {feature.is_system_critical && <Badge variant="outline" className="text-xs bg-red-50 text-red-700">حساس</Badge>}
           </div>
-          <div className="col-span-6 flex flex-wrap gap-1">
+          <div className="col-span-5 flex flex-wrap gap-1">
             {feature.available_actions.map((a) => {
               const checked = grant?.actions.includes(a) ?? false;
               return (
@@ -469,6 +474,14 @@ function FeatureTree({ features, tree, grants, onToggleAction, onScopeChange }: 
               </Select>
             )}
           </div>
+          <div className="col-span-2">
+            {grant && (
+              <ConditionsEditor
+                value={grant.conditions || null}
+                onChange={(next) => onConditionsChange(feature.feature_key, next)}
+              />
+            )}
+          </div>
         </div>
         {children.map((c) => renderNode(c, depth + 1))}
       </div>
@@ -479,9 +492,10 @@ function FeatureTree({ features, tree, grants, onToggleAction, onScopeChange }: 
   return (
     <div className="border rounded">
       <div className="grid grid-cols-12 gap-2 items-center py-2 px-2 bg-gray-100 border-b text-xs font-semibold text-gray-600">
-        <div className="col-span-4">الميزة</div>
-        <div className="col-span-6">الإجراءات</div>
+        <div className="col-span-3">الميزة</div>
+        <div className="col-span-5">الإجراءات</div>
         <div className="col-span-2">النطاق</div>
+        <div className="col-span-2">الشروط</div>
       </div>
       {roots.map((r) => renderNode(r, 0))}
     </div>
