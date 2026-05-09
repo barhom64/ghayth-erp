@@ -14,6 +14,7 @@ import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   createNotification,
   emitEvent,
@@ -552,7 +553,18 @@ invoicesRouter.post("/invoices/:id/send", requirePermission("finance:create"), a
   }
 });
 
-invoicesRouter.post("/invoices/:id/approve", requirePermission("finance:approve"), requireOwnership({ table: "invoices", checks: ["company", "branch"] }), async (req, res) => {
+// RBAC v2: enforces approval limits — if the role's
+// rbac_approval_limits.max_amount for finance.invoices.approve is set,
+// invoices whose total exceeds that limit are rejected with
+// APPROVAL_LIMIT_EXCEEDED. The amount is pulled from the invoice's
+// `total` column directly, not from the request body, so callers
+// cannot bypass it by sending a smaller amount.
+invoicesRouter.post("/invoices/:id/approve", authorize({
+  feature: "finance.invoices",
+  action: "approve",
+  resource: { table: "invoices", idParam: "id", columns: ['"companyId"', '"branchId"', '"departmentId"', '"createdBy"', 'total'] },
+  amount: { from: "resource", field: "total", currency: "SAR" },
+}), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -765,7 +777,9 @@ invoicesRouter.post("/invoices/:id/payment", requirePermission("finance:create")
   }
 });
 
-invoicesRouter.get("/invoices/:id", requirePermission("finance:read"), async (req, res) => {
+// RBAC v2: scope check on invoice + field masking. Roles can mask
+// sensitive fields like amount/vatAmount/discount via field policies.
+invoicesRouter.get("/invoices/:id", authorize({ feature: "finance.invoices", action: "view", resource: { table: "invoices", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -785,7 +799,7 @@ invoicesRouter.get("/invoices/:id", requirePermission("finance:read"), async (re
       rawQuery<any>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE $2 AND jl."accountCode" = '1100' AND jl.debit > 0 GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `PAY-${invoice.ref}%`]),
       rawQuery<any>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND (je.ref LIKE $2 OR je.ref LIKE $3) ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `JE-${invoice.ref}%`, `PAY-${invoice.ref}%`]),
     ]);
-    res.json({ ...invoice, lines, payments, journalEntries });
+    res.json(maskFields(req, { ...invoice, lines, payments, journalEntries }));
   } catch (err) {
     handleRouteError(err, res, "Invoice detail error:");
   }
