@@ -611,7 +611,8 @@ router.patch("/vehicles/:id", requirePermission("fleet:update"), async (req, res
     }
 
     params.push(id, scope.companyId);
-    await rawExecute(`UPDATE fleet_vehicles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE fleet_vehicles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
@@ -685,7 +686,8 @@ router.delete("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "d
       throw new ConflictError("لا يمكن حذف المركبة — توجد صيانة قيد التنفيذ", { field: "status", fix: "أكمل أو ألغِ سجل الصيانة قبل حذف المركبة" });
     }
 
-    await rawExecute(`UPDATE fleet_vehicles SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE fleet_vehicles SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
 
     emitEvent({
       companyId: scope.companyId,
@@ -780,7 +782,8 @@ router.patch("/drivers/:id", requirePermission("fleet:update"), async (req, res)
     }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id);
-    await rawExecute(`UPDATE fleet_drivers SET ${sets.join(",")} WHERE id=$${params.length} AND "companyId"=$${params.length + 1} AND "deletedAt" IS NULL`, [...params, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE fleet_drivers SET ${sets.join(",")} WHERE id=$${params.length} AND "companyId"=$${params.length + 1} AND "deletedAt" IS NULL`, [...params, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
@@ -829,7 +832,8 @@ router.delete("/drivers/:id", authorize({ feature: "fleet", action: "delete", re
       throw new ConflictError("لا يمكن حذف السائق — توجد رحلة نشطة مسندة إليه", { field: "status", fix: "أنهِ أو ألغِ الرحلة النشطة قبل حذف السائق" });
     }
 
-    await rawExecute(`UPDATE fleet_drivers SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE fleet_drivers SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
 
     emitEvent({
       companyId: scope.companyId,
@@ -1058,10 +1062,12 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       const tripId = tripResult.rows[0]?.id;
 
       if (selectedVehicleId) {
-        await client.query(`UPDATE fleet_vehicles SET status='in_use', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='available' AND "deletedAt" IS NULL`, [selectedVehicleId, scope.companyId]);
+        const vResult = await client.query(`UPDATE fleet_vehicles SET status='in_use', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='available' AND "deletedAt" IS NULL`, [selectedVehicleId, scope.companyId]);
+        if (!vResult.rowCount) throw new NotFoundError("المركبة غير موجودة أو حالتها غير مناسبة");
       }
       if (selectedDriverId) {
-        await client.query(`UPDATE fleet_drivers SET status='on_trip' WHERE id=$1 AND "companyId"=$2 AND status='available' AND "deletedAt" IS NULL`, [selectedDriverId, scope.companyId]);
+        const dResult = await client.query(`UPDATE fleet_drivers SET status='on_trip' WHERE id=$1 AND "companyId"=$2 AND status='available' AND "deletedAt" IS NULL`, [selectedDriverId, scope.companyId]);
+        if (!dResult.rowCount) throw new NotFoundError("السائق غير موجود أو حالته غير مناسبة");
       }
 
       return tripId;
@@ -1152,10 +1158,12 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
       setExtras: { endTime: { raw: "NOW()" }, distance: actualDistanceKm, cost: totalCost },
       onApply: async (_row, client) => {
         if (trip.vehicleId) {
-          await client.query(`UPDATE fleet_vehicles SET status='available', "currentMileage"="currentMileage"+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status='in_use' AND "deletedAt" IS NULL`, [actualDistanceKm, trip.vehicleId, scope.companyId]);
+          const vRes = await client.query(`UPDATE fleet_vehicles SET status='available', "currentMileage"="currentMileage"+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status='in_use' AND "deletedAt" IS NULL`, [actualDistanceKm, trip.vehicleId, scope.companyId]);
+          if (!vRes.rowCount) logger.warn({ vehicleId: trip.vehicleId }, "trip complete: vehicle status reset affected 0 rows");
         }
         if (trip.driverId) {
-          await client.query(`UPDATE fleet_drivers SET status='available', "totalTrips"=COALESCE("totalTrips",0)+1 WHERE id=$1 AND "companyId"=$2 AND status='on_trip' AND "deletedAt" IS NULL`, [trip.driverId, scope.companyId]);
+          const dRes = await client.query(`UPDATE fleet_drivers SET status='available', "totalTrips"=COALESCE("totalTrips",0)+1 WHERE id=$1 AND "companyId"=$2 AND status='on_trip' AND "deletedAt" IS NULL`, [trip.driverId, scope.companyId]);
+          if (!dRes.rowCount) logger.warn({ driverId: trip.driverId }, "trip complete: driver status reset affected 0 rows");
         }
       },
     });
