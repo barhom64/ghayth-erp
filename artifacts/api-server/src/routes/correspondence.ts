@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
@@ -255,29 +255,33 @@ correspondenceRouter.post("/:id/respond", authorize({ feature: "communications",
     const responseDirection = original.direction === "outgoing" ? "incoming" : "outgoing";
     const responseRef = await generateCorrespondenceRef(responseDirection as "outgoing" | "incoming", scope.companyId);
 
-    const [response] = await rawQuery<any>(
-      `INSERT INTO correspondence (
-        "companyId", "branchId", direction, ref, subject, content,
-        "entityType", "entityId",
-        "senderName", "senderOrg", "recipientName", "recipientOrg",
-        channel, status, "responseRef", notes, "createdBy"
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'draft',$14,$15,$16)
-      RETURNING *`,
-      [
-        scope.companyId, original.branchId, responseDirection, responseRef,
-        subject || `رد: ${original.subject}`, content || null,
-        original.entityType, original.entityId,
-        original.recipientName, original.recipientOrg,
-        original.senderName, original.senderOrg,
-        original.channel, original.ref,
-        notes || null, scope.userId,
-      ]
-    );
+    const response = await withTransaction(async (client) => {
+      const insertRes = await client.query(
+        `INSERT INTO correspondence (
+          "companyId", "branchId", direction, ref, subject, content,
+          "entityType", "entityId",
+          "senderName", "senderOrg", "recipientName", "recipientOrg",
+          channel, status, "responseRef", notes, "createdBy"
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'draft',$14,$15,$16)
+        RETURNING *`,
+        [
+          scope.companyId, original.branchId, responseDirection, responseRef,
+          subject || `رد: ${original.subject}`, content || null,
+          original.entityType, original.entityId,
+          original.recipientName, original.recipientOrg,
+          original.senderName, original.senderOrg,
+          original.channel, original.ref,
+          notes || null, scope.userId,
+        ]
+      );
 
-    await rawExecute(
-      `UPDATE correspondence SET "respondedAt" = NOW(), "responseRef" = $2, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $3`,
-      [id, responseRef, scope.companyId]
-    );
+      await client.query(
+        `UPDATE correspondence SET "respondedAt" = NOW(), "responseRef" = $2, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $3`,
+        [id, responseRef, scope.companyId]
+      );
+
+      return insertRes.rows[0];
+    });
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "correspondence_response", entity: "correspondence", entityId: response.id, after: {
       responseRef, originalRef: original.ref,

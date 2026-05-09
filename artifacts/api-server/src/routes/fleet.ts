@@ -975,8 +975,8 @@ router.post("/trips", authorize({ feature: "fleet", action: "create" }), async (
     if (!selectedDriverId) {
       const drivers = await rawQuery<any>(
         `SELECT d.*,
-                (SELECT COUNT(*) FROM fleet_trips WHERE "driverId"=d.id AND status='completed') AS "tripCount",
-                (SELECT COUNT(*) FROM fleet_trips WHERE "driverId"=d.id AND status='in_progress') AS "activeTrips",
+                (SELECT COUNT(*) FROM fleet_trips WHERE "driverId"=d.id AND status='completed' AND "deletedAt" IS NULL) AS "tripCount",
+                (SELECT COUNT(*) FROM fleet_trips WHERE "driverId"=d.id AND status='in_progress' AND "deletedAt" IS NULL) AS "activeTrips",
                 COALESCE(d.rating, 3) AS "driverRating"
          FROM fleet_drivers d
          WHERE d."companyId"=$1 AND d.status='available'

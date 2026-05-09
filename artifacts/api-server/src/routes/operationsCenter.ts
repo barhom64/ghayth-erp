@@ -242,7 +242,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         params
       );
       const [activeTrips] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM fleet_trips WHERE ${where} AND status='in_progress'`,
+        `SELECT COUNT(*) AS total FROM fleet_trips WHERE ${where} AND status='in_progress' AND "deletedAt" IS NULL`,
         params
       ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; });
       const needServiceVal = Number(vehicleStats?.needService ?? 0);

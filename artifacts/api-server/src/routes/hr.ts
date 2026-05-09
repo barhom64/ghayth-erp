@@ -3631,7 +3631,7 @@ router.get("/payroll-summary", authorize({ feature: "hr", action: "list" }), asy
 
     const data = Array.from(empMap.values());
     res.json({ data, total: data.length, period: targetPeriod });
-  } catch (err) { res.json({ data: [], total: 0 }); }
+  } catch (err) { logger.error(err, "payslip-preview query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.get("/violations-stats", authorize({ feature: "hr", action: "list" }), async (req, res) => {
@@ -5749,7 +5749,7 @@ router.get("/delegations", authorize({ feature: "hr", action: "list" }), async (
       [scope.companyId]
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     res.json({ data: rows, total: rows.length });
-  } catch (err) { res.json({ data: [], total: 0 }); }
+  } catch (err) { logger.error(err, "delegations query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.post("/delegations", authorize({ feature: "hr", action: "approve" }), async (req, res) => {

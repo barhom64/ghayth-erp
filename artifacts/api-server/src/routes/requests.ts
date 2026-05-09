@@ -787,62 +787,6 @@ router.post("/:id/convert", authorize({ feature: "requests", action: "create" })
     let createdId: number | null = null;
     let targetEndpoint = "";
 
-    if (targetType === "maintenance") {
-      const { supportEngine } = await import("../lib/engines/index.js");
-      const { insertId } = await supportEngine.createTicket({
-        companyId: scope.companyId,
-        title: `صيانة: ${request.title}`,
-        description: request.description || request.title,
-        priority: request.priority || "medium",
-      });
-      createdId = insertId;
-      targetEndpoint = `/support/${insertId}`;
-    } else if (targetType === "purchase") {
-      const { financialEngine } = await import("../lib/engines/index.js");
-      const { insertId } = await financialEngine.createPurchaseOrder({
-        companyId: scope.companyId,
-        ref: `PO-REQ-${id}`,
-        description: request.title + (request.description ? `: ${request.description}` : ""),
-        requestedBy: scope.userId,
-      });
-      createdId = insertId;
-      targetEndpoint = `/finance/purchase-orders/${insertId}`;
-    } else if (targetType === "case") {
-      const legalResp = await getLegalResponsible(scope.companyId);
-      const { legalEngine } = await import("../lib/engines/index.js");
-      const { insertId } = await legalEngine.createCase({
-        companyId: scope.companyId,
-        title: `قضية: ${request.title}`,
-        description: request.description || request.title,
-        priority: request.priority || "medium",
-        caseType: "civil",
-        lawyerName: legalResp?.employeeName ?? null,
-      });
-      createdId = insertId;
-      targetEndpoint = `/legal/cases/${insertId}`;
-      if (legalResp?.assignmentId) {
-        await createNotification({
-          companyId: scope.companyId,
-          assignmentId: legalResp.assignmentId,
-          type: "legal_case_created",
-          title: "قضية قانونية جديدة",
-          body: `تم إنشاء قضية جديدة من طلب رقم ${id}: ${request.title}`,
-          priority: "high",
-          refType: "legal_case",
-          refId: insertId,
-        }).catch((e) => logger.error(e, "requests background task failed"));
-      }
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: "legal.case.created",
-        entity: "legal_case",
-        entityId: insertId,
-        after: { title: `قضية: ${request.title}`, lawyerName: legalResp?.employeeName ?? null, sourceRequestId: id },
-      }).catch((e) => logger.error(e, "requests background task failed"));
-    }
-
     const updated = await applyTransition({
       entity: "requests",
       id,
@@ -851,13 +795,72 @@ router.post("/:id/convert", authorize({ feature: "requests", action: "create" })
       fromStates: ["approved"],
       toState: "closed",
       setExtras: {
-        convertedTo: createdId,
         convertedType: targetType,
         closedAt: { raw: "NOW()" },
         closedBy: scope.userId,
       },
-      after: { convertedTo: createdId, convertedType: targetType },
+      after: { convertedType: targetType },
       onApply: async (_row, client) => {
+        if (targetType === "maintenance") {
+          const { supportEngine } = await import("../lib/engines/index.js");
+          const { insertId } = await supportEngine.createTicket({
+            companyId: scope.companyId,
+            title: `صيانة: ${request.title}`,
+            description: request.description || request.title,
+            priority: request.priority || "medium",
+          });
+          createdId = insertId;
+          targetEndpoint = `/support/${insertId}`;
+        } else if (targetType === "purchase") {
+          const { financialEngine } = await import("../lib/engines/index.js");
+          const { insertId } = await financialEngine.createPurchaseOrder({
+            companyId: scope.companyId,
+            ref: `PO-REQ-${id}`,
+            description: request.title + (request.description ? `: ${request.description}` : ""),
+            requestedBy: scope.userId,
+          });
+          createdId = insertId;
+          targetEndpoint = `/finance/purchase-orders/${insertId}`;
+        } else if (targetType === "case") {
+          const legalResp = await getLegalResponsible(scope.companyId);
+          const { legalEngine } = await import("../lib/engines/index.js");
+          const { insertId } = await legalEngine.createCase({
+            companyId: scope.companyId,
+            title: `قضية: ${request.title}`,
+            description: request.description || request.title,
+            priority: request.priority || "medium",
+            caseType: "civil",
+            lawyerName: legalResp?.employeeName ?? null,
+          });
+          createdId = insertId;
+          targetEndpoint = `/legal/cases/${insertId}`;
+          if (legalResp?.assignmentId) {
+            await createNotification({
+              companyId: scope.companyId,
+              assignmentId: legalResp.assignmentId,
+              type: "legal_case_created",
+              title: "قضية قانونية جديدة",
+              body: `تم إنشاء قضية جديدة من طلب رقم ${id}: ${request.title}`,
+              priority: "high",
+              refType: "legal_case",
+              refId: insertId,
+            }).catch((e) => logger.error(e, "requests background task failed"));
+          }
+          emitEvent({
+            companyId: scope.companyId,
+            branchId: scope.branchId,
+            userId: scope.userId,
+            action: "legal.case.created",
+            entity: "legal_case",
+            entityId: insertId,
+            after: { title: `قضية: ${request.title}`, lawyerName: legalResp?.employeeName ?? null, sourceRequestId: id },
+          }).catch((e) => logger.error(e, "requests background task failed"));
+        }
+
+        await client.query(
+          `UPDATE requests SET "convertedTo" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [createdId, id, scope.companyId]
+        );
         await client.query(
           `INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('request',$1,'converted',$2,$3,$4)`,
           [id, `تحويل إلى: ${targetType} (معرف: ${createdId})`, scope.userId, scope.companyId]
