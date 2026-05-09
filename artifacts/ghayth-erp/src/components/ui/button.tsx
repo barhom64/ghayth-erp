@@ -49,47 +49,31 @@ export interface ButtonProps
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
   /**
-   * Task #155 — when true, the button subscribes to the global
-   * rate-limit cooldown and:
+   * When true, the button subscribes to the global rate-limit cooldown and:
    *   • disables itself while the cooldown is active
    *   • replaces its children with "حاول بعد N ثانية…" (with a Clock
    *     icon) so the user sees exactly when they may retry
    * Cleared automatically when the countdown reaches zero. This is the
    * one-line opt-in for high-traffic save / search / submit buttons
    * across finance / hr / properties / fleet pages.
+   *
+   * Implementation note: rendered through one of two thin sibling
+   * components (RateLimitAwareNativeButton, RateLimitAwareSlotButton)
+   * depending on `asChild`, so non-opted-in buttons pay zero subscription
+   * cost and don't re-render every cooldown tick. Splitting by render
+   * mode keeps both branches strictly typed without `as any` casts.
    */
   rateLimitAware?: boolean
 }
 
-/**
- * Inner variant that subscribes to the rate-limit cooldown. Rendered
- * only when `rateLimitAware` is set, so non-opted-in buttons pay no
- * subscription cost and aren't re-rendered every cooldown tick.
- */
-const RateLimitAwareButton = React.forwardRef<
+const RateLimitAwareNativeButton = React.forwardRef<
   HTMLButtonElement,
-  Omit<ButtonProps, "rateLimitAware"> & { Comp: typeof Slot | "button" }
->(({ className, variant, size, Comp, disabled, children, ...props }, ref) => {
+  Omit<ButtonProps, "rateLimitAware" | "asChild">
+>(({ className, variant, size, disabled, children, ...props }, ref) => {
   const cooldown = useRateLimitCooldown()
   const cooling = cooldown.isCoolingDown
-  if (Comp !== "button") {
-    // Slot mode forwards props onto its single child element. Pass
-    // `disabled` through `aria-disabled` since Slot doesn't accept it
-    // as a typed prop, but child elements (links/buttons) will still
-    // receive it via spread.
-    return (
-      <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref}
-        {...(props as any)}
-        {...({ disabled: disabled || cooling } as any)}
-      >
-        {children}
-      </Comp>
-    )
-  }
   return (
-    <Comp
+    <button
       className={cn(buttonVariants({ variant, size, className }))}
       ref={ref}
       disabled={disabled || cooling}
@@ -103,26 +87,55 @@ const RateLimitAwareButton = React.forwardRef<
       ) : (
         children
       )}
-    </Comp>
+    </button>
   )
 })
-RateLimitAwareButton.displayName = "RateLimitAwareButton"
+RateLimitAwareNativeButton.displayName = "RateLimitAwareNativeButton"
+
+const RateLimitAwareSlotButton = React.forwardRef<
+  HTMLElement,
+  Omit<ButtonProps, "rateLimitAware" | "asChild">
+>(({ className, variant, size, disabled, children, ...props }, ref) => {
+  const cooldown = useRateLimitCooldown()
+  const cooling = cooldown.isCoolingDown
+  return (
+    <Slot
+      className={cn(buttonVariants({ variant, size, className }))}
+      ref={ref}
+      aria-disabled={disabled || cooling || undefined}
+      {...props}
+    >
+      {children}
+    </Slot>
+  )
+})
+RateLimitAwareSlotButton.displayName = "RateLimitAwareSlotButton"
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, rateLimitAware = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button"
     if (rateLimitAware) {
+      if (asChild) {
+        return (
+          <RateLimitAwareSlotButton
+            className={className}
+            variant={variant}
+            size={size}
+            ref={ref as React.Ref<HTMLElement>}
+            {...props}
+          />
+        )
+      }
       return (
-        <RateLimitAwareButton
+        <RateLimitAwareNativeButton
           className={className}
           variant={variant}
           size={size}
-          Comp={Comp}
           ref={ref}
           {...props}
         />
       )
     }
+    const Comp = asChild ? Slot : "button"
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
