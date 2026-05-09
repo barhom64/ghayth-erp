@@ -2522,6 +2522,14 @@ async function weeklyDataCleanup(): Promise<string> {
   ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
   cleaned += oldNotifLogs;
 
+  // user_activity_log fills up fast (every page-view + action gets a row).
+  // 90 days is enough for behavioural-intelligence and proactive analytics;
+  // older rows would only inflate the table without analytical value.
+  const { affectedRows: oldActivityLogs } = await rawExecute(
+    `DELETE FROM user_activity_log WHERE "createdAt" < NOW() - INTERVAL '90 days'`
+  ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
+  cleaned += oldActivityLogs;
+
   try {
     await rawExecute(
       `INSERT INTO audit_archive SELECT * FROM event_logs WHERE "createdAt" < NOW() - INTERVAL '365 days'
