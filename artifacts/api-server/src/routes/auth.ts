@@ -447,16 +447,24 @@ router.post("/change-password", authMiddleware, changePasswordLimiter, async (re
     const valid = await verifyPassword(currentPassword, user.passwordHash);
     if (!valid) { throw new ForbiddenError("كلمة المرور الحالية غير صحيحة"); }
     const hashed = await hashPassword(newPassword);
-    const { affectedRows } = await rawExecute(`UPDATE users SET "passwordHash"=$1 WHERE id=$2`, [hashed, scope.userId]);
-    if (!affectedRows) throw new NotFoundError("المستخدم غير موجود");
-    try {
-      await rawExecute(
-        `UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE "userId"=$1 AND "revokedAt" IS NULL`,
-        [scope.userId]
+
+    // Atomic: rotate password AND revoke existing refresh tokens together.
+    // Previously the revoke ran in fire-and-forget try/catch; if it failed
+    // (DB blip mid-request) the password was changed but old tokens stayed
+    // valid — a security regression masked by a "success" response. Wrap
+    // both in a single transaction so they commit or roll back together.
+    await withTransaction(async (client) => {
+      const { rowCount: passwordUpdated } = await client.query(
+        `UPDATE users SET "passwordHash"=$1 WHERE id=$2`,
+        [hashed, scope.userId],
       );
-    } catch (revokeErr) {
-      logger.error({ err: revokeErr, userId: scope.userId }, "Failed to revoke refresh tokens after password change");
-    }
+      if (!passwordUpdated) throw new NotFoundError("المستخدم غير موجود");
+      await client.query(
+        `UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE "userId"=$1 AND "revokedAt" IS NULL`,
+        [scope.userId],
+      );
+    });
+
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "password_change", entity: "users", entityId: scope.userId,

@@ -366,9 +366,21 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, authorize({ featu
     const parsed = zodParse(resetPasswordSchema.safeParse(req.body));
     const { newPassword } = parsed;
     const hashed = await hashPassword(newPassword);
-    const result = await rawExecute(`UPDATE users SET "passwordHash"=$1 WHERE id=$2`, [hashed, id]);
-    if (result.affectedRows === 0) { throw new NotFoundError("المستخدم غير موجود"); }
-    await rawExecute(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`, [id]);
+    // Atomic: rotate password AND revoke existing refresh tokens together.
+    // Same reasoning as /auth/change-password — half-applied state would
+    // leave old tokens valid after a forced password reset, defeating the
+    // point of the reset.
+    await withTransaction(async (client) => {
+      const { rowCount: passwordUpdated } = await client.query(
+        `UPDATE users SET "passwordHash"=$1 WHERE id=$2`,
+        [hashed, id],
+      );
+      if (!passwordUpdated) throw new NotFoundError("المستخدم غير موجود");
+      await client.query(
+        `UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`,
+        [id],
+      );
+    });
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "password_reset", entity: "users", entityId: id,
