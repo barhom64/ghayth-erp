@@ -3,6 +3,7 @@ import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
+import { buildScopedWhere } from "../lib/scopedQuery.js";
 
 const router = Router();
 
@@ -18,27 +19,32 @@ router.get("/", authorize({ feature: "admin.audit", action: "view" }), async (re
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
-    const conditions = [`al."companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const { where: scopeWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      {},
+      { companyColumn: 'al."companyId"', disableBranchScope: true }
+    );
+    const conditions = [scopeWhere];
+    let paramIdx = nextParamIndex;
 
-    if (entityType) { params.push(String(entityType)); conditions.push(`al.entity = $${params.length}`); }
-    if (entityId) { params.push(String(entityId)); conditions.push(`al."entityId" = $${params.length}`); }
+    if (entityType) { params.push(String(entityType)); conditions.push(`al.entity = $${paramIdx++}`); }
+    if (entityId) { params.push(String(entityId)); conditions.push(`al."entityId" = $${paramIdx++}`); }
     if (action) {
       params.push(String(action));
-      const actionIdx = params.length;
+      const actionIdx = paramIdx++;
       params.push(`%.${String(action)}`);
-      const likeIdx = params.length;
+      const likeIdx = paramIdx++;
       conditions.push(`(al.action = $${actionIdx} OR al.action LIKE $${likeIdx})`);
     }
-    if (userId) { params.push(Number(userId) || 0); conditions.push(`al."userId" = $${params.length}`); }
-    if (dateFrom) { params.push(String(dateFrom)); conditions.push(`al."createdAt" >= $${params.length}::timestamptz`); }
-    if (dateTo) { params.push(String(dateTo) + "T23:59:59Z"); conditions.push(`al."createdAt" <= $${params.length}::timestamptz`); }
+    if (userId) { params.push(Number(userId) || 0); conditions.push(`al."userId" = $${paramIdx++}`); }
+    if (dateFrom) { params.push(String(dateFrom)); conditions.push(`al."createdAt" >= $${paramIdx++}::timestamptz`); }
+    if (dateTo) { params.push(String(dateTo) + "T23:59:59Z"); conditions.push(`al."createdAt" <= $${paramIdx++}::timestamptz`); }
 
     const where = conditions.join(" AND ");
     params.push(perPage);
-    const limitIdx = params.length;
+    const limitIdx = paramIdx++;
     params.push(offset);
-    const offsetIdx = params.length;
+    const offsetIdx = paramIdx++;
 
     const rows = await rawQuery<any>(
       `SELECT al.id, al."companyId", al."branchId", al."userId", al.action, al.entity, al."entityId",
