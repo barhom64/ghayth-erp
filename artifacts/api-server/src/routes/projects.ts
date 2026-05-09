@@ -938,7 +938,7 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
       }
     });
 
-    const [row] = await rawQuery<any>(`SELECT * FROM project_tasks WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT pt.* FROM project_tasks pt JOIN projects p ON p.id=pt."projectId" WHERE pt.id=$1 AND p."companyId"=$2 AND pt."deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     if (b.assigneeId) {
       const [assigneeAssignment] = await rawQuery<any>(
