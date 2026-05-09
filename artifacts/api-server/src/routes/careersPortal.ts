@@ -164,15 +164,18 @@ router.post("/auth/login", portalLimiter, async (req: Request, res: Response) =>
 
 router.get("/jobs", portalLimiter, async (_req: Request, res: Response) => {
   try {
+    const companyId = Number(_req.query.companyId) || 0;
+    if (!companyId) { res.json({ data: [] }); return; }
     const rows = await rawQuery(
       `SELECT id, title, department, location, type, description, requirements,
               "salaryMin", "salaryMax", status, "closingDate", "createdAt"
        FROM job_postings
-       WHERE status = 'open'
+       WHERE "companyId" = $1 AND status = 'open'
          AND "deletedAt" IS NULL
          AND ("isPublic" IS NULL OR "isPublic" = true)
          AND ("closingDate" IS NULL OR "closingDate" >= CURRENT_DATE)
-       ORDER BY "createdAt" DESC LIMIT 500`
+       ORDER BY "createdAt" DESC LIMIT 500`,
+      [companyId]
     );
     res.json({ data: rows });
   } catch (err) {
@@ -187,8 +190,8 @@ router.get("/jobs/:id", portalLimiter, async (req: Request, res: Response) => {
       `SELECT id, title, department, location, type, description, requirements,
               "salaryMin", "salaryMax", status, "closingDate", "createdAt"
        FROM job_postings
-       WHERE id = $1 AND status = 'open' AND "deletedAt" IS NULL`,
-      [id]
+       WHERE id = $1 AND "companyId" = $2 AND status = 'open' AND "deletedAt" IS NULL`,
+      [id, Number(req.query.companyId) || 0]
     );
     if (rows.length === 0) {
       throw new NotFoundError("الوظيفة غير موجودة");

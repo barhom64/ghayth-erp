@@ -2233,14 +2233,6 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
       );
     }
 
-    // Stage has expired – mark it and escalate
-    await rawExecute(
-      `UPDATE leave_approval_stages
-       SET status = 'escalated'
-       WHERE "leaveRequestId" = $1 AND status = 'pending' AND "expiresAt" < NOW()`,
-      [id]
-    );
-
     const [hrAssignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments
        WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active'
@@ -2250,11 +2242,18 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
     if (hrAssignment) {
       const escalateExpiresAt = new Date();
       escalateExpiresAt.setHours(escalateExpiresAt.getHours() + 24);
-      await rawExecute(
-        `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
-         VALUES ($1,99,'hr_manager',$2,$3)`,
-        [id, hrAssignment.id, escalateExpiresAt.toISOString()]
-      );
+      await withTransaction(async (client) => {
+        await client.query(
+          `UPDATE leave_approval_stages SET status = 'escalated'
+           WHERE "leaveRequestId" = $1 AND status = 'pending' AND "expiresAt" < NOW()`,
+          [id]
+        );
+        await client.query(
+          `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
+           VALUES ($1,99,'hr_manager',$2,$3)`,
+          [id, hrAssignment.id, escalateExpiresAt.toISOString()]
+        );
+      });
 
       createNotification({
         companyId: scope.companyId, assignmentId: hrAssignment.id,
@@ -3052,17 +3051,21 @@ router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
     }
     const effectiveRemote = remoteAllowed ?? (effectiveShiftType === 'remote');
 
-    if (isDefault) {
-      await rawExecute(`UPDATE shifts SET "isDefault" = false WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [scope.companyId]);
-    }
-    const { insertId } = await rawExecute(
-      `INSERT INTO shifts ("companyId","branchId",name,"startTime","endTime",days,"isDefault",status,"shiftType","remoteAllowed","splitBreakStart","splitBreakEnd","flexStartEarliest","flexStartLatest")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,$10,$11,$12,$13)`,
-      [scope.companyId, effectiveBranchId, String(name).trim(), startTime ?? null, endTime ?? null, days ?? "0,1,2,3,4", isDefault ?? false,
-       effectiveShiftType, effectiveRemote,
-       splitBreakStart || null, splitBreakEnd || null,
-       flexStartEarliest || null, flexStartLatest || null]
-    );
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      if (isDefault) {
+        await client.query(`UPDATE shifts SET "isDefault" = false WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [scope.companyId]);
+      }
+      const result = await client.query(
+        `INSERT INTO shifts ("companyId","branchId",name,"startTime","endTime",days,"isDefault",status,"shiftType","remoteAllowed","splitBreakStart","splitBreakEnd","flexStartEarliest","flexStartLatest")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,$10,$11,$12,$13) RETURNING id`,
+        [scope.companyId, effectiveBranchId, String(name).trim(), startTime ?? null, endTime ?? null, days ?? "0,1,2,3,4", isDefault ?? false,
+         effectiveShiftType, effectiveRemote,
+         splitBreakStart || null, splitBreakEnd || null,
+         flexStartEarliest || null, flexStartLatest || null]
+      );
+      insertId = result.rows[0].id;
+    });
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "shifts", entityId: insertId,
@@ -3743,7 +3746,6 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
     if (b.flexStartEarliest !== undefined) { params.push(b.flexStartEarliest); sets.push(`"flexStartEarliest"=$${params.length}`); }
     if (b.flexStartLatest !== undefined) { params.push(b.flexStartLatest); sets.push(`"flexStartLatest"=$${params.length}`); }
     if (b.isDefault !== undefined) {
-      if (b.isDefault) await rawExecute(`UPDATE shifts SET "isDefault"=false WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]);
       params.push(b.isDefault); sets.push(`"isDefault"=$${params.length}`);
     }
     if (sets.length === 0) {
@@ -3751,7 +3753,10 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
     }
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    await withTransaction(async (client) => {
+      if (b.isDefault) await client.query(`UPDATE shifts SET "isDefault"=false WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]);
+      await client.query(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    });
     const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -5402,21 +5407,24 @@ router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:crea
       throw new ForbiddenError("أنت لست ضمن المقيِّمين المعينين لهذه الدورة");
     }
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO peer_evaluations ("cycleId","companyId","evaluatorId","employeeId","evaluatorRole","overallScore",scores,comments)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-       ON CONFLICT ("cycleId","evaluatorId") DO UPDATE SET
-         "evaluatorRole"=$5,"overallScore"=$6,scores=$7,comments=$8`,
-      [cycleId, scope.companyId, evaluatorId, cycle.employeeId, evaluatorRole, overallScore,
-       scores ? JSON.stringify(scores) : null, comments ?? null]
-    );
-
-    // Mark participant as submitted — no participant record is valid for HR/manager paths
-    await rawExecute(
-      `UPDATE evaluation_participants SET "hasSubmitted"=true,"submittedAt"=NOW()
-       WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
-      [cycleId, evaluatorId]
-    );
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const result = await client.query(
+        `INSERT INTO peer_evaluations ("cycleId","companyId","evaluatorId","employeeId","evaluatorRole","overallScore",scores,comments)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT ("cycleId","evaluatorId") DO UPDATE SET
+           "evaluatorRole"=$5,"overallScore"=$6,scores=$7,comments=$8
+         RETURNING id`,
+        [cycleId, scope.companyId, evaluatorId, cycle.employeeId, evaluatorRole, overallScore,
+         scores ? JSON.stringify(scores) : null, comments ?? null]
+      );
+      insertId = result.rows[0].id;
+      await client.query(
+        `UPDATE evaluation_participants SET "hasSubmitted"=true,"submittedAt"=NOW()
+         WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
+        [cycleId, evaluatorId]
+      );
+    });
 
     await recomputeSummary(cycleId, scope.companyId, cycle.employeeId);
 
