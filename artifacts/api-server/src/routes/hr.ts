@@ -11,7 +11,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission, requireAnyPermission } from "../middlewares/permissionMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { haversineKm } from "../lib/algorithms.js";
@@ -1248,7 +1248,10 @@ router.get("/leave-requests", requirePermission("hr:read"), async (req, res) => 
   }
 });
 
-router.get("/leaves/:id", requirePermission("hr:read"), async (req, res) => {
+// RBAC v2: hr.leaves view with scope check on the record (company,
+// optionally branch/department for managers). The legacy gate only
+// checked permission existence; this also enforces the role's scope.
+router.get("/leaves/:id", authorize({ feature: "hr.leaves", action: "view", resource: { table: "hr_leave_requests", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1270,7 +1273,7 @@ router.get("/leaves/:id", requirePermission("hr:read"), async (req, res) => {
       [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("طلب الإجازة غير موجود");
-    res.json(item);
+    res.json(maskFields(req, item));
   } catch (err) { handleRouteError(err, res, "Get leave detail error"); }
 });
 
