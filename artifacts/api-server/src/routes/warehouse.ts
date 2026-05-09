@@ -548,12 +548,14 @@ router.delete("/products/:id", authorize({ feature: "warehouse.inventory", actio
 router.get("/movements", authorize({ feature: "warehouse.transfers", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { productId } = req.query as any;
+    const { productId, search, status } = req.query as any;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (productId) { where += ` AND m."productId" = $${paramIdx}`; params.push(Number(productId)); paramIdx++; }
+    if (search) { params.push(`%${search}%`); where += ` AND (p.name ILIKE $${paramIdx} OR m.reference ILIKE $${paramIdx})`; paramIdx++; }
+    if (status) { where += ` AND m.type = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<any>(
       `SELECT m.*, p.name AS "productName", p.sku FROM warehouse_movements m LEFT JOIN warehouse_products p ON p.id=m."productId" WHERE ${where} ORDER BY m.id DESC LIMIT 500`,
       params
@@ -925,18 +927,24 @@ router.post("/transfers", authorize({ feature: "warehouse.transfers", action: "c
 router.get("/categories", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { page = "1", limit: lim = "50" } = req.query as any;
+    const { page = "1", limit: lim = "50", search, status } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
+    const params: any[] = [scope.companyId];
+    let where = `"companyId"=$1 AND "deletedAt" IS NULL`;
+    let paramIdx = 2;
+    if (search) { params.push(`%${search}%`); where += ` AND name ILIKE $${paramIdx}`; paramIdx++; }
+    if (status) { params.push(status); where += ` AND status = $${paramIdx}`; paramIdx++; }
+
     const [countRow] = await rawQuery<any>(
-      `SELECT COUNT(*) AS total FROM warehouse_categories WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
-      [scope.companyId]
+      `SELECT COUNT(*) AS total FROM warehouse_categories WHERE ${where}`,
+      params
     );
     const rows = await rawQuery<any>(
-      `SELECT * FROM warehouse_categories WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT $2 OFFSET $3`,
-      [scope.companyId, perPage, offset]
+      `SELECT * FROM warehouse_categories WHERE ${where} ORDER BY name LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+      [...params, perPage, offset]
     );
     res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "Warehouse categories error:"); }
@@ -994,18 +1002,24 @@ router.post("/categories", authorize({ feature: "warehouse", action: "create" })
 router.get("/suppliers", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { page = "1", limit: lim = "50" } = req.query as any;
+    const { page = "1", limit: lim = "50", search, status } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
+    const params: any[] = [scope.companyId];
+    let where = `"companyId"=$1 AND "deletedAt" IS NULL`;
+    let paramIdx = 2;
+    if (search) { params.push(`%${search}%`); where += ` AND (name ILIKE $${paramIdx} OR "contactPerson" ILIKE $${paramIdx} OR phone ILIKE $${paramIdx})`; paramIdx++; }
+    if (status) { params.push(status); where += ` AND status = $${paramIdx}`; paramIdx++; }
+
     const [countRow] = await rawQuery<any>(
-      `SELECT COUNT(*) AS total FROM suppliers WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
-      [scope.companyId]
+      `SELECT COUNT(*) AS total FROM suppliers WHERE ${where}`,
+      params
     );
     const rows = await rawQuery<any>(
-      `SELECT * FROM suppliers WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT $2 OFFSET $3`,
-      [scope.companyId, perPage, offset]
+      `SELECT * FROM suppliers WHERE ${where} ORDER BY name LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+      [...params, perPage, offset]
     );
     res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "Suppliers error:"); }

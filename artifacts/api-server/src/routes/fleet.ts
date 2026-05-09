@@ -390,8 +390,13 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
 router.get("/drivers", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    const { search, status } = req.query as any;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'd."companyId"' });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'd."companyId"' });
+    let where = baseWhere;
+    let paramIdx = nextParamIndex;
+    if (search) { params.push(`%${search}%`); where += ` AND (d.name ILIKE $${paramIdx} OR d.phone ILIKE $${paramIdx} OR d."licenseNumber" ILIKE $${paramIdx})`; paramIdx++; }
+    if (status) { where += ` AND d.status = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<any>(
       `SELECT d.*, e.name AS "employeeName", e."empNumber" AS "employeeNumber",
               ea."jobTitle" AS "employeeJobTitle"
@@ -859,12 +864,13 @@ router.delete("/drivers/:id", authorize({ feature: "fleet", action: "delete", re
 router.get("/trips", authorize({ feature: "fleet.trips", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status } = req.query as any;
+    const { status, search } = req.query as any;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', branchColumn: 't."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
+    if (search) { params.push(`%${search}%`); where += ` AND (v."plateNumber" ILIKE $${paramIdx} OR d.name ILIKE $${paramIdx})`; paramIdx++; }
     const rows = await rawQuery<any>(
       `SELECT t.*, t."fromLocation" AS origin, t."toLocation" AS destination, t."startTime" AS "tripDate",
               v."plateNumber", v."plateNumber" AS "vehiclePlate", d.name AS "driverName"
@@ -1315,12 +1321,14 @@ router.post("/trips/:id/waypoints", authorize({ feature: "fleet.trips", action: 
 router.get("/maintenance", authorize({ feature: "fleet.maintenance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { vehicleId } = req.query as any;
+    const { vehicleId, search, status } = req.query as any;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND m."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
+    if (search) { params.push(`%${search}%`); where += ` AND (v."plateNumber" ILIKE $${paramIdx} OR m.description ILIKE $${paramIdx})`; paramIdx++; }
+    if (status) { where += ` AND m.status = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<any>(
       `SELECT m.*, m.type AS "maintenanceType", m.cost AS amount,
               m."serviceDate" AS "scheduledDate", m."serviceDate" AS date,
@@ -1737,12 +1745,14 @@ router.get("/alerts", authorize({ feature: "fleet", action: "list" }), async (re
 router.get("/fuel-logs", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { vehicleId } = req.query as any;
+    const { vehicleId, search, status } = req.query as any;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'f."companyId"', branchColumn: 'f."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND f."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
+    if (search) { params.push(`%${search}%`); where += ` AND (v."plateNumber" ILIKE $${paramIdx} OR f."stationName" ILIKE $${paramIdx})`; paramIdx++; }
+    if (status) { where += ` AND f.status = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<any>(
       `SELECT f.*, f.liters AS quantity, f."totalCost" AS cost, f."mileageAtFuel" AS mileage, f."stationName" AS station, f."fuelDate" AS date, v."plateNumber", v."plateNumber" AS "vehiclePlate" FROM fleet_fuel_logs f LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId" AND v."deletedAt" IS NULL WHERE ${where} AND f."deletedAt" IS NULL ORDER BY f.id DESC LIMIT 1000`,
       params

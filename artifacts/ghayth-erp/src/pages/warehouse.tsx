@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,7 @@ import { Package, ArrowLeftRight, Layers, Truck, Plus, AlertTriangle, DollarSign
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 
@@ -65,19 +65,17 @@ function ProductsTab() {
   const { data: stats } = useApiQuery<any>(["warehouse-stats", scopeQueryString], `/warehouse/stats${scopeQueryString ? `?${scopeQueryString}` : ""}`);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useFilters();
+  useEffect(() => { setPage(1); }, [filters.search, filters.status]);
   const pageSize = 20;
   const canManage = roleLevel >= 50;
+  const filterParams = `&search=${encodeURIComponent(filters.search || "")}&status=${encodeURIComponent(filters.status || "")}`;
   const { data: productsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["warehouse-products", String(page), scopeQueryString], `/warehouse/products?page=${page}&limit=${pageSize}${scopeSuffix}`
+    ["warehouse-products", String(page), filters.search, filters.status, scopeQueryString], `/warehouse/products?page=${page}&limit=${pageSize}${scopeSuffix}${filterParams}`
   );
   const products = asList(productsResp);
   const total = productsResp?.total || products.length;
 
-  const filtered = applyFilters(products, filters, {
-    searchFields: ["name", "sku", "categoryName"],
-    statusField: "status",
-    dateField: "createdAt",
-  });
+  const filtered = products;
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/warehouse/products",
@@ -188,17 +186,16 @@ function ProductsTab() {
 function MovementsTab() {
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useFilters();
+  useEffect(() => { setPage(1); }, [filters.search, filters.status]);
   const pageSize = 20;
+  const filterParams = `&search=${encodeURIComponent(filters.search || "")}&status=${encodeURIComponent(filters.status || "")}`;
   const { data: movementsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["warehouse-movements", String(page)], `/warehouse/movements?page=${page}&limit=${pageSize}`
+    ["warehouse-movements", String(page), filters.search, filters.status], `/warehouse/movements?page=${page}&limit=${pageSize}${filterParams}`
   );
   const movements = asList(movementsResp);
   const total = movementsResp?.total || movements.length;
 
-  const filtered = applyFilters(movements, filters, {
-    searchFields: ["productName", "reference"],
-    dateField: "createdAt",
-  });
+  const filtered = movements;
 
   const columns: DataTableColumn<any>[] = [
     { key: "productName", header: "المنتج", sortable: true, render: (m) => m.productName || "-" },
@@ -266,14 +263,12 @@ function MovementsTab() {
 
 function CategoriesTab() {
   const [, navigate] = useLocation();
-  const { data: categoriesResp, isLoading, isError, error, refetch } = useApiQuery<any>(["warehouse-categories"], "/warehouse/categories");
-  const categories = asList(categoriesResp);
   const [filters, setFilters] = useFilters();
+  const filterParams = `?search=${encodeURIComponent(filters.search || "")}&status=${encodeURIComponent(filters.status || "")}`;
+  const { data: categoriesResp, isLoading, isError, error, refetch } = useApiQuery<any>(["warehouse-categories", filters.search, filters.status], `/warehouse/categories${filterParams}`);
+  const categories = asList(categoriesResp);
 
-  const filtered = applyFilters(categories, filters, {
-    searchFields: ["name"],
-    dateField: "createdAt",
-  });
+  const filtered = categories;
 
   const columns: DataTableColumn<any>[] = [
     { key: "name", header: "الاسم", sortable: true, render: (c) => <span className="font-medium">{c.name}</span> },
@@ -325,15 +320,12 @@ function CategoriesTab() {
 
 function SuppliersTab() {
   const [, navigate] = useLocation();
-  const { data: suppliersResp, isLoading, isError, error, refetch } = useApiQuery<any>(["warehouse-suppliers"], "/warehouse/suppliers");
-  const suppliers = asList(suppliersResp);
   const [filters, setFilters] = useFilters();
+  const filterParams = `?search=${encodeURIComponent(filters.search || "")}&status=${encodeURIComponent(filters.status || "")}`;
+  const { data: suppliersResp, isLoading, isError, error, refetch } = useApiQuery<any>(["warehouse-suppliers", filters.search, filters.status], `/warehouse/suppliers${filterParams}`);
+  const suppliers = asList(suppliersResp);
 
-  const filtered = applyFilters(suppliers, filters, {
-    searchFields: ["name", "contactPerson", "phone"],
-    statusField: "status",
-    dateField: "createdAt",
-  });
+  const filtered = suppliers;
 
   const columns: DataTableColumn<any>[] = [
     { key: "name", header: "المورد", sortable: true, render: (s) => <span className="font-medium">{s.name}</span> },

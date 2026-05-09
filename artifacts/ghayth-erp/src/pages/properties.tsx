@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Building, Building2, Plus, Eye, Home, DollarSign } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { PageStateWrapper } from "@/components/shared/page-state";
 
@@ -23,16 +23,15 @@ export default function Properties() {
   const { data: stats } = useApiQuery<any>(["properties-stats", scopeQueryString], `/properties/stats?${scopeQueryString}`);
   const [page, setPage] = useState(1);
   const pageSize = 20;
+  const [filters, setFilters] = useFilters();
+  useEffect(() => { setPage(1); }, [filters.search, filters.status]);
+  const filterParams = `&search=${encodeURIComponent(filters.search || "")}&status=${encodeURIComponent(filters.status || "")}`;
   const { data: unitsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["property-units", String(page), scopeQueryString], `/properties/units?page=${page}&limit=${pageSize}${scopeSuffix}`
+    ["property-units", String(page), filters.search, filters.status, scopeQueryString], `/properties/units?page=${page}&limit=${pageSize}${scopeSuffix}${filterParams}`
   );
   const units = asList(unitsResp);
   const total = unitsResp?.total || units.length;
-  const [filters, setFilters] = useFilters();
-  const filtered = applyFilters(units, filters, {
-    searchFields: ["unitNumber", "buildingName"],
-    statusField: "status",
-  });
+  const filtered = units;
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/properties/units",

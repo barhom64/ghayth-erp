@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useApiQuery } from "@/lib/api";
 import { Link, useLocation } from "wouter";
 
@@ -31,7 +31,6 @@ import {
 import {
   AdvancedFilters,
   useFilters,
-  applyFilters,
   exportToCSV,
 } from "@/components/shared/advanced-filters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
@@ -79,19 +78,17 @@ export default function Employees() {
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [filters.search, filters.status]);
   const pageSize = 20;
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
   const { data: employeesResponse, isLoading, isError, error, refetch } = useApiQuery<{ data: any[]; total: number }>(
-    ["employees", filters.search, String(page), scopeQueryString],
-    `/employees?search=${encodeURIComponent(filters.search)}&page=${page}&limit=${pageSize}${scopeSuffix}`
+    ["employees", filters.search, filters.status, String(page), scopeQueryString],
+    `/employees?search=${encodeURIComponent(filters.search)}&status=${encodeURIComponent(filters.status || "")}&page=${page}&limit=${pageSize}${scopeSuffix}`
   );
   const employees = employeesResponse?.data;
   const total = employeesResponse?.total || 0;
   const { tagsList, selectedTag, setSelectedTag, filteredIds: tagFilteredIds } = useTagFilter("employee");
-  const preFiltered = applyFilters(employees || [], filters, {
-    statusField: "status",
-    dateField: "",
-  });
+  const preFiltered = employees || [];
   const filtered = tagFilteredIds ? preFiltered.filter((e: any) => tagFilteredIds.has(e.id)) : preFiltered;
 
   // HR-U4 — قائمة الحالات التشغيلية عبر useApiQuery بدل apiFetch+useEffect.

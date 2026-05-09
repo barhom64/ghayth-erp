@@ -154,7 +154,7 @@ const router = Router();
 router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { search = "", page = "1", limit: lim = "20" } = req.query as any;
+    const { search = "", status, page = "1", limit: lim = "20" } = req.query as any;
     const offset = (Math.max(Number(page) || 1, 1) - 1) * (Number(lim) || 20);
 
     const filters = parseScopeFilters(req);
@@ -170,6 +170,12 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
 
     let paramIdx = nextParamIndex;
     let where = baseWhere;
+
+    if (status) {
+      where += ` AND e.status = $${paramIdx}`;
+      params.push(status);
+      paramIdx++;
+    }
 
     if (!scope.isOwner && scope.role === "employee" && scope.employeeId) {
       where += ` AND e.id = $${paramIdx}`;
