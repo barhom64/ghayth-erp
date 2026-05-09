@@ -198,7 +198,8 @@ reportsRouter.get("/reports/cash-flow", requirePermission("finance:read"), async
            LEFT JOIN chart_of_accounts coa
                   ON coa.code = jl."accountCode" AND coa."companyId" = $1
           WHERE jl."journalId" = ANY($2)
-            AND NOT (jl."accountCode" = ANY($3))`,
+            AND NOT (jl."accountCode" = ANY($3))
+            AND jl."deletedAt" IS NULL`,
         [scope.companyId, jeIds, cashCodes]
       );
     }
@@ -909,7 +910,7 @@ reportsRouter.get("/reports/cash-bank-statement", requirePermission("finance:rea
     if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }
 
     const [accountInfo] = await rawQuery<any>(
-      `SELECT code, name, type FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2`,
+      `SELECT code, name, type FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL`,
       [scope.companyId, accountCode]
     );
 

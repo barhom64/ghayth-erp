@@ -1028,7 +1028,7 @@ router.get("/import/batches", requirePermission("umrah:read"), async (req, res) 
   try {
     const scope = req.scope!;
     const { seasonId } = req.query as any;
-    let where = `b."companyId" = $1`;
+    let where = `b."companyId" = $1 AND b."deletedAt" IS NULL`;
     const params: any[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND b."seasonId" = $${params.length}`; }
     const rows = await rawQuery(

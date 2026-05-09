@@ -999,17 +999,17 @@ router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) 
        FROM fleet_vehicles fv
        LEFT JOIN LATERAL (
          SELECT COALESCE(SUM(cost), 0) AS total FROM fleet_maintenance
-         WHERE "vehicleId" = fv.id AND "companyId" = $1
+         WHERE "vehicleId" = fv.id AND "companyId" = $1 AND "deletedAt" IS NULL
        ) fm_total ON true
        LEFT JOIN LATERAL (
          SELECT COALESCE(SUM("totalCost"), 0) AS total FROM fleet_fuel_logs
-         WHERE "vehicleId" = fv.id AND "companyId" = $1
+         WHERE "vehicleId" = fv.id AND "companyId" = $1 AND "deletedAt" IS NULL
        ) fuel_total ON true
        LEFT JOIN LATERAL (
          SELECT COALESCE(SUM(premium), 0) AS total FROM fleet_insurance
-         WHERE "vehicleId" = fv.id AND "companyId" = $1
+         WHERE "vehicleId" = fv.id AND "companyId" = $1 AND "deletedAt" IS NULL
        ) ins_total ON true
-       WHERE fv."companyId" = $1
+       WHERE fv."companyId" = $1 AND fv."deletedAt" IS NULL
        ORDER BY fv."plateNumber"`,
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
@@ -1115,9 +1115,9 @@ router.get("/reports/property-occupancy", requirePermission("bi:read"), async (r
          ROUND(AVG(rc."monthlyRent") FILTER (WHERE rc.status = 'active'), 0) AS "avgMonthlyRent",
          COALESCE(SUM(rc."monthlyRent") FILTER (WHERE rc.status = 'active'), 0) AS "totalMonthlyRevenue"
        FROM property_buildings pb
-       LEFT JOIN property_units pu ON pu."buildingId" = pb.id
-       LEFT JOIN rental_contracts rc ON rc."unitId" = pu.id AND rc.status = 'active'
-       WHERE pb."companyId" = $1
+       LEFT JOIN property_units pu ON pu."buildingId" = pb.id AND pu."deletedAt" IS NULL
+       LEFT JOIN rental_contracts rc ON rc."unitId" = pu.id AND rc.status = 'active' AND rc."deletedAt" IS NULL
+       WHERE pb."companyId" = $1 AND pb."deletedAt" IS NULL
        GROUP BY pb.id, pb.name, pb.address
        ORDER BY pb.name`,
       [cid]

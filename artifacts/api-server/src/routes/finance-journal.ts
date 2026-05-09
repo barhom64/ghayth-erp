@@ -1087,7 +1087,7 @@ journalRouter.post("/journal/:id/reverse", requirePermission("finance:create"), 
 
     const originalLines = await rawQuery<any>(
       `SELECT "accountCode", debit, credit, description, "costCenter", "departmentId", "projectId", "employeeId"
-       FROM journal_lines WHERE "journalId" = $1 ORDER BY id ASC`,
+       FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL ORDER BY id ASC`,
       [id]
     );
     if (originalLines.length === 0) {

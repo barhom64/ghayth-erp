@@ -60,7 +60,7 @@ vendorsRouter.get("/vendors", authorize({ feature: "finance.vendors", action: "l
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
-  } catch (_e) {
+  } catch (_e) { logger.error(_e, "vendors list query failed");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
 });

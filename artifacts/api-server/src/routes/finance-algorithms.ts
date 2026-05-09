@@ -1191,7 +1191,7 @@ financeAlgorithmsRouter.get("/fx/rates", requirePermission("finance:read"), asyn
     await ensureFxTables();
     const { from, to, type } = req.query as any;
     const params: any[] = [scope.companyId];
-    let where = `"companyId"=$1`;
+    let where = `"companyId"=$1 AND "deletedAt" IS NULL`;
     if (from) { params.push(from); where += ` AND "fromCurrency"=$${params.length}`; }
     if (to) { params.push(to); where += ` AND "toCurrency"=$${params.length}`; }
     if (type) { params.push(type); where += ` AND source=$${params.length}`; }

@@ -922,7 +922,7 @@ invoicesRouter.delete("/invoices/:id", requirePermission("finance:delete"), asyn
     await withTransaction(async (client: any) => {
       if (je) {
         const { rows: lines } = await client.query(
-          `SELECT "accountCode", debit, credit FROM journal_lines WHERE "journalId" = $1`,
+          `SELECT "accountCode", debit, credit FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL`,
           [Number(je.id)]
         );
         for (const line of lines) {

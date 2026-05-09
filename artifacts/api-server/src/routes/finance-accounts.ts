@@ -98,7 +98,7 @@ accountsRouter.get("/accounts", requirePermission("finance:read"), async (req, r
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) {
+  } catch (_e) { logger.error(_e, "accounts list query failed");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
 });
@@ -258,7 +258,7 @@ accountsRouter.get("/journal", requirePermission("finance:read"), async (req, re
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) {
+  } catch (_e) { logger.error(_e, "journal list query failed");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
 });
