@@ -11,6 +11,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission, requireAnyPermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { haversineKm } from "../lib/algorithms.js";
@@ -414,7 +415,10 @@ const checkInLimiter = createPerUserLimiter({
 // ATTENDANCE – check-in and dedicated check-out endpoints
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
+// RBAC v2: hr.attendance.checkin is self-service in featureCatalog, so the
+// authorize() middleware auto-grants every employee unconditionally.
+// Replaces the legacy hr:self/hr:create permission gate.
+router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.checkin", action: "create" }), async (req, res) => {
   // Step 4 of the HR operational audit — attendance check-in.
   // Converts the two raw res.status(400) bailouts to ConflictError with
   // meta pointing at the blocking row, and guards against a missing
@@ -781,7 +785,8 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
   }
 });
 
-router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
+// RBAC v2: same self-service guarantee as /check-in.
+router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: "create" }), async (req, res) => {
   // Step 4 of the HR operational audit — attendance check-out.
   // Symmetric treatment to check-in: ConflictError when the caller is
   // trying to check out without having checked in, or when they've
@@ -1306,7 +1311,11 @@ async function ensureLeaveSchema(): Promise<void> {
   leaveTablesEnsured = true;
 }
 
-router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
+// RBAC v2: hr.leaves.my is self-service so any employee can create a
+// request for themselves. Managers / HR creating on behalf of others
+// would need hr.leaves with action=create on a non-self scope; that
+// path will be added in a later PR.
+router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "create" }), async (req, res) => {
   try {
     await ensureLeaveSchema();
 

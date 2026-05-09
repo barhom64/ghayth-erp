@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Shield, Plus, Save, AlertTriangle, Eye, History, Copy, Layers, EyeOff, DollarSign, ChevronDown, ChevronRight } from "lucide-react";
+import { Shield, Plus, Save, AlertTriangle, Eye, History, Copy, Layers, EyeOff, DollarSign, ChevronDown, ChevronRight, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -116,6 +116,7 @@ export function RbacV2Tab() {
   const [showSimulate, setShowSimulate] = useState(false);
   const [showClone, setShowClone] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   const { data: featuresData, isLoading: featLoading, isError: featErr } = useApiQuery<{ features: Feature[] }>(
     ["rbac-features"],
@@ -300,9 +301,9 @@ export function RbacV2Tab() {
           <Card>
             <CardHeader className="pb-2 flex flex-row justify-between items-center">
               <CardTitle className="text-sm">الأدوار ({roles.length})</CardTitle>
-              <Button size="sm" variant="ghost" disabled>
-                <Plus className="h-4 w-4 me-1" />
-                جديد
+              <Button size="sm" variant="ghost" onClick={() => setShowTemplates(true)}>
+                <Sparkles className="h-4 w-4 me-1" />
+                قوالب
               </Button>
             </CardHeader>
             <CardContent className="p-0 max-h-[600px] overflow-auto">
@@ -426,6 +427,7 @@ export function RbacV2Tab() {
           <HistoryDialog open={showHistory} onClose={() => setShowHistory(false)} roleId={selectedRole.id} roleLabel={selectedRole.label_ar} />
         </>
       )}
+      <TemplatesDialog open={showTemplates} onClose={() => setShowTemplates(false)} onApplied={() => { refetchRoles(); }} />
     </div>
   );
 }
@@ -890,6 +892,131 @@ function HistoryDialog({ open, onClose, roleId, roleLabel }: {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>إغلاق</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Templates dialog ──────────────────────────────────────────────────────
+interface Template {
+  id: number;
+  role_key: string;
+  label_ar: string;
+  label_en: string | null;
+  description: string | null;
+  level: number;
+  color: string;
+  grant_count: string;
+  field_count: string;
+  limit_count: string;
+}
+
+function TemplatesDialog({ open, onClose, onApplied }: { open: boolean; onClose: () => void; onApplied: () => void }) {
+  const { data, isLoading } = useApiQuery<{ templates: Template[] }>(["rbac-templates"], "/rbac/v2/templates", open);
+  const [applying, setApplying] = useState<number | null>(null);
+  const [newKey, setNewKey] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+  const [pickedTemplate, setPickedTemplate] = useState<Template | null>(null);
+  const { toast } = useToast();
+
+  const apply = async () => {
+    if (!pickedTemplate || !newKey || !newLabel) return;
+    setApplying(pickedTemplate.id);
+    try {
+      await apiFetch(`/rbac/v2/templates/${pickedTemplate.id}/apply`, {
+        method: "POST",
+        body: JSON.stringify({ newRoleKey: newKey, labelAr: newLabel }),
+      });
+      toast({ title: "تم تطبيق القالب", description: `تم إنشاء "${newLabel}" من قالب "${pickedTemplate.label_ar}"` });
+      onApplied();
+      setPickedTemplate(null);
+      setNewKey("");
+      setNewLabel("");
+      onClose();
+    } catch (err: any) {
+      toast({ title: "فشل تطبيق القالب", description: err?.message || "خطأ", variant: "destructive" });
+    } finally {
+      setApplying(null);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5" />
+            {pickedTemplate ? `تطبيق قالب: ${pickedTemplate.label_ar}` : "قوالب الأدوار الجاهزة"}
+          </DialogTitle>
+        </DialogHeader>
+        {!pickedTemplate ? (
+          <div className="max-h-[500px] overflow-auto">
+            {isLoading ? (
+              <LoadingSpinner />
+            ) : !data?.templates?.length ? (
+              <p className="text-center text-gray-400 py-8">لا توجد قوالب جاهزة</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {data.templates.map((t) => (
+                  <Card
+                    key={t.id}
+                    className="cursor-pointer hover:shadow-md transition border-2 hover:border-blue-300"
+                    onClick={() => {
+                      setPickedTemplate(t);
+                      setNewKey(t.role_key.replace(/^tpl_/, ""));
+                      setNewLabel(t.label_ar.replace(/\s*\(قالب\)$/, ""));
+                    }}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-2 mb-2">
+                        <span className="inline-block w-3 h-3 rounded-full mt-1" style={{ backgroundColor: t.color }} />
+                        <div className="flex-1">
+                          <p className="font-semibold text-sm">{t.label_ar}</p>
+                          {t.label_en && <p className="text-xs text-gray-500">{t.label_en}</p>}
+                        </div>
+                      </div>
+                      {t.description && <p className="text-xs text-gray-600 mb-2">{t.description}</p>}
+                      <div className="flex gap-1 flex-wrap">
+                        <Badge variant="outline" className="text-xs">{t.grant_count} صلاحية</Badge>
+                        {Number(t.field_count) > 0 && <Badge variant="outline" className="text-xs">{t.field_count} سياسة حقل</Badge>}
+                        {Number(t.limit_count) > 0 && <Badge variant="outline" className="text-xs">{t.limit_count} سقف</Badge>}
+                        <Badge variant="outline" className="text-xs">المستوى {t.level}</Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="p-3 text-sm">
+                {pickedTemplate.description}
+              </CardContent>
+            </Card>
+            <div>
+              <label className="text-xs text-gray-600 mb-1 block">المفتاح في شركتك</label>
+              <Input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="branch_accountant" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-600 mb-1 block">الاسم بالعربية</label>
+              <Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="محاسب فرع" />
+            </div>
+          </div>
+        )}
+        <DialogFooter className="gap-2">
+          {pickedTemplate ? (
+            <>
+              <Button variant="outline" onClick={() => setPickedTemplate(null)}>عودة</Button>
+              <Button onClick={apply} disabled={!newKey || !newLabel || applying !== null}>
+                {applying ? "جاري التطبيق..." : "تطبيق القالب"}
+              </Button>
+            </>
+          ) : (
+            <Button variant="outline" onClick={onClose}>إغلاق</Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
