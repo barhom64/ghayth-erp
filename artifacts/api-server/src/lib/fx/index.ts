@@ -27,3 +27,18 @@ export {
   findStaleRates,
   DEFAULT_SOURCE_CHAIN,
 } from "./jobs.js";
+export type {
+  MonetaryItem,
+  RevaluationLine,
+  ComputedRevaluation,
+  RunPeriodEndOpts,
+} from "./revaluation.js";
+export { computeRevaluationLines, runPeriodEndRevaluation } from "./revaluation.js";
+export type {
+  RealizedFxInput,
+  RealizedFxResult,
+  RecordRealizedFxOpts,
+} from "./realized.js";
+export { computeRealizedFx, recordRealizedFx } from "./realized.js";
+export type { StalenessAlertOutcome } from "./staleness-alert.js";
+export { fxStalenessCheckCron, runStalenessCheck } from "./staleness-alert.js";
