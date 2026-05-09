@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CheckSquare, Plus, Pencil, Trash2, Check, X, PlayCircle, CheckCircle2, Loader2, Copy, Eye, ChevronDown, ChevronUp, Link2 } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
+import { priorityLabel } from "@/lib/priority-labels";
 import { useAppContext } from "@/contexts/app-context";
 import { DeleteConfirmImpact } from "@/components/delete-confirm-impact";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
@@ -27,7 +28,6 @@ const statusOptions = [
   { value: "overdue", label: "متأخر", color: "bg-rose-100 text-rose-700" },
 ];
 
-const priorityLabels: Record<string, string> = { high: "عالية", medium: "متوسطة", low: "منخفضة" };
 const typeLabels: Record<string, string> = { task: "مهمة عامة", meeting: "اجتماع", call: "مكالمة" };
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
@@ -166,7 +166,7 @@ export default function Tasks() {
         r.priority === "medium" ? "bg-amber-100 text-amber-700" :
         "bg-emerald-100 text-emerald-700"
       }`}>
-        {priorityLabels[r.priority] || r.priority}
+        {priorityLabel(r.priority)}
       </span>
     ) },
     { key: "status", header: "الحالة", sortable: true, render: (r: any) => <PageStatusBadge status={r.status} /> },
