@@ -5,6 +5,7 @@ import { Activity, Target, Star, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { formatTimeAgo } from "./shared";
+import { actionLabel } from "@/lib/action-labels";
 
 interface RecentActionsAndPerformanceSectionProps {
   recentActions: any[];
@@ -30,13 +31,6 @@ export function RecentActionsAndPerformanceSection({ recentActions, performanceR
           ) : (
             <div className="space-y-2">
               {recentActions.map((a: any) => {
-                const actionLabels: Record<string, string> = {
-                  create: "إنشاء",
-                  update: "تعديل",
-                  delete: "حذف",
-                  approve: "اعتماد",
-                  reject: "رفض",
-                };
                 return (
                   <div key={a.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-gray-50">
                     <div className="w-8 h-8 rounded-full bg-violet-50 flex items-center justify-center shrink-0">
@@ -44,7 +38,7 @@ export function RecentActionsAndPerformanceSection({ recentActions, performanceR
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">
-                        {actionLabels[a.action] || a.action} — {a.entityType}
+                        {actionLabel(a.action)} — {a.entityType}
                       </p>
                       {a.description && (
                         <p className="text-xs text-gray-500 truncate">{a.description}</p>
