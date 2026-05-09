@@ -1282,13 +1282,13 @@ router.post("/trips/:id/waypoints", requirePermission("fleet:update"), async (re
     );
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "fleet.trip.waypoint_added", entity: "fleet_trip_waypoints", entityId: insertId,
+      action: "fleet.trip.waypoint_added", entity: "fleet_gps_tracking", entityId: insertId,
       details: JSON.stringify({ tripId, lat, lon }),
     }).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "create", entity: "fleet_trip_waypoints", entityId: insertId,
+      action: "create", entity: "fleet_gps_tracking", entityId: insertId,
       after: { tripId, lat, lon, speed: b.speed || 0 },
     }).catch((e) => logger.error(e, "fleet background task failed"));
 
