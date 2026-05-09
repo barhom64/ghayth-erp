@@ -3,6 +3,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
+import { buildScopedWhere } from "../lib/scopedQuery.js";
 import { handleRouteError, NotFoundError,
   parseId,
   zodParse,
@@ -251,23 +252,33 @@ router.get("/", authorize({ feature: "admin", action: "list" }), async (req, res
   try {
     const scope = req.scope!;
     const { status, requestType } = req.query as any;
-    let where = `wi."companyId" = $1 AND wi."deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+
+    const { where: scopeWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      {},
+      {
+        companyColumn: 'wi."companyId"',
+        disableBranchScope: true,
+        softDeleteColumn: 'wi."deletedAt"',
+      }
+    );
+    const conditions = [scopeWhere];
+    let paramIdx = nextParamIndex;
 
     if (status) {
       params.push(status);
-      where += ` AND wi.status = $${params.length}`;
+      conditions.push(`wi.status = $${paramIdx++}`);
     }
     if (requestType) {
       params.push(requestType);
-      where += ` AND wi."requestType" = $${params.length}`;
+      conditions.push(`wi."requestType" = $${paramIdx++}`);
     }
 
     const rows = await rawQuery<any>(
       `SELECT wi.*, wd."requestTypeLabel" AS "defLabel"
        FROM workflow_instances wi
        LEFT JOIN workflow_definitions wd ON wd.id = wi."definitionId"
-       WHERE ${where}
+       WHERE ${conditions.join(" AND ")}
        ORDER BY wi."createdAt" DESC
        LIMIT 200`,
       params

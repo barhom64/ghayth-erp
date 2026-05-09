@@ -6,6 +6,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
+import { buildScopedWhere } from "../lib/scopedQuery.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import dns from "node:dns/promises";
 import { z } from "zod";
@@ -90,9 +91,10 @@ const GOV_SAFE_COLUMNS = `id, "companyId", type, name, status, enabled, "lastChe
 router.get("/", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    const { where, params } = buildScopedWhere(scope, {}, { disableBranchScope: true });
     const rows = await rawQuery<any>(
-      `SELECT ${GOV_SAFE_COLUMNS}, config FROM gov_integrations WHERE "companyId" = $1 ORDER BY type ASC`,
-      [scope.companyId]
+      `SELECT ${GOV_SAFE_COLUMNS}, config FROM gov_integrations WHERE ${where} ORDER BY type ASC`,
+      params
     );
     if (rows.length === 0) {
       for (const type of ["muqeem", "tam", "absher_business"]) {
@@ -102,8 +104,8 @@ router.get("/", authorize({ feature: "admin", action: "update" }), async (req, r
         );
       }
       const fresh = await rawQuery<any>(
-        `SELECT ${GOV_SAFE_COLUMNS}, config FROM gov_integrations WHERE "companyId" = $1 ORDER BY type ASC`,
-        [scope.companyId]
+        `SELECT ${GOV_SAFE_COLUMNS}, config FROM gov_integrations WHERE ${where} ORDER BY type ASC`,
+        params
       );
       res.json({ data: fresh.map((r: any) => ({ ...r, config: maskConfig(r.config) })) });
       return;

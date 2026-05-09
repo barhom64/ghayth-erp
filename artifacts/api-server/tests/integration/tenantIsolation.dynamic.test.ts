@@ -96,6 +96,14 @@ d("Tenant isolation — dynamic (real Postgres)", () => {
     "/api/hr/leave-requests",
     "/api/finance/budget/budgets",
     "/api/finance/vendors",
+    "/api/projects",
+    "/api/tasks",
+    "/api/documents",
+    "/api/requests",
+    "/api/workflows",
+    "/api/gov-integrations",
+    "/api/notifications",
+    "/api/audit-logs",
   ];
 
   for (const path of SCOPED_LIST_ENDPOINTS) {
