@@ -35,7 +35,7 @@ const updateCostCenterSchema = z.object({
   status: z.string().optional(),
 });
 
-router.get("/cost-centers", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+router.get("/cost-centers", authorize({ feature: "finance.cost_centers", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -57,7 +57,7 @@ router.get("/cost-centers", authorize({ feature: "finance", action: "list" }), a
   } catch (err) { handleRouteError(err, res, "List cost centers error"); }
 });
 
-router.get("/cost-centers/:id", authorize({ feature: "finance", action: "view" }), async (req, res) => {
+router.get("/cost-centers/:id", authorize({ feature: "finance.cost_centers", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -70,7 +70,7 @@ router.get("/cost-centers/:id", authorize({ feature: "finance", action: "view" }
   } catch (err) { handleRouteError(err, res, "Get cost center error"); }
 });
 
-router.post("/cost-centers", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+router.post("/cost-centers", authorize({ feature: "finance.cost_centers", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = zodParse(createCostCenterSchema.safeParse(req.body));
@@ -99,7 +99,7 @@ router.post("/cost-centers", authorize({ feature: "finance", action: "create" })
   } catch (err) { handleRouteError(err, res, "Create cost center error"); }
 });
 
-router.patch("/cost-centers/:id", authorize({ feature: "finance", action: "update" }), async (req, res) => {
+router.patch("/cost-centers/:id", authorize({ feature: "finance.cost_centers", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -137,7 +137,7 @@ router.patch("/cost-centers/:id", authorize({ feature: "finance", action: "updat
   } catch (err) { handleRouteError(err, res, "Update cost center error"); }
 });
 
-router.delete("/cost-centers/:id", authorize({ feature: "finance", action: "delete" }), async (req, res) => {
+router.delete("/cost-centers/:id", authorize({ feature: "finance.cost_centers", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

@@ -63,7 +63,7 @@ const updateRecurringJournalSchema = z.object({
   templateLines: z.array(recurringJournalLineSchema).optional(),
 });
 
-recurringRouter.get("/recurring-journals", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+recurringRouter.get("/recurring-journals", authorize({ feature: "finance.recurring", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -94,7 +94,7 @@ recurringRouter.get("/recurring-journals", authorize({ feature: "finance", actio
   }
 });
 
-recurringRouter.get("/recurring-journals/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+recurringRouter.get("/recurring-journals/:id", authorize({ feature: "finance.recurring", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -143,7 +143,7 @@ function validateTemplateLines(lines: any): { ok: true; lines: any[] } | { ok: f
   };
 }
 
-recurringRouter.post("/recurring-journals", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+recurringRouter.post("/recurring-journals", authorize({ feature: "finance.recurring", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -205,7 +205,7 @@ recurringRouter.post("/recurring-journals", authorize({ feature: "finance", acti
   }
 });
 
-recurringRouter.patch("/recurring-journals/:id", authorize({ feature: "finance", action: "update" }), async (req, res) => {
+recurringRouter.patch("/recurring-journals/:id", authorize({ feature: "finance.recurring", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -292,7 +292,7 @@ recurringRouter.patch("/recurring-journals/:id", authorize({ feature: "finance",
   }
 });
 
-recurringRouter.post("/recurring-journals/:id/run-now", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+recurringRouter.post("/recurring-journals/:id/run-now", authorize({ feature: "finance.recurring", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -344,7 +344,7 @@ recurringRouter.post("/recurring-journals/:id/run-now", authorize({ feature: "fi
   }
 });
 
-recurringRouter.delete("/recurring-journals/:id", authorize({ feature: "finance", action: "delete" }), async (req, res) => {
+recurringRouter.delete("/recurring-journals/:id", authorize({ feature: "finance.recurring", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
 

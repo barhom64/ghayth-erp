@@ -16,7 +16,7 @@ import { currentPeriod, currentYear, toDateISO, todayISO, roundTo2 } from "../li
 export const reportsRouter = Router();
 reportsRouter.use(authMiddleware);
 
-reportsRouter.get("/reports/entities/:entityType", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+reportsRouter.get("/reports/entities/:entityType", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -34,7 +34,7 @@ reportsRouter.get("/reports/entities/:entityType", authorize({ feature: "finance
   }
 });
 
-reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as any;
@@ -77,7 +77,7 @@ reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance", acti
   }
 });
 
-reportsRouter.get("/reports/income-statement", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+reportsRouter.get("/reports/income-statement", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as any;
@@ -95,7 +95,7 @@ reportsRouter.get("/reports/income-statement", authorize({ feature: "finance", a
   }
 });
 
-reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { asOfDate } = req.query as any;
@@ -140,7 +140,7 @@ reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance", acti
 // Returns per-section line items + totals, plus opening/closing cash balance.
 // ─────────────────────────────────────────────────────────────────────────────
 
-reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as any;
@@ -299,7 +299,7 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance", action: 
   }
 });
 
-reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -416,7 +416,7 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
 // Returns: opening balance, invoice + payment movements in period, running
 // balance, aging buckets (0-30, 31-60, 61-90, 90+), and ending balance.
 // ─────────────────────────────────────────────────────────────────────────────
-reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const clientId = parseId(req.params.clientId, "clientId");
@@ -535,7 +535,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
 // Returns: opening balance, PO/invoice + scheduled-payment movements, running
 // balance, aging buckets on unpaid POs, and ending balance.
 // ─────────────────────────────────────────────────────────────────────────────
-reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const supplierId = parseId(req.params.supplierId, "supplierId");
@@ -640,7 +640,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
 // Phase 7.1 — migrated from finance.ts (canonical ownership consolidation)
 // ─────────────────────────────────────────────────────────────────────────────
 
-reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, startDate, endDate } = req.query as any;
@@ -715,7 +715,7 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance", a
   }
 });
 
-reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate, branchId } = req.query as any;
@@ -774,7 +774,7 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance", a
   }
 });
 
-reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate, branchId, departmentId, projectId, costCenterId, groupBy = "account" } = req.query as any;
@@ -820,7 +820,7 @@ reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance", 
   }
 });
 
-reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate, branchId } = req.query as any;
@@ -865,7 +865,7 @@ reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance", a
   }
 });
 
-reportsRouter.get("/reports/budget-variance", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+reportsRouter.get("/reports/budget-variance", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { period, branchId } = req.query as any;
@@ -899,7 +899,7 @@ reportsRouter.get("/reports/budget-variance", authorize({ feature: "finance", ac
   }
 });
 
-reportsRouter.get("/reports/cash-bank-statement", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+reportsRouter.get("/reports/cash-bank-statement", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate, accountCode = "1100", branchId } = req.query as any;

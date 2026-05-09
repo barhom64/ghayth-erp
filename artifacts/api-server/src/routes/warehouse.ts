@@ -265,7 +265,7 @@ async function postInventoryMovementGl(params: {
   }
 }
 
-router.get("/products", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
+router.get("/products", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search, status, page = "1", limit: lim = "50" } = req.query as any;
@@ -298,7 +298,7 @@ router.get("/products", authorize({ feature: "warehouse", action: "list" }), asy
   } catch (err) { handleRouteError(err, res, "Warehouse products error:"); }
 });
 
-router.post("/products", authorize({ feature: "warehouse", action: "create" }), async (req, res) => {
+router.post("/products", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createProductSchema.safeParse(req.body));
@@ -369,7 +369,7 @@ router.get("/products/:id", authorize({ feature: "warehouse.inventory", action: 
   } catch (err) { handleRouteError(err, res, "Get product error:"); }
 });
 
-router.patch("/products/:id", authorize({ feature: "warehouse", action: "update" }), async (req, res) => {
+router.patch("/products/:id", authorize({ feature: "warehouse.inventory", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -545,7 +545,7 @@ router.delete("/products/:id", authorize({ feature: "warehouse.inventory", actio
   }
 });
 
-router.get("/movements", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
+router.get("/movements", authorize({ feature: "warehouse.transfers", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { productId } = req.query as any;
@@ -579,7 +579,7 @@ router.get("/movements/:id", authorize({ feature: "warehouse.transfers", action:
   } catch (err) { handleRouteError(err, res, "Warehouse movement detail error:"); }
 });
 
-router.post("/movements", authorize({ feature: "warehouse", action: "create" }), async (req, res): Promise<void> => {
+router.post("/movements", authorize({ feature: "warehouse.transfers", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const b = zodParse(createMovementSchema.safeParse(req.body));
@@ -836,7 +836,7 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
   return prId || null;
 }
 
-router.post("/transfers", authorize({ feature: "warehouse", action: "create" }), async (req, res): Promise<void> => {
+router.post("/transfers", authorize({ feature: "warehouse.transfers", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const b = zodParse(createTransferSchema.safeParse(req.body));
@@ -1221,7 +1221,7 @@ router.get("/stats", authorize({ feature: "warehouse", action: "list" }), async 
 // INVENTORY COUNT — جرد المخزن
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/inventory-counts", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
+router.get("/inventory-counts", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -1240,7 +1240,7 @@ router.get("/inventory-counts", authorize({ feature: "warehouse", action: "list"
   } catch (err) { handleRouteError(err, res, "Inventory counts error:"); }
 });
 
-router.post("/inventory-counts", authorize({ feature: "warehouse", action: "create" }), async (req, res) => {
+router.post("/inventory-counts", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createInventoryCountSchema.safeParse(req.body));
@@ -1271,7 +1271,7 @@ router.post("/inventory-counts", authorize({ feature: "warehouse", action: "crea
   } catch (err) { handleRouteError(err, res, "Create count error:"); }
 });
 
-router.get("/inventory-counts/:id/items", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
+router.get("/inventory-counts/:id/items", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const countId = parseId(req.params.id, "id");
@@ -1316,7 +1316,7 @@ router.get("/inventory-counts/:id/items", authorize({ feature: "warehouse", acti
   } catch (err) { handleRouteError(err, res, "Count items error:"); }
 });
 
-router.post("/inventory-counts/:id/items", authorize({ feature: "warehouse", action: "create" }), async (req, res) => {
+router.post("/inventory-counts/:id/items", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const countId = parseId(req.params.id, "id");
@@ -1376,7 +1376,7 @@ router.post("/inventory-counts/:id/items", authorize({ feature: "warehouse", act
   } catch (err) { handleRouteError(err, res, "Count item error:"); }
 });
 
-router.post("/inventory-counts/:id/approve", authorize({ feature: "warehouse", action: "create" }), async (req, res) => {
+router.post("/inventory-counts/:id/approve", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const countId = parseId(req.params.id, "id");

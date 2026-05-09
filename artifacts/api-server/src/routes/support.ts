@@ -90,7 +90,7 @@ function detectPriority(text: string): string {
   return 'medium';
 }
 
-router.get("/tickets", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.get("/tickets", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, priority } = req.query as any;
@@ -257,7 +257,7 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
   } catch (err) { handleRouteError(err, res, "Create ticket error:"); }
 });
 
-router.post("/tickets/check-sla", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.post("/tickets/check-sla", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const breached = await rawQuery<any>(
@@ -327,7 +327,7 @@ router.get("/tickets/:id", authorize({ feature: "support.tickets", action: "view
   } catch (err) { handleRouteError(err, res, "Get ticket error:"); }
 });
 
-router.post("/tickets/:id/replies", authorize({ feature: "support", action: "create" }), async (req, res) => {
+router.post("/tickets/:id/replies", authorize({ feature: "support.tickets", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createReplySchema.safeParse(req.body)) as any;
@@ -383,7 +383,7 @@ router.post("/tickets/:id/replies", authorize({ feature: "support", action: "cre
   } catch (err) { handleRouteError(err, res, "Create reply error:"); }
 });
 
-router.post("/tickets/:id/field-visit", authorize({ feature: "support", action: "create" }), async (req, res) => {
+router.post("/tickets/:id/field-visit", authorize({ feature: "support.tickets", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const ticketId = parseId(req.params.id, "id");
@@ -663,7 +663,7 @@ router.get("/stats", authorize({ feature: "support", action: "list" }), async (r
   } catch (err) { handleRouteError(err, res, "Support stats error:"); }
 });
 
-router.post("/tickets/:id/csat", authorize({ feature: "support", action: "create" }), async (req, res) => {
+router.post("/tickets/:id/csat", authorize({ feature: "support.tickets", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const ticketId = parseId(req.params.id, "id");

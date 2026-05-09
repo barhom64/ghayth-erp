@@ -56,7 +56,7 @@ const createJournalSchema = z.object({
 export const accountsRouter = Router();
 accountsRouter.use(authMiddleware);
 
-accountsRouter.get("/chart-of-accounts", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+accountsRouter.get("/chart-of-accounts", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -74,7 +74,7 @@ accountsRouter.get("/chart-of-accounts", authorize({ feature: "finance", action:
   }
 });
 
-accountsRouter.get("/accounts", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+accountsRouter.get("/accounts", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -104,7 +104,7 @@ accountsRouter.get("/accounts", authorize({ feature: "finance", action: "list" }
   }
 });
 
-accountsRouter.post("/accounts", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+accountsRouter.post("/accounts", authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -142,7 +142,7 @@ accountsRouter.post("/accounts", authorize({ feature: "finance", action: "create
   }
 });
 
-accountsRouter.patch("/accounts/:id", authorize({ feature: "finance", action: "update" }), async (req, res) => {
+accountsRouter.patch("/accounts/:id", authorize({ feature: "finance.accounts", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -186,7 +186,7 @@ accountsRouter.patch("/accounts/:id", authorize({ feature: "finance", action: "u
   } catch (err) { handleRouteError(err, res, "Update account error:"); }
 });
 
-accountsRouter.delete("/accounts/:id", authorize({ feature: "finance", action: "delete" }), async (req, res) => {
+accountsRouter.delete("/accounts/:id", authorize({ feature: "finance.accounts", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -244,7 +244,7 @@ accountsRouter.delete("/accounts/:id", authorize({ feature: "finance", action: "
   } catch (err) { handleRouteError(err, res, "Delete account error:"); }
 });
 
-accountsRouter.get("/journal", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+accountsRouter.get("/journal", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -264,7 +264,7 @@ accountsRouter.get("/journal", authorize({ feature: "finance", action: "list" })
   }
 });
 
-accountsRouter.post("/journal", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+accountsRouter.post("/journal", authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -328,7 +328,7 @@ accountsRouter.post("/journal", authorize({ feature: "finance", action: "create"
   }
 });
 
-accountsRouter.get("/ledger/:accountCode", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+accountsRouter.get("/ledger/:accountCode", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { accountCode } = req.params;
@@ -364,7 +364,7 @@ accountsRouter.get("/ledger/:accountCode", authorize({ feature: "finance", actio
   }
 });
 
-accountsRouter.get("/summary", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+accountsRouter.get("/summary", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [inv] = await rawQuery<any>(

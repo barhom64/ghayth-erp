@@ -203,6 +203,24 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
   { key: "finance.reports", parentKey: "finance", moduleKey: "finance", labelAr: "التقارير المالية",
     availableActions: READ_ACTIONS, availableScopes: ["branch", "company"], displayOrder: 290 },
 
+  // Finance sub-features added in PR #202 — granular replacements for
+  // the bulk-migrated `feature: "finance"` calls across the split
+  // routers.
+  { key: "finance.recurring", parentKey: "finance", moduleKey: "finance", labelAr: "القيود المتكررة",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
+    sensitiveFields: ["amount"], systemCritical: true, displayOrder: 282 },
+  { key: "finance.cost_centers", parentKey: "finance", moduleKey: "finance", labelAr: "مراكز التكلفة",
+    availableActions: ALL_ACTIONS, availableScopes: ["company"], displayOrder: 284 },
+  { key: "finance.algorithms", parentKey: "finance", moduleKey: "finance", labelAr: "المحركات المالية (الإهلاك / الأعمار / المطابقة)",
+    availableActions: [...READ_ACTIONS, "create"], availableScopes: ["company"],
+    systemCritical: true, displayOrder: 286 },
+  { key: "finance.hardening", parentKey: "finance", moduleKey: "finance", labelAr: "تشديد الإغلاق المالي",
+    availableActions: [...READ_ACTIONS, "create", "approve"], availableScopes: ["company"],
+    approvableActions: ["approve"], systemCritical: true, displayOrder: 288 },
+  { key: "finance.accounting_engine", parentKey: "finance", moduleKey: "finance", labelAr: "محرك المحاسبة (الترحيل التلقائي)",
+    availableActions: READ_ACTIONS, availableScopes: ["company"],
+    systemCritical: true, displayOrder: 289 },
+
   // ═══════════════════════════════════════════════════════════════
   // Fleet / Warehouse / Properties / Projects / Store
   // ═══════════════════════════════════════════════════════════════
@@ -239,6 +257,15 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     approvableActions: ["approve"], displayOrder: 530 },
   { key: "properties.payments", parentKey: "properties", moduleKey: "property", labelAr: "المدفوعات والإيجارات",
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"], displayOrder: 540 },
+
+  { key: "properties.buildings", parentKey: "properties", moduleKey: "property", labelAr: "المباني والعقارات",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"], displayOrder: 545 },
+  { key: "properties.maintenance", parentKey: "properties", moduleKey: "property", labelAr: "صيانة العقارات",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
+    approvableActions: ["approve"], displayOrder: 550 },
+  { key: "properties.owners", parentKey: "properties", moduleKey: "property", labelAr: "ملاك العقارات",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
+    sensitiveFields: ["nationalId", "phone", "iban"], displayOrder: 555 },
 
   { key: "projects", moduleKey: "operations", labelAr: "المشاريع", icon: "FolderKanban",
     availableActions: ALL_ACTIONS, availableScopes: ALL_SCOPES, displayOrder: 600 },
