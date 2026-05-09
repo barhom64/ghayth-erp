@@ -1046,7 +1046,7 @@ router.get("/import/batches/:id/changes", authorize({ feature: "umrah", action: 
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [batch] = await rawQuery(
-      `SELECT id FROM umrah_import_batches WHERE id = $1 AND "companyId" = $2`,
+      `SELECT id FROM umrah_import_batches WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!batch) throw new NotFoundError("الدفعة غير موجودة");

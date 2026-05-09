@@ -90,7 +90,35 @@ jobs:
           # via POSTGRES_DB/POSTGRES_USER/POSTGRES_PASSWORD, so we skip
           # db/bootstrap.sh's sudo-driven role/DB management and just load
           # the schema dump directly via psql.
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f db/schema.sql
+          #
+          # db/schema.sql is a pg_dump 17 output that interleaves
+          # `ALTER TABLE ... ADD CONSTRAINT FOREIGN KEY` blocks with
+          # `CREATE TABLE` blocks rather than placing every FK in a
+          # post-data section. On PG16 that ordering causes ~40 FKs to
+          # reference tables / unique constraints that don't exist yet at
+          # the moment the FK is created. We work around it with a 2-pass
+          # load: pass 1 ignores those errors and creates everything else;
+          # pass 2 replays only the `ALTER TABLE ... ADD CONSTRAINT` blocks,
+          # at which point every referenced table and PK is in place. The
+          # second pass logs "constraint already exists" / "multiple
+          # primary keys" for blocks that pass 1 already applied — those
+          # are expected and ignored.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -f db/schema.sql > /tmp/pass1.log 2>&1 || true
+          python3 -c "import re; content=open('db/schema.sql').read(); blocks=re.findall(r'^ALTER TABLE[^;]*?;', content, re.MULTILINE | re.DOTALL); print('\n\n'.join(b for b in blocks if 'ADD CONSTRAINT' in b))" > /tmp/constraints.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -f /tmp/constraints.sql > /tmp/pass2.log 2>&1 || true
+          # Verify the schema is loaded fully — every FK named in the
+          # dump must exist in the live DB. If anything is missing the
+          # workflow fails loudly with both pass logs attached.
+          expected_fks=$(grep -c 'FOREIGN KEY' db/schema.sql)
+          actual_fks=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM pg_constraint c JOIN pg_class r ON c.conrelid=r.oid JOIN pg_namespace n ON r.relnamespace=n.oid WHERE c.contype='f' AND n.nspname='public';")
+          echo "Schema loaded: $actual_fks FKs (dump declares $expected_fks)"
+          if [ "$actual_fks" -lt "$expected_fks" ]; then
+            echo "FK shortfall — pass1.log:" >&2
+            cat /tmp/pass1.log >&2
+            echo "---- pass2.log:" >&2
+            cat /tmp/pass2.log >&2
+            exit 1
+          fi
           # Mark every existing migration as already applied so the API
           # server (when imported by the dynamic test harness) doesn't try
           # to ALTER TABLE on a baseline that already has those columns.
