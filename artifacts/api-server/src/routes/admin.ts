@@ -1099,6 +1099,7 @@ import { DOMAIN_REGISTRY, getSystemStats } from "../lib/domainRegistry.js";
 import { STATE_MACHINES } from "../lib/lifecycleEngine.js";
 import { EVENT_CATALOG, countEventsByDomain } from "../lib/eventCatalog.js";
 import { PERMISSIONS, ROLE_PERMISSIONS } from "../lib/rbacCatalog.js";
+import { ENTITY_REGISTRY, getEntitiesByDomain, getMissingCoverage, getCoverageSummary } from "../lib/entityRegistry.js";
 
 router.get("/governance/policy-audit", requirePermission("admin:read"), async (req, res) => {
   try {
@@ -1202,6 +1203,7 @@ router.get("/system-registry", requirePermission("admin:read"), async (req, res)
       [scope.companyId]
     );
 
+    const coverageSummary = getCoverageSummary();
     res.json({
       overview: {
         domains: stats.domains,
@@ -1213,6 +1215,8 @@ router.get("/system-registry", requirePermission("admin:read"), async (req, res)
         roles: Object.keys(ROLE_PERMISSIONS).length,
         cronJobs: stats.cronJobs,
         glDomains: stats.glDomains,
+        registeredEntities: ENTITY_REGISTRY.length,
+        coverage: coverageSummary,
       },
       domains: DOMAIN_REGISTRY.map(d => ({
         id: d.id,
@@ -1228,19 +1232,26 @@ router.get("/system-registry", requirePermission("admin:read"), async (req, res)
   } catch (err) { handleRouteError(err, res, "System registry error:"); }
 });
 
-router.get("/system-registry/entities", requirePermission("admin:read"), async (_req, res) => {
+router.get("/system-registry/entities", requirePermission("admin:read"), async (req, res) => {
   try {
-    const entities = DOMAIN_REGISTRY.flatMap(d =>
-      d.tables.map(t => ({
-        table: t,
-        domain: d.id,
-        domainLabel: d.label,
-        hasLifecycle: STATE_MACHINES.some((m: any) => m.entity === t),
-        lifecycle: STATE_MACHINES.find((m: any) => m.entity === t) || null,
-      }))
-    );
+    const domain = req.query.domain as string | undefined;
+    const entities = domain ? getEntitiesByDomain(domain) : ENTITY_REGISTRY;
     res.json({ entities, total: entities.length });
   } catch (err) { handleRouteError(err, res, "Entity registry error:"); }
+});
+
+router.get("/system-registry/coverage", requirePermission("admin:read"), async (_req, res) => {
+  try {
+    const gaps = getMissingCoverage();
+    const summary = getCoverageSummary();
+    const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
+    const byCategory: Record<string, number> = {};
+    for (const g of gaps) {
+      bySeverity[g.severity]++;
+      byCategory[g.category] = (byCategory[g.category] || 0) + 1;
+    }
+    res.json({ gaps, total: gaps.length, bySeverity, byCategory, summary });
+  } catch (err) { handleRouteError(err, res, "Coverage analysis error:"); }
 });
 
 router.get("/system-registry/actions", requirePermission("admin:read"), async (req, res) => {
