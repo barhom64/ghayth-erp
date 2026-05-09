@@ -1,4 +1,4 @@
-import { useState, Fragment } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -12,7 +12,7 @@ import { CLASSIFICATIONS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { useAppContext } from "@/contexts/app-context";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { CrmTabsNav } from "@/components/shared/crm-tabs-nav";
@@ -46,7 +46,7 @@ export default function Clients() {
   );
   const clients = clientsResponse?.data;
   const total = clientsResponse?.total || 0;
-  const filteredClients = applyFilters(clients || [], filters, { dateField: "createdAt" });
+  const filteredClients = clients || [];
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/clients",
