@@ -27,7 +27,7 @@ export default function ApplicationListPage() {
   });
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const kpis = [
     { label: "إجمالي المتقدمين", value: apps.length, icon: Users, color: "text-blue-600 bg-blue-50" },

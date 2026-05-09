@@ -37,7 +37,7 @@ export default function OrdersCreate() {
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (loadingC || loadingP) return <LoadingSpinner />;
-  if (errorC || errorP) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (errorC || errorP) return <ErrorState />;
 
   const handleClientSelect = (clientId: string) => {
     const client = clients.find((c: any) => String(c.id) === clientId);

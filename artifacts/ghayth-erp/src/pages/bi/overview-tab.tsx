@@ -26,7 +26,7 @@ export function OverviewTab() {
     { label: "الإيرادات", value: `${formatNumber(((d.totalRevenue || 0) / 1000))}K`, icon: DollarSign, color: "text-indigo-600 bg-indigo-50" },
   ];
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <div className="space-y-4">

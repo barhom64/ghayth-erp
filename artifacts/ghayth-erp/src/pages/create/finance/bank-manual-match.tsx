@@ -31,7 +31,7 @@ export default function BankManualMatchPage() {
   const manualMatchMutation = useApiMutation("/finance/bank-reconciliation/manual-match", "POST");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   async function searchJournalLines() {
     if (!jeSearch.trim()) return;

@@ -239,7 +239,7 @@ export default function ExitDetail() {
       entityId={Number(id)}
       isLoading={isLoading}
       error={isError ? true : undefined}
-      onRetry={() => window.location.reload()}
+     
       createdAt={item?.createdAt}
       updatedAt={item?.updatedAt}
       actions={

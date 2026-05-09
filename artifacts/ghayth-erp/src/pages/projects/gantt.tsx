@@ -72,7 +72,7 @@ export default function GanttPage() {
   const totalDays = Math.max(30, (projectEnd.getTime() - projectStart.getTime()) / (24 * 3600 * 1000));
 
   if (isProjectsLoading) return <LoadingSpinner />;
-  if (isProjectsError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isProjectsError) return <ErrorState />;
 
   return (
     <PageShell

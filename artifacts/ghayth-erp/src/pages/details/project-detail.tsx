@@ -638,7 +638,7 @@ export default function ProjectDetail() {
       entityId={id || ""}
       isLoading={isLoading}
       error={isError ? error : undefined}
-      onRetry={() => window.location.reload()}
+     
       createdAt={project?.createdAt}
       updatedAt={project?.updatedAt}
       overview={overview}

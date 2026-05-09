@@ -49,7 +49,7 @@ export default function OvertimeCreate() {
   );
 
   if (employeesQ.isLoading) return <LoadingSpinner />;
-  if (employeesQ.isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (employeesQ.isError) return <ErrorState />;
 
   const salary = Number(selectedEmployee?.salary || selectedEmployee?.basicSalary || 0);
   const hourlyRate = salary > 0 ? Math.round((salary / 30 / 8) * 100) / 100 : 0;

@@ -38,7 +38,7 @@ export default function UmrahDashboard() {
   };
 
   if (seasonsLoading || dashLoading) return <LoadingSpinner />;
-  if (seasonsError || dashError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (seasonsError || dashError) return <ErrorState />;
   if (!activeSeason) return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <AlertTriangle className="w-12 h-12 text-orange-400 mb-4" />

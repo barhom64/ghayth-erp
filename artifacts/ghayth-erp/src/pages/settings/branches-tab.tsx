@@ -86,7 +86,7 @@ export function BranchesTab() {
   ];
 
   if (isLoading || companiesLoading) return <DataTable columns={branchColumns} data={[]} isLoading={true} searchPlaceholder={null} noToolbar />;
-  if (isError || companiesError) return <DataTable columns={branchColumns} data={[]} isError={true} onRetry={() => window.location.reload()} searchPlaceholder={null} noToolbar />;
+  if (isError || companiesError) return <DataTable columns={branchColumns} data={[]} isError={true} searchPlaceholder={null} noToolbar />;
 
   const handleEdit = (item: any) => {
     setForm({

@@ -678,7 +678,7 @@ export default function UnitDetail() {
       entityId={id || ""}
       isLoading={isLoading}
       error={isError ? error : undefined}
-      onRetry={() => window.location.reload()}
+     
       createdAt={unit?.createdAt}
       updatedAt={unit?.updatedAt}
       overview={overview}

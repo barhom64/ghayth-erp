@@ -27,7 +27,7 @@ export default function InventoryCostingPage() {
   const { data: roundingAccount } = useApiQuery<any>(["rounding-account"], "/finance/rounding-account");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   async function handleSetupRounding() {
     try {

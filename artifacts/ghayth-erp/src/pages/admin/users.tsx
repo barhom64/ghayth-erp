@@ -410,7 +410,7 @@ export default function AdminUsersPage() {
         data={filtered}
         isLoading={isLoading}
         isError={isError}
-        onRetry={() => window.location.reload()}
+       
         emptyMessage="لا يوجد مستخدمين"
         pageSize={0}
         searchPlaceholder="بحث بالبريد أو الاسم..."

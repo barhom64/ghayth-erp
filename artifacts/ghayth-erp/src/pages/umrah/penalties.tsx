@@ -37,7 +37,7 @@ export default function UmrahPenalties() {
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const filteredItems = items.filter((p: any) => {
     if (filters.status && p.status !== filters.status) return false;

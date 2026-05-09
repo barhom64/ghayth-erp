@@ -75,7 +75,7 @@ export default function DisciplineRegulationPage() {
   const reseeding = reseedMut.isPending;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const saveEdit = () => {
     if (!editing) return;

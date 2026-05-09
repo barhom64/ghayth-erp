@@ -119,7 +119,7 @@ export default function AutoDetectionPage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const settings = settingsQuery.data;
   const summary = summaryQuery.data;

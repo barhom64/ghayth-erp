@@ -13,7 +13,7 @@ export default function OrganizationPage() {
   const employees = empData?.data || [];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const kpis = [
     { label: "الأقسام", value: items.length, icon: Building2, color: "text-blue-600 bg-blue-50" },

@@ -98,7 +98,7 @@ export default function HR() {
   const isError = empQ.isError || leavesQ.isError || payrollQ.isError || attendanceQ.isError;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const totalEmployees = empQ.data?.total ?? "—";
   const pendingLeaves = leavesQ.data?.total ?? "—";

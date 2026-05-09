@@ -74,7 +74,7 @@ export default function RecurringJournalsCreatePage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   function updateLine(idx: number, field: keyof TemplateLine, value: string) {
     setLines((prev) => {

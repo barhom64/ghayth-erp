@@ -21,7 +21,7 @@ export default function Notifications() {
   const markingId = markReadMut.isPending ? markReadMut.variables?.id ?? null : null;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleMarkAsRead = (id: number) => {
     markReadMut.mutate({ id });

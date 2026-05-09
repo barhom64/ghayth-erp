@@ -108,7 +108,7 @@ export default function Tasks() {
   const saving = updateMut.isPending || deleteMut.isPending;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const tasks = asList(tasksResp);
   const preFiltered = applyFilters(tasks, filters, {

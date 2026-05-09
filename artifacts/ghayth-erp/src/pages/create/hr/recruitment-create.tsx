@@ -41,7 +41,7 @@ export default function RecruitmentCreate() {
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const set = (key: string, value: string) => {
     setForm((f) => ({ ...f, [key]: value }));

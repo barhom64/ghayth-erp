@@ -22,7 +22,7 @@ export default function StoreOrderDetailPage() {
   const printContainerRef = useRef<HTMLDivElement>(null);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   if (!order) return (
     <div className="text-center py-12">

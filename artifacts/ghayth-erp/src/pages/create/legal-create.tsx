@@ -53,7 +53,7 @@ export default function LegalCreate() {
   }, [copyFromId, copied]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const clients = clientsData?.data || [];
 

@@ -35,7 +35,7 @@ export default function ExcuseCreate() {
   });
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 

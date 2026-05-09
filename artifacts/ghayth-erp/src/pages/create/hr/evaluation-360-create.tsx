@@ -39,7 +39,7 @@ export default function Evaluation360Create() {
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const addParticipant = () => {
     if (!addingParticipant.evaluatorId) return;

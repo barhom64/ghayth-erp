@@ -85,7 +85,7 @@ export default function ViolationsReportPage() {
   const resolving = resolveMut.isPending ? resolveMut.variables?.id ?? null : null;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleResolve = (id: number) => {
     resolveMut.mutate({ id });

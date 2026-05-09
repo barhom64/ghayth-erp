@@ -13,7 +13,7 @@ export default function PerformanceAdvancedPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["performance"], "/hr/performance");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const items = data?.data || [];
 

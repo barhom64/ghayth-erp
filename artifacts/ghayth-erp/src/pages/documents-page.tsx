@@ -355,7 +355,7 @@ export default function DocumentsPage() {
   const { data: stats, isLoading, isError } = useApiQuery<any>(["doc-stats"], "/documents/stats");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const s = stats || {};
 

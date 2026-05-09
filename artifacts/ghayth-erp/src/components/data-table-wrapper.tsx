@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,6 +38,9 @@ export function DataTableWrapper({
   total,
   onPageChange,
 }: DataTableWrapperProps) {
+  const qc = useQueryClient();
+  const handleRetry = onRetry ?? (() => qc.invalidateQueries());
+
   if (isLoading) {
     return (
       <TableBody>
@@ -68,12 +72,10 @@ export function DataTableWrapper({
                   {error?.message || "يرجى المحاولة مرة أخرى"}
                 </p>
               </div>
-              {onRetry && (
-                <Button variant="outline" size="sm" onClick={onRetry} className="gap-2">
-                  <RefreshCw className="h-4 w-4" />
-                  إعادة المحاولة
-                </Button>
-              )}
+              <Button variant="outline" size="sm" onClick={handleRetry} className="gap-2">
+                <RefreshCw className="h-4 w-4" />
+                إعادة المحاولة
+              </Button>
             </div>
           </TableCell>
         </TableRow>
