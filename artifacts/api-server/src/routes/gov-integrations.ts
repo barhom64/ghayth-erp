@@ -417,7 +417,8 @@ router.patch("/links/:id", authorize({ feature: "admin", action: "update" }), as
     if (notes !== undefined) { params.push(notes); sets.push(`notes=$${params.length}`); }
 
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE gov_integration_links SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE gov_integration_links SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("الرابط غير موجود");
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_gov_link",

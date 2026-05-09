@@ -669,7 +669,8 @@ router.patch("/:id", authorize({ feature: "projects", action: "update" }), async
     }
     if (Object.keys(after).length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE projects SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE projects SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("المشروع غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
@@ -721,7 +722,8 @@ router.delete("/:id", authorize({ feature: "projects.list", action: "delete", re
       );
     }
 
-    await rawExecute(`UPDATE projects SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE projects SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("المشروع غير موجود");
 
     createAuditLog({
       companyId: scope.companyId,
@@ -864,7 +866,8 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects", a
     const tasks = await rawQuery<any>(`SELECT * FROM project_tasks WHERE "projectId"=$1 AND "deletedAt" IS NULL LIMIT 500`, [projectId]);
     const doneTasks = tasks.filter((t: any) => t.status === 'done').length;
     const progressPct = tasks.length > 0 ? Math.round((doneTasks / tasks.length) * 100) : 0;
-    await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [progressPct, projectId, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [progressPct, projectId, scope.companyId]);
+    if (!affectedRows) logger.warn({ projectId, progressPct }, "Project progress update matched no rows (possible race condition)");
 
     res.json({ message: 'تم إكمال المرحلة', phase, milestoneInvoiceCreated, progressPct });
   } catch (err) { handleRouteError(err, res, "Complete phase error:"); }

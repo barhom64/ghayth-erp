@@ -880,7 +880,7 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance", action: "
 
     const { journalId } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: description ?? `سلفة راتب ${employeeName} – خصم على ${deductMonths} شهر`, type: "salary_advance", sourceType: "salary_advance", sourceId: 0, sourceKey: `finance:salary_advance:${Date.now()}`, lines: [{ accountCode: advanceAccountCode, debit: Number(amount), credit: 0, employeeId: employeeId ? Number(employeeId) : undefined }, { accountCode: sourceAcct, debit: 0, credit: Number(amount) }] });
     const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "advances", refType: "salary_advance", refId: journalId, amount: Number(amount) });
-    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`, [journalId, scope.companyId]); }
+    if (approvalResult.requiresApproval) { const { affectedRows } = await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`, [journalId, scope.companyId]); if (!affectedRows) throw new NotFoundError("القيد غير موجود"); }
     const [createdAdvance] = await rawQuery<any>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
        FROM journal_entries je

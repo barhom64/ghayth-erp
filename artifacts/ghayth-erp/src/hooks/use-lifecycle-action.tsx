@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { ApiError, apiFetch, getErrorMessage } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import { actionLabel } from "@/lib/action-labels";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -190,11 +191,12 @@ export function useLifecycleAction(
         qc.invalidateQueries({ queryKey: [...key] }),
       );
 
+      const verb = actionLabel(action) || "تنفيذ";
       const successTitle =
         runOptions.successMessage ??
         (options.entityLabel
-          ? `تم ${arabicActionLabel(action)} ${options.entityLabel}`
-          : `تم ${arabicActionLabel(action)}`);
+          ? `تم ${verb} ${options.entityLabel}`
+          : `تم ${verb}`);
       toast({ title: successTitle });
 
       options.onSuccess?.(action, data);
@@ -260,46 +262,13 @@ export function useLifecycleAction(
 }
 
 /**
- * Map a lifecycle action verb to its Arabic past-tense phrase for success
- * toasts. Unknown verbs fall back to "تنفيذ العملية".
- */
-function arabicActionLabel(action: string): string {
-  switch (action) {
-    case "approve":
-      return "اعتماد";
-    case "reject":
-      return "رفض";
-    case "cancel":
-      return "إلغاء";
-    case "return":
-      return "إرجاع";
-    case "send":
-      return "إرسال";
-    case "close":
-      return "إقفال";
-    case "complete":
-      return "إكمال";
-    case "terminate":
-      return "إنهاء";
-    case "renew":
-      return "تجديد";
-    case "reopen":
-      return "إعادة فتح";
-    case "submit":
-      return "تقديم";
-    case "archive":
-      return "أرشفة";
-    default:
-      return "تنفيذ";
-  }
-}
-
-/**
  * Compose a toast title from error code + attempted action so users see
- * "لا يمكن اعتماد" instead of the generic "تعذّر تنفيذ العملية".
+ * "لا يمكن اعتماد" instead of the generic "تعذّر تنفيذ العملية". Verbs
+ * come from the canonical `lib/action-labels` so the wording matches
+ * audit logs and approval timelines elsewhere in the app.
  */
 function titleForCode(code: string, action: string): string {
-  const verb = arabicActionLabel(action);
+  const verb = actionLabel(action) || "تنفيذ";
   switch (code) {
     case "CONFLICT":
       return `لا يمكن ${verb} في الحالة الحالية`;

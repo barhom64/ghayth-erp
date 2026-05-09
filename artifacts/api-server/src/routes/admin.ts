@@ -257,27 +257,30 @@ router.patch("/users/:id", authorize({ feature: "admin", action: "update" }), as
     if (employeeId !== undefined) { params.push(employeeId || null); sets.push(`"employeeId"=$${params.length}`); }
     if (!sets.length) { throw new ValidationError("لا توجد بيانات للتحديث"); }
     params.push(id);
-    await rawExecute(`UPDATE users SET ${sets.join(",")} WHERE id=$${params.length}`, params);
-    // Revoke all refresh tokens when user is deactivated
-    if (isActive === false) {
-      await rawExecute(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`, [id]);
-    }
-    if (role !== undefined) {
-      const roleDef = PREDEFINED_ROLES.find(r => r.roleKey === role) || { roleKey: role, label: role, modules: [], level: 10 };
-      const customRoleDef = await rawQuery<any>(
-        `SELECT label, level, modules FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2 LIMIT 1`,
-        [scope.companyId, role]
-      ).then(rows => rows[0]).catch((e) => { logger.error(e, "custom role lookup failed"); return null; });
-      const finalDef = customRoleDef
-        ? { roleKey: role, label: customRoleDef.label, level: customRoleDef.level, modules: Array.isArray(customRoleDef.modules) ? customRoleDef.modules : JSON.parse(customRoleDef.modules || "[]") }
-        : roleDef;
-      await rawExecute(
-        `INSERT INTO user_roles ("userId","roleKey",label,level,modules,"companyId","createdAt")
-         VALUES ($1,$2,$3,$4,$5,$6,NOW())
-         ON CONFLICT ("userId","roleKey","companyId") DO UPDATE SET label=EXCLUDED.label, level=EXCLUDED.level, modules=EXCLUDED.modules`,
-        [id, finalDef.roleKey, finalDef.label, finalDef.level, JSON.stringify(finalDef.modules), scope.companyId]
-      ).catch((e) => logger.error(e, "admin background task failed"));
-    }
+    await withTransaction(async (tx) => {
+      const userRes = await tx.query(`UPDATE users SET ${sets.join(",")} WHERE id=$${params.length} RETURNING id`, params);
+      if (!userRes.rowCount) throw new NotFoundError("المستخدم غير موجود");
+      if (isActive === false) {
+        await tx.query(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`, [id]);
+      }
+      if (role !== undefined) {
+        const roleDef = PREDEFINED_ROLES.find(r => r.roleKey === role) || { roleKey: role, label: role, modules: [], level: 10 };
+        const { rows: customRows } = await tx.query(
+          `SELECT label, level, modules FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2 LIMIT 1`,
+          [scope.companyId, role]
+        );
+        const customRoleDef = customRows[0] ?? null;
+        const finalDef = customRoleDef
+          ? { roleKey: role, label: customRoleDef.label, level: customRoleDef.level, modules: Array.isArray(customRoleDef.modules) ? customRoleDef.modules : JSON.parse(customRoleDef.modules || "[]") }
+          : roleDef;
+        await tx.query(
+          `INSERT INTO user_roles ("userId","roleKey",label,level,modules,"companyId","createdAt")
+           VALUES ($1,$2,$3,$4,$5,$6,NOW())
+           ON CONFLICT ("userId","roleKey","companyId") DO UPDATE SET label=EXCLUDED.label, level=EXCLUDED.level, modules=EXCLUDED.modules`,
+          [id, finalDef.roleKey, finalDef.label, finalDef.level, JSON.stringify(finalDef.modules), scope.companyId]
+        );
+      }
+    });
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "users", entityId: id,
@@ -1279,7 +1282,8 @@ router.delete("/governance/event-dlq/:id", authorize({ feature: "admin", action:
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    await rawExecute(`UPDATE event_dlq SET "resolvedAt"=NOW() WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE event_dlq SET "resolvedAt"=NOW() WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     res.json({ resolved: true });
   } catch (err) { handleRouteError(err, res, "DLQ resolve error:"); }
 });

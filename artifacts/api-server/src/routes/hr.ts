@@ -3364,7 +3364,8 @@ router.delete("/approval-chain-definitions/:id", authorize({ feature: "hr", acti
     }
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT * FROM approval_chains WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
-    await rawExecute(`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("سلسلة الموافقة غير موجودة");
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "approval_chains", entityId: id,
@@ -3630,7 +3631,7 @@ router.get("/payroll-summary", authorize({ feature: "hr", action: "list" }), asy
 
     const data = Array.from(empMap.values());
     res.json({ data, total: data.length, period: targetPeriod });
-  } catch (err) { res.json({ data: [], total: 0 }); }
+  } catch (err) { logger.error(err, "payslip-preview query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.get("/violations-stats", authorize({ feature: "hr", action: "list" }), async (req, res) => {
@@ -3678,7 +3679,8 @@ router.patch("/violations/:id", authorize({ feature: "hr", action: "update" }), 
     }
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE employee_violations SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE employee_violations SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("المخالفة غير موجودة");
     const [updated] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -3757,7 +3759,8 @@ router.patch("/shifts/:id", authorize({ feature: "hr", action: "update", resourc
     params.push(id); params.push(scope.companyId);
     await withTransaction(async (client) => {
       if (b.isDefault) await client.query(`UPDATE shifts SET "isDefault"=false WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]);
-      await client.query(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+      const result = await client.query(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+      if (!result.rowCount) throw new NotFoundError("السجل غير موجود");
     });
     const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
@@ -3776,7 +3779,8 @@ router.delete("/shifts/:id", authorize({ feature: "hr", action: "delete", resour
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    await rawExecute(`UPDATE shifts SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE shifts SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "shifts", entityId: id,
@@ -5745,7 +5749,7 @@ router.get("/delegations", authorize({ feature: "hr", action: "list" }), async (
       [scope.companyId]
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     res.json({ data: rows, total: rows.length });
-  } catch (err) { res.json({ data: [], total: 0 }); }
+  } catch (err) { logger.error(err, "delegations query failed"); res.json({ data: [], total: 0 }); }
 });
 
 router.post("/delegations", authorize({ feature: "hr", action: "approve" }), async (req, res) => {
@@ -5906,7 +5910,8 @@ router.delete("/public-holidays/:id", authorize({ feature: "hr", action: "delete
     }
     const id = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    await rawExecute(`UPDATE public_holidays SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE public_holidays SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "public_holidays", entityId: id,
@@ -6369,7 +6374,8 @@ router.delete("/idp/:id", authorize({ feature: "hr", action: "delete" }), async 
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    await rawExecute(`UPDATE employee_development_plans SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE employee_development_plans SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "employee_development_plans", entityId: id,

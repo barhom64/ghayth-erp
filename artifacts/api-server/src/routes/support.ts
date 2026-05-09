@@ -773,7 +773,8 @@ router.patch("/kb/:id", authorize({ feature: "support", action: "update" }), asy
     if (b.tags !== undefined) { params.push(b.tags); sets.push(`tags=$${params.length}`); }
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE kb_articles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE kb_articles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("المقال غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.updated", entity: "kb_articles", entityId: id, details: JSON.stringify({ title: b.title }) }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
@@ -789,7 +790,8 @@ router.delete("/kb/:id", authorize({ feature: "support", action: "delete" }), as
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    await rawExecute(`UPDATE kb_articles SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE kb_articles SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("المقال غير موجود");
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.deleted", entity: "kb_articles", entityId: id, details: "{}" }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,

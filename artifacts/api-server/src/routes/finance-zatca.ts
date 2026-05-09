@@ -430,7 +430,8 @@ zatcaRouter.get("/zatca/invoice/:id/xml", authorize({ feature: "finance.zatca", 
     let uuid = invoice.zatcaUuid;
     if (!uuid) {
       uuid = crypto.randomUUID();
-      await rawExecute(`UPDATE invoices SET "zatcaUuid" = $1::uuid WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [uuid, id, scope.companyId]);
+      const { affectedRows } = await rawExecute(`UPDATE invoices SET "zatcaUuid" = $1::uuid WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [uuid, id, scope.companyId]);
+      if (!affectedRows) throw new NotFoundError("الفاتورة غير موجودة");
     }
 
     const xml = generateZatcaXml({

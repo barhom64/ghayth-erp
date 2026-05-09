@@ -862,7 +862,7 @@ router.post("/memos/:id/cancel", authorize({ feature: "hr.discipline", action: "
       onApply: async (_row, _client) => {
         // إذا كان مرتبطاً بمخالفة، نُلغي ربطها
         if (memo.violationId) {
-          await rawExecute(
+          await _client.query(
             `UPDATE employee_violations SET status = 'cancelled'
               WHERE id = $1 AND "companyId" = $2 AND status IN ('pending', 'under_review') AND "deletedAt" IS NULL`,
             [memo.violationId, scope.companyId]
@@ -958,7 +958,7 @@ router.post("/memos/:id/appeal-decision", authorize({ feature: "hr.discipline", 
       after: { status: newStatus, decision, comment, memoNumber: memo.memoNumber },
       onApply: async (_row, _client) => {
         if (decision === "accepted" && memo.violationId) {
-          await rawExecute(
+          await _client.query(
             `UPDATE employee_violations SET status = 'appeal_accepted' WHERE id = $1 AND "companyId" = $2 AND status = 'approved' AND "deletedAt" IS NULL`,
             [memo.violationId, scope.companyId]
           );
@@ -1013,7 +1013,7 @@ router.post("/memos/:id/close", authorize({ feature: "hr.discipline", action: "u
       after: { status: "closed", previousStatus: memo.status, memoNumber: memo.memoNumber },
       onApply: async (_row, _client) => {
         if (memo.violationId) {
-          await rawExecute(
+          await _client.query(
             `UPDATE employee_violations SET status = 'closed' WHERE id = $1 AND "companyId" = $2 AND status IN ('approved', 'rejected', 'appeal_accepted', 'cancelled') AND "deletedAt" IS NULL`,
             [memo.violationId, scope.companyId]
           );
@@ -1216,7 +1216,7 @@ router.get("/auto-detection/log", authorize({ feature: "hr.discipline", action: 
     const scope = req.scope!;
     const { limit, offset, fromDate, toDate } = req.query as any;
     const result = await getDetectionLog(scope.companyId, {
-      limit: limit ? Number(limit) : 50,
+      limit: Math.min(limit ? Number(limit) : 50, 500),
       offset: offset ? Number(offset) : 0,
       fromDate,
       toDate,

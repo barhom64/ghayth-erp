@@ -447,7 +447,8 @@ router.post("/change-password", authMiddleware, changePasswordLimiter, async (re
     const valid = await verifyPassword(currentPassword, user.passwordHash);
     if (!valid) { throw new ForbiddenError("كلمة المرور الحالية غير صحيحة"); }
     const hashed = await hashPassword(newPassword);
-    await rawExecute(`UPDATE users SET "passwordHash"=$1 WHERE id=$2`, [hashed, scope.userId]);
+    const { affectedRows } = await rawExecute(`UPDATE users SET "passwordHash"=$1 WHERE id=$2`, [hashed, scope.userId]);
+    if (!affectedRows) throw new NotFoundError("المستخدم غير موجود");
     try {
       await rawExecute(
         `UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE "userId"=$1 AND "revokedAt" IS NULL`,

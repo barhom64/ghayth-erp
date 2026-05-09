@@ -69,7 +69,7 @@ router.get("/", authorize({ feature: "crm.clients", action: "list" }), async (re
       paramIdx++;
     }
 
-    params.push(Number(lim) || 20);
+    params.push(Math.min(Number(lim) || 20, 500));
     const limitParam = paramIdx++;
     params.push(offset);
     const offsetParam = paramIdx++;
@@ -112,7 +112,8 @@ router.post("/", authorize({ feature: "crm", action: "create" }), async (req, re
       language,
     } = parsed;
 
-    const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments : null;
+    const rawAttachments = Array.isArray(req.body?.attachments) ? req.body.attachments.slice(0, 20) : null;
+    const attachments = rawAttachments ? rawAttachments.map((a: any) => ({ name: String(a?.name ?? ""), url: String(a?.url ?? ""), type: String(a?.type ?? "") })) : null;
     let insertedId: number = 0;
     await withTransaction(async (txClient: any) => {
       if (email) {
@@ -301,7 +302,8 @@ router.patch("/:id", authorize({ feature: "crm", action: "update" }), async (req
     if (b.isBlacklisted !== undefined) { params.push(b.isBlacklisted); sets.push(`"isBlacklisted" = $${params.length}`); }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id, scope.companyId);
-    await rawExecute(`UPDATE clients SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE clients SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("العميل غير موجود");
     const [updated] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!updated) throw new NotFoundError("العميل غير موجود");
 
@@ -388,7 +390,8 @@ router.delete("/:id", authorize({ feature: "crm.clients", action: "delete", reso
       );
     }
 
-    await rawExecute(`UPDATE clients SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE clients SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("العميل غير موجود");
 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.deleted", entity: "clients", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "clients background task failed"));
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delete", entity: "clients", entityId: id }).catch((e) => logger.error(e, "clients background task failed"));

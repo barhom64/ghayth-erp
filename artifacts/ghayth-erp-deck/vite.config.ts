@@ -4,27 +4,21 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
-const rawPort = process.env.PORT;
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
+// PORT and BASE_PATH used to be required at the top of this file, which
+// meant `vite build` (which produces static assets and never starts a
+// server) would fail with the same error as `vite preview`. Build needs
+// neither value: BASE_PATH defaults to "/" so links resolve from the
+// site root, and PORT defaults to vite's own 5173 only so the dev/preview
+// server has something sensible to bind to. Operators who care should
+// still set both explicitly via env when starting a server.
+const rawPort = process.env.PORT ?? "5173";
 const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    "BASE_PATH environment variable is required but was not provided.",
-  );
-}
+const basePath = process.env.BASE_PATH ?? "/";
 
 export default defineConfig({
   base: basePath,

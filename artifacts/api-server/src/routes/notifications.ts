@@ -25,14 +25,14 @@ router.get("/", authorize({ feature: "notifications", action: "list" }), async (
     const offset = (page - 1) * pageSize;
 
     const [[countRow], notifications] = await Promise.all([
-      rawQuery<{ count: string }>(`SELECT COUNT(*) AS count FROM notifications WHERE "assignmentId" = $1`, [scope.activeAssignmentId]),
+      rawQuery<{ count: string }>(`SELECT COUNT(*) AS count FROM notifications WHERE "assignmentId" = $1 AND "companyId" = $2`, [scope.activeAssignmentId, scope.companyId]),
       rawQuery<any>(
         `SELECT id, type, title, body, priority, "isRead", "createdAt", "refType", "refId", "actionUrl"
          FROM notifications
-         WHERE "assignmentId" = $1
+         WHERE "assignmentId" = $1 AND "companyId" = $2
          ORDER BY "createdAt" DESC
-         LIMIT $2 OFFSET $3`,
-        [scope.activeAssignmentId, pageSize, offset]
+         LIMIT $3 OFFSET $4`,
+        [scope.activeAssignmentId, scope.companyId, pageSize, offset]
       ),
     ]);
 
@@ -49,8 +49,8 @@ router.patch("/:id/read", authorize({ feature: "notifications", action: "update"
 
     const { affectedRows } = await rawExecute(
       `UPDATE notifications SET "isRead" = true, "readAt" = NOW()
-       WHERE id = $1 AND "assignmentId" = $2 RETURNING id`,
-      [id, scope.activeAssignmentId]
+       WHERE id = $1 AND "assignmentId" = $2 AND "companyId" = $3 RETURNING id`,
+      [id, scope.activeAssignmentId, scope.companyId]
     );
 
     if (!affectedRows) {
@@ -75,8 +75,8 @@ router.get("/unread-count", authorize({ feature: "notifications", action: "list"
     const scope = req.scope!;
     const [row] = await rawQuery<{ count: string }>(
       `SELECT COUNT(*) AS count FROM notifications
-       WHERE "assignmentId" = $1 AND "isRead" = false`,
-      [scope.activeAssignmentId]
+       WHERE "assignmentId" = $1 AND "companyId" = $2 AND "isRead" = false`,
+      [scope.activeAssignmentId, scope.companyId]
     );
     res.json({ count: Number(row?.count ?? 0) });
   } catch (err) {
@@ -105,7 +105,7 @@ router.post("/preferences", authorize({ feature: "notifications", action: "updat
     const { insertId } = await rawExecute(
       `INSERT INTO notification_preferences ("userId","companyId",channel,category,enabled)
        VALUES ($1,$2,$3,$4,$5)
-       ON CONFLICT ("userId", channel, category) DO UPDATE SET enabled = $5, "updatedAt" = NOW()
+       ON CONFLICT ("userId", "companyId", channel, category) DO UPDATE SET enabled = $5, "updatedAt" = NOW()
        RETURNING id`,
       [scope.userId, scope.companyId, channel || 'in_app', category || 'general', enabled !== false]
     );
@@ -129,8 +129,8 @@ router.patch("/mark-all-read", authorize({ feature: "notifications", action: "up
     const scope = req.scope!;
     const { affectedRows } = await rawExecute(
       `UPDATE notifications SET "isRead" = true, "readAt" = NOW()
-       WHERE "assignmentId" = $1 AND "isRead" = false`,
-      [scope.activeAssignmentId]
+       WHERE "assignmentId" = $1 AND "companyId" = $2 AND "isRead" = false`,
+      [scope.activeAssignmentId, scope.companyId]
     );
 
     createAuditLog({

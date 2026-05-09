@@ -455,7 +455,8 @@ router.patch("/opportunities/:id", authorize({ feature: "crm.opportunities", act
     if (b.source !== undefined) { params.push(b.source); sets.push(`source=$${params.length}`); }
     if (b.nextFollowUp !== undefined) { params.push(b.nextFollowUp || null); sets.push(`"nextFollowUp"=$${params.length}`); }
     params.push(oppId, scope.companyId);
-    await rawExecute(`UPDATE crm_opportunities SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE crm_opportunities SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("الفرصة غير موجودة");
 
     let autoActions: string[] = [];
 
@@ -841,7 +842,8 @@ router.delete("/opportunities/:id", authorize({ feature: "crm.opportunities", ac
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الفرصة غير موجودة");
-    await rawExecute(`UPDATE crm_opportunities SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE crm_opportunities SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("الفرصة غير موجودة");
     await cancelObligation(scope.companyId, "crm_opportunity", id).catch((e) => logger.error(e, "crm background task failed"));
     emitEvent({
       companyId: scope.companyId,

@@ -362,7 +362,8 @@ router.patch("/contracts/:id", authorize({ feature: "legal.contracts", action: "
     }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id, scope.companyId);
-    await rawExecute(`UPDATE legal_contracts SET ${sets.join(",")}, "updatedAt"=NOW() WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE legal_contracts SET ${sets.join(",")}, "updatedAt"=NOW() WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("العقد غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
@@ -406,7 +407,8 @@ router.delete("/contracts/:id", authorize({ feature: "legal.contracts", action: 
         { field: "status", fix: "أنهِ العقد عبر /contracts/:id/terminate قبل الحذف" }
       );
     }
-    await rawExecute(`UPDATE legal_contracts SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE legal_contracts SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("العقد غير موجود");
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -688,7 +690,8 @@ router.patch("/cases/:id", authorize({ feature: "legal.cases", action: "update" 
     if (b.court !== undefined) { params.push(b.court); sets.push(`court=$${params.length}`); }
     if (sets.length <= 1 && params.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE legal_cases SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE legal_cases SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("القضية غير موجودة");
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -744,7 +747,8 @@ router.delete("/cases/:id", authorize({ feature: "legal.cases", action: "delete"
         { field: "status", fix: "أغلق القضية عبر /cases/:id/close قبل الحذف" }
       );
     }
-    await rawExecute(`UPDATE legal_cases SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE legal_cases SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("القضية غير موجودة");
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -1233,7 +1237,8 @@ router.patch("/cases/:caseId/judgments/:id", authorize({ feature: "legal.cases",
     if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
     if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
     params.push(id); params.push(caseId); params.push(scope.companyId);
-    await rawExecute(`UPDATE legal_judgments SET ${sets.join(",")} WHERE id=$${params.length - 2} AND "caseId"=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const { affectedRows } = await rawExecute(`UPDATE legal_judgments SET ${sets.join(",")} WHERE id=$${params.length - 2} AND "caseId"=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    if (!affectedRows) throw new NotFoundError("الحكم غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
     // Mark payment obligation met if fully paid
