@@ -16,3 +16,14 @@ export {
 export { convertWithRate, invertRate } from "./convert.js";
 export type { ResolvedRate } from "./rate-lookup.js";
 export { fetchRateForDate, fetchRateOrThrow } from "./rate-lookup.js";
+export type { FetchedRate, RateSource } from "./source-fetchers/types.js";
+export { ecbSource, parseEcbXml } from "./source-fetchers/ecb.js";
+export { samaSource, SamaNotConfiguredError } from "./source-fetchers/sama.js";
+export { manualSource } from "./source-fetchers/manual.js";
+export type { DailyFetchOutcome } from "./jobs.js";
+export {
+  dailyFxRateFetch,
+  dailyFxRateFetchCron,
+  findStaleRates,
+  DEFAULT_SOURCE_CHAIN,
+} from "./jobs.js";
