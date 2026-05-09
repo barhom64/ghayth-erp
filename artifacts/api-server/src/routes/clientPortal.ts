@@ -241,7 +241,7 @@ protectedRouter.get("/me", withPortalScope(async (req, res) => {
               cpa.email AS "portalEmail", cpa."mustChangePassword", cpa."lastLoginAt"
        FROM clients c
        JOIN client_portal_accounts cpa ON cpa."clientId" = c.id AND cpa."companyId" = c."companyId"
-       WHERE ${where}`,
+       WHERE ${where} AND c."deletedAt" IS NULL`,
       params
     );
     if (!client) throw new NotFoundError("العميل غير موجود");

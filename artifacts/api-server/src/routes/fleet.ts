@@ -2933,7 +2933,7 @@ router.get("/vehicles/:id/tco", requirePermission("fleet:read"), async (req, res
     const [fuelCost] = await rawQuery<any>(
       `SELECT COALESCE(SUM("totalCost"),0) AS total, COALESCE(SUM(liters),0) AS liters,
               COALESCE(SUM(CASE WHEN "mileageAtFuel" IS NOT NULL THEN "totalCost" ELSE 0 END),0) AS "withMileage"
-       FROM fleet_fuel_logs WHERE "vehicleId"=$1`,
+       FROM fleet_fuel_logs WHERE "vehicleId"=$1 AND "deletedAt" IS NULL`,
       [vehicleId]
     );
     const [maintenanceCost] = await rawQuery<any>(
@@ -2941,13 +2941,13 @@ router.get("/vehicles/:id/tco", requirePermission("fleet:read"), async (req, res
       [vehicleId]
     );
     const [insuranceCost] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(premium),0) AS total FROM fleet_insurance WHERE "vehicleId"=$1`,
+      `SELECT COALESCE(SUM(premium),0) AS total FROM fleet_insurance WHERE "vehicleId"=$1 AND "deletedAt" IS NULL`,
       [vehicleId]
     );
     const [tripRevenue] = await rawQuery<any>(
       `SELECT COALESCE(SUM(cost),0) AS revenue, COUNT(*) AS trips,
               COALESCE(SUM(distance),0) AS "totalKm"
-       FROM fleet_trips WHERE "vehicleId"=$1 AND status='completed'`,
+       FROM fleet_trips WHERE "vehicleId"=$1 AND status='completed' AND "deletedAt" IS NULL`,
       [vehicleId]
     );
     const [trafficFines] = await rawQuery<any>(
