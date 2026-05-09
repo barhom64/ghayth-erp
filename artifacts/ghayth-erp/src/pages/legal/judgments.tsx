@@ -1,4 +1,6 @@
+import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,12 +25,12 @@ interface Judgment {
 const columns: DataTableColumn<Judgment>[] = [
   { key: "caseTitle", header: "القضية", sortable: true, searchable: true },
   { key: "caseNumber", header: "رقم القضية" },
-  { key: "judgmentDate", header: "تاريخ الحكم", sortable: true, render: (r) => r.judgmentDate ? new Date(r.judgmentDate).toLocaleDateString("ar-SA") : "-" },
+  { key: "judgmentDate", header: "تاريخ الحكم", sortable: true, render: (r) => formatDateAr(r.judgmentDate) },
   { key: "judgmentType", header: "نوع الحكم" },
   { key: "verdict", header: "الحكم / القرار", searchable: true },
-  { key: "amount", header: "المبلغ", render: (r) => r.amount ? `${Number(r.amount).toLocaleString("ar-SA")} ر.س` : "-" },
-  { key: "paidAmount", header: "المدفوع", render: (r) => r.paidAmount ? `${Number(r.paidAmount).toLocaleString("ar-SA")} ر.س` : "-" },
-  { key: "dueDate", header: "تاريخ الاستحقاق", render: (r) => r.dueDate ? new Date(r.dueDate).toLocaleDateString("ar-SA") : "-" },
+  { key: "amount", header: "المبلغ", render: (r) => r.amount ? formatCurrency(Number(r.amount)) : "-" },
+  { key: "paidAmount", header: "المدفوع", render: (r) => r.paidAmount ? formatCurrency(Number(r.paidAmount)) : "-" },
+  { key: "dueDate", header: "تاريخ الاستحقاق", render: (r) => formatDateAr(r.dueDate) },
   {
     key: "riskLevel", header: "مستوى المخاطرة", render: (r) => {
       const v = r.riskLevel;
@@ -39,6 +41,7 @@ const columns: DataTableColumn<Judgment>[] = [
 ];
 
 export default function LegalJudgments() {
+  const [, navigate] = useLocation();
   const { data, isLoading, isError, error } = useApiQuery<any>(["legal-judgments"], "/legal/judgments/financial-report");
   const rows = asList(data?.data || data);
   const totalAmount = data?.totalAmount || 0;
@@ -58,12 +61,12 @@ export default function LegalJudgments() {
       loading={isLoading}
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">إجمالي المبالغ</p><p className="text-xl font-bold">{Number(totalAmount).toLocaleString("ar-SA")} ر.س</p></CardContent></Card>
-        <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المدفوع</p><p className="text-xl font-bold text-green-600">{Number(totalPaid).toLocaleString("ar-SA")} ر.س</p></CardContent></Card>
-        <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المتبقي</p><p className="text-xl font-bold text-red-600">{Number(outstanding).toLocaleString("ar-SA")} ر.س</p></CardContent></Card>
+        <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">إجمالي المبالغ</p><p className="text-xl font-bold">{formatCurrency(Number(totalAmount))}</p></CardContent></Card>
+        <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المدفوع</p><p className="text-xl font-bold text-green-600">{formatCurrency(Number(totalPaid))}</p></CardContent></Card>
+        <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المتبقي</p><p className="text-xl font-bold text-red-600">{formatCurrency(Number(outstanding))}</p></CardContent></Card>
       </div>
       <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />
-      <DataTable columns={columns} data={filtered} isLoading={isLoading} isError={isError} error={error} />
+      <DataTable columns={columns} data={filtered} isLoading={isLoading} isError={isError} error={error} onRowClick={(j) => navigate(`/legal/judgments/${j.id}`)} />
     </PageShell>
   );
 }

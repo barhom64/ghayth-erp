@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, FileText, Clock, Shield, Car, Building2, User } from "lucide-react";
@@ -23,6 +25,7 @@ function getSeverityBadge(daysLeft: number) {
 }
 
 export default function ExpiringDocumentsPage() {
+  const [, navigate] = useLocation();
   const [days, setDays] = useState("90");
   const [filters, setFilters] = useFilters();
 
@@ -92,9 +95,7 @@ export default function ExpiringDocumentsPage() {
       sortable: true,
       render: (v) => (
         <span className="text-sm text-gray-600">
-          {v.expiryDate
-            ? new Date(v.expiryDate).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })
-            : "-"}
+          {formatDateAr(v.expiryDate)}
         </span>
       ),
     },
@@ -165,6 +166,7 @@ export default function ExpiringDocumentsPage() {
         noToolbar
         emptyMessage="لا توجد وثائق منتهية في هذه الفترة"
         pageSize={20}
+        onRowClick={(row) => navigate(`/employees/${row.employeeId}`)}
       />
     </PageShell>
   );

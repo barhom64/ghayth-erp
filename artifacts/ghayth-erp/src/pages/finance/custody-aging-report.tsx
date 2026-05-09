@@ -108,32 +108,32 @@ export default function CustodyAgingReportPage() {
                     <div className="border-t">
                       <DataTable
                         columns={[
-                          { key: "ref", header: "المرجع", render: (c) => (
+                          { key: "ref", header: "المرجع", render: (c: any) => (
                             <Link href={`/finance/custodies/${c.id}`}>
                               <span className="font-mono text-blue-600 text-xs hover:underline cursor-pointer">{c.ref}</span>
                             </Link>
                           )},
-                          { key: "description", header: "الوصف", render: (c) => (
+                          { key: "description", header: "الوصف", render: (c: any) => (
                             <div className="text-gray-600">
                               {c.description || "-"}
                               {c.purpose && <div className="text-xs text-gray-400">{c.purpose}</div>}
                             </div>
                           )},
-                          { key: "amount", header: "المبلغ", render: (c) => <span className="font-semibold">{formatCurrency(c.amount)}</span> },
-                          { key: "settledAmount", header: "المسوّى", render: (c) => <span className="text-green-600">{formatCurrency(c.settledAmount)}</span> },
-                          { key: "remainingAmount", header: "المتبقي", render: (c) => <span className="font-semibold text-orange-600">{formatCurrency(c.remainingAmount)}</span> },
-                          { key: "date", header: "التاريخ", render: (c) => <span className="text-gray-500 text-xs">{c.date ? formatDateAr(c.date) : "-"}</span> },
-                          { key: "expectedReturnDate", header: "تاريخ الإرجاع", render: (c) => c.expectedReturnDate ? (
+                          { key: "amount", header: "المبلغ", render: (c: any) => <span className="font-semibold">{formatCurrency(c.amount)}</span> },
+                          { key: "settledAmount", header: "المسوّى", render: (c: any) => <span className="text-green-600">{formatCurrency(c.settledAmount)}</span> },
+                          { key: "remainingAmount", header: "المتبقي", render: (c: any) => <span className="font-semibold text-orange-600">{formatCurrency(c.remainingAmount)}</span> },
+                          { key: "date", header: "التاريخ", render: (c: any) => <span className="text-gray-500 text-xs">{c.date ? formatDateAr(c.date) : "-"}</span> },
+                          { key: "expectedReturnDate", header: "تاريخ الإرجاع", render: (c: any) => c.expectedReturnDate ? (
                             <span className={c.isOverdue ? "text-red-600 font-semibold" : "text-gray-500"}>
                               {formatDateAr(c.expectedReturnDate)}
                             </span>
                           ) : "-" },
-                          { key: "daysOverdue", header: "أيام التأخير", render: (c) => c.daysOverdue > 0 ? (
+                          { key: "daysOverdue", header: "أيام التأخير", render: (c: any) => c.daysOverdue > 0 ? (
                             <Badge className="bg-red-100 text-red-700 text-xs">{c.daysOverdue} يوم</Badge>
                           ) : <span className="text-gray-400">-</span> },
                         ]}
                         data={emp.custodies}
-                        rowClassName={(c) => c.isOverdue ? "bg-red-50/30" : ""}
+                        rowClassName={(c: any) => c.isOverdue ? "bg-red-50/30" : ""}
                         noToolbar
                         pageSize={0}
                         searchPlaceholder={null}

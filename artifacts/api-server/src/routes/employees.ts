@@ -3,22 +3,27 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
   createNotification,
   emitEvent,
   createAuditLog,
   getManagerAssignmentId,
+  todayISO,
+  currentYear,
+  toDateISO,
 } from "../lib/businessHelpers.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { hashPassword } from "../lib/auth.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
 
 const createEmployeeSchema = z.object({
   name: z.string().min(1),
@@ -58,6 +63,7 @@ const createEmployeeSchema = z.object({
   iban: z.string().optional().nullable(),
   emergencyContact: z.string().optional().nullable(),
   emergencyPhone: z.string().optional().nullable(),
+  attachments: z.any().optional(),
 });
 
 const patchEmployeeSchema = z.object({
@@ -92,6 +98,10 @@ const patchOnboardingTaskSchema = z.object({
 });
 
 const seedObligationsSchema = z.object({}).optional();
+
+const deleteEmployeeSchema = z.object({
+  reason: z.string().optional(),
+});
 
 // Register document expiry obligations for an employee.
 // Called on create/update — idempotent via dedupeKey.
@@ -132,18 +142,17 @@ async function registerEmployeeExpiryObligations(
         { hoursAfterDue: 0, notifyRole: "hr_manager" },
         { hoursAfterDue: 72, notifyRole: "general_manager" },
       ],
-    }).catch((e) => console.error(`Failed to register ${code} obligation for emp ${empId}:`, e));
+    }).catch((e) => logger.error(e, `Failed to register ${code} obligation for emp ${empId}:`));
   }
 }
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search = "", page = "1", limit: lim = "20" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const offset = (Math.max(Number(page) || 1, 1) - 1) * (Number(lim) || 20);
 
     const filters = parseScopeFilters(req);
     if (search) filters.search = String(search);
@@ -165,7 +174,7 @@ router.get("/", requirePermission("hr:read"), async (req, res) => {
       paramIdx++;
     }
 
-    params.push(Number(lim));
+    params.push(Number(lim) || 20);
     const limitIdx = paramIdx++;
     params.push(offset);
     const offsetIdx = paramIdx++;
@@ -205,9 +214,7 @@ router.get("/", requirePermission("hr:read"), async (req, res) => {
 
 router.post("/", requirePermission("hr:create"), async (req, res) => {
   try {
-    const parsed_createEmployeeSchema = createEmployeeSchema.safeParse(req.body);
-    if (!parsed_createEmployeeSchema.success) throw new ValidationError(parsed_createEmployeeSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createEmployeeSchema.data;
+    const body = zodParse(createEmployeeSchema.safeParse(req.body));
     const scope = req.scope!;
     const {
       name,
@@ -284,15 +291,24 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         fix: "حدد نوع العقد للموظف",
       });
     }
-    if (salary !== undefined && salary !== null && Number(salary) <= 0) {
-      throw new ValidationError("الراتب يجب أن يكون أكبر من صفر", {
-        field: "salary",
-        fix: "أدخل راتباً موجباً أكبر من صفر",
-      });
+    if (salary !== undefined && salary !== null) {
+      const salaryNum = Number(salary);
+      if (salaryNum <= 0) {
+        throw new ValidationError("الراتب يجب أن يكون أكبر من صفر", {
+          field: "salary",
+          fix: "أدخل راتباً موجباً أكبر من صفر",
+        });
+      }
+      if (salaryNum > 1_000_000) {
+        throw new ValidationError("الراتب يتجاوز الحد الأقصى المسموح (1,000,000)", {
+          field: "salary",
+          fix: "تحقق من قيمة الراتب المدخلة",
+        });
+      }
     }
 
     const targetBranchId = branchId ?? scope.branchId;
-    const effectiveHireDate = hireDate || new Date().toISOString().split("T")[0];
+    const effectiveHireDate = hireDate || todayISO();
 
     // Step 1 audit — resolve department explicitly. If the caller passed a
     // `department` string that doesn't exist, we used to silently insert
@@ -320,8 +336,8 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
     // early we give the caller a clean field-tagged error.
     if (managerId) {
       const mgrRows = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE id = $1 AND "deletedAt" IS NULL LIMIT 1`,
-        [Number(managerId)]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
+        [Number(managerId), scope.companyId]
       );
       if (mgrRows.length === 0) {
         throw new ValidationError(`المدير رقم ${managerId} غير موجود`, {
@@ -333,8 +349,8 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
 
     if (email) {
       const emailRows = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE email = $1 AND "deletedAt" IS NULL LIMIT 1`,
-        [email]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.email = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL LIMIT 1`,
+        [email, effectiveCompanyId]
       );
       if (emailRows.length > 0) {
         throw new ConflictError("البريد الإلكتروني مستخدم مسبقاً", {
@@ -346,8 +362,8 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
 
     if (nationalId) {
       const nidRows = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE "nationalId" = $1 AND "deletedAt" IS NULL LIMIT 1`,
-        [nationalId]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e."nationalId" = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL LIMIT 1`,
+        [nationalId, effectiveCompanyId]
       );
       if (nidRows.length > 0) {
         throw new ConflictError("الرقم مرتبط بموظف آخر", {
@@ -363,7 +379,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
       if (!finalEmpNumber) {
         const seqRes = await client.query(`SELECT nextval('employee_number_seq') AS seq`);
         const seq = Number(seqRes.rows[0].seq);
-        const yearStr = new Date().getFullYear().toString();
+        const yearStr = currentYear().toString();
         finalEmpNumber = `EMP-${yearStr}-${String(seq).padStart(3, "0")}`;
       }
 
@@ -373,21 +389,22 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
          "iqamaNumber","iqamaExpiry","passportNumber","passportExpiry",
          "borderNumber","visaNumber","visaType","visaExpiry",
          "sponsorNumber","workPermitNumber","workPermitExpiry","iqamaStatus",
-         "bankName","bankAccount",iban,"emergencyContact","emergencyPhone")
+         "bankName","bankAccount",iban,"emergencyContact","emergencyPhone",attachments)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active',
          $9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-         $21,$22,$23,$24,$25)
+         $21,$22,$23,$24,$25,$26)
          RETURNING id`,
         [name, phone || null, email || null, finalEmpNumber, nationalId || null, gender || null, nationality || null, dateOfBirth || null,
          iqamaNumber || null, iqamaExpiry || null, passportNumber || null, passportExpiry || null,
          borderNumber || null, visaNumber || null, visaType || null, visaExpiry || null,
          sponsorNumber || null, workPermitNumber || null, workPermitExpiry || null, iqamaStatus || 'active',
-         bankName || null, bankAccount || null, iban || null, emergencyContact || null, emergencyPhone || null]
+         bankName || null, bankAccount || null, iban || null, emergencyContact || null, emergencyPhone || null,
+         (body as any).attachments ? JSON.stringify((body as any).attachments) : null]
       );
       const empId = empRes.rows[0].id;
 
       // ── Step 3: Create first assignment ──
-      let resolvedJobTitleId = req.body.jobTitleId ?? null;
+      let resolvedJobTitleId = (body as any).jobTitleId ?? null;
       if (!resolvedJobTitleId && jobTitle && jobTitle !== "موظف") {
         const jtRes = await client.query(
           `SELECT id FROM job_titles WHERE name = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`,
@@ -409,7 +426,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         `SELECT id, "annualDays" FROM hr_leave_types WHERE "companyId" = $1`,
         [effectiveCompanyId]
       );
-      const year = new Date().getFullYear();
+      const year = currentYear();
       if (leaveTypesRes.rows.length > 0) {
         const valuesSql: string[] = [];
         const params: any[] = [];
@@ -457,7 +474,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
       await client.query(
         `INSERT INTO employee_contracts ("companyId","employeeId","assignmentId","contractType","startDate","probationEndDate","probationStatus",status)
          VALUES ($1,$2,$3,$4,$5,$6,'active','active')`,
-        [scope.companyId, empId, assignmentId, contractType, effectiveHireDate, probEnd.toISOString().split("T")[0]]
+        [scope.companyId, empId, assignmentId, contractType, effectiveHireDate, toDateISO(probEnd)]
       );
 
       // ── Step 7: Create 4 onboarding tasks ──
@@ -473,7 +490,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         await client.query(
           `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status)
            VALUES ($1,$2,$3,$4,$5,'pending')`,
-          [scope.companyId, empId, assignmentId, taskTitle, dueDateOnboarding.toISOString().split("T")[0]]
+          [scope.companyId, empId, assignmentId, taskTitle, toDateISO(dueDateOnboarding)]
         );
       }
 
@@ -514,7 +531,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
            VALUES ${valuesSql.join(",")}
            ON CONFLICT DO NOTHING`,
           params
-        ).catch(() => {});
+        ).catch((e) => logger.error(e, "employees background task failed"));
       }
 
       return { empId, assignmentId, finalEmpNumber, userId, tempPassword };
@@ -530,7 +547,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         type: "employee_created", title: "موظف جديد في فريقك",
         body: `تم إضافة الموظف ${name} (${finalEmpNumber}) إلى فريقك. يرجى متابعة مهام التهيئة.`,
         priority: "high", refType: "employee", refId: empId,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "employees background task failed"));
     }
     const [hrAssignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager') AND status = 'active' ORDER BY CASE role WHEN 'hr_manager' THEN 1 ELSE 2 END LIMIT 1`,
@@ -542,14 +559,14 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
       type: "employee_created", title: "تم إضافة موظف جديد — مطلوب متابعة HR",
       body: `تم إضافة الموظف ${name} برقم ${finalEmpNumber} بنجاح. تم إنشاء ${4} مهام تهيئة. يرجى مراجعة ملف الموظف.`,
       priority: "high", refType: "employee", refId: empId,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
     if (hrTargetId !== scope.activeAssignmentId) {
       createNotification({
         companyId: scope.companyId, assignmentId: scope.activeAssignmentId,
         type: "employee_created", title: "تم إضافة موظف جديد",
         body: `تم إضافة الموظف ${name} برقم ${finalEmpNumber} بنجاح.`,
         priority: "low", refType: "employee", refId: empId,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "employees background task failed"));
     }
 
     // ── Step 9: Welcome notification/email ──
@@ -558,7 +575,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
       type: "welcome", title: "مرحباً في فريق العمل",
       body: `أهلاً ${name}، رقمك الوظيفي ${finalEmpNumber}. يسعدنا انضمامك إلى الفريق. فترة التجربة: ${probationDays} يوم.`,
       priority: "normal", refType: "employee", refId: empId,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
     if (email) {
       rawExecute(
         `INSERT INTO email_queue ("companyId","toEmail","recipientName",subject,body,status,"createdAt","refType","refId")
@@ -566,7 +583,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         [scope.companyId, email, name, `مرحباً في فريق العمل - ${finalEmpNumber}`,
           `أهلاً ${name}،\n\nرقمك الوظيفي: ${finalEmpNumber}\nالمسمى الوظيفي: ${jobTitle}\nتاريخ الالتحاق: ${effectiveHireDate}\nفترة التجربة: ${probationDays} يوم\n\nيسعدنا انضمامك إلى الفريق.`,
           empId]
-      ).catch(console.error);
+      ).catch((e) => logger.error(e, "employees background task failed"));
     }
     if (email && tempPassword) {
       rawExecute(
@@ -575,7 +592,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
         [scope.companyId, email, name, `بيانات الدخول إلى النظام - ${finalEmpNumber}`,
           `أهلاً ${name}،\n\nتم إنشاء حساب لك في نظام غيث ERP.\n\nالبريد الإلكتروني: ${email}\nكلمة المرور المؤقتة: ${tempPassword}\n\nيرجى تغيير كلمة المرور فور تسجيل الدخول الأول.\n\nهذه الرسالة تلقائية، يرجى عدم الرد عليها.`,
           empId]
-      ).catch(console.error);
+      ).catch((e) => logger.error(e, "employees background task failed"));
     }
 
     // ── Step 10: Event log ──
@@ -602,7 +619,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
     });
 
     // ── Step 12: Auto-create subsidiary accounting accounts ──
-    createSubsidiaryAccountsForEntity(scope.companyId, "employee", empId, name).catch(console.error);
+    createSubsidiaryAccountsForEntity(scope.companyId, "employee", empId, name).catch((e) => logger.error(e, "employees background task failed"));
 
     const [employee] = await rawQuery<any>(
       `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
@@ -619,7 +636,7 @@ router.post("/", requirePermission("hr:create"), async (req, res) => {
       ...employee,
       assignmentId,
       onboardingTasksCreated: 4,
-      probationEndDate: (() => { const d = new Date(effectiveHireDate); d.setDate(d.getDate() + Number(probationDays)); return d.toISOString().split("T")[0]; })(),
+      probationEndDate: (() => { const d = new Date(effectiveHireDate); d.setDate(d.getDate() + Number(probationDays)); return toDateISO(d); })(),
       userAccount: userId ? {
         userId,
         email: email || null,
@@ -651,34 +668,33 @@ router.get("/onboarding-tasks", requirePermission("hr:read"), async (req, res) =
       params
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) { console.error("Onboarding tasks error:", err); res.json({ data: [], total: 0 }); }
+  } catch (err) { logger.error(err, "Onboarding tasks error:"); res.json({ data: [], total: 0 }); }
 });
 
 router.patch("/onboarding-tasks/:id", requirePermission("hr:update"), async (req, res) => {
   try {
-    const parsed_patchOnboardingTaskSchema = patchOnboardingTaskSchema.safeParse(req.body);
-    if (!parsed_patchOnboardingTaskSchema.success) throw new ValidationError(parsed_patchOnboardingTaskSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_patchOnboardingTaskSchema.data;
+    const body = zodParse(patchOnboardingTaskSchema.safeParse(req.body));
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const { status } = body;
     const [row] = await rawQuery<any>(
       `UPDATE onboarding_tasks SET status = $1,
        "completedAt" = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
        "completedBy" = $2
-       WHERE id = $3 AND "companyId" = $4 RETURNING *`,
-      [status, scope.activeAssignmentId, Number(req.params.id), scope.companyId]
+       WHERE id = $3 AND "companyId" = $4 AND status != 'completed' RETURNING *`,
+      [status, scope.activeAssignmentId, id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المهمة غير موجودة");
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
-      action: "onboarding_task.updated", entity: "onboarding_tasks", entityId: Number(req.params.id),
+      action: "onboarding_task.updated", entity: "onboarding_tasks", entityId: id,
       details: JSON.stringify({ status }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "onboarding_tasks", entityId: Number(req.params.id),
+      action: "update", entity: "onboarding_tasks", entityId: id,
       after: { status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -687,7 +703,7 @@ router.get("/job-titles", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT * FROM job_titles WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY name`,
+      `SELECT * FROM job_titles WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY name LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
@@ -715,10 +731,10 @@ router.get("/documents", requirePermission("hr:read"), async (req, res) => {
 router.get("/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     let extraCondition = "";
-    const queryParams: any[] = [Number(id), scope.companyId];
+    const queryParams: any[] = [id, scope.companyId];
     if (!scope.isOwner && scope.role === "employee" && scope.employeeId) {
       extraCondition = ` AND e.id = $3`;
       queryParams.push(scope.employeeId);
@@ -759,7 +775,7 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
          LEFT JOIN projects p ON p.id = pt."projectId"
          WHERE pt."assigneeId" = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL
          ORDER BY pt."dueDate" DESC NULLS LAST LIMIT 20`,
-        [Number(id), scope.companyId]
+        [id, scope.companyId]
       ),
       rawQuery<any>(
         `SELECT a.id, a.date, a."checkIn", a."checkOut", a."lateMinutes", a.status
@@ -773,19 +789,19 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
                 lt.name AS "leaveTypeName"
          FROM hr_leave_requests lr
          JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-         WHERE lr."employeeId" = $1
+         WHERE lr."employeeId" = $1 AND lr."companyId" = $2
          ORDER BY lr."createdAt" DESC LIMIT 20`,
-        [Number(id)]
+        [id, scope.companyId]
       ),
       rawQuery<any>(
-        `SELECT tp.id, tp.status, tp."completedAt",
-                tc.title AS "courseTitle", tc.type AS "courseType"
-         FROM training_participants tp
-         JOIN training_courses tc ON tc.id = tp."courseId"
-         WHERE tp."employeeId" = $1
-         ORDER BY tc."startDate" DESC LIMIT 20`,
-        [Number(id)]
-      ).catch(() => []),
+        `SELECT te.id, te.status, te."completedAt",
+                tp.title AS "courseTitle", tp.type AS "courseType"
+         FROM training_enrollments te
+         JOIN training_programs tp ON tp.id = te."programId"
+         WHERE te."employeeId" = $1 AND tp."companyId" = $2
+         ORDER BY tp."startDate" DESC LIMIT 20`,
+        [id, scope.companyId]
+      ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
       rawQuery<any>(
         `SELECT pl.id, pl.basic, pl."grossSalary", pl.gosi, pl."lateDeduction", pl."netSalary",
                 pr.period, pr.status, pr."createdAt"
@@ -794,14 +810,14 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
          WHERE pl."assignmentId" = $1 AND pr."companyId" = $2 AND pl."deletedAt" IS NULL AND pr."deletedAt" IS NULL
          ORDER BY pr.period DESC LIMIT 12`,
         [employee.assignmentId, scope.companyId]
-      ).catch(() => []),
+      ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
       rawQuery<any>(
         `SELECT ev.id, ev.type, ev.description, ev.severity, ev.deduction, ev.period, ev."createdAt"
          FROM employee_violations ev
          WHERE ev."assignmentId" = $1 AND ev."companyId" = $2 AND ev."deletedAt" IS NULL
          ORDER BY ev."createdAt" DESC LIMIT 20`,
         [employee.assignmentId, scope.companyId]
-      ).catch(() => []),
+      ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
       rawQuery<any>(
         `SELECT l.id, l."loanNumber", l."loanType", l.amount, l."paidAmount", l."remainingAmount",
                 l."installmentCount", l."installmentAmount", l.status, l."createdAt"
@@ -809,14 +825,14 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
          WHERE l."assignmentId" = $1 AND l."companyId" = $2 AND l."deletedAt" IS NULL
          ORDER BY l."createdAt" DESC LIMIT 20`,
         [employee.assignmentId, scope.companyId]
-      ).catch(() => []),
+      ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
       rawQuery<any>(
         `SELECT o.id, o."requestNumber", o."overtimeDate", o.hours, o."totalAmount", o.status, o."createdAt"
          FROM hr_overtime_requests o
          WHERE o."assignmentId" = $1 AND o."companyId" = $2 AND o."deletedAt" IS NULL
          ORDER BY o."overtimeDate" DESC LIMIT 20`,
         [employee.assignmentId, scope.companyId]
-      ).catch(() => []),
+      ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
     ]);
 
     res.json({ ...employee, tasks, attendance, leaves, trainings, payroll, violations, loans, overtime });
@@ -841,11 +857,9 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
   //   5. Explicitly emits `employee.updated` — the listener already exists
   //      in eventListeners.ts but nobody was firing the event.
   try {
-    const parsed_patchEmployee = patchEmployeeSchema.safeParse(req.body);
-    if (!parsed_patchEmployee.success) throw new ValidationError(parsed_patchEmployee.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const validatedBody = parsed_patchEmployee.data;
+    const validatedBody = zodParse(patchEmployeeSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const {
       name, phone, email, jobTitle, role, salary, branchId, departmentId, status,
       borderNumber, visaNumber, visaType, visaExpiry, sponsorNumber,
@@ -870,9 +884,10 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
               ea."jobTitle", ea."jobTitleId", ea.role, ea.salary,
               ea."branchId", ea."departmentId", ea."managerId"
          FROM employees e
-         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-        WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status IN ('active','suspended','terminated')
+        WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL
+        ORDER BY ea.status = 'active' DESC, ea.id DESC LIMIT 1`,
+      [id, scope.companyId]
     );
 
     if (!before) {
@@ -881,11 +896,20 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       });
     }
 
-    if (salary !== undefined && salary !== null && Number(salary) <= 0) {
-      throw new ValidationError("الراتب يجب أن يكون أكبر من صفر", {
-        field: "salary",
-        fix: "أدخل راتباً موجباً.",
-      });
+    if (salary !== undefined && salary !== null) {
+      const salaryNum = Number(salary);
+      if (salaryNum <= 0) {
+        throw new ValidationError("الراتب يجب أن يكون أكبر من صفر", {
+          field: "salary",
+          fix: "أدخل راتباً موجباً.",
+        });
+      }
+      if (salaryNum > 1_000_000) {
+        throw new ValidationError("الراتب يتجاوز الحد الأقصى المسموح (1,000,000)", {
+          field: "salary",
+          fix: "تحقق من قيمة الراتب المدخلة",
+        });
+      }
     }
 
     // Pre-check: changing email to one that belongs to a different employee.
@@ -894,8 +918,8 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     // round-trip on every PATCH that only touches unrelated fields.
     if (email !== undefined && email && email !== before.email) {
       const [clash] = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE email = $1 AND id <> $2 AND "deletedAt" IS NULL LIMIT 1`,
-        [email, Number(id)]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.email = $1 AND e.id <> $2 AND ea."companyId" = $3 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
+        [email, id, scope.companyId]
       );
       if (clash) {
         throw new ConflictError("البريد الإلكتروني مستخدم لموظف آخر", {
@@ -909,8 +933,8 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     // Pre-check: changing nationalId to one already registered.
     if (nationalId !== undefined && nationalId && nationalId !== before.nationalId) {
       const [clash] = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE "nationalId" = $1 AND id <> $2 AND "deletedAt" IS NULL LIMIT 1`,
-        [nationalId, Number(id)]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e."nationalId" = $1 AND e.id <> $2 AND ea."companyId" = $3 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
+        [nationalId, id, scope.companyId]
       );
       if (clash) {
         throw new ConflictError("رقم الهوية مستخدم لموظف آخر", {
@@ -926,8 +950,8 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
     // always carry "managerId".
     if (bodyManagerId !== undefined && bodyManagerId) {
       const [mgr] = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE id = $1 AND "deletedAt" IS NULL LIMIT 1`,
-        [Number(bodyManagerId)]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
+        [Number(bodyManagerId), scope.companyId]
       );
       if (!mgr) {
         throw new ValidationError(`المدير رقم ${bodyManagerId} غير موجود`, {
@@ -953,85 +977,100 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
 
     const employee = { id: before.id, assignmentId: before.assignmentId };
 
-    const empFields: string[] = [];
-    const empVals: any[] = [];
-    if (name !== undefined) { empVals.push(name); empFields.push(`name = $${empVals.length}`); }
-    if (phone !== undefined) { empVals.push(phone); empFields.push(`phone = $${empVals.length}`); }
-    if (email !== undefined) { empVals.push(email); empFields.push(`email = $${empVals.length}`); }
-    if (status !== undefined) { empVals.push(status); empFields.push(`status = $${empVals.length}`); }
-    if (nationalId !== undefined) { empVals.push(nationalId); empFields.push(`"nationalId" = $${empVals.length}`); }
-    if (iqamaNumber !== undefined) { empVals.push(iqamaNumber); empFields.push(`"iqamaNumber" = $${empVals.length}`); }
-    if (iqamaExpiry !== undefined) { empVals.push(iqamaExpiry || null); empFields.push(`"iqamaExpiry" = $${empVals.length}`); }
-    if (passportNumber !== undefined) { empVals.push(passportNumber); empFields.push(`"passportNumber" = $${empVals.length}`); }
-    if (passportExpiry !== undefined) { empVals.push(passportExpiry || null); empFields.push(`"passportExpiry" = $${empVals.length}`); }
-    if (borderNumber !== undefined) { empVals.push(borderNumber); empFields.push(`"borderNumber" = $${empVals.length}`); }
-    if (visaNumber !== undefined) { empVals.push(visaNumber); empFields.push(`"visaNumber" = $${empVals.length}`); }
-    if (visaType !== undefined) { empVals.push(visaType); empFields.push(`"visaType" = $${empVals.length}`); }
-    if (visaExpiry !== undefined) { empVals.push(visaExpiry || null); empFields.push(`"visaExpiry" = $${empVals.length}`); }
-    if (sponsorNumber !== undefined) { empVals.push(sponsorNumber); empFields.push(`"sponsorNumber" = $${empVals.length}`); }
-    if (workPermitNumber !== undefined) { empVals.push(workPermitNumber); empFields.push(`"workPermitNumber" = $${empVals.length}`); }
-    if (workPermitExpiry !== undefined) { empVals.push(workPermitExpiry || null); empFields.push(`"workPermitExpiry" = $${empVals.length}`); }
-    if (iqamaStatus !== undefined) { empVals.push(iqamaStatus); empFields.push(`"iqamaStatus" = $${empVals.length}`); }
-    if (empFields.length) {
-      empVals.push(Number(id));
-      await rawExecute(`UPDATE employees SET ${empFields.join(",")} WHERE id = $${empVals.length}`, empVals);
-    }
+    await withTransaction(async (client) => {
+      const empFields: string[] = [];
+      const empVals: any[] = [];
+      if (name !== undefined) { empVals.push(name); empFields.push(`name = $${empVals.length}`); }
+      if (phone !== undefined) { empVals.push(phone); empFields.push(`phone = $${empVals.length}`); }
+      if (email !== undefined) { empVals.push(email); empFields.push(`email = $${empVals.length}`); }
+      if (status !== undefined) { empVals.push(status); empFields.push(`status = $${empVals.length}`); }
+      if (nationalId !== undefined) { empVals.push(nationalId); empFields.push(`"nationalId" = $${empVals.length}`); }
+      if (iqamaNumber !== undefined) { empVals.push(iqamaNumber); empFields.push(`"iqamaNumber" = $${empVals.length}`); }
+      if (iqamaExpiry !== undefined) { empVals.push(iqamaExpiry || null); empFields.push(`"iqamaExpiry" = $${empVals.length}`); }
+      if (passportNumber !== undefined) { empVals.push(passportNumber); empFields.push(`"passportNumber" = $${empVals.length}`); }
+      if (passportExpiry !== undefined) { empVals.push(passportExpiry || null); empFields.push(`"passportExpiry" = $${empVals.length}`); }
+      if (borderNumber !== undefined) { empVals.push(borderNumber); empFields.push(`"borderNumber" = $${empVals.length}`); }
+      if (visaNumber !== undefined) { empVals.push(visaNumber); empFields.push(`"visaNumber" = $${empVals.length}`); }
+      if (visaType !== undefined) { empVals.push(visaType); empFields.push(`"visaType" = $${empVals.length}`); }
+      if (visaExpiry !== undefined) { empVals.push(visaExpiry || null); empFields.push(`"visaExpiry" = $${empVals.length}`); }
+      if (sponsorNumber !== undefined) { empVals.push(sponsorNumber); empFields.push(`"sponsorNumber" = $${empVals.length}`); }
+      if (workPermitNumber !== undefined) { empVals.push(workPermitNumber); empFields.push(`"workPermitNumber" = $${empVals.length}`); }
+      if (workPermitExpiry !== undefined) { empVals.push(workPermitExpiry || null); empFields.push(`"workPermitExpiry" = $${empVals.length}`); }
+      if (iqamaStatus !== undefined) { empVals.push(iqamaStatus); empFields.push(`"iqamaStatus" = $${empVals.length}`); }
+      if (empFields.length) {
+        empVals.push(id);
+        await client.query(`UPDATE employees SET ${empFields.join(",")} WHERE id = $${empVals.length} AND "deletedAt" IS NULL`, empVals);
+      }
 
-    // If any expiry field was changed, refresh obligations. Old obligations with
-    // different dedupeKey remain until scanner marks them met/breached; the new
-    // dedupeKey (which includes the date) ensures no duplicates.
-    if ([iqamaExpiry, passportExpiry, workPermitExpiry, visaExpiry].some((v) => v !== undefined)) {
-      const [empRow] = await rawQuery<any>(
-        `SELECT name, "iqamaExpiry", "passportExpiry", "workPermitExpiry", "visaExpiry" FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
-        [Number(id)]
-      );
-      if (empRow) {
-        await registerEmployeeExpiryObligations(
-          scope.companyId, scope.branchId ?? null, Number(id), empRow.name,
-          {
-            iqamaExpiry: empRow.iqamaExpiry,
-            passportExpiry: empRow.passportExpiry,
-            workPermitExpiry: empRow.workPermitExpiry,
-            visaExpiry: empRow.visaExpiry,
-          }
+      if (status === "active" && before.status !== "active") {
+        await client.query(
+          `UPDATE employee_assignments SET status = 'active' WHERE id = $1 AND "companyId" = $2 AND status = $3`,
+          [employee.assignmentId, scope.companyId, before.status]
+        );
+      } else if (status === "suspended" && before.status !== "suspended") {
+        await client.query(
+          `UPDATE employee_assignments SET status = 'suspended' WHERE id = $1 AND "companyId" = $2 AND status = $3`,
+          [employee.assignmentId, scope.companyId, before.status]
         );
       }
-    }
 
-    if (jobTitle || role || salary !== undefined || branchId || departmentId || bodyJobTitleId !== undefined || bodyManagerId !== undefined) {
-      const fields: string[] = [];
-      const vals: any[] = [];
-      if (jobTitle) { vals.push(jobTitle); fields.push(`"jobTitle" = $${vals.length}`); }
-      if (bodyJobTitleId !== undefined) { vals.push(bodyJobTitleId || null); fields.push(`"jobTitleId" = $${vals.length}`); }
-      else if (jobTitle) {
-        const [jtRow] = await rawQuery<any>(`SELECT id FROM job_titles WHERE name = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`, [jobTitle, scope.companyId]);
-        if (jtRow) { vals.push(jtRow.id); fields.push(`"jobTitleId" = $${vals.length}`); }
-      }
-      if (bodyManagerId !== undefined) { vals.push(bodyManagerId ? Number(bodyManagerId) : null); fields.push(`"managerId" = $${vals.length}`); }
-      if (role) { vals.push(role); fields.push(`role = $${vals.length}`); }
-      if (salary !== undefined) {
-        const [currentAsgn] = await rawQuery<{ salary: number }>(
-          `SELECT salary FROM employee_assignments WHERE id = $1`,
-          [employee.assignmentId]
+      // If any expiry field was changed, refresh obligations. Old obligations with
+      // different dedupeKey remain until scanner marks them met/breached; the new
+      // dedupeKey (which includes the date) ensures no duplicates.
+      if ([iqamaExpiry, passportExpiry, workPermitExpiry, visaExpiry].some((v) => v !== undefined)) {
+        const { rows: [empRow] } = await client.query(
+          `SELECT name, "iqamaExpiry", "passportExpiry", "workPermitExpiry", "visaExpiry" FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
+          [id]
         );
-        const oldSalary = Number(currentAsgn?.salary ?? 0);
-        const newSalary = Number(salary);
-        vals.push(newSalary); fields.push(`salary = $${vals.length}`);
-        if (oldSalary !== newSalary) {
-          rawExecute(
-            `INSERT INTO salary_history ("employeeId","assignmentId","companyId","oldSalary","newSalary","effectiveDate","changedBy","createdAt")
-             VALUES ($1,$2,$3,$4,$5,CURRENT_DATE,$6,NOW())`,
-            [Number(id), employee.assignmentId, scope.companyId, oldSalary, newSalary, scope.activeAssignmentId]
-          ).catch(console.error);
+        if (empRow) {
+          await registerEmployeeExpiryObligations(
+            scope.companyId, scope.branchId ?? null, id, empRow.name,
+            {
+              iqamaExpiry: empRow.iqamaExpiry,
+              passportExpiry: empRow.passportExpiry,
+              workPermitExpiry: empRow.workPermitExpiry,
+              visaExpiry: empRow.visaExpiry,
+            }
+          );
         }
       }
-      if (branchId) { vals.push(branchId); fields.push(`"branchId" = $${vals.length}`); }
-      if (departmentId) { vals.push(departmentId); fields.push(`"departmentId" = $${vals.length}`); }
-      if (fields.length) {
-        vals.push(employee.assignmentId);
-        await rawExecute(`UPDATE employee_assignments SET ${fields.join(",")} WHERE id = $${vals.length}`, vals);
+
+      if (jobTitle || role || salary !== undefined || branchId || departmentId || bodyJobTitleId !== undefined || bodyManagerId !== undefined) {
+        const fields: string[] = [];
+        const vals: any[] = [];
+        if (jobTitle) { vals.push(jobTitle); fields.push(`"jobTitle" = $${vals.length}`); }
+        if (bodyJobTitleId !== undefined) { vals.push(bodyJobTitleId || null); fields.push(`"jobTitleId" = $${vals.length}`); }
+        else if (jobTitle) {
+          const { rows: [jtRow] } = await client.query(`SELECT id FROM job_titles WHERE name = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`, [jobTitle, scope.companyId]);
+          if (jtRow) { vals.push(jtRow.id); fields.push(`"jobTitleId" = $${vals.length}`); }
+        }
+        if (bodyManagerId !== undefined) { vals.push(bodyManagerId ? Number(bodyManagerId) : null); fields.push(`"managerId" = $${vals.length}`); }
+        if (role) { vals.push(role); fields.push(`role = $${vals.length}`); }
+        if (salary !== undefined) {
+          const { rows: [currentAsgn] } = await client.query(
+            `SELECT salary FROM employee_assignments WHERE id = $1 AND "companyId" = $2`,
+            [employee.assignmentId, scope.companyId]
+          );
+          const oldSalary = Number(currentAsgn?.salary ?? 0);
+          const newSalary = Number(salary);
+          vals.push(newSalary); fields.push(`salary = $${vals.length}`);
+          if (oldSalary !== newSalary) {
+            await client.query(
+              `INSERT INTO salary_history ("employeeId","assignmentId","companyId","oldSalary","newSalary","effectiveDate","changedBy","createdAt")
+               VALUES ($1,$2,$3,$4,$5,CURRENT_DATE,$6,NOW())`,
+              [id, employee.assignmentId, scope.companyId, oldSalary, newSalary, scope.activeAssignmentId]
+            );
+          }
+        }
+        if (branchId) { vals.push(branchId); fields.push(`"branchId" = $${vals.length}`); }
+        if (departmentId) { vals.push(departmentId); fields.push(`"departmentId" = $${vals.length}`); }
+        if (fields.length) {
+          vals.push(employee.assignmentId);
+          vals.push(scope.companyId);
+          await client.query(`UPDATE employee_assignments SET ${fields.join(",")} WHERE id = $${vals.length - 1} AND "companyId" = $${vals.length}`, vals);
+        }
       }
-    }
+    });
 
     // Re-read the full row so the audit log + event get a reliable "after"
     // snapshot rather than the raw body (which may contain partial updates,
@@ -1045,10 +1084,10 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
               COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
               ea.role, ea.salary, ea."branchId", ea."departmentId", ea."managerId"
          FROM employees e
-         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+         JOIN employee_assignments ea ON ea.id = $2
          LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
         WHERE e.id = $1 AND e."deletedAt" IS NULL`,
-      [Number(id)]
+      [id, employee.assignmentId]
     );
 
     // Build a field-level diff for the audit log so operators can see what
@@ -1075,14 +1114,14 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       userId: scope.userId,
       action: "update",
       entity: "employees",
-      entityId: Number(id),
+      entityId: id,
       // Snapshot both sides — logAudit / computeDiff would otherwise have
       // nothing to compute. Sensitive fields (passwordHash, tempPassword)
       // are never on the employees table so the raw snapshot is safe.
       before,
       after,
       reason: `حقول معدّلة: ${Object.keys(changedFields).join(", ") || "بلا تغيير"}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
 
     // Emit the canonical employee.updated event — the listener in
     // eventListeners.ts:82 already writes to event_logs + audit_logs but
@@ -1095,11 +1134,11 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
       userId: scope.userId,
       action: "employee.updated",
       entity: "employees",
-      entityId: Number(id),
+      entityId: id,
       before,
       after,
       details: JSON.stringify({ changedFields }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
 
     res.json(after);
   } catch (err) {
@@ -1110,13 +1149,14 @@ router.patch("/:id", requirePermission("hr:update"), async (req, res) => {
 router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
-    const { reason } = (req.body || {}) as { reason?: string };
+    const id = parseId(req.params.id, "id");
+    const { reason } = zodParse(deleteEmployeeSchema.safeParse(req.body ?? {}));
     const [employee] = await rawQuery<any>(
-      `SELECT e.id, ea.id AS "assignmentId" FROM employees e
+      `SELECT e.id, ea.id AS "assignmentId", u.id AS "userId" FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+       LEFT JOIN users u ON u."employeeId" = e.id
        WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!employee) throw new NotFoundError("الموظف غير موجود");
 
@@ -1129,12 +1169,12 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
     // them manually after the fact.
     await withTransaction(async (tx) => {
       await tx.query(
-        `UPDATE employee_assignments SET status = 'terminated' WHERE id = $1`,
-        [employee.assignmentId]
+        `UPDATE employee_assignments SET status = 'terminated' WHERE id = $1 AND "companyId" = $2 AND status = 'active'`,
+        [employee.assignmentId, scope.companyId]
       );
       await tx.query(
-        `UPDATE employees SET status = 'terminated' WHERE id = $1`,
-        [Number(id)]
+        `UPDATE employees SET status = 'terminated' WHERE id = $1 AND status = 'active' AND "deletedAt" IS NULL`,
+        [id]
       );
 
       // 1. Deactivate contracts tied to this employee / assignment so
@@ -1142,8 +1182,8 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       await tx.query(
         `UPDATE employee_contracts
            SET status = 'terminated', "probationStatus" = 'ended'
-         WHERE "employeeId" = $1 AND "companyId" = $2 AND status <> 'terminated'`,
-        [Number(id), scope.companyId]
+         WHERE "employeeId" = $1 AND "companyId" = $2 AND status <> 'terminated' AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
       );
 
       // 2. Cancel pending leave requests + their approval stages so
@@ -1151,8 +1191,8 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       await tx.query(
         `UPDATE hr_leave_requests
            SET status = 'cancelled'
-         WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'pending'`,
-        [Number(id), scope.companyId]
+         WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
       );
       await tx.query(
         `UPDATE leave_approval_stages
@@ -1161,7 +1201,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
            SELECT id FROM hr_leave_requests
            WHERE "employeeId" = $1 AND "companyId" = $2
          ) AND status = 'pending'`,
-        [Number(id), scope.companyId]
+        [id, scope.companyId]
       );
 
       // 3. Cancel open tasks assigned to the terminated assignment so
@@ -1170,7 +1210,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       await tx.query(
         `UPDATE tasks
            SET status = 'cancelled', notes = COALESCE(notes || E'\n', '') || 'ألغي تلقائياً: إنهاء خدمة الموظف'
-         WHERE "assignedTo" = $1 AND status IN ('pending', 'in_progress')`,
+         WHERE "assignedTo" = $1 AND status IN ('pending', 'in_progress') AND "deletedAt" IS NULL`,
         [employee.assignmentId]
       );
 
@@ -1183,6 +1223,23 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
          WHERE "assignedTo" = $1 AND status = 'pending'`,
         [employee.assignmentId]
       );
+
+      // 5. Cancel active/pending loans
+      await tx.query(
+        `UPDATE hr_employee_loans
+           SET status = 'cancelled', "updatedAt" = NOW()
+         WHERE "employeeId" = $1 AND "companyId" = $2 AND status IN ('active', 'pending') AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      );
+
+      // 6. Deactivate the associated user account so the terminated
+      //    employee can no longer log in.
+      if (employee.userId) {
+        await tx.query(
+          `UPDATE users SET "isActive" = false WHERE id = $1`,
+          [employee.userId]
+        );
+      }
     });
 
     emitEvent({
@@ -1191,16 +1248,16 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
       userId: scope.userId,
       action: "employee.terminated",
       entity: "employees",
-      entityId: Number(id),
+      entityId: id,
       before: { status: "active" },
       after: { status: "terminated", reason: reason || null, assignmentId: employee.assignmentId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "delete", entity: "employees", entityId: Number(id),
+      action: "delete", entity: "employees", entityId: id,
       after: { reason: reason || null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
     res.json({ message: "تم إنهاء خدمة الموظف بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "Delete employee error:");
@@ -1213,7 +1270,7 @@ router.delete("/:id", requirePermission("hr:delete"), async (req, res) => {
  */
 router.post("/obligations/seed", requirePermission("hr:update"), async (req, res) => {
   try {
-    { const _guard = seedObligationsSchema.safeParse(req.body); if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
+    zodParse(seedObligationsSchema.safeParse(req.body));
     const scope = req.scope!;
     const emps = await rawQuery<any>(
       `SELECT e.id, e.name, e."iqamaExpiry", e."passportExpiry", e."workPermitExpiry", e."visaExpiry"
@@ -1242,12 +1299,12 @@ router.post("/obligations/seed", requirePermission("hr:update"), async (req, res
       companyId: scope.companyId, userId: scope.userId,
       action: "obligations.seeded", entity: "employees", entityId: 0,
       details: JSON.stringify({ scannedEmployees: emps.length, employeesProcessed: registered }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "obligations", entityId: 0,
       after: { scannedEmployees: emps.length, employeesProcessed: registered },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "employees background task failed"));
     res.json({ scannedEmployees: emps.length, employeesProcessed: registered });
   } catch (err) { handleRouteError(err, res, "Seed HR obligations error:"); }
 });

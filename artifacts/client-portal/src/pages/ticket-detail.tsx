@@ -3,6 +3,21 @@ import { useRoute, Link } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatDateAr } from "@/lib/formatters";
+import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
+
+function ReplySubmit({ sending, disabled }: { sending: boolean; disabled: boolean }) {
+  const { isCoolingDown, label } = useRateLimitCooldown();
+  const busy = sending || isCoolingDown || disabled;
+  return (
+    <button
+      type="submit"
+      disabled={busy}
+      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+    >
+      {isCoolingDown ? label : sending ? "جاري الإرسال..." : "إرسال"}
+    </button>
+  );
+}
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
@@ -79,14 +94,12 @@ export default function TicketDetail() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <Link href="/tickets">
-          <a className="text-gray-500 hover:text-gray-700 text-sm flex items-center gap-1">
+        <Link href="/tickets" className="text-gray-500 hover:text-gray-700 text-sm flex items-center gap-1">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
             الطلبات
-          </a>
-        </Link>
+          </Link>
         <span className="text-gray-400">/</span>
         <span className="text-gray-900 font-mono text-sm font-semibold">{ticket.ref}</span>
       </div>
@@ -154,13 +167,7 @@ export default function TicketDetail() {
             {sendErr && (
               <p className="text-xs text-red-600">{sendErr}</p>
             )}
-            <button
-              type="submit"
-              disabled={sending || !replyText.trim()}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-            >
-              {sending ? "جاري الإرسال..." : "إرسال"}
-            </button>
+            <ReplySubmit sending={sending} disabled={!replyText.trim()} />
           </form>
         )}
 

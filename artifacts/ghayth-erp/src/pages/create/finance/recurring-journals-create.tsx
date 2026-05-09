@@ -192,8 +192,8 @@ export default function RecurringJournalsCreatePage() {
                   </SelectContent>
                 </Select>
                 <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder="البيان" />
-                <Input type="number" min="0" value={line.debit} onChange={(e) => updateLine(idx, "debit", e.target.value)} placeholder="0" />
-                <Input type="number" min="0" value={line.credit} onChange={(e) => updateLine(idx, "credit", e.target.value)} placeholder="0" />
+                <Input type="number" step="0.01" min="0" value={line.debit} onChange={(e) => updateLine(idx, "debit", e.target.value)} placeholder="0" />
+                <Input type="number" step="0.01" min="0" value={line.credit} onChange={(e) => updateLine(idx, "credit", e.target.value)} placeholder="0" />
                 <Button variant="ghost" size="icon" type="button" onClick={() => removeLine(idx)} disabled={lines.length <= 2}>
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
@@ -219,7 +219,7 @@ export default function RecurringJournalsCreatePage() {
         <Button variant="outline" onClick={() => setLocation("/finance/recurring-journals")}>
           إلغاء
         </Button>
-        <Button onClick={handleSubmit} disabled={!isBalanced || !name || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!isBalanced || !name || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>

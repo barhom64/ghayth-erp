@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 
 export default function PropertiesTenants() {
+  const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
 
   const { data: tenantsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
@@ -167,6 +168,7 @@ export default function PropertiesTenants() {
             isError={isError}
             error={error as Error | null}
             onRetry={refetch}
+            onRowClick={(t) => navigate(`/properties/tenants/${rowKeyOf(t)}`)}
             noToolbar
             rowKey={rowKeyOf}
             emptyMessage="لا يوجد مستأجرون"

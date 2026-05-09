@@ -111,6 +111,9 @@ export const STATUS_MAP = {
     // more specific "in_review" label so the computed onboarding status
     // doesn't need a per-page map anymore.
     probation:            { label: "فترة التجربة",   tone: "info"     },
+    // Performance reviews
+    reviewed:             { label: "مُراجَع",         tone: "info"     },
+    finalized:            { label: "مُعتمد",          tone: "success"  },
   },
 
   // ── HR ─────────────────────────────────────────────────────────────
@@ -119,13 +122,22 @@ export const STATUS_MAP = {
     auto_approved:        { label: "اعتماد تلقائي",  tone: "success" },
   },
   attendance: {
+    present:              { label: "حاضر",            tone: "success"  },
+    present_off_day:      { label: "حاضر (يوم إجازة)", tone: "info"    },
+    present_out_of_range: { label: "خارج النطاق",     tone: "warning"  },
     checked_in:           { label: "مسجَّل حضور",     tone: "success"  },
     checked_out:          { label: "مسجَّل انصراف",   tone: "info"     },
     absent:               { label: "غائب",            tone: "danger"   },
     on_leave:             { label: "في إجازة",        tone: "info"     },
+    leave:                { label: "إجازة",           tone: "info"     },
     remote:               { label: "عن بُعد",         tone: "info"     },
     late:                 { label: "متأخر",           tone: "warning"  },
     half_day:             { label: "نصف يوم",         tone: "warning"  },
+    early_leave:          { label: "انصراف مبكر",     tone: "warning"  },
+    excused:              { label: "مستأذن",          tone: "info"     },
+    weekend:              { label: "عطلة أسبوعية",    tone: "muted"    },
+    holiday:              { label: "عطلة رسمية",      tone: "muted"    },
+    present_holiday:      { label: "حضور عطلة رسمية", tone: "info"     },
   },
   memo: {
     pending_employee:     { label: "بانتظار الموظف",  tone: "warning"  },
@@ -139,11 +151,16 @@ export const STATUS_MAP = {
   // ── Finance ────────────────────────────────────────────────────────
   invoice: {
     draft:                { label: "مسودة",           tone: "muted"    },
+    pending_approval:     { label: "بانتظار الاعتماد", tone: "warning"  },
+    approved:             { label: "معتمدة",          tone: "success"  },
     sent:                 { label: "مُرسَلة",          tone: "info"     },
     partially_paid:       { label: "مدفوعة جزئياً",   tone: "progress" },
+    partial:              { label: "مدفوعة جزئياً",   tone: "progress" },
     paid:                 { label: "مدفوعة",          tone: "success"  },
     overdue:              { label: "متأخرة",          tone: "danger"   },
     void:                 { label: "ملغاة",           tone: "neutral"  },
+    cancelled:            { label: "ملغية",           tone: "neutral"  },
+    rejected:             { label: "مرفوضة",          tone: "danger"   },
     credit_memo:          { label: "إشعار دائن",      tone: "info"     },
     debit_memo:           { label: "إشعار مدين",      tone: "info"     },
   },
@@ -204,6 +221,8 @@ export const STATUS_MAP = {
     judgment:             { label: "حكم صادر",        tone: "info"     },
     execution:            { label: "قيد التنفيذ",     tone: "progress" },
     closed:               { label: "مُغلقة",          tone: "success"  },
+    won:                  { label: "ربح",             tone: "success"  },
+    lost:                 { label: "خسارة",           tone: "danger"   },
   },
 
   // ── Property / Leasing ────────────────────────────────────────────
@@ -300,6 +319,9 @@ export const STATUS_MAP = {
     active:               { label: "نشط",             tone: "success"  },
     inactive:             { label: "غير نشط",         tone: "muted"    },
     suspended:            { label: "مُوقَف",           tone: "danger"   },
+    available:            { label: "متاح",            tone: "success"  },
+    on_trip:              { label: "في رحلة",         tone: "info"     },
+    off_duty:             { label: "خارج الخدمة",     tone: "neutral"  },
   },
 
   // ── Projects ───────────────────────────────────────────────────────
@@ -311,6 +333,41 @@ export const STATUS_MAP = {
     blocked:              { label: "متوقف",           tone: "danger"   },
     completed:            { label: "مُقفَل",          tone: "success"  },
     cancelled:            { label: "ملغى",             tone: "neutral"  },
+    todo:                 { label: "للتنفيذ",         tone: "muted"    },
+    done:                 { label: "مكتمل",           tone: "success"  },
+    pending:              { label: "معلق",            tone: "warning"  },
+  },
+
+  // ── Property units ─────────────────────────────────────────────────
+  property: {
+    available:            { label: "شاغر",             tone: "info"     },
+    rented:               { label: "مؤجرة",            tone: "success"  },
+    maintenance:          { label: "تحت الصيانة",      tone: "warning"  },
+    under_maintenance:    { label: "تحت الصيانة",      tone: "warning"  },
+    out_of_service:       { label: "خارج الخدمة",      tone: "danger"   },
+    reserved:             { label: "محجوز",            tone: "info"     },
+  },
+
+  // ── Obligations ───────────────────────────────────────────────────
+  obligation: {
+    due:                  { label: "مستحق",            tone: "warning"  },
+    paid:                 { label: "مدفوع",            tone: "success"  },
+    overdue:              { label: "متأخر",            tone: "danger"   },
+    partial:              { label: "مدفوع جزئياً",     tone: "progress" },
+    pending:              { label: "معلق",             tone: "warning"  },
+    met:                  { label: "ملبى",             tone: "success"  },
+    breached:             { label: "متجاوز",           tone: "danger"   },
+    escalated_l1:         { label: "تصعيد 1",          tone: "warning"  },
+    escalated_l2:         { label: "تصعيد 2",          tone: "danger"   },
+    closed:               { label: "مغلق",             tone: "neutral"  },
+    cancelled:            { label: "ملغى",              tone: "muted"    },
+  },
+
+  // ── Recurring journals ────────────────────────────────────────────
+  recurring: {
+    success:              { label: "نجاح",             tone: "success"  },
+    failed:               { label: "فشل",              tone: "danger"   },
+    skipped:              { label: "تم تخطيه",         tone: "muted"    },
   },
 
   // ── Support ────────────────────────────────────────────────────────

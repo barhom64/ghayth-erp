@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
@@ -153,9 +154,7 @@ export default function IDPPage() {
       sortable: true,
       render: (v) => (
         <span className="text-sm text-gray-600">
-          {v.targetDate
-            ? new Date(v.targetDate).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })
-            : "-"}
+          {formatDateAr(v.targetDate)}
         </span>
       ),
     },
@@ -263,7 +262,7 @@ export default function IDPPage() {
             <Button variant="outline" onClick={() => setShowForm(false)} disabled={createIdpMut.isPending}>
               إلغاء
             </Button>
-            <Button onClick={handleSave} disabled={createIdpMut.isPending}>
+            <Button onClick={handleSave} disabled={createIdpMut.isPending} rateLimitAware>
               {createIdpMut.isPending ? "جاري الحفظ..." : "حفظ الخطة"}
             </Button>
           </DialogFooter>

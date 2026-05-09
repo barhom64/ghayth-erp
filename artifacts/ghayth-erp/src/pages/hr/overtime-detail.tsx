@@ -44,7 +44,7 @@ export default function OvertimeDetail() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
 
-  const { data, isLoading, isError } = useApiQuery<any>(["hr-overtime-detail", id], `/hr/overtime/${id}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["hr-overtime-detail", id], id ? `/hr/overtime/${id}` : null);
   const item = data?.data ?? data;
 
   if (!item && !isLoading && !isError) {
@@ -52,7 +52,7 @@ export default function OvertimeDetail() {
       <DetailPageLayout
         title="الطلب غير موجود"
         backPath="/hr/overtime"
-        entityType="hr_overtime_request"
+        entityType="overtime"
         entityId={id || "0"}
         overview={
           <Card>
@@ -85,7 +85,7 @@ export default function OvertimeDetail() {
       subtitle={item ? `${item.employeeName} — ${item.jobTitle || ""}` : undefined}
       backPath="/hr/overtime"
       status={{ label: st.label, tone: statusTone }}
-      entityType="hr_overtime_request"
+      entityType="overtime"
       entityId={Number(id)}
       refNumber={item?.requestNumber}
       createdAt={item?.createdAt}

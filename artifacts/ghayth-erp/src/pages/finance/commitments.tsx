@@ -1,3 +1,4 @@
+import { useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -9,6 +10,7 @@ import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function CommitmentsPage() {
+  const [, navigate] = useLocation();
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["commitments"], "/finance/commitments");
   const items = data?.data || [];
   const summary = data?.summary || {};
@@ -115,6 +117,7 @@ export default function CommitmentsPage() {
         emptyMessage="لا توجد التزامات"
         emptyIcon={<FileSignature className="h-6 w-6 text-slate-400" />}
         noToolbar
+        onRowClick={(row) => navigate(`/finance/commitments/${row.id}`)}
       />
     </PageShell>
   );

@@ -26,7 +26,12 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { DetailPageLayout, type DetailStatus } from "@/components/shared/detail-page-layout";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
+import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 
 /**
  * Invoice detail page — migrated to DetailPageLayout which provides
@@ -162,9 +167,24 @@ export default function InvoiceDetailPage() {
     zatcaMut.mutate({});
   };
 
+  const editDelete = useDetailEditDelete({
+    entityLabel: "الفاتورة",
+    patchPath: `/finance/invoices/${id}`,
+    deletePath: `/finance/invoices/${id}`,
+    listPath: "/finance/invoices",
+    initialValues: invoice,
+    fields: [
+      { key: "notes", label: "ملاحظات" },
+      { key: "dueDate", label: "تاريخ الاستحقاق" },
+    ],
+    invalidateKeys: [["invoice", String(id)], ["invoices"]],
+    onSaved: () => refetch(),
+  });
+
   // --- Action buttons for the header ---
   const actions = (
     <div className="flex items-center gap-2">
+      <DetailActionButtons hook={editDelete} />
       <Link href={`/finance/invoices/create?copyFrom=${id}`}>
         <Button variant="outline" size="sm" className="gap-1">
           <Copy className="h-4 w-4" />
@@ -199,6 +219,7 @@ export default function InvoiceDetailPage() {
   // --- Overview content (main tab) ---
   const overview = invoice ? (
     <div className="space-y-4">
+      <InlineEditCard hook={editDelete} />
       {/* Visible payment lifecycle strip */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-4">
@@ -288,6 +309,7 @@ export default function InvoiceDetailPage() {
                       size="sm"
                       onClick={handleZatcaSubmit}
                       disabled={zatcaMut.isPending}
+                      rateLimitAware
                       className="gap-1"
                     >
                       <Send className="h-4 w-4" />
@@ -327,7 +349,7 @@ export default function InvoiceDetailPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button type="submit" disabled={paymentMut.isPending}>
+              <Button type="submit" disabled={paymentMut.isPending} rateLimitAware>
                 {paymentMut.isPending ? "جاري التسجيل..." : "تسجيل"}
               </Button>
               <Button type="button" variant="outline" onClick={() => setShowPayment(false)}>
@@ -402,7 +424,7 @@ export default function InvoiceDetailPage() {
         </CardContent>
       </Card>
 
-      {invoice.status === "pending" && (
+      {invoice.status === "draft" && (
         <Card>
           <CardHeader><CardTitle>إجراءات الاعتماد</CardTitle></CardHeader>
           <CardContent>
@@ -465,7 +487,7 @@ export default function InvoiceDetailPage() {
           </div>
           <div className="info-item" style={{ display: "flex", gap: "4px" }}>
             <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{invoice.status || "-"}</span>
+            <span className="info-value" style={{ fontWeight: 600 }}>{resolveStatus(invoice.status, "invoice")?.label || invoice.status || "-"}</span>
           </div>
         </div>
 
@@ -555,7 +577,7 @@ export default function InvoiceDetailPage() {
             </div>
             <div className="info-item" style={{ display: "flex", gap: "4px" }}>
               <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{invoice.status || "-"}</span>
+              <span className="info-value" style={{ fontWeight: 600 }}>{resolveStatus(invoice.status, "invoice")?.label || invoice.status || "-"}</span>
             </div>
           </div>
           {lines.length > 0 && (

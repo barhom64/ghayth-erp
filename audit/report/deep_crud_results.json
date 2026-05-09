@@ -1,0 +1,34 @@
+{
+  "ts": "2026-05-07T09:57:33.662Z",
+  "ctx": {
+    "employeeId": 3,
+    "clientId": 3,
+    "vehicleId": 7,
+    "seasonId": 1,
+    "departmentId": 1,
+    "departmentName": "قسم اختبار CRUD"
+  },
+  "rows": [
+    {
+      "module": "HR",
+      "listUrl": "/employees",
+      "listApi": "/api/employees",
+      "create": "PASS",
+      "read": "PASS",
+      "update": "PASS",
+      "delete": "PASS",
+      "uiCreate": "SKIP",
+      "uiVerify": "SKIP",
+      "uiEdit": "PASS",
+      "uiDelete": "PASS",
+      "uiRender": "PASS",
+      "uiPaginate": "SKIP",
+      "uiSearch": "PASS",
+      "uiExport": "PASS",
+      "notes": [
+        "seeded-via-api id=26 needle=\"اختبار موظف-7835757-1147\"",
+        "pag:no-next-button"
+      ]
+    }
+  ]
+}

@@ -361,6 +361,7 @@ function JobDetail({ job, onBack }: { job: Job; onBack: () => void }) {
                       className="w-full"
                       onClick={handleApply}
                       disabled={applying}
+                      rateLimitAware
                     >
                       {applying
                         ? "جاري التقديم..."

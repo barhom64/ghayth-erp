@@ -10,6 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Edit, User, Phone, Mail, MapPin, Building2, Banknote, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 
 /**
  * OwnerDetail — unified detail page for a single property owner.
@@ -120,12 +127,29 @@ export default function OwnerDetail() {
     return sections;
   }, [owner, id, totalProperties, totalRentalIncome]);
 
-  const handleEdit = () => {
-    setLocation(`/properties/owners/${id}/edit`);
-  };
+  const editDelete = useDetailEditDelete({
+    entityLabel: "المالك",
+    patchPath: `/properties/owners/${id}`,
+    deletePath: `/properties/owners/${id}`,
+    listPath: "/properties/owners",
+    initialValues: owner,
+    fields: [
+      { key: "name", label: "الاسم" },
+      { key: "phone", label: "الهاتف" },
+      { key: "email", label: "البريد الإلكتروني" },
+      { key: "address", label: "العنوان" },
+      { key: "nationalId", label: "رقم الهوية" },
+      { key: "bankAccount", label: "الحساب البنكي" },
+    ],
+    invalidateKeys: [["owner", id || ""], ["owners"]],
+    onSaved: () => refetch(),
+  });
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
+      <div className="md:col-span-3">
+        <InlineEditCard hook={editDelete} />
+      </div>
       {/* Primary info — owner identity + key aggregates */}
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
@@ -242,6 +266,9 @@ export default function OwnerDetail() {
           </Card>
         )}
       </div>
+
+      {id && <EntityComments entityType="owner" entityId={id} />}
+      {id && <EntityTags entityType="owner" entityId={id} />}
     </div>
   );
 
@@ -268,27 +295,20 @@ export default function OwnerDetail() {
         error={error}
         onRetry={refetch}
         actions={
-          <>
-            {owner && (
-              <EntityPrintButton
-                branchId={owner.branchId}
-                title={owner.name ? `مالك: ${owner.name}` : "مالك"}
-                ref={owner.ref || `OWN-${id}`}
-                date={formatDateAr(owner.createdAt)}
-                sections={printSections}
-              />
-            )}
-            <GuardedButton
-              perm="properties:update"
-              variant="outline"
-              size="sm"
-              onClick={handleEdit}
-              disabled={!owner}
-            >
-              <Edit className="h-4 w-4 ms-1" />
-              تعديل
-            </GuardedButton>
-          </>
+          <DetailActionButtons
+            hook={editDelete}
+            extra={
+              owner ? (
+                <EntityPrintButton
+                  branchId={owner.branchId}
+                  title={owner.name ? `مالك: ${owner.name}` : "مالك"}
+                  ref={owner.ref || `OWN-${id}`}
+                  date={formatDateAr(owner.createdAt)}
+                  sections={printSections}
+                />
+              ) : null
+            }
+          />
         }
       />
       <AttachmentPreview

@@ -1,11 +1,39 @@
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
+  parseId,
+  zodParse,
+} from "../lib/errorHandler.js";
+import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, toDateISO } from "../lib/businessHelpers.js";
 import { z } from "zod";
+import rateLimit from "express-rate-limit";
+import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
+import { makeRateLimitStore } from "../lib/rateLimitStore.js";
+import { logger } from "../lib/logger.js";
+
+// /pdpl mixes one anonymous endpoint (/privacy-notice) with several
+// authenticated ones. Per-IP cap goes only on the anonymous endpoint;
+// authenticated routes get a per-user cap (owner/admin exempt) so admins
+// on a shared proxy IP aren't lumped together.
+const privacyNoticeIpLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: process.env.NODE_ENV === "production" ? 100 : 2000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة لاحقاً" },
+  validate: { ip: false, trustProxy: false },
+  store: makeRateLimitStore("pdpl:privacy-notice"),
+});
+const pdplUserLimiter = createPerUserLimiter({
+  prefix: "pdpl",
+  windowMs: 60 * 1000,
+  max: 120,
+  message: "تم تجاوز الحد الأقصى لطلبات حماية البيانات. يرجى المحاولة لاحقاً",
+});
 
 const dataRequestSchema = z.object({
   requestType: z.enum(["access", "rectification", "erasure", "portability", "objection"]),
@@ -16,7 +44,7 @@ const dataRequestSchema = z.object({
 
 const router = Router();
 
-router.get("/privacy-notice", async (req, res) => {
+router.get("/privacy-notice", privacyNoticeIpLimiter, async (req, res) => {
   try {
     res.json({
       version: "1.0",
@@ -51,7 +79,7 @@ router.get("/privacy-notice", async (req, res) => {
   }
 });
 
-router.get("/retention-policies", authMiddleware, async (req, res) => {
+router.get("/retention-policies", authMiddleware, pdplUserLimiter, async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -66,13 +94,13 @@ router.get("/retention-policies", authMiddleware, async (req, res) => {
   }
 });
 
-router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res) => {
+router.get("/employee-data-export/:employeeId", authMiddleware, pdplUserLimiter, async (req, res) => {
   try {
     const scope = req.scope!;
-    const employeeId = Number(req.params.employeeId);
+    const employeeId = parseId(req.params.employeeId, "employeeId");
 
     const isOwnData = scope.employeeId === employeeId;
-    const isHROrAbove = ["hr_manager", "general_manager", "owner"].includes(scope.role);
+    const isHROrAbove = HR_ROLES.includes(scope.role);
 
     if (!isOwnData && !isHROrAbove) {
       throw new ForbiddenError("يمكنك فقط تصدير بياناتك الشخصية أو يجب أن تكون مسؤول موارد بشرية");
@@ -80,10 +108,10 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
 
     const [employee] = await rawQuery<any>(
       `SELECT e.id, e.name, e."nameEn", e."nationalId", e.phone, e.email, e."dateOfBirth",
-              e.nationality, e.gender, e."maritalStatus", e."hireDate",
-              e."profileImageUrl"
+              e.nationality, e.gender, e."photoUrl" AS "profileImageUrl"
        FROM employees e
-       WHERE e.id = $1 AND e."companyId" = $2 AND e."deletedAt" IS NULL`,
+       JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $2
+       WHERE e.id = $1 AND e."deletedAt" IS NULL`,
       [employeeId, scope.companyId]
     );
 
@@ -93,7 +121,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
 
     const [assignments, attendanceSummary, leaveRequests] = await Promise.all([
       rawQuery<any>(
-        `SELECT ea.id, ea.role, ea."jobTitle", ea.salary, ea.status, ea."startDate", ea."endDate",
+        `SELECT ea.id, ea.role, ea."jobTitle", ea.salary, ea.status, ea."hireDate" AS "startDate", ea."endDate",
                 c.name AS "companyName", b.name AS "branchName"
          FROM employee_assignments ea
          JOIN companies c ON c.id = ea."companyId"
@@ -131,7 +159,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
         "Subject Rights Request",
         scope.activeAssignmentId
       ]
-    ).catch(console.error);
+    ).catch((e) => logger.error(e, "pdpl background task failed"));
 
     res.json({
       exportedAt: new Date().toISOString(),
@@ -148,11 +176,9 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
   }
 });
 
-router.post("/data-request", authMiddleware, requirePermission("admin:write"), async (req, res) => {
+router.post("/data-request", authMiddleware, pdplUserLimiter, requirePermission("admin:write"), async (req, res) => {
   try {
-    const parsed_dataRequestSchema = dataRequestSchema.safeParse(req.body);
-    if (!parsed_dataRequestSchema.success) throw new ValidationError(parsed_dataRequestSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_dataRequestSchema.data;
+    const body = zodParse(dataRequestSchema.safeParse(req.body));
     const scope = req.scope!;
     const { requestType, notes, requesterName, requesterEmail } = body;
 
@@ -174,29 +200,25 @@ router.post("/data-request", authMiddleware, requirePermission("admin:write"), a
         requesterName ?? scope.userName,
         requesterEmail ?? null,
         notes ?? null,
-        dueDate.toISOString().split("T")[0]
+        toDateISO(dueDate)
       ]
     );
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "create_data_request",
       entity: "data_access_requests", entityId: insertId,
-      after: { requestType, requesterName: requesterName ?? scope.userName, dueDate: dueDate.toISOString().split("T")[0] },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "pdpl.data_request.created", entity: "data_access_requests", entityId: insertId, details: JSON.stringify({ requestType, requesterName: requesterName ?? scope.userName }) }).catch(console.error);
+      after: { requestType, requesterName: requesterName ?? scope.userName, dueDate: toDateISO(dueDate) },
+    }).catch((e) => logger.error(e, "pdpl background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "pdpl.data_request.created", entity: "data_access_requests", entityId: insertId, details: JSON.stringify({ requestType, requesterName: requesterName ?? scope.userName }) }).catch((e) => logger.error(e, "pdpl background task failed"));
 
-    res.status(201).json({
-      id: insertId,
-      message: "تم استلام طلبك وسيتم الرد خلال 30 يوماً وفق متطلبات PDPL",
-      requestType,
-      dueDate: dueDate.toISOString().split("T")[0]
-    });
+    const [row] = await rawQuery<any>(`SELECT * FROM data_access_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json({ ...row, message: "تم استلام طلبك وسيتم الرد خلال 30 يوماً وفق متطلبات PDPL" });
   } catch (err) {
     handleRouteError(err, res, "Data request error:");
   }
 });
 
-router.get("/processing-log", authMiddleware, requireMinLevel(90), async (req, res) => {
+router.get("/processing-log", authMiddleware, pdplUserLimiter, requireMinLevel(90), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(

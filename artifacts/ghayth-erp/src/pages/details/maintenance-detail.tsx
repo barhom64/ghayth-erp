@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
@@ -8,6 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Wrench, Car, User } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   scheduled: "مجدول",
@@ -106,14 +113,29 @@ export default function MaintenanceDetail() {
     return sections;
   }, [maintenance, id]);
 
-  const handleEdit = () => {
-    setLocation(`/fleet/maintenance`);
-  };
+  const editDelete = useDetailEditDelete({
+    entityLabel: "الصيانة",
+    patchPath: `/fleet/maintenance/${id}`,
+    deletePath: `/fleet/maintenance/${id}`,
+    listPath: "/fleet/maintenance",
+    initialValues: maintenance,
+    fields: [
+      { key: "description", label: "الوصف" },
+      { key: "cost", label: "التكلفة", type: "number" },
+      { key: "odometer", label: "العداد", type: "number" },
+      { key: "notes", label: "ملاحظات" },
+    ],
+    invalidateKeys: [["maintenance", String(id)], ["maintenance"]],
+    onSaved: () => refetch(),
+  });
 
   const cost = maintenance?.cost || maintenance?.amount || 0;
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
+      <div className="md:col-span-3">
+        <InlineEditCard hook={editDelete} />
+      </div>
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
@@ -224,6 +246,9 @@ export default function MaintenanceDetail() {
           </Card>
         )}
       </div>
+
+      {id && <EntityComments entityType="maintenance" entityId={id} />}
+      {id && <EntityTags entityType="maintenance" entityId={id} />}
     </div>
   );
 
@@ -267,16 +292,7 @@ export default function MaintenanceDetail() {
               sections={printSections}
             />
           )}
-          <GuardedButton
-            perm="fleet:update"
-            variant="outline"
-            size="sm"
-            onClick={handleEdit}
-            disabled={!maintenance || ["completed", "cancelled"].includes(maintenance.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
+          <DetailActionButtons hook={editDelete} />
         </>
       }
     />

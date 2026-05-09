@@ -23,9 +23,15 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     paid: { label: "مدفوعة", cls: "bg-green-100 text-green-700" },
-    pending: { label: "معلقة", cls: "bg-yellow-100 text-yellow-700" },
+    partial: { label: "مدفوعة جزئياً", cls: "bg-blue-100 text-blue-700" },
+    partially_paid: { label: "مدفوعة جزئياً", cls: "bg-blue-100 text-blue-700" },
+    pending_approval: { label: "بانتظار الموافقة", cls: "bg-yellow-100 text-yellow-700" },
+    approved: { label: "معتمدة", cls: "bg-teal-100 text-teal-700" },
+    sent: { label: "مُرسلة", cls: "bg-indigo-100 text-indigo-700" },
     overdue: { label: "متأخرة", cls: "bg-red-100 text-red-700" },
     cancelled: { label: "ملغية", cls: "bg-gray-100 text-gray-600" },
+    draft: { label: "مسودة", cls: "bg-gray-100 text-gray-600" },
+    rejected: { label: "مرفوضة", cls: "bg-red-100 text-red-700" },
     open: { label: "مفتوح", cls: "bg-blue-100 text-blue-700" },
     in_progress: { label: "قيد التنفيذ", cls: "bg-indigo-100 text-indigo-700" },
     closed: { label: "مغلق", cls: "bg-gray-100 text-gray-600" },
@@ -92,17 +98,14 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-900 text-sm">آخر الفواتير</h2>
-            <Link href="/invoices">
-              <a className="text-xs text-blue-600 hover:underline">عرض الكل</a>
-            </Link>
+            <Link href="/invoices" className="text-xs text-blue-600 hover:underline">عرض الكل</Link>
           </div>
           {recentInvoices.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-4">لا توجد فواتير</p>
           ) : (
             <div className="space-y-2">
               {recentInvoices.map((inv: any) => (
-                <Link key={inv.id} href={`/invoices/${inv.id}`}>
-                  <a className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors block">
+                <Link key={inv.id} href={`/invoices/${inv.id}`} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors block">
                     <div>
                       <p className="text-sm font-mono font-medium text-gray-900">{inv.ref}</p>
                       <p className="text-xs text-gray-500">{formatDateShort(inv.createdAt)}</p>
@@ -111,8 +114,7 @@ export default function Dashboard() {
                       <StatusBadge status={inv.status} />
                       <span className="text-sm font-bold text-gray-900">{formatCurrency(Number(inv.total || 0))}</span>
                     </div>
-                  </a>
-                </Link>
+                  </Link>
               ))}
             </div>
           )}
@@ -121,18 +123,14 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-900 text-sm">آخر الطلبات</h2>
-            <Link href="/tickets">
-              <a className="text-xs text-blue-600 hover:underline">عرض الكل</a>
-            </Link>
+            <Link href="/tickets" className="text-xs text-blue-600 hover:underline">عرض الكل</Link>
           </div>
           {recentTickets.length === 0 ? (
             <div className="text-center py-4">
               <p className="text-gray-400 text-sm mb-3">لا توجد طلبات</p>
-              <Link href="/tickets/new">
-                <a className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">
+              <Link href="/tickets/new" className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">
                   إنشاء طلب جديد
-                </a>
-              </Link>
+                </Link>
             </div>
           ) : (
             <div className="space-y-2">

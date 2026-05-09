@@ -1,4 +1,7 @@
 import { rawQuery } from "./rawdb.js";
+import { currentPeriod, todayISO, roundTo2 } from "./businessHelpers.js";
+import { NotFoundError } from "./errorHandler.js";
+import { logger } from "./logger.js";
 
 export interface ImpactItem {
   category: string;
@@ -73,7 +76,7 @@ export async function computeLeaveImpact(
   const salary = Number(employee?.salary ?? 0);
   if (!leaveType?.isPaid && salary > 0) {
     const dailySalary = salary / 30;
-    const deduction = Math.round(dailySalary * days * 100) / 100;
+    const deduction = roundTo2(dailySalary * days);
     items.push({
       category: "المالية",
       label: "خصم من الراتب",
@@ -144,7 +147,7 @@ export async function computeTerminationImpact(
     const hireDate = new Date(employee.hireDate);
     const today = new Date();
     const yearsOfService = (today.getTime() - hireDate.getTime()) / (365.25 * 24 * 3600 * 1000);
-    const gratuity = Math.round(salary / 12 * yearsOfService * 100) / 100;
+    const gratuity = roundTo2(salary / 12 * yearsOfService);
     items.push({
       category: "المالية",
       label: "مكافأة نهاية الخدمة المقدرة",
@@ -154,10 +157,14 @@ export async function computeTerminationImpact(
   }
 
   const [custodies] = await rawQuery<any>(
-    `SELECT COALESCE(SUM(amount),0) AS total FROM custodies
-     WHERE "companyId" = $1 AND "employeeId" = $2 AND status != 'settled'`,
+    `SELECT COALESCE(SUM(jl.debit - jl.credit),0) AS total
+     FROM journal_entries je
+     JOIN journal_lines jl ON jl."journalId" = je.id
+     WHERE je."companyId" = $1 AND je."sourceType" = 'custody'
+       AND je."deletedAt" IS NULL
+       AND EXISTS (SELECT 1 FROM employee_assignments ea WHERE ea.id = je."createdBy" AND ea."employeeId" = $2)`,
     [companyId, employeeId]
-  ).catch(() => [{ total: 0 }]);
+  ).catch((e) => { logger.error(e, "impact preview query failed"); return [{ total: 0 }]; });
   const custodyTotal = Number(custodies?.total ?? 0);
   if (custodyTotal > 0) {
     items.push({
@@ -169,10 +176,10 @@ export async function computeTerminationImpact(
   }
 
   const [loans] = await rawQuery<any>(
-    `SELECT COALESCE(SUM("remainingAmount"),0) AS total FROM loans
-     WHERE "companyId" = $1 AND "employeeId" = $2 AND status != 'settled'`,
+    `SELECT COALESCE(SUM("remainingAmount"),0) AS total FROM hr_employee_loans
+     WHERE "companyId" = $1 AND "employeeId" = $2 AND status NOT IN ('completed','paid','rejected')`,
     [companyId, employeeId]
-  ).catch(() => [{ total: 0 }]);
+  ).catch((e) => { logger.error(e, "impact preview query failed"); return [{ total: 0 }]; });
   const loanTotal = Number(loans?.total ?? 0);
   if (loanTotal > 0) {
     items.push({
@@ -239,7 +246,7 @@ export async function computeViolationImpact(
     [assignmentId, employeeId]
   );
 
-  const period = new Date().toISOString().slice(0, 7);
+  const period = currentPeriod();
   const [monthCount] = await rawQuery<any>(
     `SELECT COUNT(*) AS cnt FROM employee_violations
      WHERE "assignmentId" = $1 AND period = $2`,
@@ -308,7 +315,7 @@ export async function computeEmployeeOperationalStatus(
   color: string;
   reason: string;
 }> {
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayISO();
   const period = today.slice(0, 7);
 
   const [onLeave] = await rawQuery<any>(
@@ -316,7 +323,7 @@ export async function computeEmployeeOperationalStatus(
      WHERE "employeeId" = $1 AND status = 'approved'
        AND "startDate" <= $2 AND "endDate" >= $2`,
     [employeeId, today]
-  ).catch(() => [null]);
+  ).catch((e) => { logger.error(e, "impact preview query failed"); return [null]; });
   if (onLeave) {
     return { status: "on_leave", label: "في إجازة", color: "bg-blue-100 text-blue-700", reason: "إجازة معتمدة" };
   }
@@ -325,7 +332,7 @@ export async function computeEmployeeOperationalStatus(
     `SELECT status FROM employee_contracts
      WHERE "companyId" = $1 AND "employeeId" = $2 ORDER BY id DESC LIMIT 1`,
     [companyId, employeeId]
-  ).catch(() => [null]);
+  ).catch((e) => { logger.error(e, "impact preview query failed"); return [null]; });
   if (contract?.status === "terminated" || contract?.status === "cancelled") {
     return { status: "terminated", label: "منتهية خدماته", color: "bg-gray-100 text-gray-600", reason: "انتهاء الخدمة" };
   }
@@ -334,7 +341,7 @@ export async function computeEmployeeOperationalStatus(
     `SELECT id FROM employee_violations
      WHERE "assignmentId" = $1 AND type = 'suspension' AND status = 'active'`,
     [assignmentId]
-  ).catch(() => [null]);
+  ).catch((e) => { logger.error(e, "impact preview query failed"); return [null]; });
   if (suspension) {
     return { status: "suspended", label: "موقوف", color: "bg-red-100 text-red-700", reason: "إيقاف تأديبي" };
   }
@@ -343,7 +350,7 @@ export async function computeEmployeeOperationalStatus(
     `SELECT id FROM employee_violations
      WHERE "assignmentId" = $1 AND period = $2 AND severity IN ('high','critical') AND status = 'active'`,
     [assignmentId, period]
-  ).catch(() => [null]);
+  ).catch((e) => { logger.error(e, "impact preview query failed"); return [null]; });
   if (pendingViolation) {
     return { status: "under_action", label: "تحت إجراء", color: "bg-orange-100 text-orange-700", reason: "مخالفة نشطة" };
   }
@@ -351,7 +358,7 @@ export async function computeEmployeeOperationalStatus(
   const [todayAttendance] = await rawQuery<any>(
     `SELECT status, "lateMinutes" FROM attendance WHERE "assignmentId" = $1 AND date = $2`,
     [assignmentId, today]
-  ).catch(() => [null]);
+  ).catch((e) => { logger.error(e, "impact preview query failed"); return [null]; });
 
   if (!todayAttendance) {
     const now = new Date();
@@ -382,7 +389,7 @@ export async function getPropertyUnitStatusImpact(
     `SELECT * FROM property_units WHERE id=$1 AND "companyId"=$2`,
     [unitId, companyId]
   );
-  if (!unit) throw new Error("الوحدة غير موجودة");
+  if (!unit) throw new NotFoundError("الوحدة غير موجودة");
 
   const fromStatus = unit.status;
   const impacts: StatusImpactItem[] = [];
@@ -539,7 +546,7 @@ export async function getVehicleStatusImpact(
     `SELECT v.*, d.name AS "driverName" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id=v."assignedDriverId" WHERE v.id=$1 AND v."companyId"=$2`,
     [vehicleId, companyId]
   );
-  if (!vehicle) throw new Error("المركبة غير موجودة");
+  if (!vehicle) throw new NotFoundError("المركبة غير موجودة");
 
   const fromStatus = vehicle.status;
   const impacts: StatusImpactItem[] = [];

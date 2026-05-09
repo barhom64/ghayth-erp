@@ -1,5 +1,6 @@
 import cron from "node-cron";
-import { rawQuery, rawExecute, pool } from "./rawdb.js";
+import { rawQuery, rawExecute, pool, withTransaction } from "./rawdb.js";
+import { logger } from "./logger.js";
 import { saveAllCompaniesKPISnapshots } from "./kpiEngine.js";
 import { runSmartAlertsAllCompanies } from "./smartAlerts.js";
 import { runSelfAuditAllCompanies } from "./selfAuditEngine.js";
@@ -9,19 +10,24 @@ import {
   getDirectorAssignmentId,
   getCfoAssignmentId,
   getLegalResponsible,
-  haversineDistance,
   emitEvent,
   createAuditLog,
+  todayISO,
+  toDateISO,
+  currentYear,
+  currentPeriod,
+  roundTo2,
 } from "./businessHelpers.js";
-import { broadcastAlert } from "./notificationService.js";
+import { broadcastAlert, sendNotification } from "./notificationService.js";
 import { processFallbackChains } from "./notificationEngine.js";
 import { checkSlaStatus } from "./workflowEngine.js";
 import { runAllProactiveChecks, registerProactiveEventListeners } from "./proactiveEngine.js";
 import { eventBus } from "./eventBus.js";
 import { decryptSecret } from "./secrets.js";
-import { processDueRecurringJournals } from "../routes/finance-recurring.js";
+import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
 import { scanObligations } from "./obligationsEngine.js";
 import { runAutoDetectionAllCompanies } from "./autoViolationEngine.js";
+import { getRedisRateLimitStatus, type RedisRateLimitStatus } from "./rateLimitStore.js";
 
 async function getSystemTimezone(): Promise<string> {
   try {
@@ -66,7 +72,7 @@ async function logCronJob(
       [jobId, jobName, status, duration, result, error ?? null]
     );
   } catch (err) {
-    console.error("Failed to log cron job:", err);
+    logger.error(err, "Failed to log cron job:");
   }
 }
 
@@ -77,13 +83,13 @@ async function acquireCronLock(jobName: string): Promise<boolean> {
   try {
     const upsertResult = await pool.query(
       `INSERT INTO cron_locks (job_name, locked_at, locked_by, expires_at)
-       VALUES ($1, NOW(), $2, NOW() + INTERVAL '${LOCK_TTL_MINUTES} minutes')
+       VALUES ($1, NOW(), $2, NOW() + make_interval(mins => $3))
        ON CONFLICT (job_name) DO UPDATE
          SET locked_at  = EXCLUDED.locked_at,
              locked_by  = EXCLUDED.locked_by,
              expires_at = EXCLUDED.expires_at
          WHERE cron_locks.expires_at < NOW()`,
-      [jobName, LOCK_OWNER]
+      [jobName, LOCK_OWNER, LOCK_TTL_MINUTES]
     );
     return (upsertResult.rowCount ?? 0) > 0;
   } catch {
@@ -97,7 +103,8 @@ async function releaseCronLock(jobName: string): Promise<void> {
       `DELETE FROM cron_locks WHERE job_name = $1 AND locked_by = $2`,
       [jobName, LOCK_OWNER]
     );
-  } catch {
+  } catch (e) {
+    logger.error(e, "[cronScheduler] failed to release cron lock");
   }
 }
 
@@ -112,7 +119,7 @@ async function runJob(def: CronJobDef): Promise<void> {
 
   const acquired = await acquireCronLock(def.name);
   if (!acquired) {
-    console.log(`[CRON] ${def.name}: skipped — already running on another instance`);
+    logger.debug({ job: def.name }, "CRON job skipped — already running on another instance");
     return;
   }
 
@@ -121,12 +128,12 @@ async function runJob(def: CronJobDef): Promise<void> {
     const result = await def.handler();
     const duration = Date.now() - start;
     await logCronJob(def.name, "success", duration, result);
-    console.log(`[CRON] ${def.name}: ${result} (${duration}ms)`);
+    logger.info({ job: def.name, result, duration }, "CRON job completed");
   } catch (err) {
     const duration = Date.now() - start;
     const errMsg = err instanceof Error ? err.message : String(err);
     await logCronJob(def.name, "failed", duration, "Job failed", errMsg);
-    console.error(`[CRON] ${def.name} failed:`, err);
+    logger.error(err, `[CRON] ${def.name} failed:`);
   } finally {
     await releaseCronLock(def.name);
   }
@@ -138,7 +145,7 @@ async function documentExpiryAlerts(): Promise<string> {
   for (const company of companies) {
     // Scan 90-day window to cover all three alert thresholds (90, 30, 14 days)
     const docs = await rawQuery<any>(
-      `SELECT ed.id, ed."employeeId", ed."documentType", ed."expiryDate",
+      `SELECT ed.id, ed."employeeId", ed."type", ed."expiryDate",
               e.name AS "employeeName",
               (ed."expiryDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM employee_documents ed
@@ -210,19 +217,19 @@ async function documentExpiryAlerts(): Promise<string> {
          AND fv."insuranceExpiry" IS NOT NULL
          AND fv."insuranceExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'`,
       [company.id]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any[]; });
 
     // Company documents (commercial registration, municipality license, etc.)
     const companyDocAlerts = await rawQuery<any>(
-      `SELECT cd.id, NULL AS "employeeId", cd."documentType" AS "employeeName",
-              cd."documentType", cd."expiryDate",
+      `SELECT cd.id, NULL AS "employeeId", cd."type" AS "employeeName",
+              cd."type", cd."expiryDate",
               (cd."expiryDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM company_documents cd
        WHERE cd."companyId"=$1 AND cd.status='active'
          AND cd."expiryDate" IS NOT NULL
          AND cd."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'`,
       [company.id]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any[]; });
 
     const allDocsCombined = [
       ...allDocs,
@@ -330,12 +337,12 @@ async function fleetStatusCheck(): Promise<string> {
           action: "fleet.preventive.due", entity: "fleet_vehicles", entityId: Number(v.id),
           details: `المركبة ${v.plateNumber} تجاوزت موعد الصيانة — حالة needs_service`,
         });
-      } catch {}
+      } catch (e) { logger.error(e, "[cronScheduler] fleet preventive due event failed"); }
       emitEvent({
         companyId: company.id, branchId: 0, userId: null,
         action: "fleet.vehicle.breakdown", entity: "fleet_vehicles", entityId: Number(v.id),
         details: JSON.stringify({ plateNumber: v.plateNumber, description: "صيانة متأخرة — تجاوزت موعد الصيانة المحدد", source: "preventive_due" }),
-      }).catch(() => {});
+      }).catch((e) => logger.error(e, "[cronScheduler] fleet vehicle breakdown event failed"));
       actions++;
     }
 
@@ -400,92 +407,132 @@ async function leaveEscalationCheck(): Promise<string> {
     const hoursSinceCreation = (now.getTime() - stageCreatedAt.getTime()) / 3600000;
 
     if (hoursSinceCreation >= 28 && !stage.autoApprovedAt) {
-      await rawExecute(
-        `UPDATE leave_approval_stages SET status = 'approved', decision = 'موافقة تلقائية - تجاوز المهلة', "autoApprovedAt" = NOW() WHERE id = $1`,
-        [stage.id]
-      );
-      await rawExecute(
-        `UPDATE hr_leave_requests SET status = 'approved', "approvedAt" = NOW() WHERE id = $1`,
-        [stage.leaveRequestId]
-      );
-      const year = new Date(stage.startDate).getFullYear();
-      await rawExecute(
-        `UPDATE hr_leave_balances SET used = used + $1, reserved = reserved - $1
-         WHERE "employeeId" = $2 AND "companyId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-        [stage.days, stage.employeeId, stage.companyId, stage.leaveTypeId, year]
-      );
-      await rawExecute(
-        `UPDATE approval_requests SET status = 'approved', "decidedAt" = NOW()
-         WHERE "refType" = 'leave_request' AND "refId" = $1`,
-        [stage.leaveRequestId]
-      ).catch(console.error);
-
-      const allAssignments = await rawQuery<any>(
-        `SELECT id, "companyId", "branchId" FROM employee_assignments
-         WHERE "employeeId" = $1 AND status = 'active'`,
-        [stage.employeeId]
-      );
-      const leaveStart = new Date(stage.startDate);
-      const leaveEnd = new Date(stage.endDate);
-      for (const asn of allAssignments) {
-        for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
-          const dateStr = d.toISOString().split("T")[0];
-          await rawExecute(
-            `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
-             VALUES ($1,$2,$3,$4,'on_leave',$5) ON CONFLICT DO NOTHING`,
-            [asn.id, asn.companyId, asn.branchId, dateStr, `إجازة معتمدة تلقائياً - طلب رقم ${stage.leaveRequestId}`]
-          ).catch(console.error);
-        }
-        const [managerAId] = await rawQuery<any>(
-          `SELECT ea.id FROM employee_assignments ea
-           WHERE ea."companyId" = $1 AND ea."branchId" = $2
-             AND ea.role IN ('branch_manager','hr_manager','general_manager','owner') AND ea.status = 'active' AND ea.id != $3
-           ORDER BY CASE ea.role WHEN 'branch_manager' THEN 1 WHEN 'hr_manager' THEN 2 WHEN 'general_manager' THEN 3 ELSE 4 END LIMIT 1`,
-          [asn.companyId, asn.branchId, asn.id]
+      // Wrap all database writes in a transaction to prevent partial updates
+      // on crash. Notifications and events are fire-and-forget and stay outside.
+      const { allAssignments, managersByAsn, isFullyApproved } = await withTransaction(async (client) => {
+        // 1. Approve this stage
+        await client.query(
+          `UPDATE leave_approval_stages SET status = 'approved', decision = 'موافقة تلقائية - تجاوز المهلة', "autoApprovedAt" = NOW() WHERE id = $1`,
+          [stage.id]
         );
-        if (managerAId) {
-          await rawExecute(
-            `UPDATE project_tasks SET "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1)
-             WHERE "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $2)
-               AND status NOT IN ('completed','cancelled')
-               AND ("dueDate" IS NULL OR "dueDate" BETWEEN $3 AND $4)`,
-            [managerAId.id, asn.id, stage.startDate, stage.endDate]
-          ).catch(console.error);
+
+        // 2. Check if there are remaining unapproved stages for this leave request
+        const remainingRes = await client.query(
+          `SELECT COUNT(*)::int AS cnt FROM leave_approval_stages
+           WHERE "leaveRequestId" = $1 AND id != $2 AND status NOT IN ('approved','skipped')`,
+          [stage.leaveRequestId, stage.id]
+        );
+        const remainingUnapproved = remainingRes.rows[0]?.cnt ?? 0;
+        const fullyApproved = remainingUnapproved === 0;
+
+        if (fullyApproved) {
+          // 3. Only mark the overall leave request approved when ALL stages are done
+          await client.query(
+            `UPDATE hr_leave_requests SET status = 'approved', "approvedAt" = NOW() WHERE id = $1`,
+            [stage.leaveRequestId]
+          );
+
+          // 4. Deduct leave balance
+          const year = new Date(stage.startDate).getFullYear();
+          await client.query(
+            `UPDATE hr_leave_balances SET used = used + $1, reserved = reserved - $1
+             WHERE "employeeId" = $2 AND "companyId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+            [stage.days, stage.employeeId, stage.companyId, stage.leaveTypeId, year]
+          );
+
+          // 5. Mark approval_requests as completed
+          await client.query(
+            `UPDATE approval_requests SET status = 'approved', "decidedAt" = NOW()
+             WHERE "refType" = 'leave_request' AND "refId" = $1`,
+            [stage.leaveRequestId]
+          );
+
+          // 6. Fetch assignments inside the transaction so reads are consistent
+          const asnRes = await client.query(
+            `SELECT id, "companyId", "branchId" FROM employee_assignments
+             WHERE "employeeId" = $1 AND status = 'active'`,
+            [stage.employeeId]
+          );
+          const assignments = asnRes.rows;
+
+          // 7. Insert attendance records and reassign tasks
+          const leaveStart = new Date(stage.startDate);
+          const leaveEnd = new Date(stage.endDate);
+          const managers: Record<string, any> = {};
+          for (const asn of assignments) {
+            for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
+              const dateStr = toDateISO(d);
+              await client.query(
+                `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
+                 VALUES ($1,$2,$3,$4,'on_leave',$5) ON CONFLICT DO NOTHING`,
+                [asn.id, asn.companyId, asn.branchId, dateStr, `إجازة معتمدة تلقائياً - طلب رقم ${stage.leaveRequestId}`]
+              );
+            }
+            const mgrRes = await client.query(
+              `SELECT ea.id FROM employee_assignments ea
+               WHERE ea."companyId" = $1 AND ea."branchId" = $2
+                 AND ea.role IN ('branch_manager','hr_manager','general_manager','owner') AND ea.status = 'active' AND ea.id != $3
+               ORDER BY CASE ea.role WHEN 'branch_manager' THEN 1 WHEN 'hr_manager' THEN 2 WHEN 'general_manager' THEN 3 ELSE 4 END LIMIT 1`,
+              [asn.companyId, asn.branchId, asn.id]
+            );
+            const managerAId = mgrRes.rows[0] ?? null;
+            managers[asn.id] = managerAId;
+            if (managerAId) {
+              await client.query(
+                `UPDATE project_tasks SET "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1)
+                 WHERE "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $2)
+                   AND status NOT IN ('completed','cancelled')
+                   AND ("dueDate" IS NULL OR "dueDate" BETWEEN $3 AND $4)`,
+                [managerAId.id, asn.id, stage.startDate, stage.endDate]
+              );
+            }
+          }
+          return { allAssignments: assignments, managersByAsn: managers, isFullyApproved: true };
         }
-        createNotification({
-          companyId: asn.companyId, assignmentId: asn.id,
-          type: "leave_approved", title: "تمت الموافقة التلقائية على طلب الإجازة",
-          body: `تمت الموافقة تلقائياً على إجازة ${stage.leaveTypeName} من ${stage.startDate} إلى ${stage.endDate} بسبب تجاوز المهلة`,
-          priority: "high", refType: "leave_request", refId: stage.leaveRequestId,
-        }).catch(console.error);
-        if (managerAId) {
+
+        // Stage approved but other stages still pending — don't finalize the leave request
+        return { allAssignments: [] as any[], managersByAsn: {} as Record<string, any>, isFullyApproved: false };
+      });
+
+      // Fire-and-forget notifications and events (outside the transaction)
+      if (isFullyApproved) {
+        for (const asn of allAssignments) {
+          const managerAId = managersByAsn[asn.id];
           createNotification({
-            companyId: asn.companyId, assignmentId: managerAId.id,
-            type: "leave_approved", title: "موظف في إجازة معتمدة تلقائياً",
-            body: `تمت الموافقة تلقائياً على إجازة موظف من ${stage.startDate} إلى ${stage.endDate}. تم إعادة توزيع المهام.`,
-            priority: "normal", refType: "leave_request", refId: stage.leaveRequestId,
-          }).catch(console.error);
+            companyId: asn.companyId, assignmentId: asn.id,
+            type: "leave_approved", title: "تمت الموافقة التلقائية على طلب الإجازة",
+            body: `تمت الموافقة تلقائياً على إجازة ${stage.leaveTypeName} من ${stage.startDate} إلى ${stage.endDate} بسبب تجاوز المهلة`,
+            priority: "high", refType: "leave_request", refId: stage.leaveRequestId,
+          }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
+          if (managerAId) {
+            createNotification({
+              companyId: asn.companyId, assignmentId: managerAId.id,
+              type: "leave_approved", title: "موظف في إجازة معتمدة تلقائياً",
+              body: `تمت الموافقة تلقائياً على إجازة موظف من ${stage.startDate} إلى ${stage.endDate}. تم إعادة توزيع المهام.`,
+              priority: "normal", refType: "leave_request", refId: stage.leaveRequestId,
+            }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
+          }
         }
+        // Emit the canonical leave.approved event so downstream listeners
+        // (audit trail, calendar, reporting) see auto-approvals the same way
+        // they see manual approvals. Without this, cron-approved leaves were
+        // invisible to every listener that keyed on leave.approved.
+        emitEvent({
+          companyId: stage.companyId,
+          userId: null,
+          action: "leave.approved",
+          entity: "hr_leave_requests",
+          entityId: stage.leaveRequestId,
+          details: JSON.stringify({
+            autoApproved: true,
+            reason: "timeout",
+            days: stage.days,
+            startDate: stage.startDate,
+            endDate: stage.endDate,
+            leaveTypeId: stage.leaveTypeId,
+          }),
+        }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
       }
-      // Emit the canonical leave.approved event so downstream listeners
-      // (audit trail, calendar, reporting) see auto-approvals the same way
-      // they see manual approvals. Without this, cron-approved leaves were
-      // invisible to every listener that keyed on leave.approved.
-      emitEvent({
-        companyId: stage.companyId,
-        userId: null,
-        action: "leave.approved",
-        entity: "hr_leave_requests",
-        entityId: stage.leaveRequestId,
-        details: JSON.stringify({
-          autoApproved: true,
-          reason: "timeout",
-          days: stage.days,
-          startDate: stage.startDate,
-          endDate: stage.endDate,
-          leaveTypeId: stage.leaveTypeId,
-        }),
-      }).catch(console.error);
       autoApprovals++;
     } else if (hoursSinceCreation >= 24 && !stage.escalatedAt) {
       const [hrAssignment] = await rawQuery<any>(
@@ -564,7 +611,7 @@ async function leaveReturnToWorkClosure(): Promise<string> {
         `UPDATE approval_requests SET status = 'completed', "decidedAt" = NOW()
          WHERE "refType" = 'leave_request' AND "refId" = $1 AND status NOT IN ('completed','rejected')`,
         [lv.id]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] leave request approval cleanup failed"));
 
       // Find active employee assignment so we can notify the employee.
       const [asn] = await rawQuery<any>(
@@ -583,10 +630,10 @@ async function leaveReturnToWorkClosure(): Promise<string> {
           priority: "normal",
           refType: "leave_request",
           refId: lv.id,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
 
         // Also nudge the direct manager so staffing dashboards update.
-        const managerAssignmentId = await getManagerAssignmentId(lv.companyId, asn.branchId).catch(() => null);
+        const managerAssignmentId = await getManagerAssignmentId(lv.companyId, asn.branchId).catch((e) => { logger.error(e, "[cronScheduler] manager lookup failed"); return null; });
         if (managerAssignmentId) {
           createNotification({
             companyId: lv.companyId,
@@ -597,7 +644,7 @@ async function leaveReturnToWorkClosure(): Promise<string> {
             priority: "low",
             refType: "leave_request",
             refId: lv.id,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
         }
       }
 
@@ -608,11 +655,11 @@ async function leaveReturnToWorkClosure(): Promise<string> {
         entity: "hr_leave_requests",
         entityId: lv.id,
         details: JSON.stringify({ leaveTypeId: lv.leaveTypeId, endDate: lv.endDate }),
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
 
       closed++;
     } catch (err) {
-      console.error(`[leaveReturnToWorkClosure] failed to close leave ${lv.id}:`, err);
+      logger.error(err, `[leaveReturnToWorkClosure] failed to close leave ${lv.id}:`);
     }
   }
 
@@ -652,7 +699,7 @@ async function inquiryMemoEscalation(): Promise<string> {
         `INSERT INTO hr_inquiry_memo_events ("memoId","companyId","actorRole",action,note,"createdAt")
          VALUES ($1,$2,'system','auto_declined','تجاوز مهلة 72 ساعة للرد — اعتُبر رفضاً ضمنياً',NOW())`,
         [memo.id, memo.companyId]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] inquiry memo auto-decline event insert failed"));
 
       // Tell the employee why their memo moved on — otherwise the auto-decline
       // is silent from the employee's perspective and they may later dispute
@@ -667,10 +714,10 @@ async function inquiryMemoEscalation(): Promise<string> {
           priority: "high",
           refType: "hr_inquiry_memo",
           refId: memo.id,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
       }
 
-      const managerAssignmentId = await getManagerAssignmentId(memo.companyId, memo.branchId).catch(() => null);
+      const managerAssignmentId = await getManagerAssignmentId(memo.companyId, memo.branchId).catch((e) => { logger.error(e, "[cronScheduler] manager lookup failed"); return null; });
       if (managerAssignmentId) {
         createNotification({
           companyId: memo.companyId,
@@ -681,7 +728,7 @@ async function inquiryMemoEscalation(): Promise<string> {
           priority: "high",
           refType: "hr_inquiry_memo",
           refId: memo.id,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
       }
 
       emitEvent({
@@ -691,11 +738,11 @@ async function inquiryMemoEscalation(): Promise<string> {
         entity: "hr_inquiry_memos",
         entityId: memo.id,
         details: JSON.stringify({ reason: "employee_no_response_72h" }),
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
 
       advanced++;
     } catch (err) {
-      console.error(`[inquiryMemoEscalation] failed memo ${memo.id}:`, err);
+      logger.error(err, `[inquiryMemoEscalation] failed memo ${memo.id}:`);
     }
   }
 
@@ -707,7 +754,7 @@ async function reconcileAttendance(): Promise<string> {
   let total = 0;
   for (const company of companies) {
     // Skip absent-marking if today is a public holiday for this company
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
     const [holiday] = await rawQuery<any>(
       `SELECT id FROM public_holidays WHERE "companyId"=$1 AND $2::date BETWEEN "startDate"::date AND "endDate"::date`,
       [company.id, today]
@@ -717,8 +764,8 @@ async function reconcileAttendance(): Promise<string> {
     }
 
     const { affectedRows } = await rawExecute(
-      `INSERT INTO attendance ("assignmentId", date, status, "createdAt")
-       SELECT ea.id, CURRENT_DATE, 'absent', NOW()
+      `INSERT INTO attendance ("assignmentId", "companyId", "branchId", date, status, "createdAt")
+       SELECT ea.id, ea."companyId", ea."branchId", CURRENT_DATE, 'absent', NOW()
        FROM employee_assignments ea
        WHERE ea."companyId"=$1 AND ea.status='active'
          AND NOT EXISTS (
@@ -752,7 +799,7 @@ async function reconcileAttendance(): Promise<string> {
 }
 
 async function dailyKpiSnapshot(): Promise<string> {
-  const today = new Date().toISOString().split("T")[0]!;
+  const today = todayISO();
   const saved = await saveAllCompaniesKPISnapshots(today);
   return `Saved KPI snapshots for ${saved} employees`;
 }
@@ -852,26 +899,26 @@ async function hourlyApprovalEscalation(): Promise<string> {
             await rawExecute(
               `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1`,
               [req.refId]
-            ).catch((e) => console.error("[hourly_escalation] domain update failed:", e));
+            ).catch((e) => logger.error(e, "[hourly_escalation] domain update failed:"));
           }
           const journalRefTypes = ["expense", "salary_advance", "custody"];
           if (journalRefTypes.includes(req.refType)) {
             await rawExecute(
               `UPDATE journal_entries SET status = 'posted' WHERE id = $1 AND status = 'pending_approval'`,
               [req.refId]
-            ).catch((e) => console.error("[hourly_escalation] journal update failed:", e));
+            ).catch((e) => logger.error(e, "[hourly_escalation] journal update failed:"));
           }
           // Audit + event so the auto-approval is visible in reports.
           createAuditLog({
             companyId: req.companyId, branchId: req.branchId, userId: 0,
             action: "auto_approved", entity: req.refType, entityId: req.refId,
             reason: "Auto-approved on timeout by hourly escalation cron",
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
           emitEvent({
             companyId: req.companyId, userId: 0,
             action: `${req.refType}.auto_approved`, entity: req.refType, entityId: req.refId,
             details: `Auto-approved on timeout after ${Math.round(hoursSinceCreation)}h`,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
         }
         autoApprovals++;
       } else {
@@ -916,19 +963,19 @@ async function dailyDeductionCheck(): Promise<string> {
     for (const a of absentees) {
       // 1) خصم غياب في قيد الرواتب
       await rawExecute(
-        `INSERT INTO payroll_deductions ("companyId", "employeeId", type, amount, reason, date, "createdAt")
+        `INSERT INTO payroll_deductions ("companyId", "employeeId", type, amount, description, "effectiveDate", "createdAt")
          SELECT $1, $2, 'absence', 0, $3, CURRENT_DATE, NOW()
          WHERE NOT EXISTS (
            SELECT 1 FROM payroll_deductions
-           WHERE "companyId" = $1 AND "employeeId" = $2 AND date = CURRENT_DATE AND type = 'absence'
+           WHERE "companyId" = $1 AND "employeeId" = $2 AND "effectiveDate" = CURRENT_DATE AND type = 'absence'
          )`,
         [company.id, a.employeeId, `خصم غياب تلقائي — ${a.name}`]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] absence deduction insert failed"));
       deductions++;
 
       // 2) تسجيل مخالفة + فتح محضر استفسار (idempotent) بموجب لائحة الانضباط
       try {
-        const period = new Date().toISOString().slice(0, 7);
+        const period = currentPeriod();
         const { rows: existingViolation } = await pool.query(
           `SELECT id FROM employee_violations
             WHERE "companyId" = $1 AND "assignmentId" = $2 AND type = 'absence'
@@ -963,7 +1010,7 @@ async function dailyDeductionCheck(): Promise<string> {
         });
         if (result.created) memos++;
       } catch (err) {
-        console.error("absence memo error:", err);
+        logger.error(err, "absence memo error:");
       }
     }
   }
@@ -978,15 +1025,13 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
       `SELECT i.id, i.ref, i."clientId", i.total, i."paidAmount", i."dueDate",
               c.name AS "clientName", c.phone AS "clientPhone",
               (CURRENT_DATE - i."dueDate"::date) AS "daysOverdue",
-              i."overduePhase"
+              i.status
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId"
-       WHERE i."companyId" = $1 AND i.status NOT IN ('paid','cancelled')
+       WHERE i."companyId" = $1 AND i.status NOT IN ('paid','cancelled','overdue')
          AND i."dueDate" < CURRENT_DATE`,
       [company.id]
     );
-
-    const PHASE_ORDER = ["alert", "first_notice", "reminder", "warning", "escalation", "legal"];
 
     for (const inv of invoices) {
       const days = Number(inv.daysOverdue);
@@ -999,24 +1044,17 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
       else if (days >= 3) phase = "alert";
       if (!phase) continue;
 
-      const currentIdx = PHASE_ORDER.indexOf(inv.overduePhase || "");
-      const newIdx = PHASE_ORDER.indexOf(phase);
-      if (currentIdx >= newIdx) continue;
-
-      // Also flip the invoice status to 'overdue' when appropriate — reports,
-      // collection stages and dashboards key off invoices.status, not off
-      // overduePhase, so leaving status='sent' made overdue invoices
-      // invisible in half the UI.
+      // Flip the invoice status to 'overdue' when appropriate — reports,
+      // collection stages and dashboards key off invoices.status.
       await rawExecute(
         `UPDATE invoices
-            SET "overduePhase" = $1,
-                status = CASE
+            SET status = CASE
                   WHEN status IN ('sent','partial') THEN 'overdue'
                   ELSE status
                 END
-          WHERE id = $2`,
-        [phase, inv.id]
-      ).catch(() => {});
+          WHERE id = $1`,
+        [inv.id]
+      ).catch((e) => logger.error(e, "[cronScheduler] invoice overdue status update failed"));
 
       await broadcastAlert(
         company.id, "invoice_overdue",
@@ -1032,33 +1070,9 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
 }
 
 async function dailyFuelMonitor(): Promise<string> {
-  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
-  let alerts = 0;
-  for (const company of companies) {
-    const vehicles = await rawQuery<any>(
-      `SELECT fv.id, fv."plateNumber",
-              COALESCE(SUM(fl.amount), 0) AS "monthlyFuel",
-              fv."monthlyFuelBudget"
-       FROM fleet_vehicles fv
-       LEFT JOIN fleet_fuel_logs fl ON fl."vehicleId" = fv.id
-         AND fl."createdAt" >= date_trunc('month', CURRENT_DATE)
-       WHERE fv."companyId" = $1 AND fv."monthlyFuelBudget" IS NOT NULL
-         AND fv."monthlyFuelBudget" > 0
-       GROUP BY fv.id, fv."plateNumber", fv."monthlyFuelBudget"
-       HAVING COALESCE(SUM(fl.amount), 0) > fv."monthlyFuelBudget" * 0.8`,
-      [company.id]
-    );
-    for (const v of vehicles) {
-      await broadcastAlert(
-        company.id, "fuel_budget_warning",
-        `استهلاك وقود مرتفع: ${v.plateNumber}`,
-        `الاستهلاك ${v.monthlyFuel} من الميزانية ${v.monthlyFuelBudget}`,
-        "warning", "fleet_vehicle", v.id
-      );
-      alerts++;
-    }
-  }
-  return `Fuel monitor: ${alerts} alerts`;
+  // Skipped: fleet_vehicles table does not have a "monthlyFuelBudget" column.
+  // Fuel budget monitoring requires a schema migration before it can be enabled.
+  return `Fuel monitor: 0 alerts (disabled — no monthlyFuelBudget column)`;
 }
 
 async function dailyInventoryCheck(): Promise<string> {
@@ -1066,11 +1080,11 @@ async function dailyInventoryCheck(): Promise<string> {
   let pos = 0;
   for (const company of companies) {
     const products = await rawQuery<any>(
-      `SELECT id, name, "currentStock", COALESCE("minStock", "safetyStock", 0) AS threshold
+      `SELECT id, name, "currentStock", COALESCE("minStock", 0) AS threshold
        FROM warehouse_products
        WHERE "companyId" = $1
-         AND COALESCE("minStock", "safetyStock", 0) > 0
-         AND "currentStock" < COALESCE("minStock", "safetyStock", 0)`,
+         AND COALESCE("minStock", 0) > 0
+         AND "currentStock" < COALESCE("minStock", 0)`,
       [company.id]
     );
     for (const p of products) {
@@ -1085,7 +1099,7 @@ async function dailyInventoryCheck(): Promise<string> {
           `INSERT INTO purchase_orders ("companyId", title, status, "totalAmount", "createdAt")
            VALUES ($1, $2, 'draft', 0, NOW())`,
           [company.id, `طلب شراء تلقائي: ${p.name} (المخزون ${p.currentStock}/${p.threshold})`]
-        ).catch(() => {});
+        ).catch((e) => logger.error(e, "[cronScheduler] auto purchase order insert failed"));
         pos++;
       }
     }
@@ -1139,14 +1153,14 @@ async function dailyPropertyCheck(): Promise<string> {
       );
       await rawExecute(
         `UPDATE rental_contracts SET "renewalNoticeSentAt"=NOW() WHERE id=$1`, [c.id]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] rental contract renewal notice update failed"));
       try {
         await emitEvent({
           companyId: company.id, userId: null,
           action: "lease.renewal_notice", entity: "rental_contracts", entityId: Number(c.id),
           details: `تنبيه تجديد — ينتهي ${c.endDate}`,
         });
-      } catch {}
+      } catch (e) { logger.error(e, "[cronScheduler] rental renewal notice event failed"); }
       renewalNotices++;
     }
 
@@ -1170,14 +1184,14 @@ async function dailyPropertyCheck(): Promise<string> {
       await rawExecute(
         `UPDATE rent_payments SET status='cancelled', "updatedAt"=NOW() WHERE "contractId"=$1 AND status IN ('pending','partial')`,
         [c.id]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] rent payments cancellation on contract expiry failed"));
       try {
         await emitEvent({
           companyId: company.id, userId: null,
           action: "lease.expired", entity: "rental_contracts", entityId: Number(c.id),
           details: `انتهاء تلقائي — ${c.tenantName ?? ''}`,
         });
-      } catch {}
+      } catch (e) { logger.error(e, "[cronScheduler] lease expired event failed"); }
       expired++;
     }
   }
@@ -1330,7 +1344,7 @@ async function monthlyRentPenalties(): Promise<string> {
 
       let actionLabel = targetStage;
       if (targetStage === 'penalty_applied') {
-        const lateFee = Math.round(Number(p.amount) * 0.02 * 100) / 100;
+        const lateFee = roundTo2(Number(p.amount) * 0.02);
         await rawExecute(`UPDATE rent_payments SET amount = amount + $1, "updatedAt"=NOW() WHERE id = $2`, [lateFee, p.id]);
         actionLabel = `غرامة تأخير ${lateFee}`;
         penalties++;
@@ -1374,7 +1388,7 @@ async function monthlyRentPenalties(): Promise<string> {
             details: `قضية إيجار متأخر — ${p.tenantName}`,
           });
         } catch (err) {
-          console.error("[monthlyRentPenalties] legal_cases insert failed:", err);
+          logger.error(err, "[monthlyRentPenalties] legal_cases insert failed:");
         }
         actionLabel = 'تحويل للقسم القانوني';
       } else if (targetStage === 'alert') actionLabel = 'تنبيه بالتأخر';
@@ -1386,7 +1400,7 @@ async function monthlyRentPenalties(): Promise<string> {
         `INSERT INTO late_rent_actions ("contractId","paymentId",phase,action,"sentAt",notes)
          VALUES ($1,$2,$3,$4,NOW(),$5)`,
         [p.contractId, p.id, targetStage, actionLabel, `تأخر ${lateDays} يوم — ${actionLabel}`]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] late rent action insert failed"));
 
       try {
         await emitEvent({
@@ -1394,7 +1408,7 @@ async function monthlyRentPenalties(): Promise<string> {
           action: `rent.late.${targetStage}`, entity: "rent_payments", entityId: Number(p.id),
           details: `تأخر ${lateDays} يوم — ${actionLabel}`,
         });
-      } catch {}
+      } catch (e) { logger.error(e, "[cronScheduler] rent late escalation event failed"); }
     }
   }
   return `Rent escalation: ${penalties} penalties, ${legalHandoffs} legal handoffs`;
@@ -1458,7 +1472,7 @@ async function weeklyHrReport(): Promise<string> {
       `SELECT
          COUNT(*) AS total,
          COUNT(*) FILTER (WHERE status = 'active') AS active,
-         COUNT(*) FILTER (WHERE "joinDate" >= CURRENT_DATE - INTERVAL '7 days') AS "newHires"
+         COUNT(*) FILTER (WHERE "hireDate" >= CURRENT_DATE - INTERVAL '7 days') AS "newHires"
        FROM employee_assignments WHERE "companyId" = $1`,
       [company.id]
     );
@@ -1656,7 +1670,7 @@ async function monthlyInventoryAudit(): Promise<string> {
 
 async function yearlyLeaveBalanceRenewal(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
-  const year = new Date().getFullYear();
+  const year = currentYear();
   let renewed = 0;
   for (const company of companies) {
     const balances = await rawQuery<any>(
@@ -1672,7 +1686,7 @@ async function yearlyLeaveBalanceRenewal(): Promise<string> {
          VALUES ($1, $2, $3, $4, $5, 0, 0)
          ON CONFLICT DO NOTHING`,
         [company.id, b.employeeId, b.leaveTypeId, year, b.annual || 21]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] leave balance renewal insert failed"));
       renewed++;
     }
   }
@@ -1764,7 +1778,7 @@ async function retryStuckOfficialLetters(): Promise<string> {
       });
       retried++;
     } catch (err) {
-      console.error("[retryStuckOfficialLetters] emit failed:", err);
+      logger.error(err, "[retryStuckOfficialLetters] emit failed:");
     }
   }
   return `Stuck official letters retried: ${retried}`;
@@ -1835,7 +1849,7 @@ async function processEmailQueue(): Promise<string> {
       await rawExecute(
         `UPDATE email_queue SET status = 'failed', "errorMessage" = $1, "attemptCount" = COALESCE("attemptCount",0) + 1, "updatedAt" = NOW() WHERE id = $2`,
         [errMsg, email.id]
-      ).catch(console.error);
+      ).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
       failed++;
     }
   }
@@ -1853,7 +1867,7 @@ async function hourlyWorkflowSlaCheck(): Promise<string> {
       totalEscalations += result.escalations;
       totalAutoApprovals += result.autoApprovals;
     } catch (err) {
-      console.error(`[CRON] Workflow SLA check failed for company ${company.id}:`, err);
+      logger.error(err, `[CRON] Workflow SLA check failed for company ${company.id}:`);
     }
   }
   return `Workflow SLA: ${totalWarnings} warnings, ${totalEscalations} escalations, ${totalAutoApprovals} auto-approvals`;
@@ -2048,7 +2062,7 @@ async function weeklyLogsArchiving(): Promise<string> {
     );
     auditArchived = auditResult.length;
   } catch (err) {
-    console.error("[CRON] weeklyLogsArchiving: audit_logs archiving failed:", err);
+    logger.error(err, "[CRON] weeklyLogsArchiving: audit_logs archiving failed:");
   }
 
   try {
@@ -2067,15 +2081,14 @@ async function weeklyLogsArchiving(): Promise<string> {
     );
     integrationArchived = integrationResult.length;
   } catch (err) {
-    console.error("[CRON] weeklyLogsArchiving: integration_logs archiving failed:", err);
+    logger.error(err, "[CRON] weeklyLogsArchiving: integration_logs archiving failed:");
   }
 
   return `Archived ${auditArchived} audit logs (>${AUDIT_LOG_RETENTION_DAYS}d old), ${integrationArchived} integration logs (>${INTEGRATION_LOG_RETENTION_DAYS}d old)`;
 }
 
 async function monthlyAutoDepreciation(): Promise<string> {
-  const now = new Date();
-  const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const period = currentPeriod();
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let processed = 0;
   let totalDepreciated = 0;
@@ -2101,7 +2114,7 @@ async function monthlyAutoDepreciation(): Promise<string> {
       [company.id]
     );
     if (!systemUser) {
-      console.warn(`[CRON] monthlyAutoDepreciation: No finance/owner user found for company ${company.id}, skipping`);
+      logger.warn(`[CRON] monthlyAutoDepreciation: No finance/owner user found for company ${company.id}, skipping`);
       continue;
     }
     const createdBy = systemUser.id;
@@ -2116,9 +2129,9 @@ async function monthlyAutoDepreciation(): Promise<string> {
       if (!usefulLife || usefulLife <= 0) continue;
 
       if (asset.depreciationMethod === "declining_balance") {
-        depAmount = Math.max(0, Math.round(currentBookValue * (2 / usefulLife / 12) * 100) / 100);
+        depAmount = Math.max(0, roundTo2(currentBookValue * (2 / usefulLife / 12)));
       } else {
-        depAmount = Math.max(0, Math.round((purchaseCost - salvageValue) / (usefulLife * 12) * 100) / 100);
+        depAmount = Math.max(0, roundTo2((purchaseCost - salvageValue) / (usefulLife * 12)));
       }
 
       if (currentBookValue - depAmount < salvageValue) {
@@ -2164,12 +2177,12 @@ async function monthlyAutoDepreciation(): Promise<string> {
           totalDepreciated += depAmount;
         } catch (err) {
           await client.query("ROLLBACK");
-          console.error(`[CRON] Depreciation failed for asset ${asset.id}:`, err);
+          logger.error(err, `[CRON] Depreciation failed for asset ${asset.id}:`);
         } finally {
           client.release();
         }
       } catch (err) {
-        console.error(`[CRON] Depreciation pool error for asset ${asset.id}:`, err);
+        logger.error(err, `[CRON] Depreciation pool error for asset ${asset.id}:`);
       }
     }
   }
@@ -2282,12 +2295,12 @@ async function runScheduledReports(): Promise<string> {
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      console.error(`[CRON] runScheduledReports: failed for report ${report.id}:`, err);
+      logger.error(err, `[CRON] runScheduledReports: failed for report ${report.id}:`);
       await rawExecute(
         `INSERT INTO scheduled_report_history ("scheduledReportId", status, "sentAt", error)
          VALUES ($1, 'failed', NOW(), $2)`,
         [report.id, errMsg]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] scheduled report error history insert failed"));
       errors++;
     }
   }
@@ -2399,7 +2412,7 @@ async function vendorContractExpiryAlerts(): Promise<string> {
              AND al."createdAt" > NOW() - INTERVAL '7 days'
          )`,
       [company.id]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return []; });
 
     for (const c of expiring) {
       const daysLeft = Number(c.daysLeft);
@@ -2409,7 +2422,7 @@ async function vendorContractExpiryAlerts(): Promise<string> {
         `SELECT id FROM employee_assignments WHERE "companyId" = $1
          AND role IN ('finance_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
         [company.id]
-      ).catch(() => [null]);
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [null]; });
 
       if (!purchaseAsgn) continue;
 
@@ -2427,7 +2440,7 @@ async function vendorContractExpiryAlerts(): Promise<string> {
         `INSERT INTO automation_logs ("companyId","automationType","triggerReason","actionTaken","entityType","entityId","createdAt")
          VALUES ($1,'vendor_contract_expiry',$2,$3,'vendor_contract',$4,NOW())`,
         [company.id, `عقد المورد ${c.vendorName} ينتهي خلال ${daysLeft} يوم`, "إرسال إشعار تنبيه للمشتريات", c.vendorId]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "[cronScheduler] vendor contract expiry log insert failed"));
       alerted++;
     }
   }
@@ -2440,28 +2453,28 @@ async function dailySystemHealthReport(): Promise<string> {
 
   const [errorCount] = await rawQuery<any>(
     `SELECT COUNT(*) AS cnt FROM cron_logs WHERE status = 'failed' AND "createdAt" > NOW() - INTERVAL '24 hours'`
-  ).catch(() => [{ cnt: 0 }]);
+  ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ cnt: 0 }]; });
 
   const [failedNotifs] = await rawQuery<any>(
     `SELECT COUNT(*) AS cnt FROM notification_delivery_log WHERE status = 'failed' AND "queuedAt" > NOW() - INTERVAL '24 hours'`
-  ).catch(() => [{ cnt: 0 }]);
+  ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ cnt: 0 }]; });
 
   const [dbSize] = await rawQuery<any>(
     `SELECT pg_size_pretty(pg_database_size(current_database())) AS size`
-  ).catch(() => [{ size: 'N/A' }]);
+  ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ size: 'N/A' }]; });
 
   for (const company of companies) {
     const [activeUsers] = await rawQuery<any>(
-      `SELECT COUNT(DISTINCT "assignmentId") AS cnt FROM activity_logs
+      `SELECT COUNT(DISTINCT "userId") AS cnt FROM activity_logs
        WHERE "companyId" = $1 AND "createdAt" > NOW() - INTERVAL '24 hours'`,
       [company.id]
-    ).catch(() => [{ cnt: 0 }]);
+    ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ cnt: 0 }]; });
 
     const [techAsgn] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1
        AND role IN ('general_manager','owner') AND status = 'active' LIMIT 1`,
       [company.id]
-    ).catch(() => [null]);
+    ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [null]; });
 
     if (!techAsgn) continue;
 
@@ -2487,34 +2500,34 @@ async function weeklyDataCleanup(): Promise<string> {
 
   const { affectedRows: expiredSessions } = await rawExecute(
     `DELETE FROM user_sessions WHERE "expiresAt" < NOW() - INTERVAL '7 days'`
-  ).catch(() => ({ affectedRows: 0 }));
+  ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
   cleaned += expiredSessions;
 
   const { affectedRows: oldCronLogs } = await rawExecute(
     `DELETE FROM cron_logs WHERE "createdAt" < NOW() - INTERVAL '90 days'`
-  ).catch(() => ({ affectedRows: 0 }));
+  ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
   cleaned += oldCronLogs;
 
   const { affectedRows: oldDeliveryLogs } = await rawExecute(
     `DELETE FROM notification_delivery_log WHERE "queuedAt" < NOW() - INTERVAL '90 days' AND status IN ('delivered','failed')`
-  ).catch(() => ({ affectedRows: 0 }));
+  ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
   cleaned += oldDeliveryLogs;
 
   const { affectedRows: oldNotifLogs } = await rawExecute(
     `DELETE FROM notification_log WHERE "createdAt" < NOW() - INTERVAL '90 days'`
-  ).catch(() => ({ affectedRows: 0 }));
+  ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
   cleaned += oldNotifLogs;
 
   try {
     await rawExecute(
       `INSERT INTO audit_archive SELECT * FROM event_logs WHERE "createdAt" < NOW() - INTERVAL '365 days'
        ON CONFLICT DO NOTHING`
-    ).catch(() => {});
+    ).catch((e) => logger.error(e, "[cronScheduler] audit archive insert failed"));
     const { affectedRows: archivedLogs } = await rawExecute(
       `DELETE FROM event_logs WHERE "createdAt" < NOW() - INTERVAL '365 days'`
-    ).catch(() => ({ affectedRows: 0 }));
+    ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
     cleaned += archivedLogs;
-  } catch {}
+  } catch (e) { logger.error(e, "[cronScheduler] event log archival failed"); }
 
   // Orphaned workflow_instances: delete instances whose refTable row no longer exists.
   // Only handle the known refTables — safer than a generic EXISTS loop.
@@ -2531,10 +2544,10 @@ async function weeklyDataCleanup(): Promise<string> {
            WHERE wi."refTable" = $1
              AND NOT EXISTS (SELECT 1 FROM ${tbl} t WHERE t.id = wi."refId")`,
         [tbl]
-      ).catch(() => ({ affectedRows: 0 }));
+      ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
       cleaned += affectedRows;
     }
-  } catch {}
+  } catch (e) { logger.error(e, "[cronScheduler] orphaned workflow instances cleanup failed"); }
 
   // Mark orphaned approval_requests as cancelled when their referenced entity was hard-deleted.
   // approval_requests uses refType+refId (not a workflow FK).
@@ -2558,10 +2571,10 @@ async function weeklyDataCleanup(): Promise<string> {
             AND ar.status IN ('pending','in_progress')
             AND NOT EXISTS (SELECT 1 FROM ${tbl} t WHERE t.id = ar."refId")`,
         [refType]
-      ).catch(() => ({ affectedRows: 0 }));
+      ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
       cleaned += affectedRows;
     }
-  } catch {}
+  } catch (e) { logger.error(e, "[cronScheduler] orphaned approval requests cleanup failed"); }
 
   return `Data cleanup: ${cleaned} records cleaned`;
 }
@@ -2579,7 +2592,7 @@ async function hourlyObligationsScan(): Promise<string> {
 // ─────────────────────────────────────────────────────────────────────────────
 async function dailyDunningAutoSend(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(
-    `SELECT id FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
+    `SELECT id FROM companies WHERE status = 'active'`
   );
   let totalSent = 0;
   let totalSkipped = 0;
@@ -2607,9 +2620,9 @@ async function dailyDunningAutoSend(): Promise<string> {
       await rawExecute(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "lastDunningAt" TIMESTAMP`);
 
       // Find overdue invoices needing dunning
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayISO();
       const rows = await rawQuery<any>(
-        `SELECT i.id, i."invoiceNumber", i."dueDate", i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
+        `SELECT i.id, i.ref, i."dueDate", i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
                 i."clientId", COALESCE(i."lastDunningStage",0) AS "lastStage", i."lastDunningAt",
                 GREATEST(0, ($1::date - i."dueDate"::date))::int AS "daysPastDue"
          FROM invoices i
@@ -2638,7 +2651,7 @@ async function dailyDunningAutoSend(): Promise<string> {
           if (hoursSince < 24) { totalSkipped++; continue; }
         }
 
-        const outstanding = Math.round((Number(r.total) - Number(r.paidAmount)) * 100) / 100;
+        const outstanding = roundTo2(Number(r.total) - Number(r.paidAmount));
         await rawExecute(
           `INSERT INTO dunning_letters ("companyId","invoiceId","clientId",stage,"daysPastDue","outstandingAmount","sentVia")
            VALUES ($1,$2,$3,$4,$5,$6,'auto')`,
@@ -2651,7 +2664,7 @@ async function dailyDunningAutoSend(): Promise<string> {
         totalSent++;
       }
     } catch (err) {
-      console.error(`Dunning auto-send error for company ${c.id}:`, err);
+      logger.error(err, `Dunning auto-send error for company ${c.id}:`);
     }
   }
   return `Dunning auto-send: sent=${totalSent}, skipped=${totalSkipped}`;
@@ -2662,7 +2675,7 @@ async function dailyDunningAutoSend(): Promise<string> {
 // ─────────────────────────────────────────────────────────────────────────────
 async function monthlyBadDebtReminder(): Promise<string> {
   const companies = await rawQuery<{ id: number; name: string }>(
-    `SELECT id, name FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
+    `SELECT id, name FROM companies WHERE status = 'active'`
   );
   let notified = 0;
   for (const c of companies) {
@@ -2673,7 +2686,7 @@ async function monthlyBadDebtReminder(): Promise<string> {
          WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
          LIMIT 1`,
         [c.id]
-      ).catch(() => [] as any);
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any; });
       const cfoId = cfoRow?.id;
       if (!cfoId) continue;
       await createNotification({
@@ -2686,7 +2699,7 @@ async function monthlyBadDebtReminder(): Promise<string> {
       });
       notified++;
     } catch (err) {
-      console.error(`Bad debt reminder error for company ${c.id}:`, err);
+      logger.error(err, `Bad debt reminder error for company ${c.id}:`);
     }
   }
   return `Bad debt reminders sent: ${notified}`;
@@ -2697,7 +2710,7 @@ async function monthlyBadDebtReminder(): Promise<string> {
 // ─────────────────────────────────────────────────────────────────────────────
 async function monthlyFxRevaluationReminder(): Promise<string> {
   const companies = await rawQuery<{ id: number; name: string }>(
-    `SELECT id, name FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
+    `SELECT id, name FROM companies WHERE status = 'active'`
   );
   let notified = 0;
   for (const c of companies) {
@@ -2707,7 +2720,7 @@ async function monthlyFxRevaluationReminder(): Promise<string> {
         `SELECT COUNT(*)::int AS n FROM invoices
          WHERE "companyId"=$1 AND currency IS NOT NULL AND currency<>'SAR' AND status NOT IN ('paid','cancelled')`,
         [c.id]
-      ).catch(() => [{ n: 0 }]);
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ n: 0 }]; });
       if (!fxExposure || fxExposure.n === 0) continue;
 
       const [cfoRow] = await rawQuery<{ id: number }>(
@@ -2716,7 +2729,7 @@ async function monthlyFxRevaluationReminder(): Promise<string> {
          WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
          LIMIT 1`,
         [c.id]
-      ).catch(() => [] as any);
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any; });
       const cfoId = cfoRow?.id;
       if (!cfoId) continue;
       await createNotification({
@@ -2729,7 +2742,7 @@ async function monthlyFxRevaluationReminder(): Promise<string> {
       });
       notified++;
     } catch (err) {
-      console.error(`FX reminder error for company ${c.id}:`, err);
+      logger.error(err, `FX reminder error for company ${c.id}:`);
     }
   }
   return `FX revaluation reminders sent: ${notified}`;
@@ -2740,16 +2753,16 @@ async function monthlyFxRevaluationReminder(): Promise<string> {
 // ─────────────────────────────────────────────────────────────────────────────
 async function dailyBudgetVarianceAlert(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(
-    `SELECT id FROM companies WHERE "deletedAt" IS NULL AND "isActive"=true`
+    `SELECT id FROM companies WHERE status = 'active'`
   );
-  const period = new Date().toISOString().slice(0, 7);
+  const period = currentPeriod();
   let alerted = 0;
 
   for (const c of companies) {
     try {
       const [y, m] = period.split("-").map(Number);
       const periodStart = `${y}-${String(m).padStart(2, "0")}-01`;
-      const periodEnd = new Date(y, m, 0).toISOString().slice(0, 10);
+      const periodEnd = toDateISO(new Date(y, m, 0));
 
       // Find budgets near or over limit
       const overBudget = await rawQuery<any>(
@@ -2782,7 +2795,7 @@ async function dailyBudgetVarianceAlert(): Promise<string> {
          WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
          LIMIT 1`,
         [c.id]
-      ).catch(() => [] as any);
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any; });
       const cfoId = cfoRow?.id;
       if (!cfoId) continue;
 
@@ -2801,7 +2814,7 @@ async function dailyBudgetVarianceAlert(): Promise<string> {
       });
       alerted++;
     } catch (err) {
-      console.error(`Budget variance alert error for company ${c.id}:`, err);
+      logger.error(err, `Budget variance alert error for company ${c.id}:`);
     }
   }
   return `Budget variance alerts sent: ${alerted}`;
@@ -2815,14 +2828,14 @@ async function dailyAutoViolationDetection(): Promise<string> {
 // ── Umrah cron handlers (C29-C32) ──
 
 async function umrahDailyAbsconderCheck(): Promise<string> {
-  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE "isActive"=true AND "deletedAt" IS NULL`);
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   let detected = 0;
   for (const c of companies) {
     const absconders = await rawQuery<any>(
       `SELECT p.id, p."fullName", p."passportNumber", p."groupId", p."subAgentId"
        FROM umrah_pilgrims p
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
-         AND p.status = 'absconded'
+         AND p.status = 'violated'
          AND NOT EXISTS (
            SELECT 1 FROM umrah_violations v
            WHERE v."companyId"=$1 AND v."mutamerId"=p.id AND v.type='absconded' AND v."deletedAt" IS NULL
@@ -2854,7 +2867,7 @@ async function umrahDailyAbsconderCheck(): Promise<string> {
 }
 
 async function umrahOverdueInvoiceEscalation(): Promise<string> {
-  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE "isActive"=true AND "deletedAt" IS NULL`);
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   let escalated = 0;
   for (const c of companies) {
     const overdue = await rawQuery<any>(
@@ -2888,7 +2901,7 @@ async function umrahOverdueInvoiceEscalation(): Promise<string> {
 }
 
 async function umrahWeeklyAgentPerformance(): Promise<string> {
-  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE "isActive"=true AND "deletedAt" IS NULL`);
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   let reports = 0;
   for (const c of companies) {
     const stats = await rawQuery<any>(
@@ -2923,7 +2936,7 @@ async function umrahWeeklyAgentPerformance(): Promise<string> {
 }
 
 async function umrahVisaExpiryAlerts(): Promise<string> {
-  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE "isActive"=true AND "deletedAt" IS NULL`);
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   let alerted = 0;
   for (const c of companies) {
     const expiring = await rawQuery<any>(
@@ -2952,7 +2965,7 @@ async function umrahVisaExpiryAlerts(): Promise<string> {
 }
 
 async function umrahMonthlyFinancialSummary(): Promise<string> {
-  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE "isActive"=true AND "deletedAt" IS NULL`);
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   let sent = 0;
   for (const c of companies) {
     const summary = await rawQuery<any>(
@@ -2986,6 +2999,328 @@ async function umrahMonthlyFinancialSummary(): Promise<string> {
     sent++;
   }
   return `الملخص المالي الشهري للعمرة: ${sent} شركة`;
+}
+
+// --- Rate-limit fallback alerter (Task #176) ---------------------------------
+// Notify GM/owner when getRedisRateLimitStatus() degrades to fallback-memory
+// (and on recovery). Cooldown gates ALL fallback alerts (including flap
+// re-entries). State is persisted in `system_settings` for cross-replica
+// consistency under cron lock ownership changes.
+const RATE_LIMIT_STATE_KEY = "rate_limit_alerter_state";
+const RATE_LIMIT_REALERT_COOLDOWN_MS = 30 * 60_000;
+
+interface RateLimitAlerterState {
+  lastSeenStatus: RedisRateLimitStatus | null;
+  lastAlertedAt: number;
+  fallbackSince: number | null;
+}
+
+const EMPTY_RATE_LIMIT_STATE: RateLimitAlerterState = {
+  lastSeenStatus: null,
+  lastAlertedAt: 0,
+  fallbackSince: null,
+};
+
+async function loadRateLimitAlerterState(): Promise<RateLimitAlerterState> {
+  try {
+    const rows = await rawQuery<{ value: string }>(
+      `SELECT value FROM system_settings WHERE key = $1 AND "companyId" IS NULL AND "branchId" IS NULL`,
+      [RATE_LIMIT_STATE_KEY]
+    );
+    if (rows.length === 0 || !rows[0]?.value) return { ...EMPTY_RATE_LIMIT_STATE };
+    const parsed = JSON.parse(rows[0].value) as Partial<RateLimitAlerterState>;
+    return {
+      lastSeenStatus: (parsed.lastSeenStatus as RedisRateLimitStatus | null) ?? null,
+      lastAlertedAt: typeof parsed.lastAlertedAt === "number" ? parsed.lastAlertedAt : 0,
+      fallbackSince: typeof parsed.fallbackSince === "number" ? parsed.fallbackSince : null,
+    };
+  } catch (e) {
+    logger.error(e, "[cronScheduler] rate-limit alerter state load failed");
+    return { ...EMPTY_RATE_LIMIT_STATE };
+  }
+}
+
+async function saveRateLimitAlerterState(state: RateLimitAlerterState): Promise<void> {
+  const value = JSON.stringify(state);
+  try {
+    // Upsert via INSERT … ON CONFLICT against the partial unique index that
+    // covers `(key) WHERE "companyId" IS NULL AND "branchId" IS NULL` (see
+    // migration 006_system_settings_table.sql). This makes the read+write
+    // safe under concurrent ticks: the "DO UPDATE" branch atomically replaces
+    // the JSON blob with the latest decision.
+    await rawExecute(
+      `INSERT INTO system_settings (key, value, "createdAt", "updatedAt")
+       VALUES ($1, $2, NOW(), NOW())
+       ON CONFLICT (key) WHERE "companyId" IS NULL AND "branchId" IS NULL
+       DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()`,
+      [RATE_LIMIT_STATE_KEY, value]
+    );
+  } catch (e) {
+    logger.error(e, "[cronScheduler] rate-limit alerter state save failed");
+  }
+}
+
+interface RateLimitAdminRecipient {
+  companyId: number;
+  assignmentId: number;
+  email: string | null;
+}
+
+// Task #177: a configurable list of "infra admin" recipient emails that get
+// the rate-limit fallback / recovery email even if they aren't a GM/owner of
+// any tenant. Sources are merged (env + system_settings), de-duplicated case-
+// insensitively, and applied on top of the per-tenant GM list. Cooldown in
+// rateLimitFallbackAlertCheck still gates ALL emails (incl. these), so a
+// flapping outage cannot storm the inbox.
+const INFRA_ADMIN_EMAILS_SETTING_KEY = "infra_admin_emails";
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function parseEmailList(raw: string): string[] {
+  return raw
+    .split(/[,;\s]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && EMAIL_RE.test(s));
+}
+
+function getInfraAdminEmailsFromEnv(): string[] {
+  const raw = process.env.INFRA_ADMIN_EMAILS ?? "";
+  return parseEmailList(raw);
+}
+
+async function getInfraAdminEmailsFromSettings(): Promise<string[]> {
+  try {
+    const rows = await rawQuery<{ value: string }>(
+      `SELECT value FROM system_settings WHERE key = $1 AND "companyId" IS NULL AND "branchId" IS NULL`,
+      [INFRA_ADMIN_EMAILS_SETTING_KEY]
+    );
+    if (rows.length === 0 || !rows[0]?.value) return [];
+    const v = rows[0].value;
+    // Accept both a JSON array (["a@x", "b@y"]) and a delimited string.
+    try {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((x) => (typeof x === "string" ? x.trim() : ""))
+          .filter((s) => s.length > 0 && EMAIL_RE.test(s));
+      }
+    } catch {
+      /* fall through to delimited parsing */
+    }
+    return parseEmailList(v);
+  } catch (e) {
+    logger.error(e, "[cronScheduler] infra admin emails settings lookup failed");
+    return [];
+  }
+}
+
+async function getInfraAdminEmails(): Promise<string[]> {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const push = (e: string) => {
+    const k = e.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push(e);
+  };
+  for (const e of getInfraAdminEmailsFromEnv()) push(e);
+  for (const e of await getInfraAdminEmailsFromSettings()) push(e);
+  return out;
+}
+
+// Pivot company id used to satisfy the `email_queue."companyId"` column for
+// infra-admin emails (which are platform-wide, not tenant-scoped). Prefers a
+// company we already touched (admins[0]) so we never invent a foreign-key
+// mismatch; falls back to any active company.
+async function getPivotCompanyId(admins: RateLimitAdminRecipient[]): Promise<number | null> {
+  if (admins.length > 0 && admins[0]) return admins[0].companyId;
+  try {
+    const rows = await rawQuery<{ id: number }>(
+      `SELECT id FROM companies ORDER BY id ASC LIMIT 1`
+    );
+    return rows[0]?.id ?? null;
+  } catch (e) {
+    logger.error(e, "[cronScheduler] pivot company lookup failed");
+    return null;
+  }
+}
+
+async function sendInfraAdminEmails(
+  emails: string[],
+  pivotCompanyId: number | null,
+  type: "rate_limit_fallback" | "rate_limit_recovered",
+  title: string,
+  body: string,
+  excludeEmails: Iterable<string> = []
+): Promise<number> {
+  if (emails.length === 0 || pivotCompanyId === null) return 0;
+  // Dedupe against GM/owner mailboxes that already received the same alert
+  // through sendNotification — same human shouldn't get the same page twice.
+  const exclude = new Set<string>();
+  for (const e of excludeEmails) {
+    if (e) exclude.add(e.toLowerCase());
+  }
+  let queued = 0;
+  for (const toEmail of emails) {
+    if (exclude.has(toEmail.toLowerCase())) continue;
+    try {
+      await rawExecute(
+        `INSERT INTO email_queue ("companyId", "toEmail", "recipientName", subject, body, status, "createdAt", "refType", "refId")
+         VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), $6, $7)`,
+        [pivotCompanyId, toEmail, "Infra Admin", title, body, "system_health", null]
+      );
+      queued++;
+    } catch (e) {
+      logger.error(e, `[cronScheduler] failed to queue infra-admin email for ${toEmail} (${type})`);
+    }
+  }
+  return queued;
+}
+
+// Resolve one GM/owner per company (with their login email if any). Used by
+// both the fallback alert and the recovery alert so the recipient set stays
+// consistent — anyone who got the "degraded" ping will get the "recovered"
+// ping from the same address.
+async function getRateLimitAlertRecipients(): Promise<RateLimitAdminRecipient[]> {
+  try {
+    return await rawQuery<RateLimitAdminRecipient>(
+      `SELECT DISTINCT ON (ea."companyId")
+              ea."companyId" AS "companyId",
+              ea.id          AS "assignmentId",
+              u.email        AS "email"
+       FROM employee_assignments ea
+       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN users u ON u."employeeId" = e.id
+       WHERE ea.role IN ('general_manager','owner') AND ea.status = 'active'
+       ORDER BY ea."companyId",
+                CASE ea.role WHEN 'owner' THEN 1 WHEN 'general_manager' THEN 2 ELSE 3 END,
+                ea.id`
+    );
+  } catch (e) {
+    logger.error(e, "[cronScheduler] rate-limit alert recipient lookup failed");
+    return [];
+  }
+}
+
+export async function rateLimitFallbackAlertCheck(): Promise<string> {
+  const current = getRedisRateLimitStatus();
+  const state = await loadRateLimitAlerterState();
+  const previous = state.lastSeenStatus;
+
+  // `disabled` = REDIS_URL not set (intentional, e.g. local dev). Not a
+  // degradation worth alerting on — just clear any prior fallback timer.
+  if (current === "disabled") {
+    if (state.lastSeenStatus !== "disabled" || state.fallbackSince !== null) {
+      await saveRateLimitAlerterState({
+        lastSeenStatus: "disabled",
+        lastAlertedAt: 0,
+        fallbackSince: null,
+      });
+    }
+    return "skipped (REDIS_URL not configured)";
+  }
+
+  const now = Date.now();
+
+  if (current === "fallback-memory") {
+    const fallbackSince = state.fallbackSince ?? now;
+    const sinceLastAlert = now - state.lastAlertedAt;
+    const isTransition = previous !== null && previous !== "fallback-memory";
+    // Cooldown gates ALL fallback notifications (including fresh transitions
+    // back into fallback after a brief recovery), so a flapping outage
+    // — connected ↔ fallback every few minutes — cannot storm the inbox.
+    if (state.lastAlertedAt > 0 && sinceLastAlert < RATE_LIMIT_REALERT_COOLDOWN_MS) {
+      if (state.fallbackSince === null || state.lastSeenStatus !== "fallback-memory") {
+        await saveRateLimitAlerterState({
+          lastSeenStatus: "fallback-memory",
+          lastAlertedAt: state.lastAlertedAt,
+          fallbackSince,
+        });
+      }
+      return "fallback active, within cooldown";
+    }
+    const minutesInFallback = Math.floor((now - fallbackSince) / 60000);
+    const admins = await getRateLimitAlertRecipients();
+    const fallbackTitle = "تنبيه أمني: حدود الطلبات تعمل بالذاكرة المحلية فقط";
+    const fallbackBody = isTransition
+      ? "تعذّر الاتصال بـ Redis — حدود معدّل الطلبات (rate limit) عادت للذاكرة المحلية لكل خادم. يبقى الحد مطبّقاً ولكن مشاركته بين النسخ والإقلاعات معطّلة. تحقّق من المتغيّر REDIS_URL وحالة خادم Redis."
+      : `لا يزال نظام حدود الطلبات يعمل بالذاكرة المحلية منذ ${minutesInFallback} دقيقة — تحقّق من المتغيّر REDIS_URL وحالة خادم Redis.`;
+    for (const admin of admins) {
+      await sendNotification({
+        companyId: admin.companyId,
+        assignmentId: admin.assignmentId,
+        type: "rate_limit_fallback",
+        title: fallbackTitle,
+        body: fallbackBody,
+        priority: "high",
+        refType: "system_health",
+        // Push on both in-app AND email so an overnight degradation reaches an
+        // admin who isn't looking at the dashboard. Email is silently dropped
+        // by sendNotification when recipientEmail is unset, so this is safe
+        // even for admin users without an email on file.
+        channels: admin.email ? ["in_app", "email"] : ["in_app"],
+        recipientEmail: admin.email ?? undefined,
+      });
+    }
+    // Task #177: also email the configurable infra-admin recipient list
+    // (env INFRA_ADMIN_EMAILS + system_settings 'infra_admin_emails'). These
+    // are platform-level on-call addresses that may not map to any tenant GM.
+    // The 30-minute cooldown above gates this whole branch, so infra admins
+    // are not flooded by a flapping outage either.
+    const infraEmails = await getInfraAdminEmails();
+    const pivot = await getPivotCompanyId(admins);
+    const adminEmails = admins.map((a) => a.email).filter((e): e is string => !!e);
+    const infraQueued = await sendInfraAdminEmails(infraEmails, pivot, "rate_limit_fallback", fallbackTitle, fallbackBody, adminEmails);
+    await saveRateLimitAlerterState({
+      lastSeenStatus: "fallback-memory",
+      lastAlertedAt: now,
+      fallbackSince,
+    });
+    return `Rate-limit fallback alert sent to ${admins.length} admins + ${infraQueued} infra emails (${isTransition ? "transition" : `still degraded ${minutesInFallback}m`})`;
+  }
+
+  // current === "connected"
+  if (previous === "fallback-memory") {
+    const downtimeMin = state.fallbackSince ? Math.floor((now - state.fallbackSince) / 60000) : 0;
+    const admins = await getRateLimitAlertRecipients();
+    const recoveredTitle = "تم استعادة الاتصال بـ Redis";
+    const recoveredBody = `عادت حدود معدّل الطلبات إلى وضعها المشترك بين النسخ بعد ${downtimeMin} دقيقة من العمل بالذاكرة المحلية.`;
+    for (const admin of admins) {
+      await sendNotification({
+        companyId: admin.companyId,
+        assignmentId: admin.assignmentId,
+        type: "rate_limit_recovered",
+        title: recoveredTitle,
+        body: recoveredBody,
+        priority: "normal",
+        refType: "system_health",
+        channels: admin.email ? ["in_app", "email"] : ["in_app"],
+        recipientEmail: admin.email ?? undefined,
+      });
+    }
+    // Mirror the infra-admin email recipients on recovery too — anyone who
+    // was woken up by the "degraded" page deserves the all-clear.
+    const infraEmails = await getInfraAdminEmails();
+    const pivot = await getPivotCompanyId(admins);
+    const adminEmails = admins.map((a) => a.email).filter((e): e is string => !!e);
+    const infraQueued = await sendInfraAdminEmails(infraEmails, pivot, "rate_limit_recovered", recoveredTitle, recoveredBody, adminEmails);
+    // Preserve `lastAlertedAt` so a fresh fallback within the cooldown
+    // window after this recovery is still suppressed (flap suppression).
+    await saveRateLimitAlerterState({
+      lastSeenStatus: "connected",
+      lastAlertedAt: state.lastAlertedAt,
+      fallbackSince: null,
+    });
+    return `Rate-limit recovery alert sent to ${admins.length} admins + ${infraQueued} infra emails (downtime ${downtimeMin}m)`;
+  }
+
+  if (state.lastSeenStatus !== "connected") {
+    await saveRateLimitAlerterState({
+      lastSeenStatus: "connected",
+      lastAlertedAt: state.lastAlertedAt,
+      fallbackSince: null,
+    });
+  }
+  return "ok";
 }
 
 const JOB_DEFINITIONS: CronJobDef[] = [
@@ -3049,6 +3384,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "monthly_bad_debt_reminder", description: "تذكير CFO باحتساب مخصص الديون المشكوك فيها", schedule: "0 9 1 * *", handler: monthlyBadDebtReminder },
   { name: "monthly_fx_revaluation_reminder", description: "تذكير CFO بترحيل إعادة تقييم العملات", schedule: "0 9 28 * *", handler: monthlyFxRevaluationReminder },
   { name: "daily_budget_variance_alert", description: "تنبيه تجاوز الميزانية اليومي", schedule: "0 10 * * *", handler: dailyBudgetVarianceAlert },
+  { name: "rate_limit_fallback_alert", description: "تنبيه عند انتقال حدود الطلبات إلى الذاكرة المحلية (Redis fallback)", schedule: "*/2 * * * *", handler: rateLimitFallbackAlertCheck },
 ];
 
 export async function seedCronJobs(): Promise<void> {
@@ -3061,7 +3397,7 @@ export async function seedCronJobs(): Promise<void> {
         [job.name, job.description, job.schedule]
       );
     } catch (err) {
-      console.error(`Failed to seed cron job ${job.name}:`, err);
+      logger.error(err, `Failed to seed cron job ${job.name}:`);
     }
   }
 }
@@ -3081,18 +3417,23 @@ export async function startCronScheduler(): Promise<void> {
         timezone: tz,
       });
       scheduledTasks.push(task);
-      console.log(`[CRON] Scheduled: ${def.name} (${def.schedule})`);
+      logger.info({ job: def.name, schedule: def.schedule }, "CRON job scheduled");
     } catch (err) {
-      console.error(`[CRON] Failed to schedule ${def.name}:`, err);
+      logger.error(err, `[CRON] Failed to schedule ${def.name}:`);
     }
   }
 
-  console.log(`[CRON] Scheduler started with ${scheduledTasks.length} jobs`);
+  logger.info({ jobCount: scheduledTasks.length }, "CRON scheduler started");
 }
 
 export async function triggerJobByName(jobName: string): Promise<{ success: boolean; result?: string; error?: string }> {
   const def = JOB_DEFINITIONS.find((j) => j.name === jobName);
   if (!def) return { success: false, error: `Job not found: ${jobName}` };
+
+  const acquired = await acquireCronLock(def.name);
+  if (!acquired) {
+    return { success: false, error: `Job "${jobName}" is already running on another instance` };
+  }
 
   const start = Date.now();
   try {
@@ -3105,6 +3446,8 @@ export async function triggerJobByName(jobName: string): Promise<{ success: bool
     const errMsg = err instanceof Error ? err.message : String(err);
     await logCronJob(def.name, "failed", duration, "Job failed", errMsg);
     return { success: false, error: errMsg };
+  } finally {
+    await releaseCronLock(def.name);
   }
 }
 
@@ -3113,11 +3456,11 @@ export function stopCronScheduler(): void {
     task.stop();
   }
   scheduledTasks.length = 0;
-  console.log("[CRON] Scheduler stopped");
+  logger.info("CRON scheduler stopped");
 }
 
 export async function reloadCronScheduler(): Promise<void> {
-  console.log("[CRON] Reloading scheduler with updated timezone...");
+  logger.info("CRON scheduler reloading with updated timezone");
   stopCronScheduler();
   await startCronScheduler();
 }

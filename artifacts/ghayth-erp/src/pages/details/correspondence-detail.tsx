@@ -11,6 +11,8 @@ import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Paperclip, Eye, Inbox, SendHorizonal, Mail } from "lucide-react";
@@ -311,6 +313,9 @@ export default function CorrespondenceDetail() {
           </Card>
         )}
       </div>
+
+      {id && <EntityComments entityType="correspondence" entityId={id} />}
+      {id && <EntityTags entityType="correspondence" entityId={id} />}
     </div>
   );
 

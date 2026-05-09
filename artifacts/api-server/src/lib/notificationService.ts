@@ -1,6 +1,7 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { sendPushToCompany } from "./pushService.js";
 import { dispatchNotification, interpolateTemplate, type EngineChannel } from "./notificationEngine.js";
+import { logger } from "./logger.js";
 
 export type NotificationChannel = "in_app" | "email" | "sms" | "whatsapp";
 export type NotificationPriority = "low" | "normal" | "high" | "urgent";
@@ -45,7 +46,7 @@ export async function sendNotification(payload: NotificationPayload): Promise<vo
       clientId: payload.clientId,
     });
   } catch (err: unknown) {
-    console.warn("[NotificationService] Engine dispatch failed, using fallback:", err instanceof Error ? err.message : String(err));
+    logger.warn(`[NotificationService] Engine dispatch failed, using fallback: ${err instanceof Error ? err.message : String(err)}`);
     await sendNotificationLegacy(payload);
   }
 }
@@ -63,6 +64,11 @@ const TYPE_CHANNEL_MAP: Record<string, NotificationChannel[]> = {
   kpi: ["in_app"],
   maintenance: ["in_app", "whatsapp"],
   contract: ["in_app", "email"],
+  // Security-relevant infra degradations: alert overnight via email too
+  // (Task #177). The cron caller (cronScheduler.rateLimitFallbackAlertCheck)
+  // already gates re-alerts behind a 30m cooldown, so this won't flood.
+  rate_limit_fallback: ["in_app", "email"],
+  rate_limit_recovered: ["in_app", "email"],
   default: ["in_app"],
 };
 
@@ -113,7 +119,7 @@ async function sendNotificationLegacy(payload: NotificationPayload): Promise<voi
         if (priority === "high" || priority === "urgent") {
           const pushAssignmentId = recipients.length === 1 ? recipients[0] : null;
           sendPushToCompany(companyId, pushAssignmentId, title, body, { actionUrl, refType, refId }).catch((err: unknown) => {
-            console.warn("[Notification] Push dispatch error:", err instanceof Error ? err.message : String(err));
+            logger.warn(`[Notification] Push dispatch error: ${err instanceof Error ? err.message : String(err)}`);
           });
         }
         await logNotification(companyId, channel, `assignment:${assignmentId ?? "broadcast"}`, title, body, "sent");
@@ -225,7 +231,7 @@ export async function sendTemplatedNotification(
     });
     return;
   } catch (err: unknown) {
-    console.warn("[NotificationService] Engine templated dispatch failed, using legacy:", err instanceof Error ? err.message : String(err));
+    logger.warn(`[NotificationService] Engine templated dispatch failed, using legacy: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   if (!template || !templateVars || Object.keys(templateVars).length === 0) {
@@ -289,6 +295,6 @@ export async function broadcastAlert(
       refId: relatedId,
     });
   } catch (err) {
-    console.error("broadcastAlert error:", err);
+    logger.error(err, "broadcastAlert error:");
   }
 }

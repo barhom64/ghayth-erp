@@ -121,7 +121,7 @@ export default function ExcuseCreate() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/hr/excuse-requests")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.excuseDate || createMut.isPending} size="lg">
+        <Button onClick={handleSubmit} disabled={!form.excuseDate || createMut.isPending} size="lg" rateLimitAware>
           {createMut.isPending ? "جاري الإرسال..." : "تقديم الطلب"}
         </Button>
       </div>

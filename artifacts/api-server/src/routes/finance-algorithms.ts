@@ -5,17 +5,107 @@ import {
   ConflictError,
   ForbiddenError,
   IntegrationError,
+  parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
+import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createJournalEntry, getAccountCodeFromMapping, checkFinancialPeriodOpen, updateAccountBalances } from "../lib/businessHelpers.js";
+import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO, roundTo2, roundTo4, generateTimeRef } from "../lib/businessHelpers.js";
+import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
 
 export const financeAlgorithmsRouter = Router();
 financeAlgorithmsRouter.use(authMiddleware);
 
-const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
+// ── Zod schemas ─────────────────────────────────────────────────────────────
+
+const bankReconciliationRowSchema = z.object({
+  amount: z.coerce.number().optional(),
+  debit: z.coerce.number().optional(),
+  credit: z.coerce.number().optional(),
+  date: z.string().optional(),
+  reference: z.string().optional(),
+  ref: z.string().optional(),
+  description: z.string().optional(),
+  narration: z.string().optional(),
+});
+
+const bankImportSchema = z.object({
+  rows: z.array(bankReconciliationRowSchema).min(1),
+  accountCode: z.string().default("1120"),
+  statementDate: z.string().optional(),
+});
+
+const bankAutoMatchSchema = z.object({
+  batchId: z.string().min(1),
+  accountCode: z.string().default("1120"),
+  toleranceDays: z.coerce.number().default(3),
+});
+
+const bankManualMatchSchema = z.object({
+  bankStatementId: z.coerce.number(),
+  journalLineId: z.coerce.number(),
+});
+
+const VALID_DEPRECIATION_METHODS = [
+  "straight_line", "declining_balance", "declining_balance_200",
+  "declining_balance_150", "sum_of_years_digits", "units_of_production",
+] as const;
+
+const createFixedAssetSchema = z.object({
+  name: z.string().min(1),
+  purchaseCost: z.coerce.number(),
+  purchaseDate: z.string().min(1),
+  usefulLifeYears: z.coerce.number().default(5),
+  salvageValue: z.coerce.number().default(0),
+  code: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  branchId: z.coerce.number().optional(),
+  depreciationMethod: z.string().default("straight_line"),
+  assetAccountCode: z.string().default("1500"),
+  depreciationAccountCode: z.string().default("6100"),
+  accDepreciationAccountCode: z.string().default("1590"),
+});
+
+const updateFixedAssetSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  salvageValue: z.coerce.number().optional(),
+  usefulLifeYears: z.coerce.number().optional(),
+  depreciationMethod: z.string().optional(),
+  status: z.string().optional(),
+});
+
+const depreciateAssetSchema = z.object({
+  period: z.string().min(1),
+  unitsThisPeriod: z.coerce.number().optional(),
+});
+
+const depreciateAllSchema = z.object({
+  period: z.string().min(1),
+});
+
+const roundingDiffSchema = z.object({
+  journalEntryId: z.coerce.number(),
+  roundingAmount: z.coerce.number(),
+  description: z.string().optional(),
+});
+
+const fxRateUpsertSchema = z.object({
+  rateDate: z.string().min(1),
+  fromCurrency: z.string().min(1),
+  toCurrency: z.string().default("SAR"),
+  rate: z.coerce.number().positive(),
+  type: z.string().default("spot"),
+});
+
+const fxRevaluationPostSchema = z.object({
+  period: z.string().regex(/^\d{4}-\d{2}$/),
+});
 
 function assertFinanceRole(scope: any): void {
   if (!FINANCE_ROLES.includes(scope.role)) {
@@ -32,7 +122,7 @@ function assertFinanceRole(scope: any): void {
 financeAlgorithmsRouter.get("/ar-aging", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const asOfDate = (req.query.asOfDate as string) || new Date().toISOString().split("T")[0];
+    const asOfDate = (req.query.asOfDate as string) || todayISO();
 
     const invoices = await rawQuery<any>(
       `SELECT
@@ -47,14 +137,15 @@ financeAlgorithmsRouter.get("/ar-aging", requirePermission("finance:read"), asyn
          c.phone AS "clientPhone",
          c.email AS "clientEmail"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId"
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        WHERE i."companyId" = $2
          AND i."deletedAt" IS NULL
          AND i.status NOT IN ('paid','cancelled','draft')
          AND (i.total - i."paidAmount") > 0.009
          AND i."dueDate" IS NOT NULL
          AND i."createdAt"::date <= $1::date
-       ORDER BY c.name, i."dueDate" ASC`,
+       ORDER BY c.name, i."dueDate" ASC
+       LIMIT 500`,
       [asOfDate, scope.companyId]
     );
 
@@ -121,7 +212,7 @@ financeAlgorithmsRouter.get("/ar-aging", requirePermission("finance:read"), asyn
 financeAlgorithmsRouter.get("/ap-aging", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const asOfDate = (req.query.asOfDate as string) || new Date().toISOString().split("T")[0];
+    const asOfDate = (req.query.asOfDate as string) || todayISO();
 
     const orders = await rawQuery<any>(
       `SELECT
@@ -138,8 +229,8 @@ financeAlgorithmsRouter.get("/ap-aging", requirePermission("finance:read"), asyn
          s.phone AS "supplierPhone",
          s.email AS "supplierEmail"
        FROM purchase_orders po
-       LEFT JOIN suppliers s ON s.id = po."supplierId"
-       WHERE po."companyId" = $2
+       LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
+       WHERE po."companyId" = $2 AND po."deletedAt" IS NULL
          AND po.status NOT IN ('cancelled','draft','delivered')
          AND po."totalAmount" > 0.009
          AND po."createdAt"::date <= $1::date
@@ -158,7 +249,7 @@ financeAlgorithmsRouter.get("/ap-aging", requirePermission("finance:read"), asyn
          s2.phone AS "supplierPhone",
          s2.email AS "supplierEmail"
        FROM purchase_requests pr
-       LEFT JOIN suppliers s2 ON s2.id = pr."supplierId"
+       LEFT JOIN suppliers s2 ON s2.id = pr."supplierId" AND s2."deletedAt" IS NULL
        WHERE pr."companyId" = $2
          AND pr.status NOT IN ('cancelled','rejected','completed','draft')
          AND pr."supplierId" IS NOT NULL
@@ -188,7 +279,8 @@ financeAlgorithmsRouter.get("/ap-aging", requirePermission("finance:read"), asyn
          AND COALESCE(je."sourceType",'') NOT IN ('purchase_order','purchase_request')
        GROUP BY je.id, je.ref, je.status, je."createdAt", je.description
        HAVING (SUM(jl.credit) - SUM(jl.debit)) > 0.009
-       ORDER BY "supplierName", "orderDate" ASC`,
+       ORDER BY "supplierName", "orderDate" ASC
+       LIMIT 500`,
       [asOfDate, scope.companyId]
     );
 
@@ -257,12 +349,9 @@ financeAlgorithmsRouter.post("/bank-reconciliation/import", requirePermission("f
     const scope = req.scope!;
     assertFinanceRole(scope);
 
-    const { rows, accountCode = "1120", statementDate } = req.body as any;
-    if (!Array.isArray(rows) || rows.length === 0) {
-      throw new ValidationError("لا توجد بيانات في الكشف البنكي");
-    }
+    const { rows, accountCode, statementDate } = zodParse(bankImportSchema.safeParse(req.body ?? {}));
 
-    const batchId = `BANK-${Date.now().toString(36).toUpperCase()}`;
+    const batchId = generateTimeRef("BANK");
     let imported = 0;
 
     await withTransaction(async (client) => {
@@ -275,7 +364,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/import", requirePermission("f
         if (row.date) {
           const parsed = new Date(row.date);
           if (!isNaN(parsed.getTime())) {
-            date = parsed.toISOString().split("T")[0];
+            date = toDateISO(parsed);
           }
         }
         if (!amount || amount <= 0) continue;
@@ -302,10 +391,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", requirePermissio
     const scope = req.scope!;
     assertFinanceRole(scope);
 
-    const { batchId, accountCode = "1120", toleranceDays = 3 } = req.body as any;
-    if (!batchId) {
-      throw new ValidationError("معرف الدفعة مطلوب", { field: "batchId" });
-    }
+    const { batchId, accountCode, toleranceDays } = zodParse(bankAutoMatchSchema.safeParse(req.body ?? {}));
 
     const bankRows = await rawQuery<any>(
       `SELECT * FROM bank_statements
@@ -326,6 +412,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", requirePermissio
       maxDate.setDate(maxDate.getDate() + Number(toleranceDays));
 
       const creditOrDebit = bRow.type === "credit" ? "debit" : "credit";
+      if (creditOrDebit !== "debit" && creditOrDebit !== "credit") throw new Error("Invalid column");
 
       const [jLine] = await rawQuery<any>(
         `SELECT jl.id, je."createdAt"
@@ -344,14 +431,14 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", requirePermissio
          LIMIT 1`,
         [scope.companyId, accountCode,
          amount * 0.99, amount * 1.01,
-         minDate.toISOString().split("T")[0], maxDate.toISOString().split("T")[0],
+         toDateISO(minDate), toDateISO(maxDate),
          amount, bRow.statementDate]
       );
 
       if (jLine) {
         await rawExecute(
-          `UPDATE bank_statements SET "matchStatus" = 'matched', "matchedJournalLineId" = $1 WHERE id = $2`,
-          [jLine.id, bRow.id]
+          `UPDATE bank_statements SET "matchStatus" = 'matched', "matchedJournalLineId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [jLine.id, bRow.id, scope.companyId]
         );
         matched++;
       }
@@ -377,7 +464,8 @@ financeAlgorithmsRouter.get("/bank-reconciliation/:batchId", requirePermission("
        LEFT JOIN journal_lines jl ON jl.id = bs."matchedJournalLineId"
        LEFT JOIN journal_entries je ON je.id = jl."journalId"
        WHERE bs."companyId" = $1 AND bs."importBatchId" = $2
-       ORDER BY bs."statementDate" ASC`,
+       ORDER BY bs."statementDate" ASC
+       LIMIT 500`,
       [scope.companyId, batchId]
     );
 
@@ -409,10 +497,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", requirePermiss
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const { bankStatementId, journalLineId } = req.body as any;
-    if (!bankStatementId || !journalLineId) {
-      throw new ValidationError("bankStatementId و journalLineId مطلوبان");
-    }
+    const { bankStatementId, journalLineId } = zodParse(bankManualMatchSchema.safeParse(req.body ?? {}));
     const [bs] = await rawQuery<any>(
       `SELECT * FROM bank_statements WHERE id=$1 AND "companyId"=$2 AND "matchStatus"='unmatched'`,
       [bankStatementId, scope.companyId]
@@ -423,6 +508,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", requirePermiss
       `SELECT jl.id FROM journal_lines jl
        JOIN journal_entries je ON je.id = jl."journalId"
        WHERE jl.id=$1 AND je."companyId"=$2
+         AND je."deletedAt" IS NULL
          AND jl."accountCode"=$3
          AND NOT EXISTS (SELECT 1 FROM bank_statements bs2 WHERE bs2."matchedJournalLineId"=jl.id)`,
       [journalLineId, scope.companyId, bs.accountCode]
@@ -430,8 +516,8 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", requirePermiss
     if (!jl) throw new NotFoundError("سطر القيد غير موجود أو لا يتبع نفس الشركة/الحساب أو تمت مطابقته");
 
     await rawExecute(
-      `UPDATE bank_statements SET "matchStatus"='matched', "matchedJournalLineId"=$1 WHERE id=$2`,
-      [journalLineId, bankStatementId]
+      `UPDATE bank_statements SET "matchStatus"='matched', "matchedJournalLineId"=$1 WHERE id=$2 AND "companyId"=$3`,
+      [journalLineId, bankStatementId, scope.companyId]
     );
     res.json({ success: true, message: "تمت المطابقة اليدوية" });
   } catch (err) {
@@ -487,7 +573,8 @@ financeAlgorithmsRouter.get("/bank-reconciliation", requirePermission("finance:r
        FROM bank_statements
        WHERE "companyId" = $1
        GROUP BY "importBatchId", "accountCode"
-       ORDER BY MIN("createdAt") DESC`,
+       ORDER BY MIN("createdAt") DESC
+       LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: batches });
@@ -504,7 +591,7 @@ financeAlgorithmsRouter.get("/fixed-assets", requirePermission("finance:read"), 
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT * FROM fixed_assets WHERE "companyId" = $1 ORDER BY "purchaseDate" DESC`,
+      `SELECT * FROM fixed_assets WHERE "companyId" = $1 ORDER BY "purchaseDate" DESC LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
@@ -517,16 +604,13 @@ financeAlgorithmsRouter.post("/fixed-assets", requirePermission("finance:create"
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const b = req.body as any;
-    if (!b.name || !b.purchaseCost || !b.purchaseDate) {
-      throw new ValidationError("الاسم والتكلفة وتاريخ الشراء مطلوبة");
-    }
-    const usefulYears = Number(b.usefulLifeYears ?? 5);
+    const b = zodParse(createFixedAssetSchema.safeParse(req.body ?? {}));
+    const usefulYears = b.usefulLifeYears;
     if (!usefulYears || usefulYears <= 0) {
       throw new ValidationError("العمر الإنتاجي يجب أن يكون أكبر من صفر");
     }
-    const purchaseCost = Number(b.purchaseCost);
-    const salvageValue = Number(b.salvageValue ?? 0);
+    const purchaseCost = b.purchaseCost;
+    const salvageValue = b.salvageValue;
 
     const { insertId } = await rawExecute(
       `INSERT INTO fixed_assets (
@@ -538,11 +622,11 @@ financeAlgorithmsRouter.post("/fixed-assets", requirePermission("finance:create"
       [scope.companyId, b.branchId ?? scope.branchId, b.code ?? null, b.name,
        b.description ?? null, b.category ?? null, b.purchaseDate,
        purchaseCost, salvageValue, usefulYears,
-       b.depreciationMethod ?? "straight_line", purchaseCost,
-       b.assetAccountCode ?? "1500", b.depreciationAccountCode ?? "6100",
-       b.accDepreciationAccountCode ?? "1590"]
+       b.depreciationMethod, purchaseCost,
+       b.assetAccountCode, b.depreciationAccountCode,
+       b.accDepreciationAccountCode]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM fixed_assets WHERE id = $1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fixed_assets WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) {
     handleRouteError(err, res, "Create fixed asset error:");
@@ -552,14 +636,15 @@ financeAlgorithmsRouter.post("/fixed-assets", requirePermission("finance:create"
 financeAlgorithmsRouter.get("/fixed-assets/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [asset] = await rawQuery<any>(
       `SELECT * FROM fixed_assets WHERE id=$1 AND "companyId"=$2`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!asset) { throw new NotFoundError("الأصل غير موجود"); return; }
     const schedule = await rawQuery<any>(
-      `SELECT * FROM depreciation_entries WHERE "assetId"=$1 ORDER BY period ASC`,
-      [asset.id]
+      `SELECT * FROM depreciation_entries WHERE "assetId"=$1 AND "companyId"=$2 ORDER BY period ASC`,
+      [asset.id, scope.companyId]
     );
     res.json({ ...asset, schedule });
   } catch (err) {
@@ -571,11 +656,11 @@ financeAlgorithmsRouter.patch("/fixed-assets/:id", requirePermission("finance:up
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const id = Number(req.params.id);
-    const b = req.body as any;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(updateFixedAssetSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
-    if (b.usefulLifeYears !== undefined && Number(b.usefulLifeYears) <= 0) {
+    if (b.usefulLifeYears !== undefined && b.usefulLifeYears <= 0) {
       throw new ValidationError("العمر الإنتاجي يجب أن يكون أكبر من صفر");
     }
     const f = (col: string, val: any) => { if (val !== undefined) { params.push(val); sets.push(`"${col}"=$${params.length}`); } };
@@ -621,27 +706,26 @@ function calcDepreciationAmount(asset: any, _period: string, opts?: { unitsThisP
 
   if (method === "declining_balance" || method === "declining_balance_200") {
     const annualRate = 2 / usefulLife;
-    monthlyAmount = Math.round(currentBookValue * (annualRate / 12) * 100) / 100;
+    monthlyAmount = roundTo2(currentBookValue * (annualRate / 12));
   } else if (method === "declining_balance_150") {
     const annualRate = 1.5 / usefulLife;
-    monthlyAmount = Math.round(currentBookValue * (annualRate / 12) * 100) / 100;
+    monthlyAmount = roundTo2(currentBookValue * (annualRate / 12));
   } else if (method === "sum_of_years_digits") {
-    // SYD: weight of year n = (life - n + 1) / (life*(life+1)/2)
-    // We need to know which year of the asset's life we're in.
+    if (depreciable === 0) return 0;
     const monthsElapsed = Math.max(0,
       Math.round((Number(asset.accumulatedDepreciation) / depreciable) * (usefulLife * 12))
     );
     const yearIndex = Math.min(usefulLife - 1, Math.floor(monthsElapsed / 12));
     const weight = (usefulLife - yearIndex) / ((usefulLife * (usefulLife + 1)) / 2);
     const yearAmount = depreciable * weight;
-    monthlyAmount = Math.round((yearAmount / 12) * 100) / 100;
+    monthlyAmount = roundTo2(yearAmount / 12);
   } else if (method === "units_of_production") {
     const total = Number(asset.totalLifetimeUnits || 0);
     const units = Number(opts?.unitsThisPeriod || 0);
     if (total <= 0 || units <= 0) return 0;
-    monthlyAmount = Math.round(((depreciable * units) / total) * 100) / 100;
+    monthlyAmount = roundTo2((depreciable * units) / total);
   } else {
-    monthlyAmount = Math.round((depreciable / (usefulLife * 12)) * 100) / 100;
+    monthlyAmount = roundTo2(depreciable / (usefulLife * 12));
   }
 
   return Math.min(monthlyAmount, remainingDepreciable);
@@ -650,9 +734,10 @@ function calcDepreciationAmount(asset: any, _period: string, opts?: { unitsThisP
 financeAlgorithmsRouter.get("/fixed-assets/:id/schedule", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [asset] = await rawQuery<any>(
       `SELECT * FROM fixed_assets WHERE id=$1 AND "companyId"=$2`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!asset) { throw new NotFoundError("الأصل غير موجود"); return; }
 
@@ -691,17 +776,17 @@ financeAlgorithmsRouter.get("/fixed-assets/:id/schedule", requirePermission("fin
       let monthlyDep: number;
       if (method === "declining_balance" || method === "declining_balance_200") {
         const annualRate = 2 / usefulLifeYears;
-        monthlyDep = Math.max(0, Math.round(bookValue * (annualRate / 12) * 100) / 100);
+        monthlyDep = Math.max(0, roundTo2(bookValue * (annualRate / 12)));
       } else if (method === "declining_balance_150") {
         const annualRate = 1.5 / usefulLifeYears;
-        monthlyDep = Math.max(0, Math.round(bookValue * (annualRate / 12) * 100) / 100);
+        monthlyDep = Math.max(0, roundTo2(bookValue * (annualRate / 12)));
       } else if (method === "sum_of_years_digits") {
         const yearIndex = Math.min(usefulLifeYears - 1, Math.floor(m / 12));
         const weight = (usefulLifeYears - yearIndex) / sydDenom;
         const yearAmount = depreciable * weight;
-        monthlyDep = Math.round((yearAmount / 12) * 100) / 100;
+        monthlyDep = roundTo2(yearAmount / 12);
       } else {
-        monthlyDep = Math.round((depreciable / usefulLifeMonths) * 100) / 100;
+        monthlyDep = roundTo2(depreciable / usefulLifeMonths);
       }
 
       if (bookValue - monthlyDep < salvageValue) {
@@ -725,11 +810,8 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", requirePermission("
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const id = Number(req.params.id);
-    const { period, unitsThisPeriod } = req.body as any;
-    if (!period) {
-      throw new ValidationError("الفترة المحاسبية مطلوبة", { field: "period" });
-    }
+    const id = parseId(req.params.id, "id");
+    const { period, unitsThisPeriod } = zodParse(depreciateAssetSchema.safeParse(req.body ?? {}));
     const targetPeriod = period;
 
     const [asset] = await rawQuery<any>(
@@ -739,8 +821,8 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", requirePermission("
     if (!asset) { throw new NotFoundError("الأصل غير موجود أو غير نشط"); return; }
 
     const [existing] = await rawQuery<any>(
-      `SELECT id FROM depreciation_entries WHERE "assetId"=$1 AND period=$2`,
-      [id, targetPeriod]
+      `SELECT id FROM depreciation_entries WHERE "assetId"=$1 AND period=$2 AND "companyId"=$3`,
+      [id, targetPeriod, scope.companyId]
     );
     if (existing) {
       throw new ConflictError(`تم إهلاك هذا الأصل لفترة ${targetPeriod} مسبقاً`);
@@ -756,13 +838,17 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", requirePermission("
 
     let entryId: number | undefined;
 
-    const journalId = await createJournalEntry({
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const { journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId ?? asset.branchId,
       createdBy: scope.activeAssignmentId,
       ref: `DEP-${asset.code ?? asset.id}-${targetPeriod}`,
       description: `إهلاك شهري: ${asset.name} — ${targetPeriod}`,
       type: "depreciation",
+      sourceType: "depreciation",
+      sourceId: asset.id,
+      sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
       lines: [
         { accountCode: asset.depreciationAccountCode ?? "6100", debit: depAmount, credit: 0, description: `إهلاك ${asset.name}` },
         { accountCode: asset.accDepreciationAccountCode ?? "1590", debit: 0, credit: depAmount, description: `مجمع إهلاك ${asset.name}` },
@@ -777,8 +863,8 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", requirePermission("
     entryId = entRes[0].id;
 
     await rawExecute(
-      `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3`,
-      [newAccumulated, newBookValue, id]
+      `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
+      [newAccumulated, newBookValue, id, scope.companyId]
     );
 
     res.status(201).json({
@@ -802,10 +888,7 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", requirePermission("
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const { period } = req.body as any;
-    if (!period) {
-      throw new ValidationError("الفترة المحاسبية مطلوبة", { field: "period" });
-    }
+    const { period } = zodParse(depreciateAllSchema.safeParse(req.body ?? {}));
     const targetPeriod = period;
 
     const assets = await rawQuery<any>(
@@ -824,13 +907,17 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", requirePermission("
       const newAccumulated = Number(asset.accumulatedDepreciation) + depAmount;
       const newBookValue = Math.max(Number(asset.purchaseCost) - newAccumulated, Number(asset.salvageValue));
 
-      const journalId = await createJournalEntry({
+      const { financialEngine } = await import("../lib/engines/index.js");
+      const { journalId } = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: asset.branchId ?? scope.branchId,
         createdBy: scope.activeAssignmentId,
         ref: `DEP-${asset.code ?? asset.id}-${targetPeriod}`,
         description: `إهلاك شهري: ${asset.name} — ${targetPeriod}`,
         type: "depreciation",
+        sourceType: "depreciation",
+        sourceId: asset.id,
+        sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
         lines: [
           { accountCode: asset.depreciationAccountCode ?? "6100", debit: depAmount, credit: 0 },
           { accountCode: asset.accDepreciationAccountCode ?? "1590", debit: 0, credit: depAmount },
@@ -843,8 +930,8 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", requirePermission("
         [asset.id, scope.companyId, targetPeriod, depAmount, newBookValue, journalId]
       );
       await rawExecute(
-        `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3`,
-        [newAccumulated, newBookValue, asset.id]
+        `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
+        [newAccumulated, newBookValue, asset.id, scope.companyId]
       );
 
       results.push({ assetId: asset.id, assetName: asset.name, depAmount, newBookValue });
@@ -878,8 +965,9 @@ financeAlgorithmsRouter.get("/inventory-costing", requirePermission("finance:rea
               (p."currentStock" * p."costPrice") AS "stockValue"
        FROM warehouse_products p
        LEFT JOIN warehouse_categories c ON c.id = p."categoryId"
-       WHERE p."companyId" = $1 AND p.status = 'active'
-       ORDER BY p.name`,
+       WHERE p."companyId" = $1 AND p.status = 'active' AND p."deletedAt" IS NULL
+       ORDER BY p.name
+       LIMIT 500`,
       [scope.companyId]
     );
 
@@ -898,10 +986,10 @@ financeAlgorithmsRouter.get("/inventory-costing", requirePermission("finance:rea
 financeAlgorithmsRouter.get("/inventory-costing/:productId", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const productId = Number(req.params.productId);
+    const productId = parseId(req.params.productId, "productId");
 
     const [product] = await rawQuery<any>(
-      `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2`,
+      `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [productId, scope.companyId]
     );
     if (!product) { throw new NotFoundError("المنتج غير موجود"); return; }
@@ -909,9 +997,10 @@ financeAlgorithmsRouter.get("/inventory-costing/:productId", requirePermission("
     const movements = await rawQuery<any>(
       `SELECT m.*, m."createdAt" AS date
        FROM warehouse_movements m
-       WHERE m."productId"=$1
-       ORDER BY m."createdAt" ASC`,
-      [productId]
+       WHERE m."productId"=$1 AND m."companyId"=$2
+       ORDER BY m."createdAt" ASC
+       LIMIT 500`,
+      [productId, scope.companyId]
     );
 
     let runningQty = 0;
@@ -925,32 +1014,32 @@ financeAlgorithmsRouter.get("/inventory-costing/:productId", requirePermission("
       const isOut = ["out", "transfer_out"].includes(mv.type);
 
       if (isIn) {
-        const addValue = qty * cost;
+        const addValue = roundTo2(qty * cost);
         runningQty += qty;
-        runningValue += addValue;
+        runningValue = roundTo2(runningValue + addValue);
         const waCost = runningQty > 0 ? runningValue / runningQty : cost;
         waHistory.push({
           date: mv.date, type: mv.type, quantity: qty, unitCost: cost,
-          totalCost: addValue, runningQty, runningValue, waCost: Math.round(waCost * 10000) / 10000,
+          totalCost: addValue, runningQty, runningValue, waCost: roundTo4(waCost),
         });
       } else if (isOut) {
         const waCost = runningQty > 0 ? runningValue / runningQty : 0;
-        const cogsValue = qty * waCost;
+        const cogsValue = roundTo2(qty * waCost);
         runningQty = Math.max(0, runningQty - qty);
-        runningValue = runningQty * waCost;
+        runningValue = roundTo2(runningQty * waCost);
         waHistory.push({
           date: mv.date, type: mv.type, quantity: -qty, unitCost: waCost,
-          totalCost: -cogsValue, runningQty, runningValue, waCost: Math.round(waCost * 10000) / 10000,
+          totalCost: -cogsValue, runningQty, runningValue, waCost: roundTo4(waCost),
         });
       }
     }
 
-    const currentWa = runningQty > 0 ? Math.round((runningValue / runningQty) * 10000) / 10000 : 0;
+    const currentWa = runningQty > 0 ? roundTo4(runningValue / runningQty) : 0;
 
     res.json({
       product,
       currentWaCost: currentWa,
-      currentStockValue: Math.round(currentWa * Number(product.currentStock) * 100) / 100,
+      currentStockValue: roundTo2(currentWa * Number(product.currentStock)),
       movements: waHistory,
     });
   } catch (err) {
@@ -994,7 +1083,7 @@ financeAlgorithmsRouter.post("/rounding-account/setup", requirePermission("finan
        VALUES ($1,'9999','فروقات التقريب','Rounding Differences','expense',2,null,true)`,
       [scope.companyId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM chart_of_accounts WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM chart_of_accounts WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json({ account: row, message: "تم إنشاء حساب فروقات التقريب (9999)" });
   } catch (err) {
     handleRouteError(err, res, "Setup rounding account error:");
@@ -1006,11 +1095,11 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", requirePermission("f
     const scope = req.scope!;
     assertFinanceRole(scope);
 
-    const { journalEntryId, roundingAmount, description } = req.body as any;
-    if (!journalEntryId || Math.abs(Number(roundingAmount ?? 0)) === 0) {
-      throw new ValidationError("معرف القيد وفرق التقريب مطلوبان");
+    const { journalEntryId, roundingAmount, description } = zodParse(roundingDiffSchema.safeParse(req.body ?? {}));
+    if (Math.abs(roundingAmount) === 0) {
+      throw new ValidationError("فرق التقريب يجب أن يكون مختلفاً عن الصفر");
     }
-    const diff = Math.round(Number(roundingAmount) * 100) / 100;
+    const diff = roundTo2(roundingAmount);
     if (Math.abs(diff) > 0.05) {
       throw new ValidationError("فرق التقريب يتجاوز الحد المسموح (0.05 ﷼)");
     }
@@ -1056,8 +1145,8 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", requirePermission("f
 // FX gain/loss.
 //
 // Tables are created lazily so no extra migration is needed:
-//   fx_rates(id, companyId, rateDate, fromCurrency, toCurrency, rate, type)
-//   fx_revaluations(id, companyId, period, journalEntryId, postedAt, ...)
+//   fx_rates(id, companyId, effectiveDate, fromCurrency, toCurrency, rate, source)
+//   fx_revaluations(id, companyId, currency, oldRate, newRate, revaluationDate, journalEntryId, totalImpact, createdBy, createdAt)
 
 async function ensureFxTables(client?: any) {
   const exec = client ? (sql: string, params?: any[]) => client.query(sql, params) : rawExecute;
@@ -1065,27 +1154,27 @@ async function ensureFxTables(client?: any) {
     CREATE TABLE IF NOT EXISTS fx_rates (
       id SERIAL PRIMARY KEY,
       "companyId" INTEGER NOT NULL,
-      "rateDate" DATE NOT NULL,
+      "effectiveDate" DATE NOT NULL,
       "fromCurrency" VARCHAR(8) NOT NULL,
       "toCurrency" VARCHAR(8) NOT NULL DEFAULT 'SAR',
       rate NUMERIC(18,8) NOT NULL,
-      type VARCHAR(16) NOT NULL DEFAULT 'spot',
+      source VARCHAR(40) NOT NULL DEFAULT 'manual',
       "createdAt" TIMESTAMP DEFAULT NOW(),
-      UNIQUE ("companyId","rateDate","fromCurrency","toCurrency","type")
+      UNIQUE ("companyId","effectiveDate","fromCurrency","toCurrency",source)
     )
   `);
   await exec(`
     CREATE TABLE IF NOT EXISTS fx_revaluations (
       id SERIAL PRIMARY KEY,
       "companyId" INTEGER NOT NULL,
-      period VARCHAR(7) NOT NULL,
+      currency VARCHAR(10) NOT NULL,
+      "oldRate" NUMERIC(15,6),
+      "newRate" NUMERIC(15,6),
+      "revaluationDate" DATE NOT NULL,
       "journalEntryId" INTEGER,
-      "totalGain" NUMERIC(18,2) DEFAULT 0,
-      "totalLoss" NUMERIC(18,2) DEFAULT 0,
-      details JSONB,
-      "postedBy" INTEGER,
-      "postedAt" TIMESTAMP DEFAULT NOW(),
-      UNIQUE ("companyId",period)
+      "totalImpact" NUMERIC(15,2),
+      "createdBy" INTEGER,
+      "createdAt" TIMESTAMPTZ DEFAULT NOW()
     )
   `);
   // Ensure foreign-currency columns exist on invoices & purchase_orders
@@ -1105,9 +1194,9 @@ financeAlgorithmsRouter.get("/fx/rates", requirePermission("finance:read"), asyn
     let where = `"companyId"=$1`;
     if (from) { params.push(from); where += ` AND "fromCurrency"=$${params.length}`; }
     if (to) { params.push(to); where += ` AND "toCurrency"=$${params.length}`; }
-    if (type) { params.push(type); where += ` AND type=$${params.length}`; }
+    if (type) { params.push(type); where += ` AND source=$${params.length}`; }
     const rows = await rawQuery<any>(
-      `SELECT * FROM fx_rates WHERE ${where} ORDER BY "rateDate" DESC, "fromCurrency" ASC LIMIT 500`,
+      `SELECT * FROM fx_rates WHERE ${where} ORDER BY "effectiveDate" DESC, "fromCurrency" ASC LIMIT 500`,
       params
     );
     res.json({ data: rows });
@@ -1121,18 +1210,15 @@ financeAlgorithmsRouter.post("/fx/rates", requirePermission("finance:create"), a
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const { rateDate, fromCurrency, toCurrency = "SAR", rate, type = "spot" } = req.body as any;
-    if (!rateDate || !fromCurrency || !rate || Number(rate) <= 0) {
-      throw new ValidationError("rateDate / fromCurrency / rate مطلوبة", { field: "rate", fix: "أدخل قيمة موجبة للسعر والعملة والتاريخ" });
-    }
+    const { rateDate, fromCurrency, toCurrency, rate, type } = zodParse(fxRateUpsertSchema.safeParse(req.body ?? {}));
     await ensureFxTables();
     const [row] = await rawQuery<any>(
-      `INSERT INTO fx_rates ("companyId","rateDate","fromCurrency","toCurrency",rate,type)
+      `INSERT INTO fx_rates ("companyId","effectiveDate","fromCurrency","toCurrency",rate,source)
        VALUES ($1,$2,$3,$4,$5,$6)
-       ON CONFLICT ("companyId","rateDate","fromCurrency","toCurrency","type")
+       ON CONFLICT ("companyId","effectiveDate","fromCurrency","toCurrency","source")
        DO UPDATE SET rate=EXCLUDED.rate
        RETURNING *`,
-      [scope.companyId, rateDate, String(fromCurrency).toUpperCase(), String(toCurrency).toUpperCase(), Number(rate), type]
+      [scope.companyId, rateDate, fromCurrency.toUpperCase(), toCurrency.toUpperCase(), rate, type]
     );
     res.status(201).json({ data: row });
   } catch (err) {
@@ -1145,7 +1231,7 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", requirePermission("financ
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const period = (req.query.period as string) ?? new Date().toISOString().slice(0, 7);
+    const period = (req.query.period as string) ?? currentPeriod();
     if (!/^\d{4}-\d{2}$/.test(period)) {
       throw new ValidationError("period يجب أن يكون بصيغة YYYY-MM", { field: "period", fix: "استخدم صيغة YYYY-MM مثل 2026-04" });
     }
@@ -1153,32 +1239,33 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", requirePermission("financ
 
     // Period-end date = last day of month
     const [y, m] = period.split("-").map(Number);
-    const periodEnd = new Date(y, m, 0).toISOString().slice(0, 10);
+    const periodEnd = toDateISO(new Date(y, m, 0));
 
     // Open foreign-currency invoices
     const openInvoices = await rawQuery<any>(
-      `SELECT id, "invoiceNumber", currency, "exchangeRate", total, "paidAmount", "clientId"
+      `SELECT id, ref, currency, "exchangeRate", total, "paidAmount", "clientId"
        FROM invoices
        WHERE "companyId"=$1
          AND currency IS NOT NULL AND currency <> 'SAR'
          AND status <> 'paid' AND status <> 'cancelled'
          AND COALESCE("deletedAt", NULL) IS NULL
-         AND "invoiceDate"::date <= $2::date`,
+         AND "createdAt"::date <= $2::date`,
       [scope.companyId, periodEnd]
     );
 
     // Open foreign-currency POs (AP proxy)
     const openPOs = await rawQuery<any>(
-      `SELECT id, "poNumber", currency, "exchangeRate", total, status, "supplierId"
+      `SELECT id, ref, currency, "exchangeRate", "totalAmount", status, "supplierId"
        FROM purchase_orders
        WHERE "companyId"=$1
+         AND "deletedAt" IS NULL
          AND currency IS NOT NULL AND currency <> 'SAR'
          AND status NOT IN ('paid','cancelled','draft')
-         AND "orderDate"::date <= $2::date`,
+         AND "createdAt"::date <= $2::date`,
       [scope.companyId, periodEnd]
     );
 
-    // Find closing rate per currency (latest rate_date <= periodEnd with type='period_end' or 'spot')
+    // Find closing rate per currency (latest effectiveDate <= periodEnd with source='period_end' or 'manual')
     const currencies = Array.from(
       new Set<string>([...openInvoices.map((i: any) => i.currency), ...openPOs.map((p: any) => p.currency)])
     );
@@ -1187,8 +1274,8 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", requirePermission("financ
       const [r] = await rawQuery<any>(
         `SELECT rate FROM fx_rates
          WHERE "companyId"=$1 AND "fromCurrency"=$2 AND "toCurrency"='SAR'
-           AND "rateDate"::date <= $3::date
-         ORDER BY (type='period_end') DESC, "rateDate" DESC LIMIT 1`,
+           AND "effectiveDate"::date <= $3::date
+         ORDER BY (source='period_end') DESC, "effectiveDate" DESC LIMIT 1`,
         [scope.companyId, cur, periodEnd]
       );
       rateMap[cur] = r ? Number(r.rate) : 0;
@@ -1203,16 +1290,16 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", requirePermission("financ
       const closing = rateMap[inv.currency] || 0;
       if (!closing) continue;
       const outstandingFc = Number(inv.total) - Number(inv.paidAmount ?? 0); // foreign currency
-      const bookedSar = Math.round(outstandingFc * booked * 100) / 100;
-      const revaluedSar = Math.round(outstandingFc * closing * 100) / 100;
-      const diff = Math.round((revaluedSar - bookedSar) * 100) / 100; // AR asset → gain if positive
+      const bookedSar = roundTo2(outstandingFc * booked);
+      const revaluedSar = roundTo2(outstandingFc * closing);
+      const diff = roundTo2(revaluedSar - bookedSar); // AR asset → gain if positive
       if (Math.abs(diff) < 0.01) continue;
       if (diff > 0) totalGain += diff; else totalLoss += -diff;
       details.push({
         kind: "AR",
         refType: "invoice",
         refId: inv.id,
-        refNumber: inv.invoiceNumber,
+        refNumber: inv.ref,
         currency: inv.currency,
         outstandingFc,
         bookedRate: booked,
@@ -1227,18 +1314,18 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", requirePermission("financ
       const booked = Number(po.exchangeRate) || 1;
       const closing = rateMap[po.currency] || 0;
       if (!closing) continue;
-      const outstandingFc = Number(po.total);
-      const bookedSar = Math.round(outstandingFc * booked * 100) / 100;
-      const revaluedSar = Math.round(outstandingFc * closing * 100) / 100;
+      const outstandingFc = Number(po.totalAmount);
+      const bookedSar = roundTo2(outstandingFc * booked);
+      const revaluedSar = roundTo2(outstandingFc * closing);
       // AP liability → loss if closing > booked (liability grew)
-      const diff = Math.round((revaluedSar - bookedSar) * 100) / 100;
+      const diff = roundTo2(revaluedSar - bookedSar);
       if (Math.abs(diff) < 0.01) continue;
       if (diff > 0) totalLoss += diff; else totalGain += -diff;
       details.push({
         kind: "AP",
         refType: "purchase_order",
         refId: po.id,
-        refNumber: po.poNumber,
+        refNumber: po.ref,
         currency: po.currency,
         outstandingFc,
         bookedRate: booked,
@@ -1253,9 +1340,9 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", requirePermission("financ
       period,
       periodEnd,
       rates: rateMap,
-      totalGain: Math.round(totalGain * 100) / 100,
-      totalLoss: Math.round(totalLoss * 100) / 100,
-      netImpact: Math.round((totalGain - totalLoss) * 100) / 100,
+      totalGain: roundTo2(totalGain),
+      totalLoss: roundTo2(totalLoss),
+      netImpact: roundTo2(totalGain - totalLoss),
       lineCount: details.length,
       details,
     });
@@ -1269,21 +1356,18 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:
   try {
     const scope = req.scope!;
     assertFinanceRole(scope);
-    const period = (req.body?.period as string) ?? new Date().toISOString().slice(0, 7);
-    if (!/^\d{4}-\d{2}$/.test(period)) {
-      throw new ValidationError("period يجب أن يكون بصيغة YYYY-MM", { field: "period", fix: "استخدم صيغة YYYY-MM مثل 2026-04" });
-    }
+    const { period } = zodParse(fxRevaluationPostSchema.safeParse(req.body ?? {}));
     await ensureFxTables();
     const [yPeriod, mPeriod] = period.split("-").map(Number);
-    const periodEndDate = new Date(yPeriod, mPeriod, 0).toISOString().slice(0, 10);
+    const periodEndDate = toDateISO(new Date(yPeriod, mPeriod, 0));
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, periodEndDate);
     if (!periodCheck.open) {
       throw new ValidationError(`لا يمكن الترحيل — الفترة ${periodCheck.periodName ?? period} مقفلة`);
     }
 
     const [existing] = await rawQuery<any>(
-      `SELECT id FROM fx_revaluations WHERE "companyId"=$1 AND period=$2`,
-      [scope.companyId, period]
+      `SELECT id FROM fx_revaluations WHERE "companyId"=$1 AND "revaluationDate"=$2::date`,
+      [scope.companyId, periodEndDate]
     );
     if (existing) {
       throw new ConflictError(`تم تسجيل إعادة تقييم العملات لفترة ${period} مسبقاً`);
@@ -1291,22 +1375,22 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:
 
     // Reuse preview logic by calling it inline via the same query shape
     const [y, m] = period.split("-").map(Number);
-    const periodEnd = new Date(y, m, 0).toISOString().slice(0, 10);
+    const periodEnd = toDateISO(new Date(y, m, 0));
 
     const openInvoices = await rawQuery<any>(
-      `SELECT id, "invoiceNumber", currency, "exchangeRate", total, "paidAmount"
+      `SELECT id, ref, currency, "exchangeRate", total, "paidAmount"
        FROM invoices
        WHERE "companyId"=$1 AND currency IS NOT NULL AND currency<>'SAR'
          AND status NOT IN ('paid','cancelled') AND COALESCE("deletedAt",NULL) IS NULL
-         AND "invoiceDate"::date <= $2::date`,
+         AND "createdAt"::date <= $2::date`,
       [scope.companyId, periodEnd]
     );
     const openPOs = await rawQuery<any>(
-      `SELECT id, "poNumber", currency, "exchangeRate", total
+      `SELECT id, ref, currency, "exchangeRate", "totalAmount"
        FROM purchase_orders
-       WHERE "companyId"=$1 AND currency IS NOT NULL AND currency<>'SAR'
+       WHERE "companyId"=$1 AND "deletedAt" IS NULL AND currency IS NOT NULL AND currency<>'SAR'
          AND status NOT IN ('paid','cancelled','draft')
-         AND "orderDate"::date <= $2::date`,
+         AND "createdAt"::date <= $2::date`,
       [scope.companyId, periodEnd]
     );
 
@@ -1319,8 +1403,8 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:
       const [r] = await rawQuery<any>(
         `SELECT rate FROM fx_rates
          WHERE "companyId"=$1 AND "fromCurrency"=$2 AND "toCurrency"='SAR'
-           AND "rateDate"::date <= $3::date
-         ORDER BY (type='period_end') DESC, "rateDate" DESC LIMIT 1`,
+           AND "effectiveDate"::date <= $3::date
+         ORDER BY (source='period_end') DESC, "effectiveDate" DESC LIMIT 1`,
         [scope.companyId, cur, periodEnd]
       );
       rateMap[cur] = r ? Number(r.rate) : 0;
@@ -1335,34 +1419,35 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:
       if (!closing) continue;
       const booked = Number(inv.exchangeRate) || 1;
       const outstandingFc = Number(inv.total) - Number(inv.paidAmount ?? 0);
-      const diff = Math.round(outstandingFc * (closing - booked) * 100) / 100;
+      const diff = roundTo2(outstandingFc * (closing - booked));
       if (Math.abs(diff) < 0.01) continue;
       arDiff += diff;
-      details.push({ kind: "AR", refId: inv.id, refNumber: inv.invoiceNumber, currency: inv.currency, diff });
+      details.push({ kind: "AR", refId: inv.id, refNumber: inv.ref, currency: inv.currency, diff });
     }
     for (const po of openPOs) {
       const closing = rateMap[po.currency] || 0;
       if (!closing) continue;
       const booked = Number(po.exchangeRate) || 1;
-      const outstandingFc = Number(po.total);
-      const diff = Math.round(outstandingFc * (closing - booked) * 100) / 100;
+      const outstandingFc = Number(po.totalAmount);
+      const diff = roundTo2(outstandingFc * (closing - booked));
       if (Math.abs(diff) < 0.01) continue;
       apDiff += diff;
-      details.push({ kind: "AP", refId: po.id, refNumber: po.poNumber, currency: po.currency, diff });
+      details.push({ kind: "AP", refId: po.id, refNumber: po.ref, currency: po.currency, diff });
     }
 
-    arDiff = Math.round(arDiff * 100) / 100;
-    apDiff = Math.round(apDiff * 100) / 100;
+    arDiff = roundTo2(arDiff);
+    apDiff = roundTo2(apDiff);
 
     if (arDiff === 0 && apDiff === 0) {
       throw new ValidationError("لا توجد فروق إعادة تقييم لهذه الفترة");
     }
 
     // Account codes (configurable via accounting_mappings)
-    const arCode = await getAccountCodeFromMapping(scope.companyId, "fx_revaluation_ar", "debit", "1200");
-    const apCode = await getAccountCodeFromMapping(scope.companyId, "fx_revaluation_ap", "credit", "2100");
-    const gainCode = await getAccountCodeFromMapping(scope.companyId, "fx_revaluation_gain", "credit", "4910");
-    const lossCode = await getAccountCodeFromMapping(scope.companyId, "fx_revaluation_loss", "debit", "5910");
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const arCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_ar", "debit", "1200");
+    const apCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_ap", "credit", "2100");
+    const gainCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_gain", "credit", "4910");
+    const lossCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_loss", "debit", "5910");
 
     // Build JE lines
     const lines: Array<{ accountCode: string; debit: number; credit: number; description: string }> = [];
@@ -1386,25 +1471,33 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", requirePermission("finance:
       lines.push({ accountCode: gainCode, debit: 0, credit: v, description: `ربح صرف غير محقق — AP` });
     }
 
-    const journalEntryId = await createJournalEntry({
+    const { journalId: journalEntryId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId ?? 0,
       createdBy: scope.activeAssignmentId,
       ref: `FX-REVAL-${period}`,
       description: `إعادة تقييم العملات الأجنبية — ${period}`,
       type: "fx_revaluation",
+      sourceType: "fx_revaluation",
+      sourceId: 0,
+      sourceKey: `finance:fx_reval:${scope.companyId}:${period}`,
       lines,
     });
 
     const totalGain = lines.filter(l => l.accountCode === gainCode).reduce((s, l) => s + l.credit, 0);
     const totalLoss = lines.filter(l => l.accountCode === lossCode).reduce((s, l) => s + l.debit, 0);
 
-    const [revRow] = await rawQuery<any>(
-      `INSERT INTO fx_revaluations ("companyId",period,"journalEntryId","totalGain","totalLoss",details,"postedBy")
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [scope.companyId, period, journalEntryId, totalGain, totalLoss, JSON.stringify(details), scope.activeAssignmentId]
-    );
-    const revalId = revRow?.id;
+    const revalIds: number[] = [];
+    for (const cur of currencies) {
+      const curImpact = details.filter((d: any) => d.currency === cur).reduce((s: number, d: any) => s + d.diff, 0);
+      const [revRow] = await rawQuery<any>(
+        `INSERT INTO fx_revaluations ("companyId","currency","revaluationDate","journalEntryId","totalImpact","createdBy")
+         VALUES ($1,$2,$3::date,$4,$5,$6) RETURNING id`,
+        [scope.companyId, cur, periodEnd, journalEntryId, roundTo2(curImpact), scope.activeAssignmentId]
+      );
+      if (revRow?.id) revalIds.push(revRow.id);
+    }
+    const revalId = revalIds[0];
 
     res.status(201).json({
       revaluationId: revalId,
@@ -1426,7 +1519,7 @@ financeAlgorithmsRouter.get("/fx/revaluation", requirePermission("finance:read")
     const scope = req.scope!;
     await ensureFxTables();
     const rows = await rawQuery<any>(
-      `SELECT * FROM fx_revaluations WHERE "companyId"=$1 ORDER BY period DESC LIMIT 120`,
+      `SELECT * FROM fx_revaluations WHERE "companyId"=$1 ORDER BY "revaluationDate" DESC LIMIT 120`,
       [scope.companyId]
     );
     res.json({ data: rows });
@@ -1451,7 +1544,8 @@ financeAlgorithmsRouter.get("/treasury", requirePermission("finance:read"), asyn
          AND ca."deletedAt" IS NULL
          AND ca."allowPosting" = true
          AND (ca.code LIKE '11%' OR ca.code LIKE '12%')
-       ORDER BY ca.code`,
+       ORDER BY ca.code
+       LIMIT 500`,
       [scope.companyId]
     );
 
@@ -1460,8 +1554,8 @@ financeAlgorithmsRouter.get("/treasury", requirePermission("finance:read"), asyn
     const bankBalances = cashAccounts.filter((a: any) => a.code?.startsWith("11") && !a.code?.startsWith("110")).reduce((s: number, a: any) => s + Number(a.currentBalance ?? 0), 0);
     const receivables = cashAccounts.filter((a: any) => a.code?.startsWith("12")).reduce((s: number, a: any) => s + Number(a.currentBalance ?? 0), 0);
 
-    const today = new Date().toISOString().slice(0, 10);
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const today = todayISO();
+    const thirtyDaysAgo = toDateISO(new Date(Date.now() - 30 * 86400000));
 
     const recentMovements = await rawQuery<any>(
       `SELECT je.id, je.ref, je.description, je.type, je."createdAt",
@@ -1497,7 +1591,8 @@ financeAlgorithmsRouter.get("/treasury", requirePermission("finance:read"), asyn
          AND je."createdAt" >= $2
          AND (jl."accountCode" LIKE '11%' OR jl."accountCode" LIKE '12%')
        GROUP BY DATE(je."createdAt")
-       ORDER BY day DESC`,
+       ORDER BY day DESC
+       LIMIT 500`,
       [scope.companyId, thirtyDaysAgo]
     );
 
@@ -1557,10 +1652,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", requirePermission("fina
       property: 'jl."propertyId"',
       project: 'jl."projectId"',
       contract: 'jl."contractId"',
-      product: 'jl."productId"',
-      vendor: 'jl."vendorId"',
-      client: 'jl."clientId"',
-      driver: 'jl."driverId"',
+      department: 'jl."departmentId"',
     };
     const safeCol = safeColumns[entityType];
 
@@ -1571,7 +1663,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", requirePermission("fina
         `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName", ca.type AS "accountType",
                 COALESCE((SELECT SUM(jl.debit) - SUM(jl.credit) FROM journal_lines jl
                   JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
-                  WHERE jl."accountCode" = ca.code AND je.status = 'posted'), 0) AS balance
+                  WHERE jl."accountCode" = ca.code AND je.status = 'posted' AND je."deletedAt" IS NULL), 0) AS balance
          FROM subsidiary_accounts sa
          JOIN chart_of_accounts ca ON ca.id = sa."accountId"
          WHERE sa."companyId" = $1 AND sa."entityType" = $2 AND sa."entityId" = $3`,
@@ -1586,7 +1678,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", requirePermission("fina
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
          LEFT JOIN chart_of_accounts ca ON ca.code = jl."accountCode" AND ca."companyId" = $1
-         WHERE ${safeCol} = $2
+         WHERE ${safeCol} = $2 AND je."deletedAt" IS NULL
          ORDER BY je."createdAt" DESC
          LIMIT 50`,
         [cid, eid]
@@ -1601,9 +1693,10 @@ financeAlgorithmsRouter.get("/entity-financial-profile", requirePermission("fina
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
          LEFT JOIN chart_of_accounts ca ON ca.code = jl."accountCode" AND ca."companyId" = $1
-         WHERE ${safeCol} = $2 AND je.status = 'posted'
+         WHERE ${safeCol} = $2 AND je.status = 'posted' AND je."deletedAt" IS NULL
          GROUP BY ca.code, ca.name
-         ORDER BY SUM(jl.debit) DESC`,
+         ORDER BY SUM(jl.debit) DESC
+         LIMIT 500`,
         [cid, eid]
       ),
 
@@ -1616,7 +1709,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", requirePermission("fina
            MAX(je."createdAt") AS "lastTransaction"
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
-         WHERE ${safeCol} = $2 AND je.status = 'posted'`,
+         WHERE ${safeCol} = $2 AND je.status = 'posted' AND je."deletedAt" IS NULL`,
         [cid, eid]
       ),
     ]);

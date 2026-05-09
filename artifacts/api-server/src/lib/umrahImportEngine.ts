@@ -1,8 +1,10 @@
 import * as XLSX from "xlsx";
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
-import { emitEvent, createAuditLog, createJournalEntry, getAccountCodeFromMapping } from "./businessHelpers.js";
+import { emitEvent, createAuditLog, createGuardedJournalEntry, getAccountCodeFromMapping, toDateISO } from "./businessHelpers.js";
 import { ValidationError } from "./errorHandler.js";
 import type pg from "pg";
+import { logger } from "./logger.js";
+import { encryptField, blindIndex } from "./fieldEncryption.js";
 
 // ---------------------------------------------------------------------------
 // Arabic header → DB column mapping
@@ -72,15 +74,15 @@ const VOUCHER_HEADER_MAP: Record<string, string> = {
 };
 
 const STATUS_MAP: Record<string, string> = {
-  "داخل المملكة": "inside_kingdom",
-  "خرج": "exited",
-  "متجاوز": "overstay",
-  "تم التبليغ": "absconded",
-  "هارب": "absconded",
-  "متوفي": "deceased",
-  "متوفى": "deceased",
-  "مرفوض": "visa_rejected",
-  "تأشيرة مطبوعة": "visa_printed",
+  "داخل المملكة": "arrived",
+  "خرج": "departed",
+  "متجاوز": "overstayed",
+  "تم التبليغ": "violated",
+  "هارب": "violated",
+  "متوفي": "departed",
+  "متوفى": "departed",
+  "مرفوض": "cancelled",
+  "تأشيرة مطبوعة": "active",
   "معلق": "pending",
   "نشط": "active",
   "ملغي": "cancelled",
@@ -168,7 +170,7 @@ function parseWorkbook(buffer: Buffer, headerMap: Record<string, string>, fileTy
     for (const { idx, field } of colMap) {
       let val: any = dataRow[idx];
       if (val instanceof Date) {
-        val = val.toISOString().split("T")[0];
+        val = toDateISO(val);
       } else {
         val = String(val ?? "").trim();
       }
@@ -404,25 +406,35 @@ export async function confirmMutamersImport(
 
           const ex = existMap.get(String(row.nuskNumber));
           if (!ex) {
+            const ppEnc = row.passportNumber ? encryptField(String(row.passportNumber)) : null;
+            const ppHash = row.passportNumber ? blindIndex(String(row.passportNumber)) : null;
+            const visaEnc = row.visaNumber ? encryptField(String(row.visaNumber)) : null;
+            const visaHash = row.visaNumber ? blindIndex(String(row.visaNumber)) : null;
+            const mofaEnc = row.mofaNumber ? encryptField(String(row.mofaNumber)) : null;
+            const mofaHash = row.mofaNumber ? blindIndex(String(row.mofaNumber)) : null;
+            const borderEnc = row.borderNumber ? encryptField(String(row.borderNumber)) : null;
+            const borderHash = row.borderNumber ? blindIndex(String(row.borderNumber)) : null;
             const res = await client.query(
               `INSERT INTO umrah_pilgrims
                ("companyId","branchId","seasonId","nuskNumber","fullName",nationality,gender,
-                "passportNumber","passportExpiry","visaNumber","groupId","subAgentId","agentId",
+                "passportNumber","passportNumber_hash","passportExpiry","visaNumber","visaNumber_hash",
+                "groupId","subAgentId","agentId",
                 status,"entryPort","entryFlight","exitPort","exitFlight",
-                "actualStayDays","programDuration","overstayDays","borderNumber","mofaNumber",
+                "actualStayDays","programDuration","overstayDays",
+                "borderNumber","borderNumber_hash","mofaNumber","mofaNumber_hash",
                 "isInsideKingdom","hasUmrahPermit","createdBy","createdAt","updatedAt")
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,NOW(),NOW())
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,NOW(),NOW())
                RETURNING id`,
               [
                 scope.companyId, scope.branchId, scope.seasonId,
                 row.nuskNumber, row.fullName, row.nationality, row.gender,
-                row.passportNumber, row.passportExpiry || null, row.visaNumber || null,
+                ppEnc, ppHash, row.passportExpiry || null, visaEnc, visaHash,
                 groupId, subAgentId, agentId,
                 row.status || "pending",
                 row.entryPort || null, row.entryFlight || null,
                 row.exitPort || null, row.exitFlight || null,
                 row.actualStayDays ?? null, row.programDuration ?? 14, row.overstayDays ?? 0,
-                row.borderNumber || null, row.mofaNumber || null,
+                borderEnc, borderHash, mofaEnc, mofaHash,
                 row.isInsideKingdom ?? false, row.hasUmrahPermit ?? false,
                 scope.userId,
               ]
@@ -430,7 +442,7 @@ export async function confirmMutamersImport(
             await logChange(client, batchId, "mutamer", res.rows[0].id, "created");
             newCount++;
 
-            if (row.status === "overstay" || row.status === "absconded") {
+            if (row.status === "overstayed" || row.status === "violated") {
               await detectViolation(client, scope, row, res.rows[0].id, groupId, subAgentId, agentId);
             }
           } else {
@@ -456,18 +468,17 @@ export async function confirmMutamersImport(
             if (agentId) { vals.push(agentId); changes.push(`"agentId"=$${vals.length}`); }
 
             if (changes.length > 0) {
-              vals.push(scope.userId);
-              changes.push(`"updatedBy"=$${vals.length}`);
               changes.push(`"updatedAt"=NOW()`);
               vals.push(ex.id);
+              vals.push(scope.companyId);
               await client.query(
-                `UPDATE umrah_pilgrims SET ${changes.join(",")} WHERE id=$${vals.length}`,
+                `UPDATE umrah_pilgrims SET ${changes.join(",")} WHERE id=$${vals.length - 1} AND "companyId"=$${vals.length}`,
                 vals
               );
               updatedCount++;
               if (hasFinancial) financialImpactCount++;
 
-              if ((row.status === "overstay" || row.status === "absconded") && ex.status !== row.status) {
+              if ((row.status === "overstayed" || row.status === "violated") && ex.status !== row.status) {
                 await detectViolation(client, scope, row, ex.id, groupId, subAgentId, agentId);
               }
             } else {
@@ -483,10 +494,10 @@ export async function confirmMutamersImport(
           // Treat duplicate (companyId, passportNumber, seasonId) as skipped (idempotent)
           if (/duplicate key|unique constraint|already exists/i.test(msg) && /passport/i.test(msg)) {
             skippedCount++;
-            try { await logChange(client, batchId, "mutamer", 0, "skipped", null, null, "duplicate"); } catch {}
+            try { await logChange(client, batchId, "mutamer", 0, "skipped", null, null, "duplicate"); } catch (e) { logger.error(e, "umrah import logChange failed"); }
           } else {
             errorCount++;
-            try { await logChange(client, batchId, "mutamer", 0, "error", null, null, msg); } catch {}
+            try { await logChange(client, batchId, "mutamer", 0, "error", null, null, msg); } catch (e) { logger.error(e, "umrah import logChange failed"); }
           }
         }
       }
@@ -494,15 +505,15 @@ export async function confirmMutamersImport(
 
     await client.query(
       `UPDATE umrah_import_batches SET "newCount"=$1,"updatedCount"=$2,"skippedCount"=$3,
-       "errorCount"=$4,"financialImpactCount"=$5,"updatedAt"=NOW() WHERE id=$6`,
-      [newCount, updatedCount, skippedCount, errorCount, financialImpactCount, batchId]
+       "errorCount"=$4,"financialImpactCount"=$5,"updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7`,
+      [newCount, updatedCount, skippedCount, errorCount, financialImpactCount, batchId, scope.companyId]
     );
 
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "umrah.mutamers.imported", entity: "umrah_import_batches", entityId: batchId,
       after: { newCount, updatedCount, skippedCount, errorCount },
-    }).catch(() => {});
+    }).catch((e) => logger.error(e, "umrah import event emit failed"));
 
     return { batchId, newCount, updatedCount, skippedCount, errorCount, financialImpactCount };
   });
@@ -569,7 +580,7 @@ export async function confirmVouchersImport(
             try {
               const expCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "debit", "5201");
               const apCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "credit", "2101");
-              const jeId = await createJournalEntry({
+              const jeId = await createGuardedJournalEntry({
                 companyId: scope.companyId,
                 branchId: scope.branchId || 0,
                 createdBy: scope.userId,
@@ -582,15 +593,15 @@ export async function confirmVouchersImport(
                   { accountCode: expCode, debit: totalAmt, credit: 0, description: "تكلفة خدمات نسك" },
                   { accountCode: apCode, debit: 0, credit: totalAmt, description: "مستحقات نسك" },
                 ],
-              });
+              }, { table: "umrah_nusk_invoices", id: nuskId });
               if (jeId) {
                 await client.query(
-                  `UPDATE umrah_nusk_invoices SET "purchaseInvoiceId"=$1 WHERE id=$2`,
-                  [jeId, nuskId]
+                  `UPDATE umrah_nusk_invoices SET "purchaseInvoiceId"=$1 WHERE id=$2 AND "companyId"=$3`,
+                  [jeId, nuskId, scope.companyId]
                 );
               }
             } catch (jeErr) {
-              console.error(`[UmrahImport] Journal entry failed for NUSK ${row.nuskInvoiceNumber}:`, jeErr);
+              logger.error(jeErr, `[UmrahImport] Journal entry failed for NUSK ${row.nuskInvoiceNumber}:`);
             }
           }
 
@@ -621,8 +632,9 @@ export async function confirmVouchersImport(
             changes.push(`"updatedBy"=$${vals.length}`);
             changes.push(`"updatedAt"=NOW()`);
             vals.push(ex.id);
+            vals.push(scope.companyId);
             await client.query(
-              `UPDATE umrah_nusk_invoices SET ${changes.join(",")} WHERE id=$${vals.length}`,
+              `UPDATE umrah_nusk_invoices SET ${changes.join(",")} WHERE id=$${vals.length - 1} AND "companyId"=$${vals.length}`,
               vals
             );
             updatedCount++;
@@ -638,25 +650,25 @@ export async function confirmVouchersImport(
         const msg = String(err?.message || "");
         if (/duplicate key|unique constraint|already exists/i.test(msg)) {
           skippedCount++;
-          try { await logChange(client, batchId, "nusk_invoice", 0, "skipped", null, null, "duplicate"); } catch {}
+          try { await logChange(client, batchId, "nusk_invoice", 0, "skipped", null, null, "duplicate"); } catch (e) { logger.error(e, "umrah import logChange failed"); }
         } else {
           errorCount++;
-          try { await logChange(client, batchId, "nusk_invoice", 0, "error", null, null, msg); } catch {}
+          try { await logChange(client, batchId, "nusk_invoice", 0, "error", null, null, msg); } catch (e) { logger.error(e, "umrah import logChange failed"); }
         }
       }
     }
 
     await client.query(
       `UPDATE umrah_import_batches SET "newCount"=$1,"updatedCount"=$2,"skippedCount"=$3,
-       "errorCount"=$4,"financialImpactCount"=$5,"updatedAt"=NOW() WHERE id=$6`,
-      [newCount, updatedCount, skippedCount, errorCount, financialImpactCount, batchId]
+       "errorCount"=$4,"financialImpactCount"=$5,"updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7`,
+      [newCount, updatedCount, skippedCount, errorCount, financialImpactCount, batchId, scope.companyId]
     );
 
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "umrah.vouchers.imported", entity: "umrah_import_batches", entityId: batchId,
       after: { newCount, updatedCount, skippedCount, errorCount },
-    }).catch(() => {});
+    }).catch((e) => logger.error(e, "umrah import event emit failed"));
 
     return { batchId, newCount, updatedCount, skippedCount, errorCount, financialImpactCount };
   });
@@ -670,17 +682,22 @@ async function resolveAgent(client: pg.PoolClient, scope: ImportScope, row: Pars
   if (!row.nuskAgentNumber && !row.agentName) return null;
   if (row.nuskAgentNumber) {
     const [ex] = (await client.query(
-      `SELECT id FROM umrah_agents WHERE "companyId"=$1 AND "nuskAgentNumber"=$2 AND "deletedAt" IS NULL`,
+      `SELECT id FROM umrah_agents WHERE "companyId"=$1 AND "contractRef"=$2 AND "deletedAt" IS NULL`,
       [scope.companyId, row.nuskAgentNumber]
     )).rows;
     if (ex) return ex.id;
   }
+  const agentName = row.agentName || `وكيل ${row.nuskAgentNumber}`;
+  const [exByName] = (await client.query(
+    `SELECT id FROM umrah_agents WHERE "companyId"=$1 AND name=$2 AND "deletedAt" IS NULL`,
+    [scope.companyId, agentName]
+  )).rows;
+  if (exByName) return exByName.id;
   const res = await client.query(
-    `INSERT INTO umrah_agents ("companyId","branchId",name,"nuskAgentNumber","seasonId","createdBy","createdAt","updatedAt")
-     VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())
-     ON CONFLICT ("companyId","nuskAgentNumber") WHERE "deletedAt" IS NULL DO UPDATE SET "updatedAt"=NOW()
+    `INSERT INTO umrah_agents ("companyId",name,"contractRef","createdAt","updatedAt")
+     VALUES ($1,$2,$3,NOW(),NOW())
      RETURNING id`,
-    [scope.companyId, scope.branchId, row.agentName || `وكيل ${row.nuskAgentNumber}`, row.nuskAgentNumber, scope.seasonId, scope.userId]
+    [scope.companyId, agentName, row.nuskAgentNumber || null]
   );
   return res.rows[0]?.id ?? null;
 }
@@ -723,7 +740,7 @@ async function detectViolation(
   client: pg.PoolClient, scope: ImportScope, row: ParsedRow,
   mutamerId: number, groupId: number | null, subAgentId: number | null, agentId: number | null,
 ) {
-  const type = row.status === "absconded" ? "absconded" : "overstay";
+  const type = row.status === "violated" ? "absconded" : "overstay";
   const [exists] = (await client.query(
     `SELECT id FROM umrah_violations
      WHERE "companyId"=$1 AND "mutamerId"=$2 AND type=$3 AND "deletedAt" IS NULL`,
@@ -751,7 +768,7 @@ async function detectViolation(
     companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
     action: eventName, entity: "umrah_violations", entityId: mutamerId,
     after: { nuskNumber: row.nuskNumber, type, overstayDays: row.overstayDays },
-  }).catch(() => {});
+  }).catch((e) => logger.error(e, "umrah import event emit failed"));
 }
 
 // ---------------------------------------------------------------------------

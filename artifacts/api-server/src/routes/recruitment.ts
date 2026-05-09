@@ -1,11 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError,
+  parseId,
+  zodParse,
+} from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const createPostingSchema = z.object({
   title: z.string().min(1, "عنوان الإعلان الوظيفي مطلوب"),
@@ -51,13 +54,16 @@ const updateApplicationSchema = z.object({
   interviewDate: z.string().optional().nullable(),
 });
 
+const closePostingSchema = z.object({
+  reason: z.string().min(1, "سبب الإغلاق مطلوب"),
+});
+
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/postings", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM job_postings WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM job_postings WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
@@ -65,9 +71,7 @@ router.get("/postings", requirePermission("hr:read"), async (req, res) => {
 router.post("/postings", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createPostingSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { title, department, location, type, description, requirements, salaryMin, salaryMax, status, closingDate } = parsed.data;
+    const { title, department, location, type, description, requirements, salaryMin, salaryMax, status, closingDate } = zodParse(createPostingSchema.safeParse(req.body));
     if (salaryMin !== undefined && salaryMin !== null && salaryMax !== undefined && salaryMax !== null && Number(salaryMax) < Number(salaryMin)) {
       throw new ValidationError("الحد الأعلى للراتب أقل من الحد الأدنى", {
         field: "salaryMax",
@@ -82,7 +86,7 @@ router.post("/postings", requirePermission("hr:write"), async (req, res) => {
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "job_postings", entityId: r.insertId,
       after: { title, type: type || "full-time", status: status || "open" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -90,15 +94,17 @@ router.post("/postings", requirePermission("hr:write"), async (req, res) => {
       entity: "job_postings",
       entityId: r.insertId,
       details: JSON.stringify({ title, type: type || "full-time", status: status || "open" }),
-    }).catch(console.error);
-    res.status(201).json({ id: r.insertId, title, status: status || "open" });
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, title, status: status || "open" });
   } catch (err) { handleRouteError(err, res, "Create job posting error:"); }
 });
 
 router.get("/postings/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الإعلان الوظيفي غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
@@ -107,10 +113,8 @@ router.get("/postings/:id", requirePermission("hr:read"), async (req, res) => {
 router.patch("/postings/:id", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const parsed = updatePostingSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(updatePostingSchema.safeParse(req.body)) as any;
     const sets: string[] = [];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
@@ -125,17 +129,17 @@ router.patch("/postings/:id", requirePermission("hr:write"), async (req, res) =>
     if (b.closingDate !== undefined) { params.push(b.closingDate); sets.push(`"closingDate"=$${params.length}`); }
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id); params.push(scope.companyId);
-    const result = await rawExecute(`UPDATE job_postings SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const result = await rawExecute(`UPDATE job_postings SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (result.affectedRows === 0) throw new NotFoundError("الإعلان الوظيفي غير موجود");
-    const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: b }).catch(console.error);
+    const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: b }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "recruitment.posting.updated",
       entity: "job_postings",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
@@ -144,9 +148,9 @@ router.patch("/postings/:id", requirePermission("hr:write"), async (req, res) =>
 router.post("/postings/:id/close", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const reason = (req.body?.reason as string | undefined)?.trim();
-    if (!reason) throw new ValidationError("سبب الإغلاق مطلوب", { field: "reason" });
+    const id = parseId(req.params.id, "id");
+    const { reason: rawReason } = zodParse(closePostingSchema.safeParse(req.body ?? {}));
+    const reason = rawReason.trim();
     const updated = await applyTransition({
       entity: "job_postings",
       id,
@@ -173,7 +177,7 @@ router.post("/postings/:id/close", requirePermission("hr:write"), async (req, re
         );
       },
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: { status: "closed", closedReason: reason } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: { status: "closed", closedReason: reason } }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -181,7 +185,7 @@ router.post("/postings/:id/close", requirePermission("hr:write"), async (req, re
       entity: "job_postings",
       entityId: id,
       details: JSON.stringify({ reason }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     res.json({ ...updated, event: "recruitment.job.closed" });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -194,7 +198,7 @@ router.post("/postings/:id/close", requirePermission("hr:write"), async (req, re
 router.post("/postings/:id/reopen", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const updated = await applyTransition({
       entity: "job_postings",
       id,
@@ -208,14 +212,14 @@ router.post("/postings/:id/reopen", requirePermission("hr:write"), async (req, r
         closedReason: null,
       },
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: { status: "open", reopened: true } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: { status: "open", reopened: true } }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "recruitment.posting.reopened",
       entity: "job_postings",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     res.json({ ...updated, event: "recruitment.job.reopened" });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -227,18 +231,18 @@ router.post("/postings/:id/reopen", requirePermission("hr:write"), async (req, r
 router.delete("/postings/:id", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const [before] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [before] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!before) throw new NotFoundError("الإعلان الوظيفي غير موجود");
-    await rawExecute(`UPDATE job_postings SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_postings", entityId: id, before }).catch(console.error);
+    await rawExecute(`UPDATE job_postings SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_postings", entityId: id, before }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "recruitment.posting.deleted",
       entity: "job_postings",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     res.json({ message: "تم حذف الإعلان الوظيفي بنجاح" });
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
@@ -250,7 +254,7 @@ router.get("/applications", requirePermission("hr:read"), async (req, res) => {
     let where = `(jp."companyId"=$1 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL AND jp."deletedAt" IS NULL`;
     const params: any[] = [scope.companyId];
     if (postingId) { params.push(postingId); where += ` AND a."postingId"=$${params.length}`; }
-    const rows = await rawQuery(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE ${where} ORDER BY a."createdAt" DESC`, params);
+    const rows = await rawQuery(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE ${where} ORDER BY a."createdAt" DESC LIMIT 500`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
@@ -258,9 +262,7 @@ router.get("/applications", requirePermission("hr:read"), async (req, res) => {
 router.post("/applications", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createApplicationSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { postingId, applicantName, email, phone, resumeUrl, status, notes, rating } = parsed.data;
+    const { postingId, applicantName, email, phone, resumeUrl, status, notes, rating } = zodParse(createApplicationSchema.safeParse(req.body));
     const [posting] = await rawQuery<{ id: number }>(
       `SELECT id FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [Number(postingId), scope.companyId]
@@ -274,7 +276,7 @@ router.post("/applications", requirePermission("hr:write"), async (req, res) => 
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "job_applications", entityId: r.insertId,
       after: { postingId: Number(postingId), applicantName, status: status || "new" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -282,15 +284,20 @@ router.post("/applications", requirePermission("hr:write"), async (req, res) => 
       entity: "job_applications",
       entityId: r.insertId,
       details: JSON.stringify({ postingId: Number(postingId), applicantName }),
-    }).catch(console.error);
-    res.status(201).json({ id: r.insertId, postingId: Number(postingId), applicantName, status: status || "new" });
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
+    const [row] = await rawQuery<any>(
+      `SELECT ja.* FROM job_applications ja JOIN job_postings jp ON jp.id = ja."postingId" WHERE ja.id=$1 AND jp."companyId"=$2 AND ja."deletedAt" IS NULL`,
+      [r.insertId, scope.companyId]
+    );
+    res.status(201).json(row || { id: r.insertId, postingId: Number(postingId), applicantName, status: status || "new" });
   } catch (err) { handleRouteError(err, res, "Create application error:"); }
 });
 
 router.get("/applications/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND (jp."companyId"=$2 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND (jp."companyId"=$2 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("طلب التوظيف غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
@@ -299,12 +306,10 @@ router.get("/applications/:id", requirePermission("hr:read"), async (req, res) =
 router.patch("/applications/:id", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT a.id FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2`, [id, scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [existing] = await rawQuery<any>(`SELECT a.id FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2 AND a."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("طلب التوظيف غير موجود");
-    const parsed = updateApplicationSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(updateApplicationSchema.safeParse(req.body)) as any;
     const sets: string[] = [];
     const params: any[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
@@ -313,16 +318,23 @@ router.patch("/applications/:id", requirePermission("hr:write"), async (req, res
     if (b.interviewDate !== undefined) { params.push(b.interviewDate); sets.push(`"interviewDate"=$${params.length}`); }
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id);
-    await rawExecute(`UPDATE job_applications SET ${sets.join(",")} WHERE id=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM job_applications WHERE id=$1`, [id]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_applications", entityId: id, after: b }).catch(console.error);
+    await rawExecute(
+      `UPDATE job_applications SET ${sets.join(",")} WHERE id=$${params.length} AND "deletedAt" IS NULL
+       AND "postingId" IN (SELECT id FROM job_postings WHERE "companyId"=$${params.length + 1})`,
+      [...params, scope.companyId]
+    );
+    const [row] = await rawQuery<any>(
+      `SELECT ja.* FROM job_applications ja JOIN job_postings jp ON jp.id = ja."postingId" WHERE ja.id=$1 AND jp."companyId"=$2 AND ja."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_applications", entityId: id, after: b }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "recruitment.application.updated",
       entity: "job_applications",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
@@ -330,18 +342,18 @@ router.patch("/applications/:id", requirePermission("hr:write"), async (req, res
 router.delete("/applications/:id", requirePermission("hr:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const [before] = await rawQuery<any>(`SELECT a.* FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2`, [id, scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [before] = await rawQuery<any>(`SELECT a.* FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2 AND a."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!before) throw new NotFoundError("طلب التوظيف غير موجود");
-    await rawExecute(`UPDATE job_applications SET "deletedAt" = NOW() WHERE id=$1`, [id]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_applications", entityId: id, before }).catch(console.error);
+    await rawExecute(`UPDATE job_applications SET "deletedAt" = NOW() WHERE id=$1 AND "deletedAt" IS NULL AND "postingId" IN (SELECT id FROM job_postings WHERE "companyId"=$2)`, [id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_applications", entityId: id, before }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "recruitment.application.deleted",
       entity: "job_applications",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "recruitment background task failed"));
     res.json({ message: "تم حذف طلب التوظيف بنجاح" });
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });

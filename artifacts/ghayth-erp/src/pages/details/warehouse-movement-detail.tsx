@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, ArrowRightLeft } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 /**
  * WarehouseMovementDetail — unified detail page for a single stock
@@ -227,6 +229,9 @@ export default function WarehouseMovementDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {id && <EntityComments entityType="warehouse-movement" entityId={id} />}
+      {id && <EntityTags entityType="warehouse-movement" entityId={id} />}
     </div>
   );
 

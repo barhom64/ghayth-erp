@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ export default function Fleet() {
 }
 
 function VehiclesTab() {
+  const [, navigate] = useLocation();
   const { permissions, scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
   const { data: stats } = useApiQuery<any>(["fleet-stats", scopeQueryString], `/fleet/stats${scopeQueryString ? `?${scopeQueryString}` : ""}`);
@@ -76,7 +77,7 @@ function VehiclesTab() {
     { key: "make", label: "الشركة المصنعة" },
     { key: "model", label: "الموديل" },
     { key: "color", label: "اللون" },
-    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "available", label: "متاحة" }, { value: "in_use", label: "قيد الاستخدام" }, { value: "maintenance", label: "في الصيانة" }] },
+    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "available", label: "متاحة" }, { value: "in_use", label: "قيد الاستخدام" }, { value: "maintenance", label: "في الصيانة" }, { value: "out_of_service", label: "خارج الخدمة" }] },
   ];
 
   const previewFields: PreviewField[] = [
@@ -167,6 +168,7 @@ function VehiclesTab() {
                 { value: "available", label: "متاحة" },
                 { value: "in_use", label: "قيد الاستخدام" },
                 { value: "maintenance", label: "في الصيانة" },
+                { value: "out_of_service", label: "خارج الخدمة" },
               ],
               showDateRange: true,
             }}
@@ -197,6 +199,7 @@ function VehiclesTab() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(v) => navigate(`/fleet/${v.id}`)}
             emptyMessage="لا توجد مركبات"
             emptyIcon={<Car className="h-6 w-6 text-slate-400" />}
             noToolbar
@@ -243,7 +246,7 @@ function DriversTab() {
     { key: "name", label: "الاسم" },
     { key: "phone", label: "الهاتف" },
     { key: "licenseNumber", label: "رقم الرخصة" },
-    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "active", label: "نشط" }, { value: "inactive", label: "غير نشط" }] },
+    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "available", label: "متاح" }, { value: "on_trip", label: "في رحلة" }, { value: "off_duty", label: "خارج الخدمة" }, { value: "suspended", label: "موقف" }] },
   ];
 
   const columns: DataTableColumn<any>[] = [
@@ -260,7 +263,7 @@ function DriversTab() {
         <div onClick={(e) => e.stopPropagation()}>
           <RowActions
             canEdit={canManage}
-            onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "active" })}
+            onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "available" })}
             onDelete={() => startDelete(d.id)}
           />
         </div>
@@ -276,8 +279,10 @@ function DriversTab() {
             config={{
               searchPlaceholder: "بحث بالاسم أو الهاتف أو الرخصة...",
               statuses: [
-                { value: "active", label: "نشط" },
-                { value: "inactive", label: "غير نشط" },
+                { value: "available", label: "متاح" },
+                { value: "on_trip", label: "في رحلة" },
+                { value: "off_duty", label: "خارج الخدمة" },
+                { value: "suspended", label: "موقف" },
               ],
               showDateRange: false,
             }}
@@ -325,6 +330,7 @@ function DriversTab() {
 }
 
 function TripsTab() {
+  const [, navigate] = useLocation();
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useFilters();
   const pageSize = 20;
@@ -384,6 +390,7 @@ function TripsTab() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(t) => navigate(`/fleet/trips/${t.id}`)}
             emptyMessage="لا توجد رحلات"
             emptyIcon={<MapPin className="h-6 w-6 text-slate-400" />}
             noToolbar

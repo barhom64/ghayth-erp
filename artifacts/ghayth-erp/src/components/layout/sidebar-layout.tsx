@@ -32,6 +32,7 @@ import { apiFetch, useApiQuery } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { NotificationDropdown } from "@/components/notification-dropdown";
 import { PolicyBanner } from "@/components/policy-banner";
+import { RateLimitFallbackBanner } from "@/components/rate-limit-fallback-banner";
 import { useKeyboardShortcuts, usePropertyKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 // CommandPalette is only mounted when the user opens it (Cmd+K or the
 // header button). Lazy-load it so its ~345 lines + icons don't ship in
@@ -242,6 +243,7 @@ const allNavSections: NavSection[] = [
         { label: "التنبيهات", path: "/fleet/alerts", icon: Bell },
         { label: "خطط الصيانة الوقائية", path: "/fleet/preventive-plans", icon: CalendarClock },
         { label: "مخالفات المرور", path: "/fleet/traffic-violations", icon: AlertTriangle },
+        { label: "التقارير", path: "/fleet/reports", icon: FileBarChart },
       ]},
       { label: "المستودعات", path: "/warehouse", icon: Package, module: "warehouse", children: [
         { label: "لوحة التحكم", path: "/module-dashboards?tab=warehouse", icon: LayoutDashboard },
@@ -249,6 +251,7 @@ const allNavSections: NavSection[] = [
         { label: "حركات المخزون", path: "/warehouse/movements", icon: Activity },
         { label: "الفئات", path: "/warehouse/categories", icon: FolderOpen },
         { label: "الموردين", path: "/warehouse/suppliers", icon: Users },
+        { label: "جرد المخزون", path: "/warehouse/inventory-count", icon: ClipboardCheck },
       ]},
       { label: "المتجر", path: "/store", icon: ShoppingCart, module: "store", children: [
         { label: "لوحة التحكم", path: "/module-dashboards?tab=store", icon: LayoutDashboard },
@@ -272,13 +275,17 @@ const allNavSections: NavSection[] = [
       { label: "إدارة العمرة", path: "/umrah", icon: CloudRain, children: [
         { label: "لوحة التشغيل", path: "/umrah", icon: LayoutDashboard },
         { label: "المعتمرين", path: "/umrah/pilgrims", icon: Users },
-        { label: "الوكلاء", path: "/umrah/agents", icon: Building2 },
+        { label: "الوكلاء الرئيسيين", path: "/umrah/agents", icon: Building2 },
+        { label: "الوكلاء الفرعيين", path: "/umrah/sub-agents", icon: Users },
         { label: "المواسم", path: "/umrah/seasons", icon: Calendar },
-        { label: "الغرامات", path: "/umrah/penalties", icon: AlertTriangle },
-        { label: "فواتير الوكلاء", path: "/umrah/invoices", icon: Receipt },
         { label: "الباقات", path: "/umrah/packages", icon: Package },
+        { label: "التسعير", path: "/umrah/pricing", icon: DollarSign },
+        { label: "خطط العمولات", path: "/umrah/commission-plans", icon: TrendingUp },
+        { label: "الفواتير", path: "/umrah/invoices", icon: Receipt },
+        { label: "الغرامات", path: "/umrah/penalties", icon: AlertTriangle },
+        { label: "المخالفات النظامية", path: "/umrah/violations", icon: Shield },
         { label: "النقل والمواصلات", path: "/umrah/transport", icon: Truck },
-        { label: "الاستيراد", path: "/umrah/import", icon: FileText },
+        { label: "استيراد البيانات", path: "/umrah/import", icon: FileText },
       ]},
     ],
   },
@@ -298,6 +305,8 @@ const allNavSections: NavSection[] = [
       { label: "الدعم الفني", path: "/support", icon: Headphones, module: "support", children: [
         { label: "لوحة التحكم", path: "/module-dashboards?tab=support", icon: LayoutDashboard },
         { label: "التذاكر", path: "/support", icon: Headphones },
+        { label: "قاعدة المعرفة", path: "/support/kb", icon: BookOpen },
+        { label: "الردود الجاهزة", path: "/support/replies", icon: MessageSquare },
       ]},
       { label: "التسويق", path: "/marketing", icon: Megaphone, module: "marketing" },
     ],
@@ -366,6 +375,8 @@ const allNavSections: NavSection[] = [
         { label: "سجل الحركات", path: "/activity-log", icon: Activity },
         { label: "الإشعارات", path: "/notifications", icon: Bell },
       ]},
+      { label: "الأتمتة", path: "/automation", icon: Zap, module: "admin", minRoleLevel: 60 },
+      { label: "التقارير المجدولة", path: "/reports/scheduled", icon: CalendarClock, module: "bi", minRoleLevel: 40 },
       { label: "الإعدادات", path: "/settings", icon: Cog, module: "settings", minRoleLevel: 70, children: [
         { label: "عام", path: "/settings", icon: Cog },
         { label: "الفروع", path: "/settings/branches", icon: Building },
@@ -894,6 +905,44 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     "/properties/maintenance": [
       { label: "طلب صيانة جديد", icon: Plus, link: "/properties/maintenance/create" },
     ],
+    "/umrah": [
+      { label: "استيراد معتمرين", icon: FileText, link: "/umrah/import" },
+      { label: "إضافة معتمر", icon: Plus, link: "/umrah/pilgrims?action=create" },
+      { label: "إنشاء فاتورة", icon: Receipt, link: "/umrah/invoices?action=generate" },
+    ],
+    "/umrah/pilgrims": [
+      { label: "إضافة معتمر", icon: Plus, link: "/umrah/pilgrims?action=create" },
+      { label: "استيراد من ملف", icon: FileText, link: "/umrah/import" },
+    ],
+    "/umrah/agents": [
+      { label: "إضافة وكيل", icon: Plus, link: "/umrah/agents?action=create" },
+    ],
+    "/umrah/sub-agents": [
+      { label: "إضافة وكيل فرعي", icon: Plus, link: "/umrah/sub-agents?action=create" },
+    ],
+    "/umrah/invoices": [
+      { label: "إنشاء فاتورة", icon: Plus, link: "/umrah/invoices?action=generate" },
+    ],
+    "/umrah/pricing": [
+      { label: "إضافة تسعيرة", icon: Plus, link: "/umrah/pricing?action=create" },
+    ],
+    "/umrah/commission-plans": [
+      { label: "إنشاء خطة عمولة", icon: Plus, link: "/umrah/commission-plans?action=create" },
+    ],
+    "/umrah/transport": [
+      { label: "إضافة رحلة", icon: Plus, link: "/umrah/transport?action=create" },
+    ],
+    "/umrah/penalties": [
+      { label: "إضافة غرامة", icon: Plus, link: "/umrah/penalties?action=create" },
+    ],
+    "/legal": [
+      { label: "إنشاء قضية", icon: Plus, link: "/legal?tab=cases&action=create" },
+      { label: "إنشاء عقد", icon: Plus, link: "/legal?tab=contracts&action=create" },
+    ],
+    "/crm": [
+      { label: "فرصة جديدة", icon: Plus, link: "/crm?tab=opportunities&action=create" },
+      { label: "صفقة جديدة", icon: Plus, link: "/crm?tab=deals&action=create" },
+    ],
   };
 
   const resolveQuickActions = (path: string): QuickAction[] => {
@@ -1261,6 +1310,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {buildBreadcrumbs()}
+        <RateLimitFallbackBanner />
         <PolicyBanner currentPath={location} />
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">

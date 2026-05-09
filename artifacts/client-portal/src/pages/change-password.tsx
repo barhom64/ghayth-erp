@@ -2,6 +2,21 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import { useLocation } from "wouter";
+import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
+
+function ChangePasswordSubmit({ loading }: { loading: boolean }) {
+  const { isCoolingDown, label } = useRateLimitCooldown();
+  const busy = loading || isCoolingDown;
+  return (
+    <button
+      type="submit"
+      disabled={busy}
+      className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors text-sm"
+    >
+      {isCoolingDown ? label : loading ? "جارٍ الحفظ..." : "تغيير كلمة المرور"}
+    </button>
+  );
+}
 
 export default function ChangePassword() {
   const { logout, clearMustChangePassword } = useAuth();
@@ -97,13 +112,7 @@ export default function ChangePassword() {
                   placeholder="••••••••"
                 />
               </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors text-sm"
-              >
-                {loading ? "جارٍ الحفظ..." : "تغيير كلمة المرور"}
-              </button>
+              <ChangePasswordSubmit loading={loading} />
               <button
                 type="button"
                 onClick={logout}

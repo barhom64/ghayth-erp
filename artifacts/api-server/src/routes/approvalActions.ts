@@ -1,15 +1,14 @@
 import { Router } from "express";
+import { APPROVAL_AUDIT_ROLES } from "../lib/rbacCatalog.js";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
+import { handleRouteError, ForbiddenError, parseId } from "../lib/errorHandler.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/overrides/report", async (req, res) => {
   try {
     const scope = req.scope!;
-    const allowedRoles = ["owner", "general_manager", "hr_manager", "finance_manager", "compliance", "audit"];
+    const allowedRoles = APPROVAL_AUDIT_ROLES;
     if (!allowedRoles.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح لك بالاطلاع على تقرير المخالفات");
     }
@@ -42,14 +41,15 @@ router.get("/overrides/report", async (req, res) => {
 router.get("/:entityType/:entityId", async (req, res) => {
   try {
     const scope = req.scope!;
-    const { entityType, entityId } = req.params;
+    const { entityType } = req.params;
+    const entityId = parseId(req.params.entityId, "entityId");
     const rows = await rawQuery(
       `SELECT aa.*, u.email as "actionByEmail"
        FROM approval_actions aa
        LEFT JOIN users u ON aa."actionBy" = u.id
        WHERE aa."entityType" = $1 AND aa."entityId" = $2 AND aa."companyId" = $3
-       ORDER BY aa."createdAt" DESC`,
-      [entityType, Number(entityId), scope.companyId]
+       ORDER BY aa."createdAt" DESC LIMIT 200`,
+      [entityType, entityId, scope.companyId]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) {

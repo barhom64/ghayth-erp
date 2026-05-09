@@ -11,6 +11,8 @@ import { Edit, Banknote, Calendar, Hash, CreditCard } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { useToast } from "@/hooks/use-toast";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 /**
  * PropertyPaymentDetail — unified detail page for a single property
@@ -319,6 +321,9 @@ export default function PropertyPaymentDetail() {
           </Card>
         )}
       </div>
+
+      {id && <EntityComments entityType="property-payment" entityId={id} />}
+      {id && <EntityTags entityType="property-payment" entityId={id} />}
     </div>
   );
 

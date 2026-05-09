@@ -11,7 +11,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Headphones, User, MessageSquare, Send, Trash2, Clock } from "lucide-react";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { ApprovalActions } from "@/components/approval-actions";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 export default function TicketDetail() {
   const [, params] = useRoute("/support/:id");
@@ -116,7 +119,7 @@ export default function TicketDetail() {
             <div className="border-t pt-4 space-y-3">
               <Textarea placeholder="اكتب رداً..." value={newReply} onChange={(e) => setNewReply(e.target.value)} className="min-h-[80px]" />
               <div className="flex justify-end">
-                <Button className="gap-2" disabled={!newReply.trim() || sending} onClick={handleSendReply}><Send className="w-4 h-4" /> إرسال الرد</Button>
+                <Button className="gap-2" disabled={!newReply.trim() || sending} onClick={handleSendReply} rateLimitAware><Send className="w-4 h-4" /> إرسال الرد</Button>
               </div>
             </div>
           </CardContent>
@@ -151,8 +154,41 @@ export default function TicketDetail() {
           </CardContent>
         </Card>
 
-        {id && <ApprovalTimeline entityType="support_ticket" entityId={id} />}
+        {id && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ApprovalActions
+                entityType="ticket"
+                entityId={Number(id)}
+                currentStatus={ticket.status}
+                approveEndpoint={`/support/tickets/${id}/approve`}
+                rejectEndpoint={`/support/tickets/${id}/approve`}
+                returnEndpoint={`/support/tickets/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, notes })}
+                returnBody={(notes) => ({ approved: "returned", notes })}
+                pendingStatuses={["pending", "open", "returned"]}
+                invalidateKeys={[["support-tickets"], ["support-stats"]]}
+                onDone={() => {
+                  refetch();
+                  toast({ title: "تم تحديث التذكرة" });
+                }}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {id && <ApprovalTimeline entityType="ticket" entityId={id} />}
       </div>
+
+      {id && <EntityComments entityType="ticket" entityId={id} />}
+      {id && <EntityTags entityType="ticket" entityId={id} />}
     </div>
   ) : null;
 
@@ -163,7 +199,7 @@ export default function TicketDetail() {
       backPath="/support"
       backLabel="الدعم الفني"
       status={ticket ? { label: statusLabel(ticket.status), tone: statusTone(ticket.status) } : undefined}
-      entityType="support_ticket"
+      entityType="ticket"
       entityId={id || ""}
       isLoading={isLoading}
       error={isError ? error : undefined}

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, isRateLimitedError } from "@/lib/api";
+import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import { CheckCircle2, Eye, EyeOff, Lock } from "lucide-react";
 
 export function ChangePasswordSection() {
   const { toast } = useToast();
+  const cooldown = useRateLimitCooldown();
   const [current, setCurrent] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
@@ -31,6 +33,9 @@ export function ChangePasswordSection() {
       setCurrent(""); setNewPw(""); setConfirmPw("");
       setSuccess(true);
     } catch (e: any) {
+      // The shared apiFetch already shows a debounced rate-limit toast on
+      // 429, so swallow it here to avoid a duplicate generic error toast.
+      if (isRateLimitedError(e)) { setLoading(false); return; }
       toast({ variant: "destructive", title: e.message || "فشل في تغيير كلمة المرور" });
     }
     setLoading(false);
@@ -90,8 +95,17 @@ export function ChangePasswordSection() {
                 onChange={(e) => setConfirmPw(e.target.value)}
               />
             </div>
-            <Button className="w-full" onClick={handleSubmit} disabled={loading || !current || !newPw || !confirmPw}>
-              {loading ? "جاري التغيير..." : "تغيير كلمة المرور"}
+            <Button
+              className="w-full"
+              onClick={handleSubmit}
+              disabled={loading || cooldown.isCoolingDown || !current || !newPw || !confirmPw}
+              rateLimitAware
+            >
+              {loading
+                ? "جاري التغيير..."
+                : cooldown.isCoolingDown
+                  ? cooldown.label
+                  : "تغيير كلمة المرور"}
             </Button>
           </>
         )}

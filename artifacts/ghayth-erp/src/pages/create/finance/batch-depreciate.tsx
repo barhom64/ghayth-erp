@@ -38,7 +38,7 @@ export default function BatchDepreciatePage() {
             </FormFieldWrapper>
           </div>
         </div>
-        <Button onClick={handleBatchDepreciate} disabled={batchDepMutation.isPending} className="gap-2">
+        <Button onClick={handleBatchDepreciate} disabled={batchDepMutation.isPending} className="gap-2" rateLimitAware>
           <Save className="h-4 w-4" />
           {batchDepMutation.isPending ? "جارٍ الإهلاك..." : `إهلاك جميع الأصول — ${depPeriod}`}
         </Button>

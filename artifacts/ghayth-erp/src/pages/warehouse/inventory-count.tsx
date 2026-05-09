@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import {
   ClipboardCheck, Plus, Package, CheckCircle, ChevronDown, ChevronUp,
   ArrowUp, ArrowDown, FileText, Clock, AlertTriangle,
@@ -355,7 +356,7 @@ export default function InventoryCountPage() {
           <CardContent className="grid grid-cols-3 gap-4">
             <div>
               <Label>تاريخ الجرد</Label>
-              <Input type="date" value={form.countDate} onChange={(e) => setForm({ ...form, countDate: e.target.value })} />
+              <UnifiedDateInput value={form.countDate} onChange={(v) => setForm({ ...form, countDate: v })} showDualCalendar showPresets />
             </div>
             <div>
               <Label>موقع المستودع</Label>
@@ -366,7 +367,7 @@ export default function InventoryCountPage() {
               <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
             <div className="col-span-3 flex gap-2">
-              <Button onClick={handleCreate}>بدء الجرد</Button>
+              <Button onClick={handleCreate} rateLimitAware>بدء الجرد</Button>
               <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
             </div>
           </CardContent>

@@ -104,7 +104,7 @@ export default function ProjectCostingDetailPage() {
       refNumber={project?.ref}
       createdAt={project?.startDate || project?.createdAt}
       updatedAt={project?.updatedAt}
-      entityType="project_costing"
+      entityType="project-costing"
       entityId={id}
       isLoading={isLoading}
       error={isError ? true : undefined}

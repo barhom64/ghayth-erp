@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Edit, Clock, MapPin, AlertTriangle } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   present: "حاضر",
@@ -229,6 +231,9 @@ export default function AttendanceDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {id && <EntityComments entityType="attendance" entityId={id} />}
+      {id && <EntityTags entityType="attendance" entityId={id} />}
     </div>
   );
 

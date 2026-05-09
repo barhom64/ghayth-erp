@@ -6,6 +6,7 @@ import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { KpiGrid } from "@/components/shared/kpi-card";
+import { ErrorState } from "@/components/shared/loading-error-states";
 import { Building2, Home, Plus, Eye, Pencil, TrendingUp, CheckCircle } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
@@ -29,11 +30,13 @@ export default function PropertiesBuildings() {
   const canManage = permissions.canManageProperty || roleLevel >= 50;
   const [filters, setFilters] = useFilters();
 
-  const { data: buildingsResp, isLoading } = useApiQuery<any>(
+  const { data: buildingsResp, isLoading, isError } = useApiQuery<any>(
     ["property-buildings", scopeQueryString],
     `/properties/buildings?${scopeQueryString || ""}`
   );
   const buildings = asList(buildingsResp);
+
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const filtered = applyFilters(buildings, filters, {
     searchFields: ["name", "address", "city"],

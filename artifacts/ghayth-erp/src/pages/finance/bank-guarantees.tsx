@@ -654,6 +654,7 @@ export default function BankGuaranteesPage() {
               <Button
                 type="submit"
                 disabled={saveMutation.isPending || updateMutation.isPending}
+                rateLimitAware
               >
                 {saveMutation.isPending || updateMutation.isPending
                   ? "جاري الحفظ..."

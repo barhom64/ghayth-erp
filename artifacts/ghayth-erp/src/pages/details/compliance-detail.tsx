@@ -6,8 +6,13 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ApprovalActions } from "@/components/approval-actions";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, ShieldCheck } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
+import { useToast } from "@/hooks/use-toast";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   compliant: "ملتزم",
@@ -29,6 +34,8 @@ export default function ComplianceDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/governance/compliance/:id");
   const id = params?.id ? Number(params.id) : null;
+
+  const { toast } = useToast();
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["compliance", String(id)],
@@ -179,6 +186,37 @@ export default function ComplianceDetail() {
       </Card>
 
       <div className="space-y-3">
+        {/* Approval actions */}
+        {id && compliance && ["pending", "pending_review", "returned"].includes(compliance.status) && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ApprovalActions
+                entityType="compliance"
+                entityId={id}
+                currentStatus={compliance.status}
+                approveEndpoint={`/governance/compliance/${id}/approve`}
+                rejectEndpoint={`/governance/compliance/${id}/approve`}
+                returnEndpoint={`/governance/compliance/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, notes })}
+                returnBody={(notes) => ({ approved: "returned", notes })}
+                pendingStatuses={["pending", "pending_review", "returned"]}
+                invalidateKeys={[["compliance"]]}
+                onDone={() => {
+                  refetch();
+                  toast({ title: "تم تحديث الامتثال" });
+                }}
+              />
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">معلومات إضافية</CardTitle>
@@ -205,6 +243,11 @@ export default function ComplianceDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {id && <ApprovalTimeline entityType="compliance" entityId={id} />}
+
+      {id && <EntityComments entityType="compliance" entityId={id} />}
+      {id && <EntityTags entityType="compliance" entityId={id} />}
     </div>
   );
 

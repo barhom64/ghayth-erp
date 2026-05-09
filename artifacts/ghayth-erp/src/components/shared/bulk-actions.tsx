@@ -121,7 +121,7 @@ export function BulkActionsBar({
           </Button>
         )}
         {actions.includes("export") && csvColumns && (
-          <Button size="sm" variant="outline" className="gap-1 text-blue-700 border-blue-300 hover:bg-blue-50" onClick={handleExport}>
+          <Button size="sm" variant="outline" className="gap-1 text-blue-700 border-blue-300 hover:bg-blue-50" onClick={handleExport} rateLimitAware>
             <Download className="h-3.5 w-3.5" />
             تصدير جدولي
           </Button>

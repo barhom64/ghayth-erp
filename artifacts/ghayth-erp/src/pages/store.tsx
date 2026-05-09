@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { StoreTabsNav } from "@/components/shared/store-tabs-nav";
 
 function ProductsTab() {
   const [, navigate] = useLocation();
@@ -104,7 +105,7 @@ function ProductsTab() {
           <div><Label>السعر</Label><Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></div>
           <div><Label>سعر التكلفة</Label><Input type="number" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} /></div>
           <div><Label>الكمية</Label><Input type="number" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></div>
-          <div className="md:col-span-3"><Button onClick={handleSubmit} disabled={!form.name || createMut.isPending}>حفظ</Button></div>
+          <div className="md:col-span-3"><Button onClick={handleSubmit} disabled={!form.name || createMut.isPending} rateLimitAware>حفظ</Button></div>
         </CardContent></Card>
       )}
       <Card>
@@ -124,7 +125,7 @@ function ProductsTab() {
             onRowClick={(p) => navigate(`/store/products/${p.id}`)}
             renderRowExtras={(p) => {
               if (editingId === p.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(p.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
-              if (deletingId === p.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.name} entityType="store_product" entityId={p.id} />;
+              if (deletingId === p.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.name} entityType="store-product" entityId={p.id} />;
               return null;
             }}
           />
@@ -225,7 +226,7 @@ function OrdersTab() {
           <div><Label>الهاتف</Label><Input value={form.customerPhone} onChange={(e) => setForm({ ...form, customerPhone: e.target.value })} /></div>
           <div><Label>المبلغ الإجمالي</Label><Input type="number" value={form.totalAmount} onChange={(e) => setForm({ ...form, totalAmount: e.target.value })} /></div>
           <div><Label>ملاحظات</Label><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
-          <div className="md:col-span-2"><Button onClick={handleSubmit} disabled={!form.customerName || createMut.isPending}>حفظ</Button></div>
+          <div className="md:col-span-2"><Button onClick={handleSubmit} disabled={!form.customerName || createMut.isPending} rateLimitAware>حفظ</Button></div>
         </CardContent></Card>
       )}
       <Card>
@@ -244,7 +245,7 @@ function OrdersTab() {
             pageSize={20}
             renderRowExtras={(o) => {
               if (editingId === o.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(o.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
-              if (deletingId === o.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(o.id)} onCancel={cancelDelete} isPending={isPending} itemName={o.orderNumber || `#${o.id}`} entityType="store_order" entityId={o.id} />;
+              if (deletingId === o.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(o.id)} onCancel={cancelDelete} isPending={isPending} itemName={o.orderNumber || `#${o.id}`} entityType="store-order" entityId={o.id} />;
               return null;
             }}
           />
@@ -270,6 +271,7 @@ export default function StorePage() {
 
   return (
     <div className="space-y-6">
+      <StoreTabsNav />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">

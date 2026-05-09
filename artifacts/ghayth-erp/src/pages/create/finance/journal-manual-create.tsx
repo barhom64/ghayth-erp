@@ -134,10 +134,10 @@ export default function JournalManualCreatePage() {
                         <Input value={line.description} onChange={e => updateLine(i, "description", e.target.value)} placeholder="البيان" />
                       </td>
                       <td className="px-2 py-1">
-                        <Input className="w-24" type="number" min="0" value={line.debit || ""} onChange={e => updateLine(i, "debit", e.target.value)} placeholder="0" />
+                        <Input className="w-24" type="number" min="0" step="0.01" value={line.debit || ""} onChange={e => updateLine(i, "debit", e.target.value)} placeholder="0" />
                       </td>
                       <td className="px-2 py-1">
-                        <Input className="w-24" type="number" min="0" value={line.credit || ""} onChange={e => updateLine(i, "credit", e.target.value)} placeholder="0" />
+                        <Input className="w-24" type="number" min="0" step="0.01" value={line.credit || ""} onChange={e => updateLine(i, "credit", e.target.value)} placeholder="0" />
                       </td>
                       <td className="px-2 py-1">
                         <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-red-600 text-lg leading-none">&times;</button>
@@ -176,7 +176,7 @@ export default function JournalManualCreatePage() {
 
             <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="outline" onClick={() => navigate("/finance/journal-manual")}>إلغاء</Button>
-              <Button type="submit" disabled={createMutation.isPending || !isBalanced}>
+              <Button type="submit" disabled={createMutation.isPending || !isBalanced} rateLimitAware>
                 {createMutation.isPending ? "جاري الإنشاء..." : "إنشاء القيد"}
               </Button>
             </div>

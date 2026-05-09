@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +10,7 @@ import { KeyRound, CheckCircle, Shield, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { roleKeyColors } from "@/contexts/app-context";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const MODULE_LABELS: Record<string, string> = {
   home: "الرئيسية", hr: "الموارد البشرية", finance: "المالية", fleet: "الأسطول",
@@ -85,8 +85,35 @@ export default function AdminRolesPage() {
   const [newRole, setNewRole] = useState({ roleKey: "", label: "", level: "10", modules: [] as string[] });
   const [creatingRole, setCreatingRole] = useState(false);
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const rolePermColumns: DataTableColumn<any>[] = [
+    { key: "label", header: "الوحدة", width: "144px", render: (r: any) => <span className="font-medium text-sm text-gray-700">{r.label}</span> },
+    ...PERM_ACTIONS.map((action) => ({
+      key: action.key,
+      header: action.label,
+      align: "center" as const,
+      render: (r: any) => {
+        const perm = `${r.key}:${action.key}`;
+        const hasWildcard = rolePerms.has("*") || rolePerms.has(`${r.key}:*`);
+        const hasPerm = hasWildcard || rolePerms.has(perm);
+        const isSaving = permSaving === perm;
+        return (
+          <button
+            onClick={() => !hasWildcard && toggleRolePerm(r.key, action.key)}
+            disabled={hasWildcard || isSaving}
+            className={cn("w-7 h-7 rounded-md transition-all mx-auto flex items-center justify-center border-2",
+              hasPerm ? hasWildcard ? "bg-blue-100 border-blue-200 cursor-not-allowed" : "bg-green-100 border-green-500 hover:bg-green-200"
+                : "bg-white border-gray-200 hover:border-gray-400",
+              isSaving && "opacity-50")}
+            title={hasWildcard ? "صلاحية كاملة" : hasPerm ? "انقر لإزالة" : "انقر لإضافة"}>
+            {hasPerm && <CheckCircle className={cn("h-4 w-4", hasWildcard ? "text-blue-500" : "text-green-600")} />}
+          </button>
+        );
+      },
+    })),
+  ];
+
+  if (isLoading) return <DataTable columns={rolePermColumns} data={[]} isLoading={true} searchPlaceholder={null} noToolbar />;
+  if (isError) return <DataTable columns={rolePermColumns} data={[]} isError={true} onRetry={() => window.location.reload()} searchPlaceholder={null} noToolbar />;
 
   const toggleNewRoleModule = (mod: string) => {
     setNewRole(prev => ({
@@ -284,44 +311,14 @@ export default function AdminRolesPage() {
             {permsLoading ? (
               <p className="text-sm text-gray-400 text-center py-4">جاري التحميل...</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm border-collapse">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="p-2 text-start font-medium text-gray-600 w-36">الوحدة</th>
-                      {PERM_ACTIONS.map(a => (
-                        <th key={a.key} className="p-2 text-center font-medium text-gray-600 min-w-[70px]">{a.label}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {PERM_MODULES.map((mod) => (
-                      <tr key={mod.key} className="border-b hover:bg-gray-50">
-                        <td className="p-2 font-medium text-sm text-gray-700">{mod.label}</td>
-                        {PERM_ACTIONS.map(action => {
-                          const perm = `${mod.key}:${action.key}`;
-                          const hasWildcard = rolePerms.has("*") || rolePerms.has(`${mod.key}:*`);
-                          const hasPerm = hasWildcard || rolePerms.has(perm);
-                          const isSaving = permSaving === perm;
-                          return (
-                            <td key={action.key} className="p-2 text-center">
-                              <button
-                                onClick={() => !hasWildcard && toggleRolePerm(mod.key, action.key)}
-                                disabled={hasWildcard || isSaving}
-                                className={cn("w-7 h-7 rounded-md transition-all mx-auto flex items-center justify-center border-2",
-                                  hasPerm ? hasWildcard ? "bg-blue-100 border-blue-200 cursor-not-allowed" : "bg-green-100 border-green-500 hover:bg-green-200"
-                                    : "bg-white border-gray-200 hover:border-gray-400",
-                                  isSaving && "opacity-50")}
-                                title={hasWildcard ? "صلاحية كاملة" : hasPerm ? "انقر لإزالة" : "انقر لإضافة"}>
-                                {hasPerm && <CheckCircle className={cn("h-4 w-4", hasWildcard ? "text-blue-500" : "text-green-600")} />}
-                              </button>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div>
+                <DataTable
+                  columns={rolePermColumns}
+                  data={PERM_MODULES}
+                  noToolbar
+                  pageSize={0}
+                  rowKey={(r: any) => r.key}
+                />
                 {rolePerms.has("*") && (
                   <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
                     <Shield className="h-3 w-3" />هذا الدور يمتلك صلاحيات كاملة (*)

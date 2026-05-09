@@ -462,7 +462,7 @@ export default function Evaluation360DetailPage() {
       subtitle={cycle ? `${cycle.period} · ${cycle.jobTitle}` : undefined}
       backPath="/hr/evaluations"
       backLabel="العودة"
-      entityType="hr_evaluation_360"
+      entityType="hr-evaluation-360"
       entityId={cycleId}
       isLoading={isLoading}
       error={isError || (!isLoading && !data?.cycle) ? true : undefined}

@@ -4,6 +4,7 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   RefreshCw, CheckCircle, AlertTriangle, Scale,
 } from "lucide-react";
@@ -22,6 +23,18 @@ export default function AdminGlReconciliation() {
   const healthy = data?.healthy ?? true;
   const driftCount = data?.driftCount ?? 0;
   const mismatches = data?.mismatches ?? [];
+
+  const mismatchColumns: DataTableColumn<any>[] = [
+    { key: "code", header: "الكود", searchable: true, render: (r: any) => <span className="font-mono text-xs">{r.code}</span> },
+    { key: "name", header: "اسم الحساب", searchable: true },
+    { key: "stored_balance", header: "الرصيد المخزن", render: (r: any) => <span className="text-xs font-mono">{formatAmount(r.stored_balance)}</span> },
+    { key: "computed_balance", header: "الرصيد المحسوب", render: (r: any) => <span className="text-xs font-mono">{formatAmount(r.computed_balance)}</span> },
+    { key: "drift", header: "الانحراف", sortable: true, render: (r: any) => (
+      <Badge className={Number(r.drift) > 0 ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}>
+        {formatAmount(r.drift)}
+      </Badge>
+    )},
+  ];
 
   return (
     <PageShell
@@ -65,34 +78,12 @@ export default function AdminGlReconciliation() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="max-h-[500px] overflow-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-gray-50 sticky top-0">
-                        <th className="p-2 text-start">الكود</th>
-                        <th className="p-2 text-start">اسم الحساب</th>
-                        <th className="p-2 text-start">الرصيد المخزن</th>
-                        <th className="p-2 text-start">الرصيد المحسوب</th>
-                        <th className="p-2 text-start">الانحراف</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {mismatches.map((row: any, i: number) => (
-                        <tr key={i} className="border-b hover:bg-gray-50">
-                          <td className="p-2 font-mono text-xs">{row.code}</td>
-                          <td className="p-2 text-xs">{row.name}</td>
-                          <td className="p-2 text-xs font-mono">{formatAmount(row.stored_balance)}</td>
-                          <td className="p-2 text-xs font-mono">{formatAmount(row.computed_balance)}</td>
-                          <td className="p-2">
-                            <Badge className={Number(row.drift) > 0 ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}>
-                              {formatAmount(row.drift)}
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataTable
+                  columns={mismatchColumns}
+                  data={mismatches}
+                  noToolbar
+                  pageSize={0}
+                />
               </CardContent>
             </Card>
           )}

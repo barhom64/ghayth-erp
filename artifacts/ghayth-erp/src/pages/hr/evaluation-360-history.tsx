@@ -1,5 +1,6 @@
 import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -93,7 +94,7 @@ export default function Evaluation360HistoryPage() {
       <DataTable
         columns={[
           { key: "period", header: "الفترة", sortable: true, render: (v) => <span className="font-medium">{v.period}</span> },
-          { key: "startDate", header: "تاريخ البدء", sortable: true, render: (v) => <span className="text-gray-500">{v.startDate ? new Date(v.startDate).toLocaleDateString('ar-SA') : '-'}</span> },
+          { key: "startDate", header: "تاريخ البدء", sortable: true, render: (v) => <span className="text-gray-500">{formatDateAr(v.startDate)}</span> },
           { key: "systemScore", header: "النظام", sortable: true, render: (v) => <ScoreDot score={v.systemScore} /> },
           { key: "managerScore", header: "المدير", sortable: true, render: (v) => <ScoreDot score={v.managerScore} /> },
           { key: "peerScore", header: "الزملاء", sortable: true, render: (v) => <ScoreDot score={v.peerScore} /> },

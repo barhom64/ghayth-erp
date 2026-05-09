@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 export function SystemControlsTab() {
-  const { data, refetch } = useApiQuery<any>(["system-controls"], "/settings/system-controls");
+  const { data, refetch, isLoading, isError, error } = useApiQuery<any>(["system-controls"], "/settings/system-controls");
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const controls = data?.data || {};
@@ -74,6 +75,9 @@ export function SystemControlsTab() {
     }
   ];
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
+
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -119,7 +123,7 @@ export function SystemControlsTab() {
           </CardContent>
         </Card>
       ))}
-      <Button onClick={handleSave} disabled={saving}>
+      <Button onClick={handleSave} disabled={saving} rateLimitAware>
         <Save className="h-4 w-4 me-1" />{saving ? "جاري الحفظ..." : "حفظ الإعدادات"}
       </Button>
     </div>

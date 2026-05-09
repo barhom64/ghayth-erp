@@ -41,20 +41,18 @@ interface Assignment {
 
 interface AuthContextType {
   isAuthenticated: boolean;
-  token: string | null;
   user: UserInfo | null;
   assignments: Assignment[];
   loading: boolean;
-  login: (token: string, assignments?: Assignment[]) => void;
+  login: (assignments?: Assignment[]) => void;
   logout: () => void;
   refreshUser: () => Promise<void>;
-  updateToken: (newToken: string) => void;
+  notifyTokenRefreshed: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem("erp_token"));
   const [user, setUser] = useState<UserInfo | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>(() => {
     try {
@@ -62,11 +60,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return stored ? JSON.parse(stored) : [];
     } catch { return []; }
   });
-  const [loading, setLoading] = useState(!!token);
+  const hasSession = !!localStorage.getItem("erp_assignments");
+  const [loading, setLoading] = useState(hasSession);
   const [, setLocation] = useLocation();
 
   const fetchUser = useCallback(async () => {
-    if (!token) return;
     try {
       const data = await apiFetch("/auth/me");
       setUser({
@@ -86,46 +84,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         userRoles: data.userRoles || [],
       });
     } catch {
-      localStorage.removeItem("erp_token");
       localStorage.removeItem("erp_assignments");
-      setToken(null);
       setUser(null);
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
-    if (token) {
+    if (hasSession) {
       fetchUser();
     } else {
       setLoading(false);
       setLocation("/login");
     }
-  }, [token]);
+  }, []);
 
-  const login = (newToken: string, newAssignments?: Assignment[]) => {
-    localStorage.setItem("erp_token", newToken);
+  const login = (newAssignments?: Assignment[]) => {
     if (newAssignments) {
       localStorage.setItem("erp_assignments", JSON.stringify(newAssignments));
       setAssignments(newAssignments);
     }
-    setToken(newToken);
+    fetchUser();
     setLocation("/dashboard");
   };
 
   const logout = () => {
-    const refreshToken = localStorage.getItem("erp_refresh_token");
-    if (refreshToken) {
-      apiFetch("/auth/logout", {
-        method: "POST",
-        body: JSON.stringify({ refreshToken }),
-      }).catch(() => {});
-    }
-    localStorage.removeItem("erp_token");
-    localStorage.removeItem("erp_refresh_token");
+    apiFetch("/auth/logout", { method: "POST" }).catch(() => {});
     localStorage.removeItem("erp_assignments");
-    setToken(null);
     setUser(null);
     setAssignments([]);
     setLocation("/login");
@@ -135,13 +121,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await fetchUser();
   };
 
-  const updateToken = (newToken: string) => {
-    localStorage.setItem("erp_token", newToken);
-    setToken(newToken);
+  const notifyTokenRefreshed = () => {
+    fetchUser();
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated: !!token, token, user, assignments, loading, login, logout, refreshUser, updateToken }}>
+    <AuthContext.Provider value={{ isAuthenticated: !!user, user, assignments, loading, login, logout, refreshUser, notifyTokenRefreshed }}>
       {children}
     </AuthContext.Provider>
   );

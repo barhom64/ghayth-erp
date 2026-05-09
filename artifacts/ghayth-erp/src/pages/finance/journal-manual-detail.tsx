@@ -207,7 +207,7 @@ export default function JournalManualDetailPage() {
         createdAt={journal?.createdAt}
         updatedAt={journal?.updatedAt}
         createdByName={journal?.createdByName}
-        entityType="journal_entry"
+        entityType="journal-entry"
         entityId={id}
         isLoading={isLoading}
         error={isError ? true : undefined}

@@ -1,5 +1,5 @@
 import { useApiQuery, asList } from "@/lib/api";
-import { formatTimeAr } from "@/lib/formatters";
+import { formatTimeAr, formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -61,7 +61,7 @@ function AttendanceMap({ items }: { items: any[] }) {
         });
         const time = formatTimeAr(a.checkIn);
         L.marker([lat, lng], { icon })
-          .bindPopup(`<div style="text-align:right;font-family:inherit"><b>${a.employeeName || "موظف"}</b><br/>التاريخ: ${a.date || ""}<br/>الوقت: ${time}</div>`)
+          .bindPopup(`<div style="text-align:right;font-family:inherit"><b>${a.employeeName || "موظف"}</b><br/>التاريخ: ${a.date ? formatDateAr(a.date) : ""}<br/>الوقت: ${time}</div>`)
           .addTo(mapInstance.current!);
         bounds.push([lat, lng]);
       }
@@ -110,7 +110,7 @@ export default function FieldTrackingPage() {
       <DataTable
         columns={[
           { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName}</span> },
-          { key: "date", header: "التاريخ", sortable: true, render: (v) => <span className="text-gray-500">{v.date}</span> },
+          { key: "date", header: "التاريخ", sortable: true, render: (v) => <span className="text-gray-500">{v.date ? formatDateAr(v.date) : "-"}</span> },
           { key: "checkIn", header: "وقت التسجيل", sortable: true, render: (v) => <span className="font-mono">{formatTimeAr(v.checkIn)}</span> },
           { key: "status", header: "الحالة", sortable: true, render: (v) => <PageStatusBadge status={v.status} /> },
         ] as DataTableColumn<any>[]}

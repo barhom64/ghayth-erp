@@ -101,7 +101,7 @@ export default function AccountsCreate() {
       </div>
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/finance/accounts")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.name || !form.code || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!form.name || !form.code || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>

@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, FolderTree } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 /**
  * WarehouseCategoryDetail — detail page for a single warehouse category.
@@ -126,6 +128,9 @@ export default function WarehouseCategoryDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {id && <EntityComments entityType="warehouse-category" entityId={id} />}
+      {id && <EntityTags entityType="warehouse-category" entityId={id} />}
     </div>
   );
 

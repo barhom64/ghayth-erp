@@ -36,10 +36,10 @@ export default function OvertimePage() {
   const stats = data?.stats || {};
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
-  const approveMut = useApiMutation(null as any, "PATCH", [["hr-overtime"]], {
+  const approveMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-overtime"]], {
     successMessage: "تم اعتماد الطلب",
   });
-  const rejectMut = useApiMutation(null as any, "PATCH", [["hr-overtime"]], {
+  const rejectMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-overtime"]], {
     successMessage: "تم رفض الطلب",
   });
 

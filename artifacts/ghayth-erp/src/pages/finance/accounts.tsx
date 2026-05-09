@@ -395,6 +395,7 @@ export default function AccountsPage() {
               <DataTable
                 columns={flatColumns}
                 data={sortedFlat}
+                onRowClick={(acc) => navigate(`/finance/ledger/${acc.code}`)}
                 noToolbar
                 emptyMessage="لا توجد حسابات"
               />

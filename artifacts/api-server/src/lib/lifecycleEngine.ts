@@ -39,6 +39,7 @@ import type pg from "pg";
 import { withTransaction } from "./rawdb.js";
 import { createAuditLog, createNotification } from "./businessHelpers.js";
 import { safeEmitEvent } from "./eventBus.js";
+import { logger } from "./logger.js";
 
 export interface LifecycleScope {
   companyId: number;
@@ -64,6 +65,15 @@ export type ExtraValue =
   | Date
   | null
   | { raw: string };
+
+const ALLOWED_RAW_EXPRESSIONS = new Set([
+  "NOW()",
+  "NULL",
+  "TRUE",
+  "FALSE",
+  "CURRENT_TIMESTAMP",
+  "CURRENT_DATE",
+]);
 
 export interface ApplyTransitionOptions {
   /** Physical table being mutated. Must be a valid SQL identifier. */
@@ -102,12 +112,14 @@ export interface ApplyTransitionOptions {
 }
 
 export class LifecycleError extends Error {
+  public readonly statusCode: number;
   constructor(
     message: string,
     public readonly status: number = 422,
     public readonly field?: string
   ) {
     super(message);
+    this.statusCode = status;
   }
 }
 
@@ -143,6 +155,9 @@ export async function applyTransition<TRow = any>(
 
   const { updated, existingStatus } = await withTransaction(async (client) => {
     // 1. Lock the row and validate state.
+    if (extraWhere && !/^[\w\s"'.=()]+$/.test(extraWhere)) {
+      throw new LifecycleError("extraWhere contains disallowed characters", 400);
+    }
     const lockSql =
       `SELECT * FROM ${tableId} WHERE id = $1 AND "companyId" = $2` +
       (extraWhere ? ` AND ${extraWhere}` : "") +
@@ -164,6 +179,16 @@ export async function applyTransition<TRow = any>(
       }
     }
 
+    if (toState !== undefined) {
+      const currentStatus = (existing[statusCol] as string) ?? "*";
+      if (!isValidTransition(entity, currentStatus, toState, statusCol)) {
+        throw new LifecycleError(
+          `الانتقال غير مسموح: ${entity} ${currentStatus} → ${toState}`,
+          409
+        );
+      }
+    }
+
     // 2. Build the UPDATE SET list.
     const sets: string[] = [];
     const params: any[] = [];
@@ -174,6 +199,9 @@ export async function applyTransition<TRow = any>(
     if (setExtras) {
       for (const [col, val] of Object.entries(setExtras)) {
         if (val && typeof val === "object" && "raw" in val) {
+          if (!ALLOWED_RAW_EXPRESSIONS.has(val.raw.toUpperCase().trim())) {
+            throw new Error(`Blocked raw SQL expression in setExtras: "${val.raw}". Use parameterized values instead.`);
+          }
           sets.push(`${quoteIdent(col)} = ${val.raw}`);
           continue;
         }
@@ -188,16 +216,17 @@ export async function applyTransition<TRow = any>(
 
     if (sets.length > 0) {
       params.push(id);
+      params.push(scope.companyId);
       await client.query(
-        `UPDATE ${tableId} SET ${sets.join(", ")} WHERE id = $${params.length}`,
+        `UPDATE ${tableId} SET ${sets.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length}`,
         params
       );
     }
 
     // 3. Read the updated row back.
     const updatedRes = await client.query(
-      `SELECT * FROM ${tableId} WHERE id = $1`,
-      [id]
+      `SELECT * FROM ${tableId} WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
     );
     const updatedRow = updatedRes.rows[0];
 
@@ -245,7 +274,7 @@ export async function applyTransition<TRow = any>(
     before: { [statusCol]: existingStatus },
     after: { [statusCol]: toState ?? existingStatus, ...(after ?? {}) },
     reason,
-  }).catch((err) => console.error("lifecycleEngine audit error:", err));
+  }).catch((err) => logger.error(err, "lifecycleEngine audit error:"));
 
   safeEmitEvent({
     action,
@@ -271,7 +300,7 @@ export async function applyTransition<TRow = any>(
         refType: n.refType,
         refId: n.refId,
         actionUrl: n.actionUrl,
-      }).catch((err) => console.error("lifecycleEngine notify error:", err));
+      }).catch((err) => logger.error(err, "lifecycleEngine notify error:"));
     }
   }
 
@@ -328,8 +357,11 @@ export const STATE_MACHINES: StateMachine[] = [
     entity: "invoices",
     label: "فاتورة مبيعات",
     transitions: {
-      draft: ["approved", "cancelled"],
-      approved: ["posted", "cancelled"],
+      draft: ["approved", "rejected", "returned", "sent", "cancelled"],
+      approved: ["sent", "posted", "cancelled", "rejected"],
+      returned: ["draft", "approved", "cancelled"],
+      rejected: ["draft", "cancelled"],
+      sent: ["partial", "paid", "overdue", "cancelled"],
       posted: ["paid", "partial", "overdue", "cancelled", "closed"],
       partial: ["paid", "overdue", "cancelled"],
       overdue: ["paid", "partial", "cancelled"],
@@ -343,11 +375,18 @@ export const STATE_MACHINES: StateMachine[] = [
     label: "أمر شراء",
     transitions: {
       draft: ["pending_approval", "approved", "cancelled"],
-      pending_approval: ["approved", "rejected"],
-      approved: ["partially_received", "received", "cancelled"],
-      partially_received: ["received"],
-      received: ["paid"],
+      pending: ["pending_approval", "confirmed"],
+      pending_approval: ["approved", "rejected", "returned"],
+      approved: ["partially_received", "received", "sent", "cancelled"],
+      sent: ["confirmed", "partially_received", "received", "cancelled"],
+      confirmed: ["partially_received", "received", "cancelled"],
+      partially_received: ["received", "invoice_matched", "invoice_mismatch"],
+      received: ["invoice_matched", "invoice_mismatch", "paid"],
+      invoice_matched: ["paid", "payment_scheduled"],
+      invoice_mismatch: ["invoice_matched", "cancelled"],
+      payment_scheduled: ["paid"],
       rejected: ["draft"],
+      returned: ["draft", "pending_approval", "approved", "cancelled"],
       paid: [],
       cancelled: [],
     },
@@ -368,11 +407,24 @@ export const STATE_MACHINES: StateMachine[] = [
     label: "قيد يومية",
     statusColumn: "status",
     transitions: {
-      draft: ["pending_approval", "posted"],
-      pending_approval: ["posted", "rejected"],
-      posted: ["reversed"],
+      draft: ["pending_approval", "posted", "approved", "rejected", "returned"],
+      pending_approval: ["posted", "approved", "rejected", "returned"],
+      approved: ["posted", "rejected"],
+      posted: [],
       rejected: ["draft"],
-      reversed: [],
+      returned: ["draft", "pending_approval", "approved"],
+    },
+  },
+  {
+    entity: "journal_entries",
+    label: "قيد يومية — اعتماد يدوي",
+    statusColumn: "approvalStatus",
+    transitions: {
+      draft: ["pending_review"],
+      pending_review: ["approved", "rejected"],
+      approved: ["posted", "rejected"],
+      rejected: ["draft"],
+      posted: [],
     },
   },
   {
@@ -401,8 +453,9 @@ export const STATE_MACHINES: StateMachine[] = [
     entity: "hr_leave_requests",
     label: "طلب إجازة",
     transitions: {
-      pending: ["approved", "rejected"],
+      pending: ["approved", "rejected", "returned", "cancelled"],
       approved: ["cancelled", "completed"],
+      returned: ["pending"],
       rejected: [],
       cancelled: [],
       completed: [],
@@ -420,16 +473,18 @@ export const STATE_MACHINES: StateMachine[] = [
     },
   },
   {
-    entity: "hr_discipline_memos",
+    entity: "hr_inquiry_memos",
     label: "مذكرة تأديبية",
     transitions: {
-      draft: ["issued"],
-      issued: ["acknowledged", "appealed", "escalated"],
-      acknowledged: ["closed"],
-      appealed: ["gm_review", "justified", "closed"],
-      escalated: ["gm_review"],
-      gm_review: ["justified", "closed"],
-      justified: ["closed"],
+      pending_employee: ["pending_manager"],
+      pending_manager: ["pending_gm"],
+      pending_gm: ["approved", "rejected"],
+      approved: ["appeal_pending", "closed"],
+      rejected: ["closed"],
+      appeal_pending: ["appeal_accepted", "approved"],
+      appeal_accepted: ["closed"],
+      cancelled: ["closed"],
+      draft: ["pending_employee", "cancelled"],
       closed: [],
     },
   },
@@ -437,6 +492,7 @@ export const STATE_MACHINES: StateMachine[] = [
     entity: "fleet_trips",
     label: "رحلة أسطول",
     transitions: {
+      planned: ["scheduled", "in_progress", "cancelled"],
       scheduled: ["in_progress", "cancelled"],
       in_progress: ["completed", "cancelled"],
       completed: [],
@@ -466,6 +522,16 @@ export const STATE_MACHINES: StateMachine[] = [
     },
   },
   {
+    entity: "property_units",
+    label: "وحدة عقارية",
+    transitions: {
+      available: ["reserved", "rented", "maintenance"],
+      reserved: ["rented", "available"],
+      rented: ["available", "maintenance"],
+      maintenance: ["available"],
+    },
+  },
+  {
     entity: "support_tickets",
     label: "تذكرة دعم",
     transitions: {
@@ -492,7 +558,10 @@ export const STATE_MACHINES: StateMachine[] = [
     entity: "workflow_instances",
     label: "طلب اعتماد",
     transitions: {
-      pending: ["approved", "rejected", "escalated"],
+      draft: ["pending", "pending_approval"],
+      pending: ["approved", "rejected", "returned", "escalated"],
+      pending_approval: ["approved", "rejected", "returned"],
+      returned: ["draft", "pending", "pending_approval"],
       escalated: ["approved", "rejected"],
       approved: [],
       rejected: [],
@@ -502,11 +571,55 @@ export const STATE_MACHINES: StateMachine[] = [
     entity: "umrah_sales_invoices",
     label: "فاتورة عمرة",
     transitions: {
-      draft: ["confirmed", "cancelled"],
-      confirmed: ["paid", "partial", "cancelled"],
-      partial: ["paid", "cancelled"],
+      draft: ["approved", "cancelled"],
+      approved: ["sent", "cancelled"],
+      sent: ["partially_paid", "paid", "overdue", "cancelled"],
+      partially_paid: ["paid", "overdue", "cancelled"],
       paid: [],
+      overdue: ["partially_paid", "paid", "cancelled"],
       cancelled: [],
+    },
+  },
+  {
+    entity: "umrah_pilgrims",
+    label: "معتمر",
+    transitions: {
+      pending:    ["arrived", "cancelled"],
+      arrived:    ["active", "departed", "overstayed", "cancelled"],
+      active:     ["departed", "overstayed", "violated"],
+      overstayed: ["departed", "violated"],
+      departed:   [],
+      violated:   [],
+      cancelled:  [],
+    },
+  },
+  {
+    entity: "umrah_seasons",
+    label: "موسم عمرة",
+    transitions: {
+      open:     ["closed"],
+      closed:   ["archived"],
+      archived: [],
+    },
+  },
+  {
+    entity: "umrah_agents",
+    label: "وكيل عمرة",
+    transitions: {
+      active:    ["inactive", "suspended", "blocked"],
+      inactive:  ["active"],
+      suspended: ["active", "blocked"],
+      blocked:   [],
+    },
+  },
+  {
+    entity: "umrah_transport",
+    label: "نقل عمرة",
+    transitions: {
+      scheduled:   ["in_progress", "cancelled"],
+      in_progress: ["completed", "cancelled"],
+      completed:   [],
+      cancelled:   [],
     },
   },
   {
@@ -523,9 +636,10 @@ export const STATE_MACHINES: StateMachine[] = [
     label: "ميزانية",
     transitions: {
       draft: ["pending_approval", "approved"],
-      pending_approval: ["approved", "rejected"],
+      pending_approval: ["approved", "rejected", "returned"],
       approved: ["closed"],
       rejected: ["draft"],
+      returned: ["draft", "pending_approval"],
       closed: [],
     },
   },
@@ -537,19 +651,57 @@ export const STATE_MACHINES: StateMachine[] = [
       closed: ["open"],
     },
   },
+  {
+    entity: "fleet_traffic_violations",
+    label: "مخالفة مرورية",
+    transitions: {
+      pending: ["unpaid", "paid", "disputed", "cancelled"],
+      unpaid: ["paid", "disputed", "cancelled"],
+      disputed: ["unpaid", "paid", "cancelled"],
+      paid: [],
+      cancelled: [],
+    },
+  },
+  {
+    entity: "umrah_penalties",
+    label: "عقوبة عمرة",
+    transitions: {
+      pending: ["invoiced", "waived"],
+      invoiced: ["paid", "waived"],
+      paid: [],
+      waived: [],
+    },
+  },
+  {
+    entity: "umrah_agent_invoices",
+    label: "فاتورة وكيل عمرة",
+    transitions: {
+      sent: ["partially_paid", "paid", "overdue", "cancelled"],
+      partially_paid: ["paid", "overdue", "cancelled"],
+      overdue: ["partially_paid", "paid", "cancelled"],
+      paid: [],
+      cancelled: [],
+    },
+  },
 ];
 
-const _smIndex = new Map<string, StateMachine>(
-  STATE_MACHINES.map((sm) => [sm.entity, sm])
-);
-
-export function getStateMachine(entity: string): StateMachine | undefined {
-  return _smIndex.get(entity);
+function _smKey(entity: string, statusColumn?: string): string {
+  return statusColumn && statusColumn !== "status"
+    ? `${entity}::${statusColumn}`
+    : entity;
 }
 
-export function isValidTransition(entity: string, from: string, to: string): boolean {
-  const sm = _smIndex.get(entity);
-  if (!sm) return true;
+const _smIndex = new Map<string, StateMachine>(
+  STATE_MACHINES.map((sm) => [_smKey(sm.entity, sm.statusColumn), sm])
+);
+
+export function getStateMachine(entity: string, statusColumn?: string): StateMachine | undefined {
+  return _smIndex.get(_smKey(entity, statusColumn)) ?? _smIndex.get(entity);
+}
+
+export function isValidTransition(entity: string, from: string, to: string, statusColumn?: string): boolean {
+  const sm = getStateMachine(entity, statusColumn);
+  if (!sm) return false;
   const allowed = sm.transitions[from] ?? sm.transitions["*"];
   if (!allowed) return false;
   return allowed.includes(to);

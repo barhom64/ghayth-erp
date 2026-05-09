@@ -251,7 +251,7 @@ export default function EmployeesCreate() {
           </Select>
         </FormFieldWrapper>
         <FormFieldWrapper label="تاريخ الميلاد"><DatePicker value={form.dateOfBirth} onChange={(v) => setForm((f) => ({ ...f, dateOfBirth: v }))} /></FormFieldWrapper>
-        <TextField label="رقم الجوال" required dir="ltr" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} error={fieldErrors.phone} />
+        <TextField label="رقم الجوال" required type="tel" inputMode="tel" dir="ltr" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} error={fieldErrors.phone} />
         <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} error={fieldErrors.email} />
 
         <div className="md:col-span-2">
@@ -473,7 +473,7 @@ export default function EmployeesCreate() {
       <FileDropZone files={attachments} onFilesChange={setAttachments} label="المرفقات (صور، وثائق)" />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/employees")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ الموظف"}
         </Button>
       </div>

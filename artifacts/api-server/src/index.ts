@@ -1,9 +1,10 @@
 import app from "./app.js";
 import { logger } from "./lib/logger.js";
 import { runMigrations } from "./lib/migrate.js";
-import { startCronScheduler } from "./lib/cronScheduler.js";
+import { startCronScheduler, stopCronScheduler } from "./lib/cronScheduler.js";
 import { registerEventListeners } from "./lib/eventListeners.js";
 import { registerRulesEngineListener } from "./lib/rulesEngine.js";
+import "./lib/engines/hrEngine.js";
 import { seedDemoData } from "./lib/seedDemoData.js";
 import { bootstrapAdminUser } from "./lib/bootstrapAdmin.js";
 import { syncFeatureCatalog } from "./lib/rbac/catalogSync.js";
@@ -82,12 +83,16 @@ async function start() {
 
   const server = http.createServer(app);
 
-  server.listen(port, "0.0.0.0", async (err?: Error) => {
-    if (err) {
-      logger.error({ err }, "Error listening on port");
-      process.exit(1);
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      logger.error({ port }, "Port already in use");
+    } else {
+      logger.error({ err }, "Server error");
     }
+    process.exit(1);
+  });
 
+  server.listen(port, "0.0.0.0", async () => {
     logger.info({ port }, "Server listening");
 
     try {
@@ -100,6 +105,9 @@ async function start() {
 
   async function shutdown(signal: string) {
     logger.info({ signal }, "Received shutdown signal, starting graceful shutdown");
+
+    stopCronScheduler();
+    logger.info("Cron scheduler stopped");
 
     server.close(async (err) => {
       if (err) {

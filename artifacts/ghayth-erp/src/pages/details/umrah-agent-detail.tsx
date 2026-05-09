@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
@@ -8,6 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Phone, Mail, MapPin, Users, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "نشط",
@@ -71,12 +78,29 @@ export default function UmrahAgentDetail() {
     return [{ kind: "info-grid", items }];
   }, [agent, id]);
 
-  const handleEdit = () => {
-    setLocation(`/umrah/agents/${id}/edit`);
-  };
+  const editDelete = useDetailEditDelete({
+    entityLabel: "الوكيل",
+    patchPath: `/umrah/agents/${id}`,
+    deletePath: `/umrah/agents/${id}`,
+    listPath: "/umrah/agents",
+    initialValues: agent,
+    fields: [
+      { key: "name", label: "الاسم" },
+      { key: "phone", label: "الهاتف" },
+      { key: "email", label: "البريد الإلكتروني" },
+      { key: "licenseNumber", label: "رقم الترخيص" },
+      { key: "address", label: "العنوان" },
+      { key: "notes", label: "ملاحظات" },
+    ],
+    invalidateKeys: [["umrah-agent-detail", id || ""], ["umrah-agents"]],
+    onSaved: () => refetch(),
+  });
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
+      <div className="md:col-span-3">
+        <InlineEditCard hook={editDelete} />
+      </div>
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
@@ -177,6 +201,9 @@ export default function UmrahAgentDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {id && <EntityComments entityType="umrah-agent" entityId={id} />}
+      {id && <EntityTags entityType="umrah-agent" entityId={id} />}
     </div>
   );
 
@@ -194,26 +221,25 @@ export default function UmrahAgentDetail() {
       createdAt={agent?.createdAt}
       updatedAt={agent?.updatedAt}
       relatedEntities={relatedEntities}
-      entityType="agent"
+      entityType="umrah-agent"
       entityId={id ?? 0}
       overview={overview}
       isLoading={isLoading}
       error={error}
       onRetry={refetch}
       actions={
-        <>
-          <EntityPrintButton
-            branchId={agent?.branchId}
-            title={`ملف الوكيل — ${agent?.name || ""}`}
-            ref={`AGT-${id}`}
-            date={formatDateAr(new Date().toISOString())}
-            sections={printSections}
-          />
-          <GuardedButton perm="operations:update" variant="outline" size="sm" onClick={handleEdit} disabled={!agent}>
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
-        </>
+        <DetailActionButtons
+          hook={editDelete}
+          extra={
+            <EntityPrintButton
+              branchId={agent?.branchId}
+              title={`ملف الوكيل — ${agent?.name || ""}`}
+              ref={`AGT-${id}`}
+              date={formatDateAr(new Date().toISOString())}
+              sections={printSections}
+            />
+          }
+        />
       }
     />
   );

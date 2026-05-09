@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -242,7 +243,7 @@ export default function UmrahImport() {
         <CardContent>
           <DataTable
             columns={[
-              { key: "createdAt", header: "التاريخ", render: (l: any) => new Date(l.createdAt).toLocaleString("ar-SA") },
+              { key: "createdAt", header: "التاريخ", render: (l: any) => formatDateAr(l.createdAt) },
               { key: "fileName", header: "الملف" },
               { key: "totalRows", header: "الإجمالي" },
               { key: "newRecords", header: "جديد", render: (l: any) => <span className="text-green-600">{l.newRecords}</span> },

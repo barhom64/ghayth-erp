@@ -1,0 +1,6267 @@
+{
+  "batch": 0,
+  "start": 0,
+  "end": 373,
+  "results": [
+    {
+      "route": "/action-center",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/action-center",
+      "shot": "audit/screenshots/action_center.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/activity-log",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/activity-log",
+      "shot": "audit/screenshots/activity_log.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/admin",
+      "shot": "audit/screenshots/admin.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/domain-registry",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/admin/domain-registry",
+      "shot": "audit/screenshots/admin_domain_registry.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/event-monitor",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/admin/event-monitor",
+      "shot": "audit/screenshots/admin_event_monitor.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/gl-reconciliation",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/admin/gl-reconciliation",
+      "shot": "audit/screenshots/admin_gl_reconciliation.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/integrations",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/admin/integrations",
+      "shot": "audit/screenshots/admin_integrations.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/lifecycle-monitor",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/admin/lifecycle-monitor",
+      "shot": "audit/screenshots/admin_lifecycle_monitor.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/logs",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/admin/logs",
+      "shot": "audit/screenshots/admin_logs.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/monitoring",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/admin/monitoring",
+      "shot": "audit/screenshots/admin_monitoring.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/policy-engine",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/admin/policy-engine",
+      "shot": "audit/screenshots/admin_policy_engine.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/posting-failures",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/admin/posting-failures",
+      "shot": "audit/screenshots/admin_posting_failures.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/rbac-matrix",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/admin/rbac-matrix",
+      "shot": "audit/screenshots/admin_rbac_matrix.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/roles",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/admin/roles",
+      "shot": "audit/screenshots/admin_roles.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/system-governor",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/admin/system-governor",
+      "shot": "audit/screenshots/admin_system_governor.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/system-registry",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/admin/system-registry",
+      "shot": "audit/screenshots/admin_system_registry.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/users",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/admin/users",
+      "shot": "audit/screenshots/admin_users.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/admin/violations-report",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/admin/violations-report",
+      "shot": "audit/screenshots/admin_violations_report.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/automation",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/automation",
+      "shot": "audit/screenshots/automation.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/bi",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/bi",
+      "shot": "audit/screenshots/bi.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/bi/admin-reports",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/bi/admin-reports",
+      "shot": "audit/screenshots/bi_admin_reports.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/bi/dashboards",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/bi/dashboards",
+      "shot": "audit/screenshots/bi_dashboards.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/bi/dashboards/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/bi/dashboards/create; write POST /api/intelligence/activity → 200; consoleErr=2",
+      "shot": "audit/screenshots/bi_dashboards_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/bi/kpis",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/bi/kpis",
+      "shot": "audit/screenshots/bi_kpis.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/bi/kpis/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/bi/kpis/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/bi_kpis_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/bi/operations",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/bi/operations",
+      "shot": "audit/screenshots/bi_operations.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/bi/reports",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/bi/reports",
+      "shot": "audit/screenshots/bi_reports.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/bi/reports/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/bi/reports/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/bi_reports_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/calendar",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/calendar",
+      "shot": "audit/screenshots/calendar.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/clients",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/clients",
+      "shot": "audit/screenshots/clients.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/clients/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "SKIP",
+      "note": "landed=/dashboard expected=/clients/3",
+      "shot": "audit/screenshots/clients_id.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/clients/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/clients/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/clients_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/communications",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/communications",
+      "shot": "audit/screenshots/communications.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/communications/letters/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/communications/letters/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/communications_letters_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/communications/notification-engine",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/communications/notification-engine",
+      "shot": "audit/screenshots/communications_notification_engine.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/correspondence",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/correspondence",
+      "shot": "audit/screenshots/correspondence.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/correspondence/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/correspondence",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/correspondence/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/correspondence/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/correspondence_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/crm",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/crm",
+      "shot": "audit/screenshots/crm.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/crm/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/crm/leads → 404",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/crm/activities",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/crm/activities",
+      "shot": "audit/screenshots/crm_activities.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/crm/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/crm/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/crm_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/crm/leads/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/crm/leads → 404",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/crm/pipeline",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/crm/pipeline",
+      "shot": "audit/screenshots/crm_pipeline.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/daily-close",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/daily-close",
+      "shot": "audit/screenshots/daily_close.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/dashboard",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "PASS",
+      "a5": "PASS",
+      "note": "",
+      "shot": null,
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/documents",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/documents",
+      "shot": "audit/screenshots/documents.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/documents/:docId/versions",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/documents/1/versions",
+      "shot": "audit/screenshots/documents_docId_versions.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/documents/archive",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/documents/archive",
+      "shot": "audit/screenshots/documents_archive.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/documents/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/documents/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/documents_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/documents/folders",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/documents/folders",
+      "shot": "audit/screenshots/documents_folders.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/documents/templates",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/documents/templates",
+      "shot": "audit/screenshots/documents_templates.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/documents/upload",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/documents/upload",
+      "shot": "audit/screenshots/documents_upload.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/employees",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/employees",
+      "shot": "audit/screenshots/employees.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/employees/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "SKIP",
+      "note": "landed=/dashboard expected=/employees/3",
+      "shot": "audit/screenshots/employees_id.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/employees/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/employees/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/employees_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/exec-dashboard",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/exec-dashboard",
+      "shot": "audit/screenshots/exec_dashboard.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance",
+      "shot": "audit/screenshots/finance.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/accounts",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/accounts",
+      "shot": "audit/screenshots/finance_accounts.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/accounts/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "SKIP",
+      "note": "landed=/dashboard expected=/finance/accounts/2",
+      "shot": "audit/screenshots/finance_accounts_id.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/accounts/:id/edit",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/accounts/2/edit; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/finance_accounts_id_edit.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": true,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/accounts/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/accounts/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/finance_accounts_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/ap-aging",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/ap-aging",
+      "shot": "audit/screenshots/finance_ap_aging.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/ar-aging",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/ar-aging",
+      "shot": "audit/screenshots/finance_ar_aging.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/bank-guarantees",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/bank-guarantees",
+      "shot": "audit/screenshots/finance_bank_guarantees.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/bank-reconciliation",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/bank-reconciliation",
+      "shot": "audit/screenshots/finance_bank_reconciliation.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/bank-reconciliation/manual-match/:batchId/:rowId",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /finance/bank-reconciliation/manual-match/:batchId/:rowId",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/budget",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/budget",
+      "shot": "audit/screenshots/finance_budget.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/budget/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/budget",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/budget/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/budget/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/finance_budget_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/cash-flow-forecast",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/cash-flow-forecast",
+      "shot": "audit/screenshots/finance_cash_flow_forecast.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/cashflow",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/cashflow",
+      "shot": "audit/screenshots/finance_cashflow.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/commitments",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/commitments",
+      "shot": "audit/screenshots/finance_commitments.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/commitments/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/commitments",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/custodies",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/custodies",
+      "shot": "audit/screenshots/finance_custodies.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/custodies/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/custodies",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/custodies/report",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/custodies/report",
+      "shot": "audit/screenshots/finance_custodies_report.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/expenses",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/expenses",
+      "shot": "audit/screenshots/finance_expenses.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/expenses/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/expenses",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/expenses/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/expenses/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/finance_expenses_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/financial-requests",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/financial-requests",
+      "shot": "audit/screenshots/finance_financial_requests.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/financial-requests/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/financial-requests",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/fiscal-periods",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/fiscal-periods",
+      "shot": "audit/screenshots/finance_fiscal_periods.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/fixed-assets",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/fixed-assets",
+      "shot": "audit/screenshots/finance_fixed_assets.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/fixed-assets/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/fixed-assets",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/fixed-assets/batch-depreciate",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/fixed-assets/batch-depreciate",
+      "shot": "audit/screenshots/finance_fixed_assets_batch_depreciate.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/intercompany",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/intercompany",
+      "shot": "audit/screenshots/finance_intercompany.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/intercompany/consolidation/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/intercompany/consolidation/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/finance_intercompany_consolidation_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/inventory-costing",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/inventory-costing",
+      "shot": "audit/screenshots/finance_inventory_costing.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/invoices",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/invoices",
+      "shot": "audit/screenshots/finance_invoices.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/invoices/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "SKIP",
+      "note": "landed=/dashboard expected=/finance/invoices/1",
+      "shot": "audit/screenshots/finance_invoices_id.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/invoices/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/invoices/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/finance_invoices_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/journal",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/journal",
+      "shot": "audit/screenshots/finance_journal.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/journal-manual",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/journal-manual",
+      "shot": "audit/screenshots/finance_journal_manual.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/journal-manual/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/journal-manual",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/journal-manual/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/journal-manual/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/finance_journal_manual_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/journal/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/journal/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/finance_journal_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/ledger/:code",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /finance/ledger/:code",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/opening-balances",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/opening-balances",
+      "shot": "audit/screenshots/finance_opening_balances.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/opening-balances/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/opening-balances/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/finance_opening_balances_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/payments",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/payments",
+      "shot": "audit/screenshots/finance_payments.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/project-costing",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/project-costing",
+      "shot": "audit/screenshots/finance_project_costing.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/project-costing/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /finance/project-costing/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/purchase-orders",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/purchase-orders",
+      "shot": "audit/screenshots/finance_purchase_orders.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/purchase-orders/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/purchase-orders",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/purchase-orders/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/purchase-orders/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/finance_purchase_orders_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/receivables",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/receivables",
+      "shot": "audit/screenshots/finance_receivables.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/receivables/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "SKIP",
+      "note": "landed=/dashboard expected=/finance/receivables/3",
+      "shot": "audit/screenshots/finance_receivables_id.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/recurring-journals",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/recurring-journals",
+      "shot": "audit/screenshots/finance_recurring_journals.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/recurring-journals/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/recurring-journals",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/recurring-journals/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/recurring-journals/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/finance_recurring_journals_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/reports",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/reports",
+      "shot": "audit/screenshots/finance_reports.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/salary-advances",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/salary-advances",
+      "shot": "audit/screenshots/finance_salary_advances.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/salary-advances/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/salary-advances",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/tax",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/tax",
+      "shot": "audit/screenshots/finance_tax.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/treasury",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/treasury",
+      "shot": "audit/screenshots/finance_treasury.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/vendors",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/vendors",
+      "shot": "audit/screenshots/finance_vendors.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/vendors/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "SKIP",
+      "note": "landed=/dashboard expected=/finance/vendors/1",
+      "shot": "audit/screenshots/finance_vendors_id.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/vendors/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/vendors/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/finance_vendors_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/vouchers",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/vouchers",
+      "shot": "audit/screenshots/finance_vouchers.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/finance/vouchers/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no row in /api/finance/vouchers",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/vouchers/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/vouchers/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/finance_vouchers_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/finance/year-end-close",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/finance/year-end-close",
+      "shot": "audit/screenshots/finance_year_end_close.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet",
+      "shot": "audit/screenshots/fleet.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/:id",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "SKIP",
+      "note": "landed=/dashboard expected=/fleet/7",
+      "shot": "audit/screenshots/fleet_id.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/:id/status",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/7/status",
+      "shot": "audit/screenshots/fleet_id_status.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/alerts",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/alerts",
+      "shot": "audit/screenshots/fleet_alerts.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/alerts/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/alerts/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/fleet_alerts_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/drivers",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/drivers",
+      "shot": "audit/screenshots/fleet_drivers.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/drivers/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/fleet/drivers → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/drivers/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/drivers/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/fleet_drivers_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/fuel",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/fuel",
+      "shot": "audit/screenshots/fleet_fuel.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/fuel/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/fleet/fuel-logs → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/fuel/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/fuel/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/fleet_fuel_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/insurance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/insurance",
+      "shot": "audit/screenshots/fleet_insurance.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/insurance/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/fleet/insurance → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/insurance/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/insurance/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/fleet_insurance_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/maintenance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/maintenance",
+      "shot": "audit/screenshots/fleet_maintenance.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/maintenance/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/fleet/maintenance → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/maintenance/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/maintenance/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/fleet_maintenance_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/preventive-plans",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/preventive-plans",
+      "shot": "audit/screenshots/fleet_preventive_plans.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/reports",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/reports",
+      "shot": "audit/screenshots/fleet_reports.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/tco",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/tco",
+      "shot": "audit/screenshots/fleet_tco.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/traffic-violations",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/traffic-violations",
+      "shot": "audit/screenshots/fleet_traffic_violations.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/traffic-violations/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/fleet/traffic-violations → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/trips",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/trips",
+      "shot": "audit/screenshots/fleet_trips.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/fleet/trips/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/fleet/trips → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/trips/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/trips/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/fleet_trips_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/fleet/vehicles/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/fleet/vehicles/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/fleet_vehicles_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/governance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/governance",
+      "shot": "audit/screenshots/governance.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/governance/audits",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/governance/audits",
+      "shot": "audit/screenshots/governance_audits.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/governance/audits/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/governance/audits → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/governance/audits/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/governance/audits/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/governance_audits_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/governance/capa",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/governance/capa",
+      "shot": "audit/screenshots/governance_capa.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/governance/compliance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/governance/compliance",
+      "shot": "audit/screenshots/governance_compliance.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/governance/compliance/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/governance/compliance → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/governance/compliance/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/governance/compliance/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/governance_compliance_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/governance/policies",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/governance/policies",
+      "shot": "audit/screenshots/governance_policies.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/governance/policies/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/governance/policies → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/governance/policies/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/governance/policies/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/governance_policies_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/governance/risks",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/governance/risks",
+      "shot": "audit/screenshots/governance_risks.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/governance/risks/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/governance/risks → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/governance/risks/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/governance/risks/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/governance_risks_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/guide/properties",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/guide/properties",
+      "shot": "audit/screenshots/guide_properties.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr",
+      "shot": "audit/screenshots/hr.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/attendance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/attendance",
+      "shot": "audit/screenshots/hr_attendance.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/attendance/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/attendance → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/attendance/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/attendance/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/hr_attendance_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/attendance/field-tracking",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/attendance/field-tracking",
+      "shot": "audit/screenshots/hr_attendance_field_tracking.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/attendance/qr-scanner",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/attendance/qr-scanner",
+      "shot": "audit/screenshots/hr_attendance_qr_scanner.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/attendance/reports",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/attendance/reports",
+      "shot": "audit/screenshots/hr_attendance_reports.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/contracts",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/contracts",
+      "shot": "audit/screenshots/hr_contracts.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/contracts/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/contracts → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/contracts/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/contracts/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/hr_contracts_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/development-plans",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/development-plans; consoleErr=2",
+      "shot": "audit/screenshots/hr_development_plans.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/discipline/memos",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/discipline/memos",
+      "shot": "audit/screenshots/hr_discipline_memos.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/discipline/memos/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /hr/discipline/memos/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/discipline/regulation",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/discipline/regulation",
+      "shot": "audit/screenshots/hr_discipline_regulation.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/employee-activation",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/employee-activation",
+      "shot": "audit/screenshots/hr_employee_activation.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/employee-profile/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /hr/employee-profile/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/evaluation-360",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/evaluation-360",
+      "shot": "audit/screenshots/hr_evaluation_360.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/evaluation-360/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/evaluation-360 → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/evaluation-360/:id/peer",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/evaluation-360 → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/evaluation-360/:id/upward",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/evaluation-360 → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/evaluation-360/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/evaluation-360/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/hr_evaluation_360_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/evaluation-360/history/:employeeId",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/evaluation-360 → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/excuse-requests",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/excuse-requests",
+      "shot": "audit/screenshots/hr_excuse_requests.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/excuse-requests/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/excuse-requests → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/excuse-requests/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/excuse-requests/create; write POST /api/intelligence/activity → 200; consoleErr=2",
+      "shot": "audit/screenshots/hr_excuse_requests_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/exit",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/exit",
+      "shot": "audit/screenshots/hr_exit.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/exit/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/exit → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/exit/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/exit/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/hr_exit_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/expiring-documents",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/expiring-documents",
+      "shot": "audit/screenshots/hr_expiring_documents.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/gratuity",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/gratuity",
+      "shot": "audit/screenshots/hr_gratuity.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/idp",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/idp",
+      "shot": "audit/screenshots/hr_idp.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/leaves",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/leaves",
+      "shot": "audit/screenshots/hr_leaves.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/leaves/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/leaves → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/leaves/approval-chains",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/leaves/approval-chains",
+      "shot": "audit/screenshots/hr_leaves_approval_chains.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/leaves/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/leaves/create; write POST /api/intelligence/activity → 200; consoleErr=2",
+      "shot": "audit/screenshots/hr_leaves_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/leaves/management",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/leaves/management",
+      "shot": "audit/screenshots/hr_leaves_management.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/loans",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/loans",
+      "shot": "audit/screenshots/hr_loans.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/loans/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/loans → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/loans/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/loans/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/hr_loans_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/official-letters",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/official-letters",
+      "shot": "audit/screenshots/hr_official_letters.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/onboarding-review",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/onboarding-review",
+      "shot": "audit/screenshots/hr_onboarding_review.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/organization",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/organization",
+      "shot": "audit/screenshots/hr_organization.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/organization/structure",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/organization/structure",
+      "shot": "audit/screenshots/hr_organization_structure.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/overtime",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/overtime",
+      "shot": "audit/screenshots/hr_overtime.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/overtime/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/overtime → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/overtime/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/overtime/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/hr_overtime_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/payroll",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/payroll",
+      "shot": "audit/screenshots/hr_payroll.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/payroll/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/payroll → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/payroll/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/payroll/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/hr_payroll_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/payroll/salary-components",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/payroll/salary-components",
+      "shot": "audit/screenshots/hr_payroll_salary_components.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/performance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/performance",
+      "shot": "audit/screenshots/hr_performance.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/performance/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/performance → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/performance/advanced",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/performance/advanced",
+      "shot": "audit/screenshots/hr_performance_advanced.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/performance/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/performance/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/hr_performance_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/public-holidays",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/public-holidays",
+      "shot": "audit/screenshots/hr_public_holidays.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/recruitment",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/recruitment",
+      "shot": "audit/screenshots/hr_recruitment.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/recruitment/advanced",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/recruitment/advanced",
+      "shot": "audit/screenshots/hr_recruitment_advanced.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/recruitment/applicants/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/recruitment/applicants/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/hr_recruitment_applicants_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/recruitment/applications",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/recruitment/applications",
+      "shot": "audit/screenshots/hr_recruitment_applications.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/recruitment/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/recruitment/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/hr_recruitment_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/recruitment/jobs/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/recruitment → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/shifts",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/shifts",
+      "shot": "audit/screenshots/hr_shifts.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/shifts/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /hr/shifts/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/shifts/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/shifts/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/hr_shifts_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/shifts/management",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/shifts/management",
+      "shot": "audit/screenshots/hr_shifts_management.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/training",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/training",
+      "shot": "audit/screenshots/hr_training.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/training/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/training → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/training/advanced",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/training/advanced",
+      "shot": "audit/screenshots/hr_training_advanced.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/training/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/training/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/hr_training_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/transfers",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/transfers",
+      "shot": "audit/screenshots/hr_transfers.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/transfers/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/transfers → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/turnover-report",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/turnover-report",
+      "shot": "audit/screenshots/hr_turnover_report.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/violations",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/violations",
+      "shot": "audit/screenshots/hr_violations.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/violations/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/hr/violations → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/violations/auto-detection",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/violations/auto-detection",
+      "shot": "audit/screenshots/hr_violations_auto_detection.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/violations/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/violations/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/hr_violations_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/hr/violations/management",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/violations/management",
+      "shot": "audit/screenshots/hr_violations_management.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/hr/violations/penalty-escalation",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/hr/violations/penalty-escalation",
+      "shot": "audit/screenshots/hr_violations_penalty_escalation.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/insights",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/insights",
+      "shot": "audit/screenshots/insights.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/intelligence",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/intelligence",
+      "shot": "audit/screenshots/intelligence.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/legal",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/legal",
+      "shot": "audit/screenshots/legal.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/legal/cases",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/legal/cases",
+      "shot": "audit/screenshots/legal_cases.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/legal/cases/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/legal/cases → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/legal/cases/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/legal/cases/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/legal_cases_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/legal/contracts",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/legal/contracts",
+      "shot": "audit/screenshots/legal_contracts.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/legal/contracts/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/legal/contracts → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/legal/correspondence",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/legal/correspondence",
+      "shot": "audit/screenshots/legal_correspondence.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/legal/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/legal/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/legal_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/legal/documents",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/legal/documents",
+      "shot": "audit/screenshots/legal_documents.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/legal/judgments",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/legal/judgments",
+      "shot": "audit/screenshots/legal_judgments.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/legal/judgments/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/legal/judgments → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/legal/sessions",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/legal/sessions",
+      "shot": "audit/screenshots/legal_sessions.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/legal/sessions/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/legal/sessions → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/manager-board",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/manager-board",
+      "shot": "audit/screenshots/manager_board.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/marketing",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/marketing",
+      "shot": "audit/screenshots/marketing.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/marketing/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/marketing/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/marketing_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/module-dashboards",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/module-dashboards",
+      "shot": "audit/screenshots/module_dashboards.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-attendance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/my-attendance",
+      "shot": "audit/screenshots/my_attendance.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-documents",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/my-documents",
+      "shot": "audit/screenshots/my_documents.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-leave-request",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/my-leave-request",
+      "shot": "audit/screenshots/my_leave_request.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-loans",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/my-loans",
+      "shot": "audit/screenshots/my_loans.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-overtime",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/my-overtime",
+      "shot": "audit/screenshots/my_overtime.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-payslip",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/my-payslip",
+      "shot": "audit/screenshots/my_payslip.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-performance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/my-performance",
+      "shot": "audit/screenshots/my_performance.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-requests",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/my-requests",
+      "shot": "audit/screenshots/my_requests.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/my-space",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/my-space",
+      "shot": "audit/screenshots/my_space.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/notifications",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/notifications",
+      "shot": "audit/screenshots/notifications.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/obligations",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/obligations",
+      "shot": "audit/screenshots/obligations.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/operations-center",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/operations-center",
+      "shot": "audit/screenshots/operations_center.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/projects",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/projects",
+      "shot": "audit/screenshots/projects.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/projects/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /projects/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/projects/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/projects/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/projects_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/projects/gantt",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/projects/gantt",
+      "shot": "audit/screenshots/projects_gantt.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/projects/risks",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/projects/risks",
+      "shot": "audit/screenshots/projects_risks.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/projects/tasks",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/projects/tasks",
+      "shot": "audit/screenshots/projects_tasks.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties",
+      "shot": "audit/screenshots/properties.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/properties/units → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/:id/status",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/properties/units → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/buildings",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/buildings",
+      "shot": "audit/screenshots/properties_buildings.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/buildings/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/properties/buildings → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/buildings/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/buildings/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/properties_buildings_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/contracts",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/contracts",
+      "shot": "audit/screenshots/properties_contracts.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/contracts/:contractId/pay/:installmentId",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/properties/contracts → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/contracts/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/properties/contracts → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/contracts/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/contracts/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/properties_contracts_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/properties_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/dashboard",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/dashboard",
+      "shot": "audit/screenshots/properties_dashboard.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/deposits",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/deposits",
+      "shot": "audit/screenshots/properties_deposits.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/guide",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/guide",
+      "shot": "audit/screenshots/properties_guide.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/inspections",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/inspections",
+      "shot": "audit/screenshots/properties_inspections.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/maintenance",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/maintenance",
+      "shot": "audit/screenshots/properties_maintenance.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/maintenance/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/properties/units → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/maintenance/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/maintenance/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/properties_maintenance_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/occupancy-report",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/occupancy-report",
+      "shot": "audit/screenshots/properties_occupancy_report.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/owners",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/owners",
+      "shot": "audit/screenshots/properties_owners.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/owners/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/properties/owners → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/owners/:id/edit",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/properties/owners → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": true,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/owners/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/owners/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/properties_owners_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/payments",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/payments",
+      "shot": "audit/screenshots/properties_payments.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/payments/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/properties/units → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/payments/:paymentId/pay",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/properties/units → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/tenants",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/tenants",
+      "shot": "audit/screenshots/properties_tenants.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/properties/tenants/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/properties/tenants → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/properties/tenants/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/properties/tenants/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/properties_tenants_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/reports/scheduled",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/reports/scheduled",
+      "shot": "audit/screenshots/reports_scheduled.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/requests",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/requests",
+      "shot": "audit/screenshots/requests.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/requests/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /requests/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/requests/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/requests/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/requests_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/requests/types",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/requests/types",
+      "shot": "audit/screenshots/requests_types.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/requests/types/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/requests/types/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/requests_types_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/requests/workflows",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/requests/workflows",
+      "shot": "audit/screenshots/requests_workflows.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/settings",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/settings",
+      "shot": "audit/screenshots/settings.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/settings/audit-log",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/settings/audit-log",
+      "shot": "audit/screenshots/settings_audit_log.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/settings/branches",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/settings/branches",
+      "shot": "audit/screenshots/settings_branches.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/settings/companies",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/settings/companies",
+      "shot": "audit/screenshots/settings_companies.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/settings/departments",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/settings/departments",
+      "shot": "audit/screenshots/settings_departments.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/settings/rules",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/settings/rules",
+      "shot": "audit/screenshots/settings_rules.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/store",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/store",
+      "shot": "audit/screenshots/store.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/store/orders",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/store/orders",
+      "shot": "audit/screenshots/store_orders.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/store/orders/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /store/orders/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/store/orders/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/store/orders/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/store_orders_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/store/products/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /store/products/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/store/products/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/store/products/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/store_products_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/support",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/support",
+      "shot": "audit/screenshots/support.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/support/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /support/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/support/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/support/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/support_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/support/kb",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/support/kb",
+      "shot": "audit/screenshots/support_kb.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/support/replies",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/support/replies",
+      "shot": "audit/screenshots/support_replies.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/tasks",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/tasks",
+      "shot": "audit/screenshots/tasks.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/tasks/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /tasks/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/tasks/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/tasks/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/tasks_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/umrah",
+      "shot": "audit/screenshots/umrah.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/agents",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/umrah/agents",
+      "shot": "audit/screenshots/umrah_agents.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/agents/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/umrah/agents → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/commission-plans",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/umrah/commission-plans",
+      "shot": "audit/screenshots/umrah_commission_plans.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/commission-plans/:id/edit",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/umrah/commission-plans → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": true,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/commission-plans/new",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/umrah/commission-plans/new",
+      "shot": "audit/screenshots/umrah_commission_plans_new.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/import",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/umrah/import",
+      "shot": "audit/screenshots/umrah_import.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/import/legacy",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/umrah/import/legacy",
+      "shot": "audit/screenshots/umrah_import_legacy.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/invoices",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/umrah/invoices",
+      "shot": "audit/screenshots/umrah_invoices.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/invoices/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /umrah/invoices/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/packages",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/umrah/packages",
+      "shot": "audit/screenshots/umrah_packages.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/packages/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/umrah/packages → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/penalties",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/umrah/penalties",
+      "shot": "audit/screenshots/umrah_penalties.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/penalties/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /umrah/penalties/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/pilgrims",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/umrah/pilgrims",
+      "shot": "audit/screenshots/umrah_pilgrims.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/pilgrims/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: no id resolver for /umrah/pilgrims/:id",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/pilgrims/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/umrah/pilgrims/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/umrah_pilgrims_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/pricing",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/umrah/pricing",
+      "shot": "audit/screenshots/umrah_pricing.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/seasons",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/umrah/seasons",
+      "shot": "audit/screenshots/umrah_seasons.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/seasons/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/umrah/seasons → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/sub-agents",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/umrah/sub-agents",
+      "shot": "audit/screenshots/umrah_sub_agents.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/transport",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/umrah/transport",
+      "shot": "audit/screenshots/umrah_transport.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/transport/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/umrah/transport → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/umrah/violations",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/umrah/violations",
+      "shot": "audit/screenshots/umrah_violations.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/umrah/violations/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/umrah/violations → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/warehouse",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/warehouse",
+      "shot": "audit/screenshots/warehouse.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/warehouse/categories",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/warehouse/categories",
+      "shot": "audit/screenshots/warehouse_categories.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/warehouse/categories/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/warehouse/categories → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/warehouse/categories/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/warehouse/categories/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/warehouse_categories_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/warehouse/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/warehouse/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/warehouse_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/warehouse/inventory-count",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/warehouse/inventory-count",
+      "shot": "audit/screenshots/warehouse_inventory_count.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/warehouse/movements",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/warehouse/movements",
+      "shot": "audit/screenshots/warehouse_movements.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/warehouse/movements/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/warehouse/movements → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/warehouse/movements/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/warehouse/movements/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/warehouse_movements_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    },
+    {
+      "route": "/warehouse/products/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/warehouse/products → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/warehouse/suppliers",
+      "a1": "PASS",
+      "a2": "PASS",
+      "a3": "SKIP",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/warehouse/suppliers",
+      "shot": "audit/screenshots/warehouse_suppliers.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": true
+      }
+    },
+    {
+      "route": "/warehouse/suppliers/:id",
+      "a1": "SKIP",
+      "a2": "SKIP",
+      "a3": "SKIP",
+      "a4": "SKIP",
+      "a5": "SKIP",
+      "note": "unresolved: /api/warehouse/suppliers → 401",
+      "shot": null,
+      "cls": {
+        "isCreate": false,
+        "isEdit": false,
+        "isDetail": true,
+        "isList": false
+      }
+    },
+    {
+      "route": "/warehouse/suppliers/create",
+      "a1": "PASS",
+      "a2": "SKIP",
+      "a3": "PASS",
+      "a4": "FAIL",
+      "a5": "PASS",
+      "note": "landed=/dashboard expected=/warehouse/suppliers/create; write POST /api/intelligence/activity → 200",
+      "shot": "audit/screenshots/warehouse_suppliers_create.png",
+      "landedUrl": "http://localhost/dashboard",
+      "cls": {
+        "isCreate": true,
+        "isEdit": false,
+        "isDetail": false,
+        "isList": false
+      }
+    }
+  ]
+}

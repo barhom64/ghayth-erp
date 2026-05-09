@@ -4,6 +4,7 @@ import { PageShell } from "@/components/page-shell";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { resolveStatus } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Users, DollarSign, Truck, Scale, Building2, FolderKanban,
@@ -116,7 +117,7 @@ function HrDashboard() {
                       <div className="bg-red-400" style={{ height: `${(Number(d.absent) / total) * 60}px` }} />
                       <div className="bg-orange-400 rounded-b" style={{ height: `${(Number(d.late) / total) * 60}px` }} />
                     </div>
-                    <span className="text-[9px] text-muted-foreground">{d.date ? new Date(d.date).toLocaleDateString("ar-SA", { weekday: "short" }) : ""}</span>
+                    <span className="text-[9px] text-muted-foreground">{d.date ? formatDateAr(d.date) : ""}</span>
                   </div>
                 );
               })}
@@ -261,7 +262,7 @@ function LegalDashboard() {
             {(data.casesByStatus || []).map((s: any) => (
               <MiniBar
                 key={s.status}
-                label={s.status === "open" ? "مفتوحة" : s.status === "in_progress" ? "قيد النظر" : s.status === "closed" ? "مغلقة" : s.status}
+                label={resolveStatus(s.status, "legal_case")?.label ?? s.status}
                 value={Number(s.count)}
                 max={data.cases?.total ?? 1}
                 color={s.status === "open" ? "red" : s.status === "in_progress" ? "orange" : "green"}
@@ -536,7 +537,7 @@ function SupportDashboard() {
                       <div className="bg-blue-400 rounded-t" style={{ height: `${(Number(d.created) / maxVal) * 60}px` }} />
                       <div className="bg-green-400 rounded-b" style={{ height: `${(Number(d.resolved) / maxVal) * 60}px` }} />
                     </div>
-                    <span className="text-[9px] text-muted-foreground">{d.date ? new Date(d.date).toLocaleDateString("ar-SA", { weekday: "short" }) : ""}</span>
+                    <span className="text-[9px] text-muted-foreground">{d.date ? formatDateAr(d.date) : ""}</span>
                   </div>
                 );
               })}

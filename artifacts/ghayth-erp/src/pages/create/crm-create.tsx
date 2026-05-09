@@ -125,8 +125,8 @@ export default function CrmCreate() {
             </Select>
           </FormFieldWrapper>
           <TextField label="جهة الاتصال" value={form.contactName} onChange={(v) => setForm((f) => ({ ...f, contactName: v }))} placeholder="اسم جهة الاتصال" />
-          <TextField label="الهاتف" dir="ltr" value={form.contactPhone} onChange={(v) => setForm((f) => ({ ...f, contactPhone: v }))} placeholder="05xxxxxxxx" />
-          <TextField label="البريد الإلكتروني" dir="ltr" value={form.contactEmail} onChange={(v) => setForm((f) => ({ ...f, contactEmail: v }))} placeholder="email@example.com" />
+          <TextField label="الهاتف" type="tel" inputMode="tel" dir="ltr" value={form.contactPhone} onChange={(v) => setForm((f) => ({ ...f, contactPhone: v }))} placeholder="05xxxxxxxx" />
+          <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.contactEmail} onChange={(v) => setForm((f) => ({ ...f, contactEmail: v }))} placeholder="email@example.com" />
           <FormFieldWrapper label="المصدر">
             <Select value={form.source || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, source: v === "_none" ? "" : v }))}>
               <SelectTrigger><SelectValue placeholder="اختر المصدر" /></SelectTrigger>
@@ -154,7 +154,7 @@ export default function CrmCreate() {
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/crm")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={addOpp.isPending}>{addOpp.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
+          <Button onClick={handleSubmit} disabled={addOpp.isPending} rateLimitAware>{addOpp.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
         </div>
       </div>
     </CreatePageLayout>

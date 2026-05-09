@@ -131,7 +131,7 @@ export default function SupportCreate() {
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/support")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={addTicket.isPending}>{addTicket.isPending ? "جاري الإنشاء..." : "إنشاء"}</Button>
+          <Button onClick={handleSubmit} disabled={addTicket.isPending} rateLimitAware>{addTicket.isPending ? "جاري الإنشاء..." : "إنشاء"}</Button>
         </div>
       </div>
     </CreatePageLayout>

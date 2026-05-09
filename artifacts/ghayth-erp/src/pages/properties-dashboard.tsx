@@ -14,14 +14,16 @@ import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Badge } from "@/components/ui/badge";
+import { ErrorState } from "@/components/shared/loading-error-states";
 
 export default function PropertiesDashboard() {
   const { scopeQueryString } = useAppContext();
-  const { data: stats, isLoading } = useApiQuery(
+  const { data: stats, isLoading, isError } = useApiQuery(
     ["properties-stats", scopeQueryString],
     `/properties/stats?${scopeQueryString || ""}`
   );
 
+  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
   if (isLoading) return (
     <div className="space-y-6">
       <Skeleton className="h-10 w-64" />

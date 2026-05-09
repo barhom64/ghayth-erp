@@ -4,6 +4,7 @@ import { useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import {
   Clock, Calendar, DollarSign, FileSignature,
   CheckCircle2, XCircle, AlertCircle, ChevronLeft,
@@ -15,16 +16,6 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 
-const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
-  pending: { label: "معلق", color: "bg-yellow-100 text-yellow-700 border-yellow-200", icon: Clock },
-  in_review: { label: "قيد المراجعة", color: "bg-blue-100 text-blue-700 border-blue-200", icon: AlertCircle },
-  approved: { label: "موافق", color: "bg-green-100 text-green-700 border-green-200", icon: CheckCircle2 },
-  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700 border-red-200", icon: XCircle },
-  returned: { label: "مُعاد", color: "bg-orange-100 text-orange-700 border-orange-200", icon: RefreshCw },
-  escalated: { label: "مُصعَّد", color: "bg-purple-100 text-purple-700 border-purple-200", icon: AlertCircle },
-  draft: { label: "مسودة", color: "bg-gray-100 text-gray-600 border-gray-200", icon: ClipboardList },
-};
-
 const typeLabels: Record<string, { label: string; icon: any }> = {
   leave: { label: "إجازة", icon: Calendar },
   salary_advance: { label: "سلفة راتب", icon: DollarSign },
@@ -34,15 +25,27 @@ const typeLabels: Record<string, { label: string; icon: any }> = {
   exit: { label: "نهاية خدمة", icon: LogOut },
 };
 
+const detailPaths: Record<string, string> = {
+  leave: "/hr/leaves",
+  salary_advance: "/finance/salary-advances",
+  official_letter: "/hr/official-letters",
+  loan: "/hr/loans",
+  overtime: "/hr/overtime",
+  exit: "/hr/exit",
+  purchase_request: "/finance/purchase-orders",
+  expense: "/finance/expenses",
+  financial_request: "/finance/financial-requests",
+};
+
+function getDetailUrl(req: any): string | null {
+  const base = detailPaths[req.requestType];
+  const id = req.refId || req.entityId;
+  if (base && id) return `${base}/${id}`;
+  return null;
+}
+
 function StatusBadge({ status }: { status: string }) {
-  const cfg = statusConfig[status] ?? { label: status, color: "bg-gray-100 text-gray-600 border-gray-200", icon: Clock };
-  const Icon = cfg.icon;
-  return (
-    <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border", cfg.color)}>
-      <Icon size={12} />
-      {cfg.label}
-    </span>
-  );
+  return <PageStatusBadge status={status} />;
 }
 
 export default function MyRequests() {
@@ -112,8 +115,9 @@ export default function MyRequests() {
             {workflowRequests.map((req: any) => {
               const typeInfo = typeLabels[req.requestType] ?? { label: req.requestType, icon: ClipboardList };
               const TypeIcon = typeInfo.icon;
-              return (
-                <Card key={req.id} className="hover:shadow-md transition-shadow">
+              const url = getDetailUrl(req);
+              const card = (
+                <Card key={req.id} className="hover:shadow-md transition-shadow cursor-pointer">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3 min-w-0">
@@ -140,6 +144,7 @@ export default function MyRequests() {
                   </CardContent>
                 </Card>
               );
+              return url ? <Link key={req.id} href={url}>{card}</Link> : card;
             })}
           </div>
         )

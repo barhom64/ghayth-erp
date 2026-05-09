@@ -48,6 +48,8 @@ const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const ROUTES_DIR = join(REPO_ROOT, "artifacts/api-server/src/routes");
 const LIB_DIR = join(REPO_ROOT, "artifacts/api-server/src/lib");
 const MIDDLEWARES_DIR = join(REPO_ROOT, "artifacts/api-server/src/middlewares");
+const ERP_PAGES_DIR = join(REPO_ROOT, "artifacts/ghayth-erp/src/pages");
+const ERP_COMPONENTS_DIR = join(REPO_ROOT, "artifacts/ghayth-erp/src/components");
 
 /** @type {Array<{ id: string, scan: string[], skip?: (file: string) => boolean, regex: RegExp, message: string }>} */
 const RULES = [
@@ -75,17 +77,66 @@ const RULES = [
     id: "legacy-validationError-import",
     scan: [ROUTES_DIR, LIB_DIR],
     skip: (file) => file.endsWith("/lib/errorHandler.ts"),
-    // Lowercase-v `validationError` next to other named imports from errorHandler.
-    // The class `ValidationError` (capital V) is fine.
     regex: /^\s*validationError\s*,?\s*$/m,
     message:
       "Stale `validationError` named import. The lowercase-v helper was " +
       "removed in Phase 5c — only the `ValidationError` class is exported now.",
   },
+  {
+    id: "direct-gl-import-in-domain-route",
+    scan: [ROUTES_DIR],
+    skip: (file) => {
+      const base = file.split("/").pop();
+      return base.startsWith("finance") || base === "index.ts";
+    },
+    regex: /\b(?:createJournalEntry|createGuardedJournalEntry)\b/,
+    message:
+      "Direct GL function import in non-finance route is forbidden. " +
+      "Use the domain engine's GL method (e.g. hrEngine.postPayrollRunGL) " +
+      "which routes through financialEngine.postJournalEntry() with " +
+      "period checks, sourceKey idempotency, and budget validation.",
+  },
+  {
+    id: "save-button-missing-rateLimitAware",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
+    extensions: [".tsx"],
+    skip: (file) => file.endsWith("/components/ui/button.tsx"),
+    // Match `<Button ...>` whose attribute span (`...`) contains either
+    // `type="submit"` or an `onClick={handleSomeWriteAction}` but does NOT
+    // contain `rateLimitAware`. Action verbs are intentionally limited to
+    // write/submit-style handlers; pure navigation handlers (handleEdit,
+    // handleView, handleClose, handleCancel, etc.) are not flagged.
+    // `[^>]` excludes `>` so the match stops at the closing bracket of the
+    // opening tag; `s` flag lets `.` style classes span newlines, and
+    // because `[^>]` already crosses newlines we naturally cover multiline
+    // `<Button\n  prop={...}\n  onClick={handleSave}\n>` declarations
+    // in a whole-file (not line-by-line) scan.
+    regex: /<Button\b(?![^>]*\brateLimitAware\b)[^>]*\b(?:type="submit"|onClick=\{handle(?:Save|Submit|Create|Update|Add|Pay|Approve|Reject|Apply|Send|Post|Settle|Issue|Match|Search|Record|Confirm|Process|Generate|Allocate|Distribute|Refund|Verify|Activate|Deactivate|Renew|Extend|Terminate|Transfer|Assign|Reconcile|Upload|Import|Export|Schedule|Run|Bulk|Batch)[A-Za-z]*\})[^>]*>/g,
+    multiline: true,
+    message:
+      "Save / submit / write-action <Button> is missing the `rateLimitAware` " +
+      "prop. During a global 429 cooldown the button must disable itself and " +
+      "show \"حاول بعد N ثانية…\". Add `rateLimitAware` to the button (Task #155 / #164). " +
+      "If the handler is purely read-only (e.g. open a dialog, navigate, toggle UI), " +
+      "rename it so it doesn't start with one of the write verbs the rule scans for.",
+  },
+  {
+    id: "direct-account-mapping-in-domain-route",
+    scan: [ROUTES_DIR],
+    skip: (file) => {
+      const base = file.split("/").pop();
+      return base.startsWith("finance") || base === "index.ts";
+    },
+    regex: /\bgetAccountCodeFromMapping\b/,
+    message:
+      "Direct getAccountCodeFromMapping call in non-finance route is forbidden. " +
+      "Account code resolution should happen inside the domain engine " +
+      "(e.g. fleetEngine, propertiesEngine) via financialEngine.resolveAccountCode().",
+  },
 ];
 
-/** Recursively yield every `.ts` file under a directory. */
-async function* walk(dir) {
+/** Recursively yield every file under a directory matching the given extensions. */
+async function* walk(dir, extensions = [".ts"]) {
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
@@ -96,8 +147,8 @@ async function* walk(dir) {
   for (const entry of entries) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      yield* walk(full);
-    } else if (entry.isFile() && entry.name.endsWith(".ts")) {
+      yield* walk(full, extensions);
+    } else if (entry.isFile() && extensions.some((ext) => entry.name.endsWith(ext))) {
       yield full;
     }
   }
@@ -107,21 +158,43 @@ const failures = [];
 
 for (const rule of RULES) {
   for (const root of rule.scan) {
-    for await (const file of walk(root)) {
+    for await (const file of walk(root, rule.extensions ?? [".ts"])) {
       if (rule.skip && rule.skip(file)) continue;
       const source = await readFile(file, "utf8");
-      const lines = source.split("\n");
-      lines.forEach((line, index) => {
-        if (rule.regex.test(line)) {
+      if (rule.multiline) {
+        // Whole-file scan: walk every regex match and report it at the
+        // 1-based line number where the match begins. Catches multi-line
+        // JSX declarations that a per-line scan would miss.
+        const re = rule.regex.global
+          ? rule.regex
+          : new RegExp(rule.regex.source, rule.regex.flags + "g");
+        let m;
+        while ((m = re.exec(source)) !== null) {
+          const lineNumber = source.slice(0, m.index).split("\n").length;
+          const snippet = m[0].split("\n")[0].trim();
           failures.push({
             rule: rule.id,
             file: relative(REPO_ROOT, file),
-            line: index + 1,
-            snippet: line.trim(),
+            line: lineNumber,
+            snippet:
+              snippet.length > 200 ? snippet.slice(0, 200) + "…" : snippet,
             message: rule.message,
           });
+          if (re.lastIndex === m.index) re.lastIndex++; // safety against zero-width
         }
-      });
+      } else {
+        source.split("\n").forEach((line, index) => {
+          if (rule.regex.test(line)) {
+            failures.push({
+              rule: rule.id,
+              file: relative(REPO_ROOT, file),
+              line: index + 1,
+              snippet: line.trim(),
+              message: rule.message,
+            });
+          }
+        });
+      }
     }
   }
 }

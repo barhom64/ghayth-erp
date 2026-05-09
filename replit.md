@@ -1,8 +1,65 @@
-# Overview
+# Ghayth ERP
 
-Ghayth ERP (غيث ERP) is a comprehensive, full-stack Arabic enterprise resource planning system for Al Door Group. It centralizes operations, enhances efficiency, and supports strategic decision-making across over 28 business modules (including HR, Finance, Fleet, Warehouse, Properties, Legal, Projects, CRM, Support, Governance, and Business Intelligence). The system provides a unified, user-friendly platform tailored to diverse business requirements, integrating core functions into a single solution. A behavioral intelligence layer offers advanced analytics, personalized recommendations, and proactive alerts across the entire system. The project aims to provide a unified, user-friendly platform tailored to diverse business requirements, integrating core functions into a single solution for Al Door Group.
+A comprehensive, full-stack Arabic enterprise resource planning system centralizing operations and enhancing efficiency for Al Door Group.
 
-# User Preferences
+## Run & Operate
+
+-   **Install dependencies**: `pnpm install`
+-   **Build**: `pnpm build`
+-   **Typecheck**: `pnpm typecheck`
+-   **API Codegen**: `pnpm --filter @ghayth-erp/api-spec run generate` (from OpenAPI spec)
+-   **Ghost-row check**: `pnpm run check:ghost-rows` — connects to `$DATABASE_URL`, lists every table that has a `deletedAt` column, then walks `artifacts/api-server/src/routes/**` and flags any `rawQuery` SELECT statement that reads from one of those tables without a `"deletedAt" IS NULL` predicate (the bug class Task #161 fixed). Statements containing `${…}` interpolation are skipped because helpers like `buildScopedWhere(…, { softDeleteColumn })` may inject the predicate. **Also scans Drizzle typed-builder calls** of the form `db.select().from(<tableVar>).leftJoin(...).where(...)` and asserts the chained predicates (or the join's ON arg) include `isNull(<tableVar>.deletedAt)` or `eq(<tableVar>.deletedAt, null)` — the equivalent guard for the typed builder, mirroring what `check:schema-drift` already does for `.insert().values()` / `.update().set()` (Task #168). Both guards share `scripts/src/lib/drizzle-schema.mjs::loadDrizzleSchema()` to resolve `tableVar → SQL table name`. Intentional exceptions (audit reports, restore-from-trash flows) live in `scripts/ghost-row-allowlist.txt` as `routes/<file>.ts[:tableName]` lines and apply to both raw SQL and Drizzle findings. Wired in as step 6 of `pnpm run guard` (and the `guard` GitHub Action) gated on `$DATABASE_URL`.
+-   **Schema-drift check**: `pnpm run check:schema-drift` — connects to `$DATABASE_URL` and asserts that every quoted/INSERT/UPDATE identifier in `artifacts/api-server/src/routes/**` exists in `information_schema`. Catches the class of bug where a route references a column the live DB does not have (e.g. `suppliers.category`, `invoices.costCenter`, `umrah_packages.updatedAt`, `employees.attachments`, `financial_posting_failures` table) before it surfaces as a runtime 500. Identifiers declared by `CREATE TABLE IF NOT EXISTS` inside a `rawQuery()` are treated as locally defined so route-managed auxiliary tables don't false-positive. **Fires automatically** as step 5 of `pnpm run guard` (and the `guard` GitHub Action on every push/PR), gated on `$DATABASE_URL` being set; a failed check blocks the merge with the same readable diff users see locally.
+-   **DB Migrations**: Migrations are applied automatically by `api-server` on startup. Manual migration files in `artifacts/api-server/src/migrations/`.
+-   **Required Env Vars**: `REPLIT_DEV_DOMAIN`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` (for screenshot generation).
+
+## Stack
+
+-   **Monorepo**: pnpm workspaces
+-   **Node.js**: 24
+-   **TypeScript**: 5.9
+-   **API**: Express 5
+-   **Database**: PostgreSQL (raw `pg` pool, Drizzle ORM)
+-   **ORM**: Drizzle ORM
+-   **Authentication**: JWT with refresh tokens
+-   **Validation**: Zod
+-   **API Codegen**: Orval (from OpenAPI spec)
+-   **Frontend**: React, Vite, TailwindCSS, shadcn/ui
+
+## Where things live
+
+-   **API Server**: `artifacts/api-server`
+-   **Main Frontend**: `artifacts/ghayth-erp`
+-   **Client Portal**: `artifacts/client-portal`
+-   **Careers Portal**: `artifacts/careers-portal`
+-   **OpenAPI Spec**: `lib/api-spec`
+-   **DB Schema**: `lib/db/schema.ts`
+-   **Frontend Routes**: `artifacts/ghayth-erp/src/routes/` (modular, `React.lazy()` for performance)
+-   **Shared API Client (React Hooks)**: `lib/api-client-react`
+-   **Shared Zod Schemas**: `lib/api-zod`
+-   **Screenshot Generation Scripts**: `artifacts/ghayth-erp-deck/scripts/`
+-   **Health Check Script**: `scripts/health-check.sh`
+-   **Full Verification Report**: `GHAITH_FULL_SYSTEM_VERIFICATION_REPORT.md` (15 sections, regenerated 2026-05-06)
+-   **Services Index**: `SERVICES_INDEX.md` (369 FE pages × 48 modules × 928 API endpoints, with Playwright e2e results)
+-   **Latest API Smoke (2026-05-06)**: 56/56 endpoints PASS (100%) with admin auth — see `/tmp/api_final_results.txt`. Previous "failures" were path mismatches in the test script, not real bugs (recruitment/postings not /jobs; discipline/memos not /cases; fleet/fuel-logs not /fuel).
+-   **Frontend Runtime Audit (2026-05-07, Task #185 v2 — supersedes the matrix below)**: Real headless-Chromium walk of every frontend route via `scripts/src/runtime-audit.cjs` with **periodic re-login every 25 routes** (run with `ALL=1 pnpm run audit:runtime`; runbook in `audit/RUNTIME_AUDIT_README.md`). **Per-route disposition: 1 PASS (`/dashboard` only) / 291 FAIL / 81 SKIP across 373 routes.** Per-axis: A1 render 292/0/81, A2 data fetch 223/0/150, A3 primary CTA 69/0/304, A4 navigation 1/291/81, A5 runtime smoke 285/0/88. With re-login in place every axis except A4 returns 0 FAIL — the **single failure mode in this run is A4**: 291/373 routes (78%) bounce to `/dashboard` on direct `page.goto` because the SPA's wouter router does not honor deep links. A5 actually fills every `<input>/<textarea>/<select>` and clicks save and watches for a `POST/PATCH/PUT` to `/api/*` (285 PASS = real 2xx-4xx writes). 81 SKIPs are `:id` routes whose list API returned 404 or was empty. Per-route Arabic descriptions + screenshot path per FAIL in `FRONTEND_BUGS.md` "Task #185" section; full table + 291 PNG screenshots in `FRONTEND_RUNTIME_AUDIT.md` and `audit/screenshots/`.
+-   **⚠️ Retracted: Frontend Test Matrix (2026-05-07, "1510/1510 (100%)")**: The previous claim in `FRONTEND_TEST_MATRIX.md` was source-review-only — no browser ever loaded those routes. Replaced by the runtime audit above. The matrix file carries a retraction banner; do not quote the old number.
+-   **Deep CRUD Round-Trip (2026-05-07, Task #144 — extends #139)**: 124/137 applicable PASS (90.5%), 13 FAIL, 115 SKIP across 21 high-traffic entities × **12 axes** (252 checks) covering HR, Finance, Properties, Fleet, Umrah. Axes added in #144: **uE/uD** = real edit/delete via the row's "تعديل" pencil and "حذف" trash buttons (click pencil → tweak input → click "حفظ التعديلات" → assert PATCH 2xx; click trash → wait for "تأكيد الحذف" → assert DELETE 2xx + row vanishes after 3 cache-busting refreshes). Generic DOM walker finds the row's actions on both `<table>` rows and Card grids (hr/shifts). uE/uD PASS on hr/shifts, fleet/vehicles, fleet/drivers; SKIP (no row affordance) on finance/vendors, properties/buildings; surfaced **2 new High-severity bugs (C11/C12)** — see `FRONTEND_BUGS.md`: (C11) `DELETE /api/finance/accounts/:id` soft-delete leaks (row stays visible after delete + 3 refreshes); (C12) `/properties/owners/:id/edit` route is unrouted (Pencil button → blank). Browser-crash recovery added to harness (`recreatePage`) so a single delete that triggers a full page reload can no longer poison the rest of the run. New `APPEND=1` env merges results from a prior partial run so the canonical 21-entity matrix can be assembled in two halves under bash's 120s ceiling. Harness: `scripts/src/deepCrudTest.cjs`. JSON: `audit/report/deep_crud_results.json`.
+-   **Audit Artifacts**: `audit/report/{auth_coverage,boundary_writes,db_tables,db_audit_cols,db_rowcounts,code_tables_not_in_db,db_tables_not_in_code}` and `audit/api-smoke-results.json`, `audit/inventory.json`
+
+## Architecture decisions
+
+-   **Monorepo Structure**: pnpm workspaces are used to manage multiple interdependent applications and libraries within a single repository.
+-   **Frontend Routing**: Modular route files using `React.lazy()` ensure efficient code-splitting and improved initial load performance.
+-   **Create/Edit UI**: Operations use standalone full pages instead of popups/modals to provide a consistent and robust user experience, reserving dialogs for read-only previews or confirmations.
+-   **GitHub Integration**: Custom GitHub API sync (`scripts/_push2.mjs`) is used for incremental, resumable pushes due to limitations with `git` commands in the environment.
+-   **Multi-tenancy**: Implemented with a 3-level settings engine (system → company → branch) and multi-filter system.
+
+## Product
+
+Ghayth ERP centralizes operations across 28+ modules (HR, Finance, Fleet, Warehouse, Properties, Legal, Projects, CRM, Support, Governance, BI) for Al Door Group. It features a behavioral intelligence layer for analytics and personalized recommendations, granular RBAC, a generic approval chain engine, and comprehensive operational dashboards. It also includes an enterprise-grade multi-channel notification system and a full Document Management System.
+
+## User preferences
 
 -   **Frontend Layout**:
     -   **Sidebar**: White light theme, expandable sub-menus for all 20+ modules, RTL (right-side), filtered by selected role.
@@ -16,124 +73,23 @@ Ghayth ERP (غيث ERP) is a comprehensive, full-stack Arabic enterprise resourc
 -   **`lib/formatters.ts`**: `formatDateAr()` (Arabic date like "١٤ يناير ٢٠٢٦"), `formatNumber()` (Arabic-Indic numerals), `formatCurrency()` (ر.س symbol).
 -   **404 Page**: Arabic design with CloudRain icon, Arabic numerals (٤٠٤), navigation buttons.
 
-# System Architecture
+## Gotchas
 
-The project is structured as a pnpm workspace monorepo.
+-   **GitHub Sync**: `.github/workflows/*` files cannot be pushed via `scripts/_push2.mjs` and must be edited directly on GitHub. Local `git` commands are blocked.
+-   **API Recurring Bugs**: Be aware of common API query discrepancies (e.g., `hireDate` vs `startDate`, `entityType` vs `relatedEntity`, missing `fullName` on `users` table).
+-   **Migration Overwrites**: Upstream pulls often overwrite local fixes; re-apply known fixes related to column names, `SAVEPOINT` usage, `rawExecute` vs `pool.query`, and conditional DDL statements.
+-   **DB Schema Inconsistencies**: Key tables like `employees`, `invoices`, `official_letters`, `company_settings`, `obligations`, `purchase_requests`, and `property_buildings` have specific column constraints or dynamic creation that must be respected.
+-   **JSX Generics**: Avoid `<DataTable<any>>` due to Babel JSX parser limitations; use `(DataTable as any)` or remove generics.
+-   **Stale Guards**: Remove any stale `if (req.path.includes("/pay")) return;` type guards as they can cause infinite hangs.
+-   **Screenshot Refresh**: Always refresh screenshots via `pnpm --filter @workspace/ghayth-erp-deck run export-pdf-fresh` before any presentation or sharing a PDF with the GM.
 
-**Stack:**
+## Pointers
 
--   **Monorepo tool**: pnpm workspaces
--   **Node.js**: 24
--   **TypeScript**: 5.9
--   **API framework**: Express 5
--   **Database**: PostgreSQL (raw queries via `pg` pool, Drizzle ORM)
--   **Authentication**: JWT with refresh tokens
--   **Validation**: Zod
--   **API codegen**: Orval (from OpenAPI spec)
--   **Frontend**: React, Vite, TailwindCSS, shadcn/ui
-
-**Architectural Artifacts:**
-
--   `artifacts/api-server`: Express 5 REST API (port 8080).
--   `artifacts/ghayth-erp`: React+Vite frontend (port 18822).
--   `artifacts/client-portal`: Client self-service portal (port 25516).
--   `artifacts/careers-portal`: Careers/recruitment portal (port 23179).
-
-**GitHub Sync:** Repository `barhom64/ghayth-erp` (private). Connected via GitHub integration. Changes pushed via GitHub API using `scripts/_push2.mjs` (PUT /contents path-by-path) — incremental, resumable via `/tmp/_push2_state.json`. Note: GitHub App token lacks `workflows: write`, so `.github/workflows/*` files cannot be pushed and must be edited directly on GitHub. Local destructive `git` commands (commit/push/remote ops) are blocked in this environment — all syncs go through the GitHub REST API. Stale `subrepl-*` remote entries in `.git/config` are harmless leftovers from sub-agent clones and can be ignored.
-
-**Upstream batch reconciliation pattern:** When the user pushes a large upstream batch on GitHub and asks to pull it locally:
-1. Fetch the diff via the GitHub connector (`scripts/github-pull.mjs`).
-2. Copy any new `migrations/NNN_*.sql` into `artifacts/api-server/src/migrations/` using sequential numbers (renumber as needed).
-3. Re-apply local fixes that get overwritten by the pull (the recurring ones are listed below in **Local Fixes Re-applied After Each Pull**).
-4. Restart `api-server` and verify migrations applied; patch any failed migration with `DO $$ IF EXISTS ... $$` guards (most common: column doesn't exist yet on the target schema).
-5. Hit a sweep of endpoints with the admin token to confirm 200/304/404, never 500.
-6. Push back to GitHub via `scripts/_push2.mjs`.
-
-**Local Fixes Re-applied After Each Pull (recurring):**
-- `routes/permissions.ts`, `routes/correspondence.ts` (list+get), `routes/finance-custodies.ts` (approval actions): replace `users.name` selects with `COALESCE(employees.name, users.email) AS "<alias>"` plus `LEFT JOIN employees e ON e.id = u."employeeId"` — the `users` table has no `name` column.
-- `lib/umrahImportEngine.ts`: keep SAVEPOINT/dedupe wrapping in the mutamers and vouchers loops so a single bad row doesn't abort the whole batch.
-- `routes/umrah-entities.ts`: drop `deletedAt` and `uploadedAt` from `/import/batches` and `/:id/changes` (those columns don't exist on `umrah_import_batches`); keep `ORDER BY "createdAt" DESC`.
-- `lib/obligationsEngine.ts`: `ensureObligationsTable()` must use `pool.query` (not `rawExecute`) — `rawExecute` auto-appends `RETURNING id` which breaks DDL.
-- `migrations/106_performance_indexes.sql`: wrap the `payroll_lines` index in a `DO $$ IF EXISTS column 'payrollRunId' THEN ... ELSIF column 'runId' THEN ... END $$` block (the upstream uses `payrollRunId` but our schema has `runId`); also drop `CONCURRENTLY` and wrap the `employees.department` index in a column-exists guard.
-- `migrations/105_missing_tables.sql`: add `ALTER TABLE fx_rates ADD COLUMN IF NOT EXISTS "effectiveDate"`, plus `source`, plus a `UPDATE` to backfill from `rateDate`.
-- `migrations/107_missing_tables_phase2.sql`: add `ALTER TABLE correspondence ADD COLUMN IF NOT EXISTS "deletedAt"` and same for `company_documents` BEFORE the indexes that reference `deletedAt`.
-
-**Shared Libraries:**
-
--   `lib/api-spec`: OpenAPI specification and Orval codegen.
--   `lib/api-client-react`: Generated React Query hooks.
--   `lib/api-zod`: Generated Zod schemas.
--   `lib/db`: Drizzle ORM schema and PostgreSQL pool.
-
-**Core Infrastructure & Features:**
-
--   **Behavioral Intelligence Layer**: User activity logging, RFM scoring, churn prediction, personalized recommendations, KPIs, and smart alerts.
--   **Modular Design**: Standalone admin pages, manager board, finance cash flow dashboard, and enhanced "My Space" for personalized user experiences.
--   **Unified Backend Systems**: Centralized error handling, approval enforcement, event system, and scoped query helpers for data isolation.
--   **Multi-tenant Architecture**: Company bootstrap, multi-filter system, and 3-level settings engine (system → company → branch).
--   **Role-Based Access Control (RBAC)**: Backend-driven multi-role system with granular permissions and tenant isolation.
--   **Comprehensive Module Support**: Enhanced HR module (KPI dashboard, forms, state engine, discipline regulation with inquiry memos), finance (collection, budget, accounting, vendors, ZATCA e-invoicing, financial algorithms, three-way match PO→GRN→Invoice, recurring journals, opening balances), property (lifecycle, Ejar compliance, lease lifecycle), fleet, legal, projects, support, CRM, and Umrah management.
--   **Workflow & Automation**: Generic approval chain engine, automated workflows for various modules, unified workflow and business rules engines, and proactive automation with daily self-audits.
--   **Operational Dashboards**: Command Center, My Space Portal, Action Center, Operations Center, and BI Dashboards for comprehensive oversight and analytics.
--   **Data Integrity & Security**: Atomic payroll transactions, soft delete for financial records, JWT_SECRET enforcement, CORS origin whitelist, rate limiting, and strict business validation guards.
--   **Audit & Reporting**: Evidence-grade audit system with before/after state capture, financial reports system (trial balance, income statement, balance sheet), and impact preview for actions.
--   **TypedError Hierarchy**: All HR routes use `ValidationError(422)`, `ConflictError(409)`, `NotFoundError(404)`, `ForbiddenError(403)` with structured `{code, field, fix, meta}` responses. The old `hr-attendance.ts` router has been removed — all attendance logic is consolidated in `hr.ts`.
--   **Event Dedup**: `emitEvent` in `businessHelpers.ts` writes to `event_logs` once per call (dedup fix commit `3fc9f69`).
--   **User Experience Enhancements**: Global command palette, reusable printing/letterhead system, advanced filters, entity timelines, document management, copy/duplicate, permission guards, autocomplete, auto-draft, keyboard shortcuts, policy banners, delete confirm with impact, unsaved changes warning, quick preview, file attachments, and data-level scoping.
--   **Integration Infrastructure**: Government integration infrastructure (Muqeem, TAM, Absher Business) and a robust cron scheduler for alerts, escalations, reporting, and automation.
--   **Notification Engine**: Enterprise-grade multi-channel notification system with DB-driven routing rules, per-user preferences, editable templates, fallback/escalation chains, outbound webhooks, and unified delivery tracking.
--   **Document Management System (DMS)**: Full DMS with object storage, workflow, and multi-versioning.
-
-# External Dependencies
-
--   **Database**: PostgreSQL
--   **Authentication**: `bcryptjs`, `jsonwebtoken`
--   **Validation**: `zod`, `drizzle-zod`
--   **API Codegen**: Orval
--   **Frontend Frameworks**: React, Vite
--   **UI Library**: TailwindCSS, shadcn/ui
--   **Maps**: Leaflet, react-leaflet
--   **Object Storage**: Replit Object Storage (GCS-backed) via `@google-cloud/storage`
-
-# Error Prevention System
-
-**Health Check Script:** `bash scripts/health-check.sh`
-
-Run before every deployment or after merging branches. Checks:
-1. **Broken imports** — all imports from `api.ts` are actually exported
-2. **Missing routes** — page files exist but not registered in route files
-3. **Dangling routes** — route files reference non-existent page files
-4. **DB column mismatches** — code references columns/tables that don't exist
-5. **API endpoints** — all endpoints respond (401 = auth required = OK)
-6. **Service health** — all 4 services are running
-
-**Common Bugs & Prevention Rules:**
-
-| Bug Pattern | Root Cause | Prevention |
-|------------|-----------|------------|
-| Import not found | Branch adds function but doesn't export it in shared file | Always add `export` in `api.ts` when creating new utility functions |
-| Route 404 | Page file created but not registered in `*Routes.tsx` | Every new `.tsx` page MUST have a matching route entry |
-| DB column error | Code queries column that doesn't exist | Check `information_schema.columns` before using new column names |
-| CRON crash | CRON job assumes table/column exists | Wrap CRON queries in try-catch; use `ensureXxxTable()` pattern |
-
-**Critical Schema Facts (do NOT violate):**
-- `employees` has NO `companyId`, NO `deletedAt` — company link is via `employee_assignments`
-- `invoices` has NO `updatedAt` — use `skipUpdatedAt: true` in lifecycleEngine
-- `official_letters` has NO `branchId` — never query it
-- `company_settings` does NOT exist — wrap in try-catch with empty fallback
-- `obligations` created dynamically via `ensureObligationsTable()` — not in base schema
-- `purchase_requests` uses `expectedDelivery` (not `expectedDate`); items use `name` (not `itemName`), `totalPrice` (not `lineTotal`)
-- `property_buildings` has NO `branchId`, `floors`, `description`
-
-**Deck Screenshots (ghayth-erp-deck):**
-
-The deck (`artifacts/ghayth-erp-deck`) embeds platform screenshots from `public/screenshots/*.png`. Scripts in `artifacts/ghayth-erp-deck/scripts/`:
-
-- `pnpm --filter @workspace/ghayth-erp-deck run refresh-shots` — re-capture all module screenshots from the live ERP (requires `REPLIT_DEV_DOMAIN`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`).
-- `pnpm --filter @workspace/ghayth-erp-deck run export-pdf` — build deck and export PDF using existing screenshots.
-- `pnpm --filter @workspace/ghayth-erp-deck run export-pdf-fresh` — refresh screenshots first, then export PDF. **Use this before any presentation or share with the GM** to guarantee shots match the current UI.
-- `pnpm --filter @workspace/ghayth-erp-deck run check-shots-age` — warn if any screenshot is older than 14 days (override with `SHOTS_MAX_AGE_DAYS=N`; set `FAIL_ON_STALE=1` to exit non-zero).
-
-When to refresh screenshots: after any visible change to dashboard, HR, finance, operations, fleet, properties, legal, projects, support, or CRM modules; and always before exporting a deliverable PDF for the GM.
-
-**JSX Rule:** NEVER use `<DataTable<any>` — Babel JSX parser fails on generic type params. Use `(DataTable as any)` or remove generic.
+-   **OpenAPI Specification**: `lib/api-spec`
+-   **Drizzle ORM**: [https://orm.drizzle.team/](https://orm.drizzle.team/)
+-   **Zod**: [https://zod.dev/](https://zod.dev/)
+-   **Orval**: [https://orval.dev/](https://orval.dev/)
+-   **TailwindCSS**: [https://tailwindcss.com/](https://tailwindcss.com/)
+-   **shadcn/ui**: [https://ui.shadcn.com/](https://ui.shadcn.com/)
+-   **React**: [https://react.dev/](https://react.dev/)
+-   **Vite**: [https://vitejs.dev/](https://vitejs.dev/)

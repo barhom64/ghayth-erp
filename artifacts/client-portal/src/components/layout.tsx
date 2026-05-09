@@ -1,5 +1,6 @@
 import { useAuth } from "@/lib/auth";
 import { Link, useLocation } from "wouter";
+import { RateLimitFallbackBanner } from "./rate-limit-fallback-banner";
 
 const navLinks = [
   { href: "/", label: "الرئيسية", icon: "🏠" },
@@ -45,23 +46,21 @@ export function PortalLayout({ children }: { children: React.ReactNode }) {
             {navLinks.map((link) => {
               const isActive = link.href === "/" ? location === "/" : location.startsWith(link.href);
               return (
-                <Link key={link.href} href={link.href}>
-                  <a
-                    className={`flex items-center gap-1.5 px-3 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+                <Link key={link.href} href={link.href} className={`flex items-center gap-1.5 px-3 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
                       isActive
                         ? "border-blue-600 text-blue-600"
                         : "border-transparent text-gray-600 hover:text-gray-900"
-                    }`}
-                  >
+                    }`}>
                     <span>{link.icon}</span>
                     <span>{link.label}</span>
-                  </a>
-                </Link>
+                  </Link>
               );
             })}
           </div>
         </div>
       </nav>
+
+      <RateLimitFallbackBanner />
 
       <main className="max-w-5xl mx-auto px-4 py-6">
         {children}

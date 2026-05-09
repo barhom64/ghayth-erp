@@ -3,34 +3,64 @@ import {
   ValidationError,
   NotFoundError,
   IntegrationError,
+  parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
+import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createJournalEntry, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog, todayISO } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
 
+import {
+  computeNextRunDate,
+  runRecurringJournal,
+  processDueRecurringJournals,
+  type RecurringFrequency,
+} from "../lib/recurringJournalProcessor.js";
+import { logger } from "../lib/logger.js";
+export type { RecurringFrequency };
+export { computeNextRunDate, runRecurringJournal, processDueRecurringJournals };
+
 export const recurringRouter = Router();
-recurringRouter.use(authMiddleware);
 
+const VALID_FREQUENCIES = ["daily", "weekly", "monthly", "quarterly", "yearly"] as const;
 
-export type RecurringFrequency = "daily" | "weekly" | "monthly" | "quarterly" | "yearly";
+const recurringJournalLineSchema = z.object({
+  accountCode: z.string(),
+  debit: z.coerce.number().default(0),
+  credit: z.coerce.number().default(0),
+  description: z.string().optional().nullable(),
+  costCenter: z.string().optional().nullable(),
+  departmentId: z.coerce.number().optional().nullable(),
+  projectId: z.coerce.number().optional().nullable(),
+});
 
-export function computeNextRunDate(fromDate: string | Date, frequency: RecurringFrequency): string {
-  const d = new Date(fromDate);
-  switch (frequency) {
-    case "daily": d.setDate(d.getDate() + 1); break;
-    case "weekly": d.setDate(d.getDate() + 7); break;
-    case "monthly": d.setMonth(d.getMonth() + 1); break;
-    case "quarterly": d.setMonth(d.getMonth() + 3); break;
-    case "yearly": d.setFullYear(d.getFullYear() + 1); break;
-    default: d.setMonth(d.getMonth() + 1);
-  }
-  return d.toISOString().slice(0, 10);
-}
+const createRecurringJournalSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "yearly"]),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  active: z.boolean().default(true),
+  templateLines: z.array(recurringJournalLineSchema),
+  templateRef: z.string().optional(),
+  templateDescription: z.string().optional(),
+});
+
+const updateRecurringJournalSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "yearly"]).optional(),
+  startDate: z.string().optional(),
+  nextRunDate: z.string().optional(),
+  active: z.boolean().optional(),
+  templateRef: z.string().optional(),
+  templateDescription: z.string().optional(),
+  templateLines: z.array(recurringJournalLineSchema).optional(),
+});
 
 recurringRouter.get("/recurring-journals", requirePermission("finance:read"), async (req, res) => {
   try {
@@ -66,7 +96,7 @@ recurringRouter.get("/recurring-journals", requirePermission("finance:read"), as
 recurringRouter.get("/recurring-journals/:id", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = ANY($2) AND "deletedAt" IS NULL`,
       [id, scope.allowedCompanies]
@@ -76,9 +106,9 @@ recurringRouter.get("/recurring-journals/:id", requirePermission("finance:read")
       `SELECT rr.*, je.ref AS "journalRef", je.description AS "journalDescription"
        FROM recurring_journal_runs rr
        LEFT JOIN journal_entries je ON je.id = rr."journalEntryId"
-       WHERE rr."recurringJournalId" = $1
+       WHERE rr."recurringJournalId" = $1 AND rr."companyId" = $2
        ORDER BY rr."createdAt" DESC LIMIT 50`,
-      [id]
+      [id, scope.companyId]
     );
     res.json({ ...row, history });
   } catch (err) {
@@ -117,27 +147,15 @@ recurringRouter.post("/recurring-journals", requirePermission("finance:create"),
     const scope = req.scope!;
 
     const {
-      name, description, frequency, startDate, active = true,
+      name, description, frequency, startDate, active,
       templateLines, templateRef, templateDescription,
-    } = req.body as any;
+    } = zodParse(createRecurringJournalSchema.safeParse(req.body ?? {}));
 
-    if (!name || !String(name).trim()) {
-      throw new ValidationError("اسم القيد الدوري مطلوب", {
-        field: "name",
-        fix: "أدخل اسماً واضحاً",
-      });
-    }
-    const freq = String(frequency || "").toLowerCase() as RecurringFrequency;
-    if (!["daily", "weekly", "monthly", "quarterly", "yearly"].includes(freq)) {
+    const freq = frequency.toLowerCase() as RecurringFrequency;
+    if (!(VALID_FREQUENCIES as readonly string[]).includes(freq)) {
       throw new ValidationError("تكرار غير صالح", {
         field: "frequency",
         fix: "اختر: daily أو weekly أو monthly أو quarterly أو yearly",
-      });
-    }
-    if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
-      throw new ValidationError("تاريخ البدء مطلوب", {
-        field: "startDate",
-        fix: "استخدم الصيغة YYYY-MM-DD",
       });
     }
     const v = validateTemplateLines(templateLines);
@@ -178,7 +196,7 @@ recurringRouter.post("/recurring-journals", requirePermission("finance:create"),
       entity: "recurring_journals",
       entityId: insertId,
       after: { name, frequency: freq, startDate, lineCount: v.lines.length },
-    }).catch((err) => console.error("[audit] recurring_journal.created:", err));
+    }).catch((err) => logger.error(err, "[audit] recurring_journal.created:"));
 
     res.status(201).json({ id: insertId, name, frequency: freq, startDate, nextRunDate, active });
   } catch (err) {
@@ -190,8 +208,8 @@ recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:upda
   try {
     const scope = req.scope!;
 
-    const id = Number(req.params.id);
-    const b = req.body as any;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(updateRecurringJournalSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<any>(
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -211,7 +229,7 @@ recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:upda
     addField("description", b.description);
     if (b.frequency !== undefined) {
       const freq = String(b.frequency).toLowerCase();
-      if (!["daily", "weekly", "monthly", "quarterly", "yearly"].includes(freq)) {
+      if (!(VALID_FREQUENCIES as readonly string[]).includes(freq)) {
         throw new ValidationError("تكرار غير صالح", {
           field: "frequency",
           fix: "اختر: daily أو weekly أو monthly أو quarterly أو yearly",
@@ -245,7 +263,7 @@ recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:upda
     params.push(id);
     params.push(scope.companyId);
     await rawExecute(
-      `UPDATE recurring_journals SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length}`,
+      `UPDATE recurring_journals SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`,
       params
     );
 
@@ -265,7 +283,7 @@ recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:upda
       entity: "recurring_journals",
       entityId: id,
       after: { fields: Object.keys(b) },
-    }).catch((err) => console.error("[audit] recurring_journal.updated:", err));
+    }).catch((err) => logger.error(err, "[audit] recurring_journal.updated:"));
 
     res.json({ success: true, id });
   } catch (err) {
@@ -273,66 +291,11 @@ recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:upda
   }
 });
 
-export async function runRecurringJournal(params: {
-  companyId: number;
-  recurring: any;
-  triggeredBy: "scheduler" | "manual";
-  actorAssignmentId?: number;
-  branchId?: number;
-}): Promise<{ success: boolean; journalId?: number; ref?: string; error?: string }> {
-  const { companyId, recurring, triggeredBy, actorAssignmentId, branchId } = params;
-  try {
-    const lines = typeof recurring.templateLines === "string"
-      ? JSON.parse(recurring.templateLines)
-      : recurring.templateLines;
-    const ref = `${recurring.templateRef || `REC-${recurring.id}`}-${new Date().toISOString().slice(0, 10)}`;
-    const description = recurring.templateDescription || recurring.description || recurring.name;
-
-    const journalId = await createJournalEntry({
-      companyId,
-      branchId: branchId ?? recurring.branchId ?? 0,
-      createdBy: actorAssignmentId ?? recurring.createdBy ?? 0,
-      ref,
-      description,
-      type: "recurring",
-      sourceType: "recurring_journal",
-      sourceId: recurring.id,
-      lines,
-    });
-
-    const today = new Date().toISOString().slice(0, 10);
-    const next = computeNextRunDate(today, recurring.frequency);
-    await rawExecute(
-      `UPDATE recurring_journals
-         SET "lastRunDate" = $1, "nextRunDate" = $2, "runsCount" = "runsCount" + 1, "updatedAt" = NOW()
-       WHERE id = $3`,
-      [today, next, recurring.id]
-    );
-    await rawExecute(
-      `INSERT INTO recurring_journal_runs
-         ("companyId","recurringJournalId","journalEntryId","runDate",status,"triggeredBy")
-       VALUES ($1,$2,$3,$4,'success',$5)`,
-      [companyId, recurring.id, journalId, today, triggeredBy]
-    );
-
-    return { success: true, journalId, ref };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    await rawExecute(
-      `INSERT INTO recurring_journal_runs
-         ("companyId","recurringJournalId","runDate",status,error,"triggeredBy")
-       VALUES ($1,$2,$3,'failed',$4,$5)`,
-      [companyId, recurring.id, new Date().toISOString().slice(0, 10), msg, triggeredBy]
-    ).catch(() => {});
-    return { success: false, error: msg };
-  }
-}
-
 recurringRouter.post("/recurring-journals/:id/run-now", requirePermission("finance:create"), async (req, res) => {
   try {
     const scope = req.scope!;
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [recurring] = await rawQuery<any>(
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -372,7 +335,7 @@ recurringRouter.post("/recurring-journals/:id/run-now", requirePermission("finan
       entity: "recurring_journals",
       entityId: id,
       after: { journalId: result.journalId, ref: result.ref, triggeredBy: "manual" },
-    }).catch((err) => console.error("[audit] recurring_journal.run_now:", err));
+    }).catch((err) => logger.error(err, "[audit] recurring_journal.run_now:"));
 
     res.status(201).json(result);
   } catch (err) {
@@ -384,7 +347,7 @@ recurringRouter.delete("/recurring-journals/:id", requirePermission("finance:del
   try {
     const scope = req.scope!;
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
 
     const [existing] = await rawQuery<any>(
       `SELECT id, name FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -414,7 +377,7 @@ recurringRouter.delete("/recurring-journals/:id", requirePermission("finance:del
       entity: "recurring_journals",
       entityId: id,
       after: { name: existing.name, softDelete: true },
-    }).catch((err) => console.error("[audit] recurring_journal.deleted:", err));
+    }).catch((err) => logger.error(err, "[audit] recurring_journal.deleted:"));
 
     res.json({ success: true });
   } catch (err) {
@@ -422,25 +385,3 @@ recurringRouter.delete("/recurring-journals/:id", requirePermission("finance:del
   }
 });
 
-/**
- * Scheduler entry point: run all active recurring journals whose
- * nextRunDate is on or before today. Invoked by the daily cron job.
- */
-export async function processDueRecurringJournals(): Promise<string> {
-  const due = await rawQuery<any>(
-    `SELECT * FROM recurring_journals
-     WHERE active = TRUE AND "deletedAt" IS NULL AND "nextRunDate" <= CURRENT_DATE`
-  );
-  let ok = 0;
-  let failed = 0;
-  for (const r of due) {
-    const result = await runRecurringJournal({
-      companyId: r.companyId,
-      recurring: r,
-      triggeredBy: "scheduler",
-      branchId: r.branchId ?? undefined,
-    });
-    if (result.success) ok++; else failed++;
-  }
-  return `Recurring journals: ${ok} success, ${failed} failed, ${due.length} due`;
-}

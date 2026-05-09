@@ -1,8 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { logSecurityEvent } from "./permissionMiddleware.js";
+import { logger } from "../lib/logger.js";
 
-const roleModuleCache = new Map<number, { modules: string[]; roles: string[]; level: number; expiresAt: number }>();
+const roleModuleCache = new Map<string, { modules: string[]; roles: string[]; level: number; expiresAt: number }>();
 const CACHE_TTL = 30_000;
 
 const ROLE_LEVELS: Record<string, number> = {
@@ -39,13 +40,14 @@ const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
   employee: ["home","requests","documents","comms"],
 };
 
-async function getUserModules(userId: number, fallbackRole?: string): Promise<{ modules: string[]; roles: string[]; level: number }> {
-  const cached = roleModuleCache.get(userId);
+async function getUserModules(userId: number, fallbackRole?: string, companyId?: number): Promise<{ modules: string[]; roles: string[]; level: number }> {
+  const cacheKey = `${userId}:${companyId ?? 0}`;
+  const cached = roleModuleCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached;
 
   const rows = await rawQuery<{ roleKey: string; modules: any; level: number }>(
-    `SELECT "roleKey", modules, level FROM user_roles WHERE "userId" = $1`,
-    [userId]
+    `SELECT "roleKey", modules, level FROM user_roles WHERE "userId" = $1 AND ("companyId" IS NULL OR "companyId" = $2)`,
+    [userId, companyId ?? 0]
   );
 
   const allModules = new Set<string>();
@@ -68,7 +70,7 @@ async function getUserModules(userId: number, fallbackRole?: string): Promise<{ 
   }
 
   const result = { modules: [...allModules], roles, level: maxLevel, expiresAt: Date.now() + CACHE_TTL };
-  roleModuleCache.set(userId, result);
+  roleModuleCache.set(cacheKey, result);
   return result;
 }
 
@@ -80,7 +82,7 @@ export function requireModule(...requiredModules: string[]) {
     if (scope.isOwner || scope.role === "owner") { next(); return; }
 
     try {
-      const { modules } = await getUserModules(scope.userId, scope.role);
+      const { modules } = await getUserModules(scope.userId, scope.role, scope.companyId);
 
       if (modules.length === 0) {
         const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket?.remoteAddress;
@@ -93,7 +95,7 @@ export function requireModule(...requiredModules: string[]) {
           requiredPerms: requiredModules,
           reason: "module_access_denied_no_modules",
           ip,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[middleware] background task failed"));
 
         res.status(403).json({
           error: "لا تملك صلاحية الوصول لهذا القسم",
@@ -116,7 +118,7 @@ export function requireModule(...requiredModules: string[]) {
           requiredPerms: requiredModules,
           reason: "module_access_denied",
           ip,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[middleware] background task failed"));
 
         res.status(403).json({
           error: "لا تملك صلاحية الوصول لهذا القسم",
@@ -128,7 +130,7 @@ export function requireModule(...requiredModules: string[]) {
       }
       next();
     } catch (err) {
-      console.error("Role guard error:", err);
+      logger.error(err, "Role guard error:");
       res.status(500).json({ error: "خطأ في التحقق من الصلاحيات", code: "SERVER_ERROR" });
     }
   };
@@ -145,7 +147,7 @@ export function requireMinLevel(minLevel: number) {
     if (assignmentLevel >= minLevel) { next(); return; }
 
     try {
-      const { level } = await getUserModules(scope.userId, scope.role);
+      const { level } = await getUserModules(scope.userId, scope.role, scope.companyId);
       const effectiveLevel = Math.max(assignmentLevel, level);
 
       if (effectiveLevel < minLevel) {
@@ -159,7 +161,7 @@ export function requireMinLevel(minLevel: number) {
           requiredPerms: [`min_level:${minLevel}`],
           reason: "insufficient_level",
           ip,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[middleware] background task failed"));
 
         res.status(403).json({
           error: "مستوى الصلاحيات غير كافٍ للوصول لهذا المورد",
@@ -171,7 +173,7 @@ export function requireMinLevel(minLevel: number) {
       }
       next();
     } catch (err) {
-      console.error("Role guard error:", err);
+      logger.error(err, "Role guard error:");
       res.status(500).json({ error: "خطأ في التحقق من الصلاحيات", code: "SERVER_ERROR" });
     }
   };
@@ -185,7 +187,7 @@ export function requireRole(...requiredRoles: string[]) {
     if (scope.isOwner || scope.role === "owner") { next(); return; }
 
     try {
-      const { roles } = await getUserModules(scope.userId, scope.role);
+      const { roles } = await getUserModules(scope.userId, scope.role, scope.companyId);
 
       const hasRole = requiredRoles.some(r =>
         roles.includes(r) || scope.role === r
@@ -202,7 +204,7 @@ export function requireRole(...requiredRoles: string[]) {
           requiredPerms: requiredRoles,
           reason: "role_required",
           ip,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[middleware] background task failed"));
 
         res.status(403).json({
           error: "لا تملك الدور المطلوب لهذا الإجراء",
@@ -214,13 +216,18 @@ export function requireRole(...requiredRoles: string[]) {
       }
       next();
     } catch (err) {
-      console.error("Role guard error:", err);
+      logger.error(err, "Role guard error:");
       res.status(500).json({ error: "خطأ في التحقق من الصلاحيات", code: "SERVER_ERROR" });
     }
   };
 }
 
 export function invalidateRoleCache(userId?: number): void {
-  if (userId) roleModuleCache.delete(userId);
-  else roleModuleCache.clear();
+  if (userId) {
+    for (const key of roleModuleCache.keys()) {
+      if (key.startsWith(`${userId}:`)) roleModuleCache.delete(key);
+    }
+  } else {
+    roleModuleCache.clear();
+  }
 }

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api";
+import { notifyRateLimited, RateLimitError } from "@/lib/rate-limit-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,12 +59,15 @@ export default function DocumentsUpload() {
     }
     setUploading(true);
     try {
-      const token = localStorage.getItem("erp_token");
       const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       });
+      if (urlRes.status === 429) {
+        throw new RateLimitError(notifyRateLimited(urlRes));
+      }
       if (!urlRes.ok) throw new Error("فشل في الحصول على رابط الرفع");
       const { uploadURL, objectPath } = await urlRes.json();
 
@@ -95,6 +99,11 @@ export default function DocumentsUpload() {
       toast({ title: "تم رفع المستند بنجاح" });
       setLocation("/documents");
     } catch (err: any) {
+      if (err instanceof RateLimitError) {
+        // notifyRateLimited already showed the debounced rate-limit toast.
+        setUploading(false);
+        return;
+      }
       toast({ variant: "destructive", title: "خطأ أثناء الرفع", description: err.message || "حدث خطأ" });
     } finally {
       setUploading(false);
@@ -204,7 +213,7 @@ export default function DocumentsUpload() {
 
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/documents")}>إلغاء</Button>
-          <Button onClick={handleUpload} disabled={!form.title || !file || uploading}>
+          <Button onClick={handleUpload} disabled={!form.title || !file || uploading} rateLimitAware>
             {uploading ? "جاري الرفع..." : "رفع المستند"}
           </Button>
         </div>

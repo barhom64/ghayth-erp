@@ -36,10 +36,10 @@ export default function LoansPage() {
   const stats = data?.stats || {};
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
-  const approveMut = useApiMutation(null as any, "PATCH", [["hr-loans"]], {
+  const approveMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-loans"]], {
     successMessage: "تم اعتماد السلفة بنجاح",
   });
-  const rejectMut = useApiMutation(null as any, "PATCH", [["hr-loans"]], {
+  const rejectMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-loans"]], {
     successMessage: "تم رفض السلفة",
   });
 

@@ -11,7 +11,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function Intelligence() {
-  const { data: overview, isLoading: loadingOverview } = useApiQuery(["intelligence-overview"], "/intelligence/overview");
+  const { data: overview, isLoading: loadingOverview, isError: overviewError } = useApiQuery(["intelligence-overview"], "/intelligence/overview");
   const { data: alertsResp, isLoading: loadingAlerts } = useApiQuery<any>(["intelligence-alerts"], "/intelligence/alerts");
   const alerts = asList(alertsResp);
   const { data: schedule } = useApiQuery<any>(["daily-schedule"], "/intelligence/daily-schedule");
@@ -39,6 +39,7 @@ export default function Intelligence() {
   ];
 
   if (loadingOverview) return <LoadingSpinner />;
+  if (overviewError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   return (
     <PageShell title="لوحة الذكاء">

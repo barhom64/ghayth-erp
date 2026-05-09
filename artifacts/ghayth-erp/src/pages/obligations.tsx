@@ -3,6 +3,7 @@ import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageShell } from "@/components/page-shell";
@@ -68,7 +69,7 @@ export default function ObligationsPage() {
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["obligations-list", statusFilter],
-    `/obligations?status=${encodeURIComponent(statusFilter)}&limit=200`
+    `/obligations?${statusFilter !== "all" ? `status=${encodeURIComponent(statusFilter)}&` : ""}limit=200`
   );
   const list = asList(data?.data || data);
   const filtered = search
@@ -147,7 +148,7 @@ export default function ObligationsPage() {
             <SelectItem value="escalated_l1,escalated_l2">في تصعيد</SelectItem>
             <SelectItem value="met">ملبى</SelectItem>
             <SelectItem value="cancelled">ملغى</SelectItem>
-            <SelectItem value="">الكل</SelectItem>
+            <SelectItem value="all">الكل</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -173,9 +174,7 @@ export default function ObligationsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm">{o.title}</span>
-                        <Badge className={STATUS_COLORS[o.status] || "bg-gray-100 text-gray-700"}>
-                          {STATUS_LABELS[o.status] || o.status}
-                        </Badge>
+                        <PageStatusBadge status={o.status} domain="obligation" />
                         {o.obligationType && (
                           <Badge variant="outline" className="text-xs">
                             {TYPE_LABELS[o.obligationType] || o.obligationType}

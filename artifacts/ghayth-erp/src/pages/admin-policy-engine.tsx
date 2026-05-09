@@ -4,6 +4,7 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   ShieldAlert, RefreshCw, Users, Lock, AlertTriangle, Scan,
 } from "lucide-react";
@@ -13,6 +14,15 @@ const SEVERITY_COLORS: Record<string, string> = {
   high: "bg-orange-100 text-orange-800",
   medium: "bg-yellow-100 text-yellow-800",
   low: "bg-blue-100 text-blue-800",
+  info: "bg-blue-50 text-blue-700",
+};
+
+const SEVERITY_LABELS: Record<string, string> = {
+  critical: "حرج",
+  high: "عالي",
+  medium: "متوسط",
+  low: "منخفض",
+  info: "معلوماتي",
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -37,6 +47,20 @@ export default function AdminPolicyEngine() {
   const sensitiveOps = strategies?.sensitiveOperations ?? [];
 
   const isLoading = auditLoading || stratLoading;
+
+  const violationColumns: DataTableColumn<any>[] = [
+    { key: "type", header: "النوع", searchable: true, render: (r: any) => <Badge variant="outline">{TYPE_LABELS[r.type] || r.type}</Badge> },
+    { key: "severity", header: "الخطورة", sortable: true, render: (r: any) => <Badge className={SEVERITY_COLORS[r.severity] || ""}>{SEVERITY_LABELS[r.severity] || r.severity}</Badge> },
+    { key: "details", header: "التفاصيل", searchable: true },
+  ];
+
+  const roleStrategyColumns: DataTableColumn<any>[] = [
+    { key: "label", header: "الدور", searchable: true, render: (r: any) => <span className="font-medium">{r.label}</span> },
+    { key: "tier", header: "المستوى", sortable: true, render: (r: any) => <Badge variant="outline">{r.tier}</Badge> },
+    { key: "canDelegate", header: "تفويض", render: (r: any) => <span>{r.canDelegate ? "✓" : "—"}</span> },
+    { key: "maxBranches", header: "حد الفروع", render: (r: any) => <span>{r.maxBranches ?? "∞"}</span> },
+    { key: "description", header: "الوصف", render: (r: any) => <span className="text-xs text-gray-500">{r.description}</span> },
+  ];
 
   return (
     <PageShell
@@ -87,30 +111,12 @@ export default function AdminPolicyEngine() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="max-h-[400px] overflow-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-gray-50 sticky top-0">
-                        <th className="p-2 text-start">النوع</th>
-                        <th className="p-2 text-start">الخطورة</th>
-                        <th className="p-2 text-start">التفاصيل</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {violations.map((v: any, i: number) => (
-                        <tr key={i} className="border-b hover:bg-gray-50">
-                          <td className="p-2">
-                            <Badge variant="outline">{TYPE_LABELS[v.type] || v.type}</Badge>
-                          </td>
-                          <td className="p-2">
-                            <Badge className={SEVERITY_COLORS[v.severity] || ""}>{v.severity}</Badge>
-                          </td>
-                          <td className="p-2 text-xs">{v.details}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataTable
+                  columns={violationColumns}
+                  data={violations}
+                  noToolbar
+                  pageSize={0}
+                />
               </CardContent>
             </Card>
           )}
@@ -177,30 +183,13 @@ export default function AdminPolicyEngine() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-gray-50">
-                      <th className="p-2 text-start">الدور</th>
-                      <th className="p-2 text-start">المستوى</th>
-                      <th className="p-2 text-start">تفويض</th>
-                      <th className="p-2 text-start">حد الفروع</th>
-                      <th className="p-2 text-start">الوصف</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {roleStrategies.map((s: any, i: number) => (
-                      <tr key={i} className="border-b hover:bg-gray-50">
-                        <td className="p-2 font-medium">{s.label}</td>
-                        <td className="p-2"><Badge variant="outline">{s.tier}</Badge></td>
-                        <td className="p-2">{s.canDelegate ? "✓" : "—"}</td>
-                        <td className="p-2">{s.maxBranches ?? "∞"}</td>
-                        <td className="p-2 text-xs text-gray-500">{s.description}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                columns={roleStrategyColumns}
+                data={roleStrategies}
+                noToolbar
+                pageSize={0}
+                emptyMessage="لا توجد استراتيجيات"
+              />
             </CardContent>
           </Card>
         </div>

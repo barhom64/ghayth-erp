@@ -12,6 +12,8 @@ import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 /**
  * TransferDetail — detail page for a single employee transfer.
@@ -179,6 +181,14 @@ export default function TransferDetail() {
                 approveEndpoint={`/hr/transfers/${id}/approve`}
                 rejectEndpoint={`/hr/transfers/${id}/approve`}
                 returnEndpoint={`/hr/transfers/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, reason: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, reason: notes })}
+                returnBody={(notes) => ({ approved: "returned", reason: notes })}
+                pendingStatuses={["pending", "returned"]}
+                invalidateKeys={[["transfers"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث طلب النقل" });
@@ -201,8 +211,11 @@ export default function TransferDetail() {
         )}
       </div>
 
-      {id && <ApprovalTimeline entityType="employee_transfer" entityId={id} />}
-      {id && <EntityDocuments entityType="employee_transfer" entityId={id} />}
+      {id && <ApprovalTimeline entityType="transfer" entityId={id} />}
+      {id && <EntityDocuments entityType="transfer" entityId={id} />}
+
+      {id && <EntityComments entityType="transfer" entityId={id} />}
+      {id && <EntityTags entityType="transfer" entityId={id} />}
     </div>
   );
 

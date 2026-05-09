@@ -1,11 +1,12 @@
 import { Router } from "express";
+import { FINANCE_ROLES, HR_ROLES, PR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError } from "../lib/errorHandler.js";
+import { todayISO } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 function buildFilter(scope: any, req: any, opts: { branchColumn?: string } = {}) {
   const filters = parseScopeFilters(req);
@@ -21,7 +22,7 @@ function buildFilterNoBranch(scope: any, req: any) {
 router.get("/", async (req, res) => {
   try {
     const scope = req.scope!;
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
     const { where, params, nextParamIndex } = buildFilter(scope, req);
 
     const todayIdx = nextParamIndex;
@@ -40,7 +41,7 @@ router.get("/", async (req, res) => {
           / NULLIF(COUNT(*) FILTER (WHERE "scheduledDate" = $${todayIdx}), 0), 0
         ) AS "completedPct"
        FROM tasks
-       WHERE ${where}`,
+       WHERE ${where} AND "deletedAt" IS NULL`,
       taskParams
     );
 
@@ -51,6 +52,7 @@ router.get("/", async (req, res) => {
        LEFT JOIN employee_assignments ea ON ea.id = t."assignedTo"
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE ${where.replace(/"companyId"/g, 't."companyId"').replace(/"branchId"/g, 't."branchId"')}
+         AND t."deletedAt" IS NULL
          AND t."scheduledDate" = $${todayIdx}
        ORDER BY t.priority DESC, t.status ASC
        LIMIT 15`,
@@ -64,7 +66,7 @@ router.get("/", async (req, res) => {
        FROM hr_leave_requests lr
        JOIN employees e ON e.id = lr."employeeId"
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-       WHERE ${leaveWhere.replace(/"companyId"/g, 'lr."companyId"')} AND lr.status = 'pending'
+       WHERE ${leaveWhere.replace(/"companyId"/g, 'lr."companyId"')} AND lr.status = 'pending' AND lr."deletedAt" IS NULL
        ORDER BY lr."createdAt" DESC
        LIMIT 10`,
       leaveParams
@@ -76,12 +78,12 @@ router.get("/", async (req, res) => {
       pendingFinanceApprovals = await rawQuery<any>(
         `SELECT id, ref, title, status, "createdAt"
          FROM expense_claims
-         WHERE ${fw} AND status = 'pending'
+         WHERE ${fw} AND "deletedAt" IS NULL AND status = 'pending'
          ORDER BY "createdAt" DESC
          LIMIT 5`,
         fp
       );
-    } catch (_e) { console.error("Dashboard: failed to load pending expense claims:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard: failed to load pending expense claims:"); }
 
     let pendingPurchaseRequests: any[] = [];
     try {
@@ -94,15 +96,15 @@ router.get("/", async (req, res) => {
          LIMIT 5`,
         pp
       );
-    } catch (_e) { console.error("Dashboard: failed to load pending purchase requests:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard: failed to load pending purchase requests:"); }
 
     const notifications = await rawQuery<any>(
       `SELECT id, type, title, body, priority, "isRead", "createdAt"
        FROM notifications
-       WHERE "assignmentId" = $1 AND "isRead" = false
+       WHERE "assignmentId" = $1 AND "companyId" = $2 AND "isRead" = false
        ORDER BY "createdAt" DESC
        LIMIT 8`,
-      [scope.activeAssignmentId]
+      [scope.activeAssignmentId, scope.companyId]
     );
 
     res.json({
@@ -129,7 +131,7 @@ router.get("/", async (req, res) => {
 router.get("/summary", async (req, res) => {
   try {
     const scope = req.scope!;
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
     const monthStart = today.slice(0, 7) + "-01";
 
     const { where, params, nextParamIndex } = buildFilter(scope, req);
@@ -140,7 +142,7 @@ router.get("/summary", async (req, res) => {
     );
     const { where: noBranchWhere, params: noBranchParams, nextParamIndex: noBranchNextIdx } = buildFilterNoBranch(scope, req);
     const [clients] = await rawQuery<any>(
-      `SELECT COUNT(*) AS total FROM clients WHERE ${noBranchWhere}`,
+      `SELECT COUNT(*) AS total FROM clients WHERE ${noBranchWhere} AND "deletedAt" IS NULL`,
       [...noBranchParams]
     );
     const [invoices] = await rawQuery<any>(
@@ -160,7 +162,7 @@ router.get("/summary", async (req, res) => {
     const [tasks] = await rawQuery<any>(
       `SELECT COUNT(*) AS active
        FROM tasks
-       WHERE ${where} AND status IN ('in_progress','pending')
+       WHERE ${where} AND "deletedAt" IS NULL AND status IN ('in_progress','pending')
          AND "scheduledDate" = $${nextParamIndex}`,
       [...params, today]
     );
@@ -168,20 +170,20 @@ router.get("/summary", async (req, res) => {
     let vehicles = { total: 0, active: 0 };
     try {
       const [v] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='active') AS active FROM fleet_vehicles WHERE ${where}`,
+        `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='active') AS active FROM fleet_vehicles WHERE ${where} AND "deletedAt" IS NULL`,
         [...params]
       );
       vehicles = { total: Number(v?.total ?? 0), active: Number(v?.active ?? 0) };
-    } catch (_e) { console.error("Dashboard summary: failed to load fleet vehicles:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard summary: failed to load fleet vehicles:"); }
 
     let tickets = { open: 0, breached: 0 };
     try {
       const [t] = await rawQuery<any>(
-        `SELECT COUNT(*) FILTER (WHERE status='open') AS open, COUNT(*) FILTER (WHERE status='open' AND "slaDeadline" < NOW()) AS breached FROM support_tickets WHERE ${noBranchWhere}`,
+        `SELECT COUNT(*) FILTER (WHERE status='open') AS open, COUNT(*) FILTER (WHERE status='open' AND "slaDeadline" < NOW()) AS breached FROM support_tickets WHERE ${noBranchWhere} AND "deletedAt" IS NULL`,
         [...noBranchParams]
       );
       tickets = { open: Number(t?.open ?? 0), breached: Number(t?.breached ?? 0) };
-    } catch (_e) { console.error("Dashboard summary: failed to load support tickets:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard summary: failed to load support tickets:"); }
 
     let projects = { active: 0, total: 0 };
     try {
@@ -190,43 +192,43 @@ router.get("/summary", async (req, res) => {
         [...noBranchParams]
       );
       projects = { total: Number(p?.total ?? 0), active: Number(p?.active ?? 0) };
-    } catch (_e) { console.error("Dashboard summary: failed to load projects:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard summary: failed to load projects:"); }
 
     let contracts = { active: 0, expiringSoon: 0 };
     try {
       const [c] = await rawQuery<any>(
-        `SELECT COUNT(*) FILTER (WHERE status='active') AS active, COUNT(*) FILTER (WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 30) AS "expiringSoon" FROM legal_contracts WHERE ${noBranchWhere}`,
+        `SELECT COUNT(*) FILTER (WHERE status='active') AS active, COUNT(*) FILTER (WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 30) AS "expiringSoon" FROM legal_contracts WHERE ${noBranchWhere} AND "deletedAt" IS NULL`,
         [...noBranchParams]
       );
       contracts = { active: Number(c?.active ?? 0), expiringSoon: Number(c?.expiringSoon ?? 0) };
-    } catch (_e) { console.error("Dashboard summary: failed to load contracts:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard summary: failed to load contracts:"); }
 
     let opportunities = { total: 0, value: 0 };
     try {
       const [o] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total, COALESCE(SUM(value),0) AS value FROM crm_opportunities WHERE ${noBranchWhere} AND stage NOT IN ('lost','won')`,
+        `SELECT COUNT(*) AS total, COALESCE(SUM(value),0) AS value FROM crm_opportunities WHERE ${noBranchWhere} AND "deletedAt" IS NULL AND stage NOT IN ('lost','won')`,
         [...noBranchParams]
       );
       opportunities = { total: Number(o?.total ?? 0), value: Number(o?.value ?? 0) };
-    } catch (_e) { console.error("Dashboard summary: failed to load CRM opportunities:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard summary: failed to load CRM opportunities:"); }
 
     let warehouseAlerts = 0;
     try {
       const [w] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM warehouse_products WHERE ${where} AND status='active' AND "currentStock" <= "minStock"`,
+        `SELECT COUNT(*) AS total FROM warehouse_products WHERE ${where} AND status='active' AND "deletedAt" IS NULL AND "currentStock" <= "minStock"`,
         [...params]
       );
       warehouseAlerts = Number(w?.total ?? 0);
-    } catch (_e) { console.error("Dashboard summary: failed to load warehouse alerts:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard summary: failed to load warehouse alerts:"); }
 
     let pendingLeaveRequests = 0;
     try {
       const [lr] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM hr_leave_requests WHERE ${noBranchWhere} AND status = 'pending'`,
+        `SELECT COUNT(*) AS total FROM hr_leave_requests WHERE ${noBranchWhere} AND status = 'pending' AND "deletedAt" IS NULL`,
         [...noBranchParams]
       );
       pendingLeaveRequests = Number(lr?.total ?? 0);
-    } catch (_e) { console.error("Dashboard summary: failed to load pending leave requests:", _e); }
+    } catch (_e) { logger.error(_e, "Dashboard summary: failed to load pending leave requests:"); }
 
     res.json({
       totalEmployees: Number(employees?.total ?? 0),
@@ -256,22 +258,22 @@ router.get("/role-data", async (req, res) => {
     const role = scope.role;
     const result: any = { role };
 
-    if (["hr_manager", "general_manager", "owner"].includes(role)) {
+    if (HR_ROLES.includes(role)) {
       const [onboarding] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM tasks WHERE ${where} AND category = 'onboarding' AND status != 'completed'`, params
-      ).catch(() => [{ total: 0 }]);
+        `SELECT COUNT(*) AS total FROM tasks WHERE ${where} AND "deletedAt" IS NULL AND type = 'onboarding' AND status != 'completed'`, params
+      ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ total: 0 }]; });
       const probationRows = await rawQuery<any>(
         `SELECT e.name, ec."probationEndDate"
          FROM employee_contracts ec
          JOIN employees e ON e.id = ec."employeeId"
-         WHERE ec."companyId" = ANY($1::int[]) AND ec."probationEndDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+         WHERE ec."companyId" = ANY($1::int[]) AND ec."deletedAt" IS NULL AND ec."probationEndDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
          LIMIT 10`,
         [scope.allowedCompanies]
-      ).catch(() => []);
+      ).catch((e) => { logger.error(e, "dashboard query failed"); return []; });
       const [expiringDocs] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM employee_documents WHERE "companyId" = ANY($1::int[]) AND "expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`,
         [scope.allowedCompanies]
-      ).catch(() => [{ total: 0 }]);
+      ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ total: 0 }]; });
       result.hr = {
         pendingOnboarding: Number(onboarding?.total ?? 0),
         probationEnding: probationRows,
@@ -279,24 +281,24 @@ router.get("/role-data", async (req, res) => {
       };
     }
 
-    if (["finance_manager", "general_manager", "owner"].includes(role)) {
+    if (FINANCE_ROLES.includes(role)) {
       const [overdueInvoices] = await rawQuery<any>(
         `SELECT COUNT(*) AS count, COALESCE(SUM(total - "paidAmount"), 0) AS amount
          FROM invoices WHERE ${where} AND "deletedAt" IS NULL AND status IN ('overdue','sent') AND "dueDate" < CURRENT_DATE`, params
-      ).catch(() => [{ count: 0, amount: 0 }]);
+      ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ count: 0, amount: 0 }]; });
       const [advancedCollection] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM invoice_collection_stages ics
          JOIN invoices i ON i.id = ics."invoiceId" AND i."deletedAt" IS NULL
          WHERE i."companyId" = ANY($1::int[]) AND ics.stage >= 4`,
         [scope.allowedCompanies]
-      ).catch(() => [{ total: 0 }]);
+      ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ total: 0 }]; });
       const [budgetUsage] = await rawQuery<any>(
         `SELECT COALESCE(AVG(CASE WHEN b."totalAmount" > 0 THEN (COALESCE(bl_used.total,0)::numeric / b."totalAmount") * 100 ELSE 0 END), 0) AS avg
          FROM budgets b
          LEFT JOIN LATERAL (SELECT COALESCE(SUM(bl.amount),0) AS total FROM budget_lines bl WHERE bl."budgetId" = b.id) bl_used ON TRUE
-         WHERE b."companyId" = ANY($1::int[]) AND b.status = 'active'`,
+         WHERE b."companyId" = ANY($1::int[]) AND b."deletedAt" IS NULL AND b.status = 'active'`,
         [scope.allowedCompanies]
-      ).catch(() => [{ avg: 0 }]);
+      ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ avg: 0 }]; });
       result.finance = {
         overdueCount: Number(overdueInvoices?.count ?? 0),
         overdueAmount: Number(overdueInvoices?.amount ?? 0),
@@ -305,14 +307,14 @@ router.get("/role-data", async (req, res) => {
       };
     }
 
-    if (["branch_manager", "general_manager", "owner"].includes(role)) {
+    if (PR_APPROVAL_ROLES.includes(role)) {
       const [teamTasks] = await rawQuery<any>(
         `SELECT
            COUNT(*) AS total,
            COUNT(*) FILTER (WHERE status = 'completed') AS completed,
            COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "scheduledDate" < CURRENT_DATE) AS overdue
-         FROM tasks WHERE ${where}`, params
-      ).catch(() => [{ total: 0, completed: 0, overdue: 0 }]);
+         FROM tasks WHERE ${where} AND "deletedAt" IS NULL`, params
+      ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ total: 0, completed: 0, overdue: 0 }]; });
       result.manager = {
         teamTasksTotal: Number(teamTasks?.total ?? 0),
         teamTasksCompleted: Number(teamTasks?.completed ?? 0),
@@ -358,7 +360,7 @@ router.get("/charts/revenue", async (req, res) => {
          AND v."createdAt" >= (CURRENT_DATE - INTERVAL '6 months')
        GROUP BY month_key`,
       [...voucherParams]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "dashboard query failed"); return [] as any[]; });
     const expenseMap: Record<string, number> = {};
     for (const e of expenseRows) expenseMap[e.month_key] = Number(e.total);
 
@@ -447,13 +449,13 @@ router.get("/charts/recent-events", async (req, res) => {
         FROM invoices WHERE ${companyWhere} AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 3)
        UNION ALL
        (SELECT 'leave' AS type, id, 'طلب إجازة من ' || (SELECT name FROM employees WHERE id = lr."employeeId") AS text, lr."createdAt"
-        FROM hr_leave_requests lr WHERE lr.${companyWhere} ORDER BY lr."createdAt" DESC LIMIT 3)
+        FROM hr_leave_requests lr WHERE lr.${companyWhere} AND lr."deletedAt" IS NULL ORDER BY lr."createdAt" DESC LIMIT 3)
        UNION ALL
        (SELECT 'ticket' AS type, id, 'تذكرة دعم: ' || COALESCE(title, '#' || id) AS text, "createdAt"
-        FROM support_tickets WHERE ${companyWhere} ORDER BY "createdAt" DESC LIMIT 3)
+        FROM support_tickets WHERE ${companyWhere} AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 3)
        UNION ALL
        (SELECT 'task' AS type, id, 'مهمة: ' || COALESCE(title, '#' || id) AS text, "createdAt"
-        FROM tasks WHERE ${companyWhere} ORDER BY "createdAt" DESC LIMIT 3)
+        FROM tasks WHERE ${companyWhere} AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 3)
        UNION ALL
        (SELECT 'attendance' AS type, id, 'تسجيل حضور - ' || (SELECT name FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE ea.id=a."assignmentId" LIMIT 1) AS text, "createdAt"
         FROM attendance a WHERE a.${companyWhere} ORDER BY "createdAt" DESC LIMIT 3)

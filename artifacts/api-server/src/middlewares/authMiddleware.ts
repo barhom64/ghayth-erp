@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { verifyToken, type JWTPayload } from "../lib/auth.js";
 import { rawQuery } from "../lib/rawdb.js";
+import { logger } from "../lib/logger.js";
 
 export interface RequestScope {
   userId: number;
@@ -27,10 +28,11 @@ declare global {
 }
 
 export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const auth = req.headers.authorization;
-  if (!auth?.startsWith("Bearer ")) {
-    // 401 — no bearer token at all. Frontend reads `code: AUTH_MISSING` to
-    // trigger login redirect instead of showing a generic error page.
+  const cookieToken: string | undefined = req.cookies?.erp_access;
+  const authHeader = req.headers.authorization;
+  const token = cookieToken || (authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined);
+
+  if (!token) {
     res.status(401).json({
       error: "غير مصرح: لا يوجد توكن",
       code: "AUTH_MISSING",
@@ -39,15 +41,13 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     return;
   }
 
-  const token = auth.slice(7);
-
   try {
     const payload = verifyToken(token);
     const scope = await buildScope(payload);
     req.scope = scope;
     next();
   } catch (err: any) {
-    console.error("[AUTH] Token verification failed:", err?.message || err);
+    logger.error(err, "[AUTH] Token verification failed");
     const isExpired = /expired/i.test(String(err?.message ?? ""));
     res.status(401).json({
       error: isExpired ? "انتهت صلاحية الجلسة" : "توكن غير صالح",
@@ -68,7 +68,7 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
      JOIN users u ON u."employeeId" = ea."employeeId"
      LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
      LEFT JOIN employees e ON e.id = ea."employeeId"
-     WHERE ea.id = $1 AND ea.status = 'active' AND u.id = $2`,
+     WHERE ea.id = $1 AND ea.status = 'active' AND u.id = $2 AND u."isActive" = true`,
     [activeAssignmentId, payload.userId]
   );
 
@@ -114,28 +114,17 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
     effectiveBranchId = allowedBranches[0];
   }
   if (effectiveBranchId == null) {
-    // Absolutely nothing to fall back to — new tenant with no branches
-    // yet. Create the implicit "default" branch so the scope is always
-    // non-null. This is a one-time bootstrap per company.
-    const [created] = await rawQuery<any>(
-      `INSERT INTO branches ("companyId", name, "isActive")
-       VALUES ($1, 'الفرع الرئيسي', true)
-       ON CONFLICT DO NOTHING
-       RETURNING id`,
+    const [anyBranch] = await rawQuery<{ id: number }>(
+      `SELECT id FROM branches WHERE "companyId" = $1 AND status = 'active' ORDER BY id ASC LIMIT 1`,
       [assignment.companyId]
     );
-    if (created?.id) {
-      effectiveBranchId = created.id;
-      allowedBranches.push(created.id);
-    } else {
-      const [anyBranch] = await rawQuery<{ id: number }>(
-        `SELECT id FROM branches WHERE "companyId" = $1 ORDER BY id ASC LIMIT 1`,
-        [assignment.companyId]
-      );
-      effectiveBranchId = anyBranch?.id ?? 0;
-      if (anyBranch?.id && !allowedBranches.includes(anyBranch.id)) {
+    if (anyBranch?.id) {
+      effectiveBranchId = anyBranch.id;
+      if (!allowedBranches.includes(anyBranch.id)) {
         allowedBranches.push(anyBranch.id);
       }
+    } else {
+      effectiveBranchId = 0;
     }
   }
 

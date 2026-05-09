@@ -19,6 +19,8 @@
  * with one of these classes.
  */
 
+import { logger } from "./logger.js";
+
 export interface TypedErrorOptions {
   /** Form field that the error is attached to, when applicable. */
   field?: string;
@@ -92,6 +94,15 @@ export class ForbiddenError extends TypedError {
 export class IntegrationError extends TypedError {
   public readonly status = 502;
   public readonly code = "INTEGRATION_ERROR";
+}
+
+/** Parse a route param as a positive integer ID; throws ValidationError on NaN / ≤ 0. */
+export function parseId(val: string | string[] | undefined, label = "id"): number {
+  const raw = Array.isArray(val) ? val[0] : val;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n))
+    throw new ValidationError(`معرف غير صالح: ${label}`, { field: label });
+  return n;
 }
 
 /** True when `err` is one of our typed error classes. */
@@ -286,6 +297,14 @@ export function classifyDbError(err: unknown): ClassifiedError {
   };
 }
 
+/** Unwrap a Zod safeParse result — returns `data` or throws `ValidationError`. */
+export function zodParse<T>(result: { success: true; data: T } | { success: false; error: { errors: { message: string }[] } }): T {
+  if (!result.success) {
+    throw new ValidationError(result.error.errors[0]?.message ?? "بيانات غير صالحة");
+  }
+  return result.data;
+}
+
 export function handleRouteError(err: unknown, res: any, logContext: string): void {
   // Typed errors win — the route handler has already said exactly what the
   // client should see, so we skip DB error classification entirely.
@@ -294,9 +313,9 @@ export function handleRouteError(err: unknown, res: any, logContext: string): vo
     // visible to the operator even though we never ship it to the client.
     const underlying = (err as any).cause;
     if (underlying !== undefined) {
-      console.error(`[ERROR] ${logContext}:`, err.message, err.code, err.meta ?? "", underlying);
+      logger.error({ code: err.code, meta: err.meta, cause: underlying }, `[ERROR] ${logContext}: ${err.message}`);
     } else {
-      console.error(`[ERROR] ${logContext}:`, err.message, err.code, err.meta ?? "");
+      logger.error({ code: err.code, meta: err.meta }, `[ERROR] ${logContext}: ${err.message}`);
     }
     if (res.headersSent) return;
     res.status(err.status).json(err.toResponse());
@@ -308,9 +327,9 @@ export function handleRouteError(err: unknown, res: any, logContext: string): vo
     const safeFields = e && typeof e === "object"
       ? { message: e.message, code: e.code, detail: e.detail, hint: e.hint, table: e.table, column: e.column, constraint: e.constraint, position: e.position, where: e.where }
       : { message: String(e) };
-    console.error(`[ERROR] ${logContext}:`, JSON.stringify(safeFields), e?.stack ?? "");
+    logger.error({ ...safeFields, stack: e?.stack }, `[ERROR] ${logContext}`);
   } catch {
-    console.error(`[ERROR] ${logContext}: <unprintable error>`);
+    logger.error(`[ERROR] ${logContext}: <unprintable error>`);
   }
   const { status, message, code, field, fix } = classifyDbError(err);
   if (res.headersSent) return;

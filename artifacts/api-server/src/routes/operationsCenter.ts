@@ -1,11 +1,12 @@
 import { Router } from "express";
+import { OPS_CLOSE_ROLES, OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { handleRouteError, ValidationError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { handleRouteError, ValidationError, ForbiddenError, ConflictError , zodParse } from "../lib/errorHandler.js";
+import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { logger } from "../lib/logger.js";
 
 // ── Zod validation schemas ──────────────────────────────────────────
 const dailyCloseExecuteSchema = z.object({
@@ -14,7 +15,6 @@ const dailyCloseExecuteSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 function buildFilter(scope: any, req: any) {
   const filters = parseScopeFilters(req);
@@ -65,7 +65,7 @@ async function loadThresholds(companyId: number): Promise<Thresholds> {
       }
       return merged;
     }
-  } catch (_e) {}
+  } catch (_e) { logger.error(_e, "silent catch"); }
   return DEFAULT_THRESHOLDS;
 }
 
@@ -75,7 +75,7 @@ async function getApprovalSlaHours(): Promise<number> {
       `SELECT value FROM system_settings WHERE key = 'approval_sla_hours' LIMIT 1`
     );
     if (setting?.value) return Number(setting.value);
-  } catch (_) {}
+  } catch (_) { logger.error(_, "silent catch"); }
   return 48;
 }
 
@@ -116,13 +116,13 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
           { key: "violated", label: "مخالفات عمرة", value: violated, severity: severity(violated, t.violated.warn, t.violated.crit), actionLabel: "عرض المخالفات", actionLink: "/umrah?tab=penalties" },
         ],
       };
-    } catch (_e) { console.error("OpsCenter: umrah failed:", _e); }
+    } catch (_e) { logger.error(_e, "OpsCenter: umrah failed:"); }
 
     try {
       const [unitStats] = await rawQuery<any>(
         `SELECT
            COUNT(*) FILTER (WHERE status='under_maintenance') AS maintenance
-         FROM property_units WHERE "companyId"=$1`,
+         FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
         [cid]
       );
       const [overdueRent] = await rawQuery<any>(
@@ -136,13 +136,13 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
         `SELECT COUNT(*) AS total,
            COUNT(*) FILTER (WHERE "slaDeadline" IS NOT NULL AND "slaDeadline" < NOW()) AS breached
          FROM maintenance_requests
-         WHERE "companyId"=$1 AND status NOT IN ('completed','closed','rejected')`,
+         WHERE "companyId"=$1 AND status NOT IN ('completed','closed','rejected') AND "deletedAt" IS NULL`,
         [cid]
       );
       const [expContracts] = await rawQuery<any>(
         `SELECT COUNT(*) AS total
          FROM rental_contracts
-         WHERE "companyId"=$1 AND status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`,
+         WHERE "companyId"=$1 AND status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND "deletedAt" IS NULL`,
         [cid]
       );
       const overdueRentVal = Number(overdueRent?.total ?? 0);
@@ -158,10 +158,10 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
           { key: "expiringContracts", label: "عقود تنتهي خلال 30 يوم", value: expContractsVal, severity: severity(expContractsVal, t.expiringContracts.warn, t.expiringContracts.crit), actionLabel: "تجديد العقود", actionLink: "/properties/contracts" },
         ],
       };
-    } catch (_e) { console.error("OpsCenter: property failed:", _e); }
+    } catch (_e) { logger.error(_e, "OpsCenter: property failed:"); }
 
     try {
-      const today = new Date().toISOString().split("T")[0];
+      const today = todayISO();
       const [absent] = await rawQuery<any>(
         `SELECT
            (SELECT COUNT(*) FROM employee_assignments WHERE "companyId" = ANY($1::int[]) AND status='active') -
@@ -177,9 +177,9 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
         [companies]
       );
       const [violations] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM hr_violations WHERE "companyId" = ANY($1::int[]) AND status='pending'`,
+        `SELECT COUNT(*) AS total FROM employee_violations WHERE "companyId" = ANY($1::int[]) AND status IN ('pending_inquiry','pending_employee','pending_manager','pending_gm') AND "deletedAt" IS NULL`,
         [companies]
-      ).catch(() => [{ total: 0 }]);
+      ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; });
       const absentVal = Math.max(0, Number(absent?.total ?? 0));
       const pendingLeavesVal = Number(pendingLeaves?.total ?? 0);
       const expiringDocsVal = Number(expiringDocs?.total ?? 0);
@@ -193,7 +193,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
           { key: "violations", label: "مخالفات معلقة", value: violationsVal, severity: severity(violationsVal, t.violations.warn, t.violations.crit), actionLabel: "مراجعة المخالفات", actionLink: "/hr/violations" },
         ],
       };
-    } catch (_e) { console.error("OpsCenter: hr failed:", _e); }
+    } catch (_e) { logger.error(_e, "OpsCenter: hr failed:"); }
 
     try {
       const [overdueInv] = await rawQuery<any>(
@@ -204,17 +204,17 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
       const [pendingExpenses] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM expense_claims WHERE ${where} AND status='pending'`,
         params
-      ).catch(() => [{ total: 0 }]);
+      ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; });
       const [pendingPO] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM purchase_requests WHERE ${where} AND status='pending'`,
         params
-      ).catch(() => [{ total: 0 }]);
+      ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; });
       const [cashFlow] = await rawQuery<any>(
         `SELECT
            COALESCE((SELECT SUM(amount) FROM vouchers WHERE "companyId"=$1 AND type='receipt' AND "createdAt" >= date_trunc('month', CURRENT_DATE)), 0) AS inflow,
            COALESCE((SELECT SUM(amount) FROM vouchers WHERE "companyId"=$1 AND type='payment' AND "createdAt" >= date_trunc('month', CURRENT_DATE)), 0) AS outflow`,
         [cid]
-      ).catch(() => [{ inflow: 0, outflow: 0 }]);
+      ).catch((e) => { logger.error(e, "operations center query failed"); return [{ inflow: 0, outflow: 0 }]; });
       const inflow = Number(cashFlow?.inflow ?? 0);
       const outflow = Number(cashFlow?.outflow ?? 0);
       const netCashFlow = inflow - outflow;
@@ -231,19 +231,19 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
           { key: "cashFlow", label: "التدفق النقدي (الشهر)", value: netCashFlow, severity: severity(cashFlowNegative, t.cashFlowNegative.warn, t.cashFlowNegative.crit), actionLabel: "عرض التقارير المالية", actionLink: "/finance/reports", extra: `وارد: ${inflow.toLocaleString()} — صادر: ${outflow.toLocaleString()} ر.س` },
         ],
       };
-    } catch (_e) { console.error("OpsCenter: finance failed:", _e); }
+    } catch (_e) { logger.error(_e, "OpsCenter: finance failed:"); }
 
     try {
       const [vehicleStats] = await rawQuery<any>(
         `SELECT
            COUNT(*) FILTER (WHERE status='active' AND "nextServiceDate" IS NOT NULL AND "nextServiceDate" <= CURRENT_DATE + INTERVAL '7 days') AS needService
-         FROM fleet_vehicles WHERE ${where}`,
+         FROM fleet_vehicles WHERE ${where} AND "deletedAt" IS NULL`,
         params
       );
       const [activeTrips] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM fleet_trips WHERE ${where} AND status='in_progress'`,
         params
-      ).catch(() => [{ total: 0 }]);
+      ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; });
       const needServiceVal = Number(vehicleStats?.needService ?? 0);
       const activeTripsVal = Number(activeTrips?.total ?? 0);
       sections.fleet = {
@@ -253,7 +253,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
           { key: "activeTrips", label: "رحلات نشطة", value: activeTripsVal, severity: "ok" as Severity, actionLabel: "عرض الرحلات", actionLink: "/fleet/trips" },
         ],
       };
-    } catch (_e) { console.error("OpsCenter: fleet failed:", _e); }
+    } catch (_e) { logger.error(_e, "OpsCenter: fleet failed:"); }
 
     let slaItems: any[] = [];
     try {
@@ -272,7 +272,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
         hoursOverdue: Math.round(Number(m.hoursOverdue ?? 0)),
         entityLink: "/properties/maintenance",
       })));
-    } catch (_e) {}
+    } catch (_e) { logger.error(_e, "silent catch"); }
 
     try {
       const ticketSla = await rawQuery<any>(
@@ -289,7 +289,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
         hoursOverdue: Math.round(Number(t.hoursOverdue ?? 0)),
         entityLink: `/support/${t.id}`,
       })));
-    } catch (_e) {}
+    } catch (_e) { logger.error(_e, "silent catch"); }
 
     try {
       const slaHours = await getApprovalSlaHours();
@@ -324,7 +324,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
         hoursOverdue: Math.round(Number(e.hoursOverdue ?? 0)),
         entityLink: "/finance/expenses",
       })));
-    } catch (_e) { console.error("OpsCenter: approval SLA failed:", _e); }
+    } catch (_e) { logger.error(_e, "OpsCenter: approval SLA failed:"); }
 
     slaItems = slaItems.map(item => {
       const hoursOver = Math.abs(Number(item.hoursOverdue ?? 0));
@@ -339,7 +339,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
     try {
       liveFeed = await rawQuery<any>(
         `SELECT a.id, a.action, a.entity, a."entityId",
-                COALESCE(e.name, u.username, 'نظام') AS "userName",
+                COALESCE(e.name, u.email, 'نظام') AS "userName",
                 a."createdAt", a.reason
          FROM audit_logs a
          LEFT JOIN users u ON u.id = a."userId"
@@ -349,7 +349,7 @@ router.get("/", requirePermission("operations:read"), async (req, res) => {
          LIMIT 50`,
         [companies]
       );
-    } catch (_e) { console.error("OpsCenter: livefeed failed:", _e); }
+    } catch (_e) { logger.error(_e, "OpsCenter: livefeed failed:"); }
 
     res.json({ sections, slaItems, liveFeed });
   } catch (err) {
@@ -417,7 +417,7 @@ async function buildChecklistItems(scope: any, where: string, params: any[], com
 
     try {
       const [overdue] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM invoices WHERE ${where} AND status IN ('overdue') AND "dueDate" < CURRENT_DATE`,
+        `SELECT COUNT(*) AS total FROM invoices WHERE ${where} AND status IN ('overdue') AND "dueDate" < CURRENT_DATE AND "deletedAt" IS NULL`,
         params
       );
       const val = Number(overdue?.total ?? 0);
@@ -473,12 +473,12 @@ async function buildChecklistItems(scope: any, where: string, params: any[], com
     try {
       const [receipts] = await rawQuery<any>(
         `SELECT COALESCE(SUM(amount),0) AS total FROM vouchers
-         WHERE "companyId" = ANY($1::int[]) AND type='receipt' AND date = $2`,
+         WHERE "companyId" = ANY($1::int[]) AND type='receipt' AND "createdAt"::date = $2`,
         [companies, today]
       );
       const [payments] = await rawQuery<any>(
         `SELECT COALESCE(SUM(amount),0) AS total FROM vouchers
-         WHERE "companyId" = ANY($1::int[]) AND type='payment' AND date = $2`,
+         WHERE "companyId" = ANY($1::int[]) AND type='payment' AND "createdAt"::date = $2`,
         [companies, today]
       );
       const receiptTotal = Number(receipts?.total ?? 0);
@@ -502,7 +502,7 @@ router.get("/daily-close/checklist", requirePermission("operations:read"), async
   try {
     const scope = req.scope!;
     const companies = scope.allowedCompanies;
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
     const { where, params } = buildFilter(scope, req);
 
     const items = await buildChecklistItems(scope, where, params, companies, today);
@@ -514,7 +514,7 @@ router.get("/daily-close/checklist", requirePermission("operations:read"), async
         [scope.companyId, today]
       );
       closedToday = !!existing;
-    } catch (_e) {}
+    } catch (_e) { logger.error(_e, "silent catch"); }
 
     res.json({
       date: today,
@@ -529,19 +529,18 @@ router.get("/daily-close/checklist", requirePermission("operations:read"), async
 
 router.post("/daily-close/execute", requirePermission("finance:write"), async (req, res) => {
   try {
-    const parsed = dailyCloseExecuteSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(dailyCloseExecuteSchema.safeParse(req.body));
     const scope = req.scope!;
-    const allowedRoles = ["owner", "general_manager", "branch_manager", "hr_manager", "finance_manager"];
+    const allowedRoles = OPS_CLOSE_ROLES;
     if (!allowedRoles.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح — يتطلب صلاحية مدير على الأقل");
     }
 
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
     const userId = scope.userId;
     const cid = scope.companyId;
-    const forceClose = req.body?.force === true;
-    const overrideRoles = ["owner", "general_manager"];
+    const forceClose = parsed.force === true;
+    const overrideRoles = OWNER_GM_ROLES;
 
     if (!forceClose) {
       const { where, params } = buildFilter(scope, req);
@@ -566,7 +565,7 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
          "createdAt" TIMESTAMPTZ DEFAULT NOW(),
          UNIQUE("companyId", "closeDate")
        )`
-    ).catch(() => {});
+    ).catch((e) => logger.error(e, "operationsCenter background task failed"));
 
     const [existing] = await rawQuery<any>(
       `SELECT id FROM daily_close_log WHERE "companyId"=$1 AND "closeDate"=$2`,
@@ -576,7 +575,7 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
       throw new ConflictError("تم إقفال هذا اليوم مسبقاً");
     }
 
-    const notes = req.body?.notes || "";
+    const notes = parsed.notes || "";
     await rawQuery(
       `INSERT INTO daily_close_log ("companyId", "closeDate", "closedBy", notes, forced) VALUES ($1, $2, $3, $4, $5)`,
       [cid, today, userId, notes, forceClose]
@@ -586,7 +585,7 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
       companyId: cid, userId: scope.userId,
       action: "create", entity: "daily_close", entityId: 0,
       reason: forceClose ? `إقفال يومي بتجاوز - ${today}` : `إقفال يومي - ${today}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "operationsCenter background task failed"));
 
     try {
       await rawQuery(
@@ -594,9 +593,9 @@ router.post("/daily-close/execute", requirePermission("finance:write"), async (r
          VALUES ('daily_close', 'system', '0', $1, $2, $3, NOW())`,
         [cid, userId, forceClose ? `إقفال يومي بتجاوز - ${today}` : `إقفال يومي - ${today}`]
       );
-    } catch (_e) { console.error("OpsCenter: audit log for daily close failed:", _e); }
+    } catch (_e) { logger.error(_e, "OpsCenter: audit log for daily close failed:"); }
 
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "daily_close.executed", entity: "daily_close_log", entityId: 0, details: JSON.stringify({ date: today, forced: forceClose }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "daily_close.executed", entity: "daily_close_log", entityId: 0, details: JSON.stringify({ date: today, forced: forceClose }) }).catch((e) => logger.error(e, "operationsCenter background task failed"));
     res.json({ success: true, message: "تم إقفال اليوم بنجاح", date: today, forced: forceClose });
   } catch (err) {
     handleRouteError(err, res, "إقفال اليوم");

@@ -1,12 +1,15 @@
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError,
+  parseId,
+  zodParse,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { loadBalanceAssign } from "../lib/algorithms.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const createTaskSchema = z.object({
   title: z.string().min(1, "عنوان المهمة مطلوب"),
@@ -37,8 +40,15 @@ const updateTaskSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
+const VALID_TASK_TRANSITIONS: Record<string, string[]> = {
+  pending: ["in_progress", "cancelled"],
+  in_progress: ["completed", "blocked", "cancelled", "pending"],
+  blocked: ["in_progress", "cancelled"],
+  completed: ["in_progress"],
+  cancelled: ["pending"],
+};
+
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/", requirePermission("tasks:read"), async (req, res) => {
   try {
@@ -90,7 +100,7 @@ router.get("/", requirePermission("tasks:read"), async (req, res) => {
       }
     }
     if (relatedUnitId && linkedEntityType === "maintenance_request") {
-      where += ` AND t."linkedEntityId" IN (SELECT mr2.id FROM maintenance_requests mr2 WHERE mr2."unitId" = $${paramIdx})`;
+      where += ` AND t."linkedEntityId" IN (SELECT mr2.id FROM maintenance_requests mr2 WHERE mr2."unitId" = $${paramIdx} AND mr2."deletedAt" IS NULL)`;
       params.push(Number(relatedUnitId));
       paramIdx++;
     }
@@ -106,9 +116,10 @@ router.get("/", requirePermission("tasks:read"), async (req, res) => {
        FROM tasks t
        LEFT JOIN employee_assignments ea ON ea.id = t."assignedTo"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       LEFT JOIN clients c ON c.id = t."clientId"
+       LEFT JOIN clients c ON c.id = t."clientId" AND c."deletedAt" IS NULL
        WHERE ${where}
-       ORDER BY t.priority DESC, t."scheduledDate" ASC NULLS LAST`,
+       ORDER BY t.priority DESC, t."scheduledDate" ASC NULLS LAST
+       LIMIT 500`,
       params
     );
 
@@ -122,13 +133,13 @@ router.get("/", requirePermission("tasks:read"), async (req, res) => {
       }
     }
     const bulkQueryMap: Record<string, string> = {
-      property_unit: `SELECT id, "unitNumber" AS name FROM property_units WHERE id = ANY($1) AND "companyId"=$2`,
-      vehicle: `SELECT id, COALESCE("plateNumber", make || ' ' || model) AS name FROM vehicles WHERE id = ANY($1) AND "companyId"=$2`,
-      client: `SELECT id, name FROM clients WHERE id = ANY($1) AND "companyId"=$2`,
+      property_unit: `SELECT id, "unitNumber" AS name FROM property_units WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      vehicle: `SELECT id, COALESCE("plateNumber", make || ' ' || model) AS name FROM fleet_vehicles WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      client: `SELECT id, name FROM clients WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
       project: `SELECT id, name FROM projects WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
-      contract: `SELECT id, COALESCE(ref, 'عقد #' || id) AS name FROM contracts WHERE id = ANY($1) AND "companyId"=$2`,
-      legal_case: `SELECT id, COALESCE(title, "caseNumber", 'قضية #' || id) AS name FROM legal_cases WHERE id = ANY($1) AND "companyId"=$2`,
-      maintenance_request: `SELECT id, COALESCE(description, category, 'طلب #' || id) AS name FROM maintenance_requests WHERE id = ANY($1) AND "companyId"=$2`,
+      contract: `SELECT id, COALESCE("contractNumber", 'عقد #' || id) AS name FROM rental_contracts WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      legal_case: `SELECT id, COALESCE(title, "caseNumber", 'قضية #' || id) AS name FROM legal_cases WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      maintenance_request: `SELECT id, COALESCE(description, category, 'طلب #' || id) AS name FROM maintenance_requests WHERE id = ANY($1) AND "companyId"=$2 AND "deletedAt" IS NULL`,
     };
     const namesByType = new Map<string, Map<number, string>>();
     await Promise.all(
@@ -140,7 +151,7 @@ router.get("/", requirePermission("tasks:read"), async (req, res) => {
           const map = new Map<number, string>();
           for (const r of rows) map.set(Number(r.id), r.name);
           namesByType.set(type, map);
-        } catch { /* table may not exist in some deployments */ }
+        } catch (e) { logger.warn(e, "tasks: linked entity table may not exist"); }
       })
     );
     for (const task of tasks) {
@@ -168,7 +179,7 @@ router.get("/entity-search", requirePermission("tasks:read"), async (req, res) =
       project: `SELECT id, name FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL AND name ILIKE $2 ORDER BY id DESC LIMIT 10`,
       contract: `SELECT id, COALESCE("contractNumber", 'عقد #' || id::text) AS name FROM rental_contracts WHERE "companyId"=$1 AND "deletedAt" IS NULL AND ("contractNumber" ILIKE $2 OR "tenantName" ILIKE $2) ORDER BY id DESC LIMIT 10`,
       legal_case: `SELECT id, COALESCE(title, "caseNumber", 'قضية #' || id::text) AS name FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL AND (title ILIKE $2 OR "caseNumber" ILIKE $2) ORDER BY id DESC LIMIT 10`,
-      maintenance_request: `SELECT id, COALESCE(description, category, 'طلب #' || id) AS name FROM maintenance_requests WHERE "companyId"=$1 AND (description ILIKE $2 OR category ILIKE $2) ORDER BY id DESC LIMIT 10`,
+      maintenance_request: `SELECT id, COALESCE(description, category, 'طلب #' || id) AS name FROM maintenance_requests WHERE "companyId"=$1 AND "deletedAt" IS NULL AND (description ILIKE $2 OR category ILIKE $2) ORDER BY id DESC LIMIT 10`,
     };
 
     const query = searchMap[type];
@@ -184,8 +195,9 @@ router.get("/entity-search", requirePermission("tasks:read"), async (req, res) =
 router.get("/:id", requirePermission("tasks:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     let scopeCondition = ` AND t."companyId" = $2`;
-    const params: any[] = [req.params.id, scope.companyId];
+    const params: any[] = [id, scope.companyId];
     if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {
       scopeCondition += ` AND t."assignedTo" = $3`;
       params.push(scope.activeAssignmentId);
@@ -196,7 +208,7 @@ router.get("/:id", requirePermission("tasks:read"), async (req, res) => {
        FROM tasks t
        LEFT JOIN employee_assignments ea ON ea.id = t."assignedTo"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       LEFT JOIN clients c ON c.id = t."clientId"
+       LEFT JOIN clients c ON c.id = t."clientId" AND c."deletedAt" IS NULL
        WHERE t.id = $1${scopeCondition} AND t."deletedAt" IS NULL`,
       params
     );
@@ -210,9 +222,7 @@ router.get("/:id", requirePermission("tasks:read"), async (req, res) => {
 router.post("/", requirePermission("tasks:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createTaskSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { title, description, type, priority, scheduledStart, scheduledEnd, scheduledDate, clientName, clientId, notes, assignedTo: bodyAssignedTo, linkedEntityType, linkedEntityId, autoGenerated } = parsed.data;
+    const { title, description, type, priority, scheduledStart, scheduledEnd, scheduledDate, clientName, clientId, notes, assignedTo: bodyAssignedTo, linkedEntityType, linkedEntityId, autoGenerated } = zodParse(createTaskSchema.safeParse(req.body));
 
     if (scheduledStart && scheduledEnd && new Date(scheduledEnd) < new Date(scheduledStart)) {
       throw new ValidationError("تاريخ النهاية قبل تاريخ البداية", {
@@ -306,8 +316,9 @@ router.post("/", requirePermission("tasks:write"), async (req, res) => {
       ]
     );
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "tasks", entityId: rows[0]?.id, after: { title, type: type || "task", priority: priority || "medium", assignedTo: finalAssignedTo } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "task.created", entity: "tasks", entityId: rows[0]?.id, details: JSON.stringify({ title, type: type || "task", priority: priority || "medium" }) }).catch(console.error);
+    if (!rows[0]) throw new NotFoundError("فشل في إنشاء المهمة");
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "tasks", entityId: rows[0].id, after: { title, type: type || "task", priority: priority || "medium", assignedTo: finalAssignedTo } }).catch((e) => logger.error(e, "tasks background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "task.created", entity: "tasks", entityId: rows[0].id, details: JSON.stringify({ title, type: type || "task", priority: priority || "medium" }) }).catch((e) => logger.error(e, "tasks background task failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create task error:"); }
 });
@@ -315,9 +326,8 @@ router.post("/", requirePermission("tasks:write"), async (req, res) => {
 router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = updateTaskSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { title, description, type, priority, status, scheduledStart, scheduledEnd, scheduledDate, notes } = parsed.data as any;
+    const id = parseId(req.params.id, "id");
+    const { title, description, type, priority, status, scheduledStart, scheduledEnd, scheduledDate, notes } = zodParse(updateTaskSchema.safeParse(req.body)) as any;
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
@@ -342,13 +352,33 @@ router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
 
     if (sets.length === 0) { throw new ValidationError("لا توجد بيانات للتحديث"); }
 
-    params.push(req.params.id);
+    let currentStatus: string | undefined;
+    if (status) {
+      const [current] = await rawQuery<{ status: string }>(
+        `SELECT status FROM tasks WHERE id = $1 AND "companyId" = $2`,
+        [id, scope.companyId]
+      );
+      if (!current) throw new NotFoundError("المهمة غير موجودة");
+      currentStatus = current.status;
+      const allowed = VALID_TASK_TRANSITIONS[currentStatus];
+      if (allowed && !allowed.includes(status)) {
+        throw new ConflictError(`لا يمكن نقل المهمة من "${currentStatus}" إلى "${status}"`);
+      }
+    }
+
+    params.push(id);
     let whereClause = `id = $${idx}`;
     idx++;
 
     params.push(scope.companyId);
     whereClause += ` AND "companyId" = $${idx}`;
     idx++;
+
+    if (currentStatus) {
+      params.push(currentStatus);
+      whereClause += ` AND status = $${idx}`;
+      idx++;
+    }
 
     if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {
       whereClause += ` AND "assignedTo" = $${idx}`;
@@ -363,25 +393,33 @@ router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
 
     if (rows.length === 0) { throw new NotFoundError("المهمة غير موجودة"); }
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "tasks", entityId: Number(req.params.id), after: { title, description, type, priority, status, scheduledStart, scheduledEnd, scheduledDate, notes } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "tasks", entityId: id, after: { title, description, type, priority, status, scheduledStart, scheduledEnd, scheduledDate, notes } }).catch((e) => logger.error(e, "tasks background task failed"));
 
-    // Close the loop on status transitions so subscribers fire.
-    if (status === "completed") {
+    if (status) {
       emitEvent({
         companyId: scope.companyId,
         branchId: scope.branchId,
         userId: scope.userId,
-        action: "task.completed",
+        action: `task.${status}`,
         entity: "tasks",
-        entityId: Number(req.params.id),
-        before: { status: "in_progress" },
+        entityId: id,
         after: {
-          status: "completed",
-          completedAt: rows[0]?.completedAt ?? new Date().toISOString(),
+          status,
+          ...(status === "completed" ? { completedAt: rows[0]?.completedAt ?? new Date().toISOString() } : {}),
           assignedTo: rows[0]?.assignedTo ?? null,
           title: rows[0]?.title ?? null,
         },
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "tasks background task failed"));
+    } else if (sets.length > 0) {
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "task.updated",
+        entity: "tasks",
+        entityId: id,
+        after: { title: rows[0]?.title ?? null },
+      }).catch((e) => logger.error(e, "tasks background task failed"));
     }
 
     res.json(rows[0]);
@@ -393,7 +431,8 @@ router.patch("/:id", requirePermission("tasks:write"), async (req, res) => {
 router.delete("/:id", requirePermission("tasks:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const beforeParams: any[] = [req.params.id, scope.companyId];
+    const id = parseId(req.params.id, "id");
+    const beforeParams: any[] = [id, scope.companyId];
     let beforeWhere = `id = $1 AND "companyId" = $2`;
     if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {
       beforeWhere += ` AND "assignedTo" = $3`;
@@ -402,7 +441,7 @@ router.delete("/:id", requirePermission("tasks:write"), async (req, res) => {
     const [before] = await rawQuery<any>(`SELECT * FROM tasks WHERE ${beforeWhere}`, beforeParams);
     if (!before) { throw new NotFoundError("المهمة غير موجودة"); }
 
-    const params: any[] = [req.params.id, scope.companyId];
+    const params: any[] = [id, scope.companyId];
     let whereClause = `id = $1 AND "companyId" = $2`;
 
     if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {
@@ -415,8 +454,8 @@ router.delete("/:id", requirePermission("tasks:write"), async (req, res) => {
       params
     );
     if (rows.length === 0) { throw new NotFoundError("المهمة غير موجودة"); }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "tasks", entityId: Number(req.params.id), before }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "task.deleted", entity: "tasks", entityId: Number(req.params.id), details: JSON.stringify({ title: before?.title }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "tasks", entityId: id, before }).catch((e) => logger.error(e, "tasks background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "task.deleted", entity: "tasks", entityId: id, details: JSON.stringify({ title: before?.title }) }).catch((e) => logger.error(e, "tasks background task failed"));
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete task error:");

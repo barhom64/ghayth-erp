@@ -4,23 +4,125 @@ import {
   NotFoundError,
   ConflictError,
   ForbiddenError,
+  parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
+import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
-  createJournalEntry,
   createAuditLog,
   emitEvent,
-  createNotification,
+  todayISO,
 } from "../lib/businessHelpers.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { logger } from "../lib/logger.js";
 
 export const financeHardeningRouter = Router();
 financeHardeningRouter.use(authMiddleware);
+
+// ── Zod schemas ─────────────────────────────────────────────────────────────
+
+const createFiscalPeriodSchema = z.object({
+  name: z.string().min(1),
+  startDate: z.string().min(1),
+  endDate: z.string().min(1),
+  notes: z.string().optional(),
+});
+
+const closeFiscalPeriodSchema = z.object({
+  notes: z.string().optional(),
+});
+
+const reopenFiscalPeriodSchema = z.object({
+  reason: z.string().min(1),
+});
+
+const journalLineSchema = z.object({
+  accountCode: z.string(),
+  debit: z.coerce.number().default(0),
+  credit: z.coerce.number().default(0),
+  description: z.string().optional(),
+  costCenter: z.string().optional(),
+  departmentId: z.coerce.number().optional(),
+  projectId: z.coerce.number().optional(),
+  employeeId: z.coerce.number().optional(),
+});
+
+const createManualJournalSchema = z.object({
+  description: z.string().optional(),
+  lines: z.array(journalLineSchema).min(2),
+  costCenter: z.string().optional(),
+  notes: z.string().optional(),
+  date: z.string().optional(),
+});
+
+const reviewJournalSchema = z.object({
+  approved: z.boolean(),
+  notes: z.string().optional(),
+});
+
+const approveJournalSchema = z.object({
+  approved: z.boolean(),
+  notes: z.string().optional(),
+});
+
+const createBankGuaranteeSchema = z.object({
+  ref: z.string().min(1),
+  bank: z.string().min(1),
+  beneficiary: z.string().min(1),
+  amount: z.coerce.number(),
+  issueDate: z.string().min(1),
+  expiryDate: z.string().min(1),
+  guaranteeType: z.string().optional(),
+  notes: z.string().optional(),
+  attachmentUrl: z.string().optional(),
+  branchId: z.coerce.number().optional(),
+});
+
+const updateBankGuaranteeSchema = z.object({
+  bank: z.string().optional(),
+  beneficiary: z.string().optional(),
+  amount: z.coerce.number().optional(),
+  expiryDate: z.string().optional(),
+  status: z.enum(["active", "expired", "released", "renewed", "cancelled"]).optional(),
+  notes: z.string().optional(),
+  attachmentUrl: z.string().optional(),
+  guaranteeType: z.string().optional(),
+});
+
+const cancelBankGuaranteeSchema = z.object({
+  reason: z.string().min(1),
+});
+
+const releaseBankGuaranteeSchema = z.object({
+  notes: z.string().optional(),
+});
+
+const createIntercompanySchema = z.object({
+  toCompanyId: z.coerce.number(),
+  amount: z.coerce.number(),
+  description: z.string().optional(),
+  transactionDate: z.string().optional(),
+  arAccountCode: z.string().default("1200"),
+  apAccountCode: z.string().default("2100"),
+  revenueAccountCode: z.string().default("4000"),
+  expenseAccountCode: z.string().default("5000"),
+});
+
+const createProjectSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  budget: z.coerce.number().default(0),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  branchId: z.coerce.number().optional(),
+  ref: z.string().optional(),
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FISCAL PERIODS — FULL CRUD + OPEN/CLOSE/REOPEN
@@ -50,19 +152,13 @@ financeHardeningRouter.post("/fiscal-periods-v2", requirePermission("finance:cre
   try {
     const scope = req.scope!;
 
-    const { name, startDate, endDate, notes } = req.body as any;
-    if (!name || !startDate || !endDate) {
-      throw new ValidationError("الاسم وتاريخ البداية والنهاية مطلوبة", {
-        field: !name ? "name" : !startDate ? "startDate" : "endDate",
-        fix: "أدخل اسم الفترة وتاريخي البداية والنهاية بصيغة YYYY-MM-DD",
-      });
-    }
+    const { name, startDate, endDate, notes } = zodParse(createFiscalPeriodSchema.safeParse(req.body ?? {}));
     const { insertId } = await rawExecute(
       `INSERT INTO financial_periods ("companyId",name,"startDate","endDate",status,notes)
        VALUES ($1,$2,$3,$4,'open',$5)`,
       [scope.companyId, name, startDate, endDate, notes ?? null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM financial_periods WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM financial_periods WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     emitEvent({
       companyId: scope.companyId,
@@ -80,7 +176,7 @@ financeHardeningRouter.post("/fiscal-periods-v2", requirePermission("finance:cre
       entity: "financial_periods",
       entityId: insertId,
       after: { name, startDate, endDate },
-    }).catch((err) => console.error("[audit] fiscal_period.created:", err));
+    }).catch((err) => logger.error(err, "[audit] fiscal_period.created:"));
 
     res.status(201).json(row);
   } catch (err) {
@@ -92,8 +188,8 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", requirePermission("f
   try {
     const scope = req.scope!;
 
-    const periodId = Number(req.params.id);
-    const { notes } = req.body as any;
+    const periodId = parseId(req.params.id, "id");
+    const { notes } = zodParse(closeFiscalPeriodSchema.safeParse(req.body ?? {}));
 
     // Pre-flight: refuse close when the period still has unposted manual
     // journals. The business rule lives here (not in applyTransition) so we
@@ -162,14 +258,8 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", requirePermission("
   try {
     const scope = req.scope!;
 
-    const periodId = Number(req.params.id);
-    const { reason } = req.body as any;
-    if (!reason) {
-      throw new ValidationError("سبب فتح الفترة مطلوب", {
-        field: "reason",
-        fix: "اكتب سبب إعادة فتح الفترة المالية",
-      });
-    }
+    const periodId = parseId(req.params.id, "id");
+    const { reason } = zodParse(reopenFiscalPeriodSchema.safeParse(req.body ?? {}));
 
     // Fetch only the name for the success message; the engine does the
     // state check and row update.
@@ -218,13 +308,7 @@ financeHardeningRouter.post("/journal-manual", requirePermission("finance:create
   try {
     const scope = req.scope!;
 
-    const { description, lines, costCenter, notes } = req.body as any;
-    if (!lines || !Array.isArray(lines) || lines.length < 2) {
-      throw new ValidationError("القيد يجب أن يحتوي على سطرين على الأقل", {
-        field: "lines",
-        fix: "أرسل سطرين أو أكثر بحيث يكون مجموع المدين = مجموع الدائن",
-      });
-    }
+    const { description, lines, costCenter, notes } = zodParse(createManualJournalSchema.safeParse(req.body ?? {}));
 
     const totalDebit = lines.reduce((s: number, l: any) => s + Number(l.debit ?? 0), 0);
     const totalCredit = lines.reduce((s: number, l: any) => s + Number(l.credit ?? 0), 0);
@@ -240,18 +324,22 @@ financeHardeningRouter.post("/journal-manual", requirePermission("finance:create
     }
 
     const ref = `MJE-${Date.now()}`;
-    const journalId = await createJournalEntry({
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const { journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
       ref,
       description: description ?? "قيد يدوي",
+      sourceType: "manual_journal",
+      sourceId: 0,
+      sourceKey: `finance:manual:${Date.now()}`,
       lines,
     });
 
     await rawExecute(
-      `UPDATE journal_entries SET "approvalStatus"='draft', "isManual"=TRUE, "costCenter"=$1 WHERE id=$2`,
-      [costCenter ?? null, journalId]
+      `UPDATE journal_entries SET "approvalStatus"='draft', "isManual"=TRUE, "costCenter"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+      [costCenter ?? null, journalId, scope.companyId]
     );
 
     emitEvent({
@@ -270,13 +358,17 @@ financeHardeningRouter.post("/journal-manual", requirePermission("finance:create
       entity: "journal_entries",
       entityId: journalId,
       after: { ref, totalDebit, lineCount: lines.length, approvalStatus: "draft", isManual: true },
-    }).catch((err) => console.error("[audit] journal.manual_created:", err));
+    }).catch((err) => logger.error(err, "[audit] journal.manual_created:"));
 
-    res.status(201).json({
-      id: journalId, ref, description, totalDebit, totalCredit,
-      approvalStatus: "draft", isManual: true,
-      message: "تم إنشاء القيد اليدوي بحالة مسودة — يحتاج مراجعة واعتماد قبل الترحيل",
-    });
+    const [createdManualJournal] = await rawQuery<any>(
+      `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [journalId, scope.companyId]
+    );
+    res.status(201).json({ ...(createdManualJournal || { id: journalId }), message: "تم إنشاء القيد اليدوي بحالة مسودة — يحتاج مراجعة واعتماد قبل الترحيل" });
   } catch (err) {
     handleRouteError(err, res, "Create manual journal error:");
   }
@@ -298,11 +390,11 @@ financeHardeningRouter.get("/journal-manual", requirePermission("finance:read"),
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl."journalId"=je.id
        LEFT JOIN employee_assignments ea_rev ON ea_rev.id=je."reviewedBy"
-       LEFT JOIN employees e_rev ON e_rev.id=ea_rev."employeeId"
+       LEFT JOIN employees e_rev ON e_rev.id=ea_rev."employeeId" AND e_rev."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea_apr ON ea_apr.id=je."approvedBy"
-       LEFT JOIN employees e_apr ON e_apr.id=ea_apr."employeeId"
+       LEFT JOIN employees e_apr ON e_apr.id=ea_apr."employeeId" AND e_apr."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea_cre ON ea_cre.id=je."createdBy"
-       LEFT JOIN employees e_cre ON e_cre.id=ea_cre."employeeId"
+       LEFT JOIN employees e_cre ON e_cre.id=ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE ${conditions.join(" AND ")}
        GROUP BY je.id, e_rev.name, e_apr.name, e_cre.name
        ORDER BY je."createdAt" DESC LIMIT 100`,
@@ -311,6 +403,28 @@ financeHardeningRouter.get("/journal-manual", requirePermission("finance:read"),
     res.json({ data: rows, total: rows.length });
   } catch (err) {
     handleRouteError(err, res, "List manual journals error:");
+  }
+});
+
+financeHardeningRouter.get("/journal-manual/:id", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(
+      `SELECT je.*, json_agg(jl.*) FILTER (WHERE jl.id IS NOT NULL) AS lines,
+              e_cre.name AS "createdByName"
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId"=je.id
+       LEFT JOIN employee_assignments ea_cre ON ea_cre.id=je."createdBy"
+       LEFT JOIN employees e_cre ON e_cre.id=ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id, e_cre.name`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("القيد اليدوي غير موجود");
+    res.json(row);
+  } catch (err) {
+    handleRouteError(err, res, "Journal manual detail error:");
   }
 });
 
@@ -331,7 +445,7 @@ financeHardeningRouter.patch("/journal-manual/:id/submit", requirePermission("fi
   try {
     const scope = req.scope!;
 
-    const journalId = Number(req.params.id);
+    const journalId = parseId(req.params.id, "id");
 
     // Fetch ref only for the success message; engine does state validation.
     const [je] = await rawQuery<any>(
@@ -368,8 +482,8 @@ financeHardeningRouter.patch("/journal-manual/:id/review", requirePermission("fi
   try {
     const scope = req.scope!;
 
-    const journalId = Number(req.params.id);
-    const { approved, notes } = req.body as any;
+    const journalId = parseId(req.params.id, "id");
+    const { approved, notes } = zodParse(reviewJournalSchema.safeParse(req.body ?? {}));
 
     // Fetch createdBy for the "cannot review your own entry" business rule
     // plus ref for the success message. State validation still happens in
@@ -432,8 +546,8 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", requirePermission("f
   try {
     const scope = req.scope!;
 
-    const journalId = Number(req.params.id);
-    const { approved, notes } = req.body as any;
+    const journalId = parseId(req.params.id, "id");
+    const { approved, notes } = zodParse(approveJournalSchema.safeParse(req.body ?? {}));
 
     const [je] = await rawQuery<any>(
       `SELECT ref FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
@@ -455,9 +569,8 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", requirePermission("f
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
       action: `journal.approved_${newStatus}`,
       statusColumn: "approvalStatus",
-      // Approver can act on a journal that is either pending_review
-      // (pre-approved) or already approved (re-confirm / demote to rejected).
-      fromStates: ["pending_review", "approved"],
+      // Approver can only act on journals that are pending_review.
+      fromStates: ["pending_review"],
       toState: newStatus,
       reason: notes ?? undefined,
       extraWhere: `"isManual"=TRUE AND "deletedAt" IS NULL`,
@@ -485,7 +598,7 @@ financeHardeningRouter.patch("/journal-manual/:id/post", requirePermission("fina
   try {
     const scope = req.scope!;
 
-    const journalId = Number(req.params.id);
+    const journalId = parseId(req.params.id, "id");
 
     const [je] = await rawQuery<any>(
       `SELECT ref FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
@@ -534,7 +647,6 @@ financeHardeningRouter.patch("/journal-manual/:id/post", requirePermission("fina
 financeHardeningRouter.get("/bank-guarantees", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const today = new Date().toISOString().split("T")[0];
     const rows = await rawQuery<any>(
       `SELECT bg.*,
               (bg."expiryDate"::date - CURRENT_DATE) AS "daysToExpiry",
@@ -569,22 +681,13 @@ financeHardeningRouter.post("/bank-guarantees", requirePermission("finance:creat
   try {
     const scope = req.scope!;
 
-    const { ref, bank, beneficiary, amount, issueDate, expiryDate, guaranteeType, notes, attachmentUrl, branchId } = req.body as any;
-    if (!ref || !bank || !beneficiary || !amount || !issueDate || !expiryDate) {
-      throw new ValidationError(
-        "رقم الضمان والبنك والجهة المستفيدة والمبلغ والتواريخ مطلوبة",
-        {
-          field: !ref ? "ref" : !bank ? "bank" : !beneficiary ? "beneficiary" : !amount ? "amount" : !issueDate ? "issueDate" : "expiryDate",
-          fix: "أكمل جميع الحقول الأساسية للضمان البنكي",
-        },
-      );
-    }
+    const { ref, bank, beneficiary, amount, issueDate, expiryDate, guaranteeType, notes, attachmentUrl, branchId } = zodParse(createBankGuaranteeSchema.safeParse(req.body ?? {}));
     const { insertId } = await rawExecute(
       `INSERT INTO bank_guarantees ("companyId","branchId",ref,bank,beneficiary,amount,"issueDate","expiryDate","guaranteeType",notes,"attachmentUrl","createdBy")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [scope.companyId, branchId ?? scope.branchId, ref, bank, beneficiary, Number(amount), issueDate, expiryDate, guaranteeType ?? "performance", notes ?? null, attachmentUrl ?? null, scope.activeAssignmentId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM bank_guarantees WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM bank_guarantees WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     emitEvent({
       companyId: scope.companyId,
@@ -602,7 +705,7 @@ financeHardeningRouter.post("/bank-guarantees", requirePermission("finance:creat
       entity: "bank_guarantees",
       entityId: insertId,
       after: { ref, bank, amount: Number(amount), expiryDate },
-    }).catch((err) => console.error("[audit] bank_guarantee.created:", err));
+    }).catch((err) => logger.error(err, "[audit] bank_guarantee.created:"));
 
     res.status(201).json(row);
   } catch (err) {
@@ -615,7 +718,7 @@ financeHardeningRouter.patch("/bank-guarantees/:id", requirePermission("finance:
     const scope = req.scope!;
 
     const { id } = req.params;
-    const b = req.body as any;
+    const b = zodParse(updateBankGuaranteeSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     const f = (col: string, val: any) => { if (val !== undefined) { params.push(val); sets.push(`"${col}"=$${params.length}`); } };
@@ -651,7 +754,7 @@ financeHardeningRouter.patch("/bank-guarantees/:id", requirePermission("finance:
       entity: "bank_guarantees",
       entityId: Number(id),
       after: { fields: Object.keys(b) },
-    }).catch((err) => console.error("[audit] bank_guarantee.updated:", err));
+    }).catch((err) => logger.error(err, "[audit] bank_guarantee.updated:"));
 
     res.json(row);
   } catch (err) {
@@ -663,7 +766,7 @@ financeHardeningRouter.delete("/bank-guarantees/:id", requirePermission("finance
   try {
     const scope = req.scope!;
 
-    const guaranteeId = Number(req.params.id);
+    const guaranteeId = parseId(req.params.id, "id");
 
     const [existing] = await rawQuery<any>(
       `SELECT id, ref, bank, status, amount FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -709,7 +812,7 @@ financeHardeningRouter.delete("/bank-guarantees/:id", requirePermission("finance
       entity: "bank_guarantees",
       entityId: guaranteeId,
       after: { ref: existing.ref, bank: existing.bank, amount: Number(existing.amount), softDelete: true },
-    }).catch((err) => console.error("[audit] bank_guarantee.deleted:", err));
+    }).catch((err) => logger.error(err, "[audit] bank_guarantee.deleted:"));
 
     res.json({ success: true });
   } catch (err) {
@@ -733,14 +836,8 @@ financeHardeningRouter.post("/bank-guarantees/:id/cancel", requirePermission("fi
   try {
     const scope = req.scope!;
 
-    const guaranteeId = Number(req.params.id);
-    const { reason } = req.body as any;
-    if (!reason || !String(reason).trim()) {
-      throw new ValidationError("سبب الإلغاء مطلوب", {
-        field: "reason",
-        fix: "اكتب سبب إلغاء الضمان البنكي",
-      });
-    }
+    const guaranteeId = parseId(req.params.id, "id");
+    const { reason } = zodParse(cancelBankGuaranteeSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<any>(
       `SELECT ref, bank, notes FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -786,8 +883,8 @@ financeHardeningRouter.post("/bank-guarantees/:id/release", requirePermission("f
   try {
     const scope = req.scope!;
 
-    const guaranteeId = Number(req.params.id);
-    const { notes } = req.body as any;
+    const guaranteeId = parseId(req.params.id, "id");
+    const { notes } = zodParse(releaseBankGuaranteeSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<any>(
       `SELECT ref, bank, notes FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -855,15 +952,9 @@ financeHardeningRouter.post("/intercompany", requirePermission("finance:create")
   try {
     const scope = req.scope!;
 
-    const { toCompanyId, amount, description, transactionDate, arAccountCode = "1200", apAccountCode = "2100", revenueAccountCode = "4000", expenseAccountCode = "5000" } = req.body as any;
+    const { toCompanyId, amount, description, transactionDate, arAccountCode, apAccountCode, revenueAccountCode, expenseAccountCode } = zodParse(createIntercompanySchema.safeParse(req.body ?? {}));
 
-    if (!toCompanyId || !amount) {
-      throw new ValidationError("الشركة المستلمة والمبلغ مطلوبان", {
-        field: !toCompanyId ? "toCompanyId" : "amount",
-        fix: "اختر شركة مستلمة وحدّد مبلغ المعاملة",
-      });
-    }
-    if (Number(toCompanyId) === scope.companyId) {
+    if (toCompanyId === scope.companyId) {
       throw new ValidationError("لا يمكن إنشاء معاملة بين الشركة ونفسها", {
         field: "toCompanyId",
         fix: "اختر شركة مختلفة عن الشركة الحالية",
@@ -877,41 +968,63 @@ financeHardeningRouter.post("/intercompany", requirePermission("finance:create")
     }
 
     const ref = `IC-${Date.now()}`;
-    const txDate = transactionDate ?? new Date().toISOString().split("T")[0];
+    const txDate = transactionDate ?? todayISO();
 
-    // Journal entry for the FROM company (debit AR, credit Revenue)
-    const fromJournalId = await createJournalEntry({
+    const { financialEngine } = await import("../lib/engines/index.js");
+
+    // postJournalEntry manages its own transaction internally, so we use a
+    // compensating-reversal pattern: if the second post fails we soft-delete the first.
+    const fromTimestamp = Date.now();
+    const fromResult = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
       ref,
       description: description ?? `معاملة بين الشركات ${ref}`,
       type: "intercompany",
+      sourceType: "intercompany",
+      sourceId: 0,
+      sourceKey: `finance:intercompany:from:${fromTimestamp}`,
       lines: [
         { accountCode: arAccountCode, debit: Number(amount), credit: 0, description: "ذمم مدينة شركة شقيقة" },
         { accountCode: revenueAccountCode, debit: 0, credit: Number(amount), description: "إيراد شركة شقيقة" },
       ],
     });
 
-    // Journal entry for the TO company (debit Expense, credit AP)
-    const toJournalId = await createJournalEntry({
-      companyId: Number(toCompanyId),
-      branchId: scope.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref,
-      description: description ?? `معاملة بين الشركات ${ref}`,
-      type: "intercompany",
-      lines: [
-        { accountCode: expenseAccountCode, debit: Number(amount), credit: 0, description: "مصروف شركة شقيقة" },
-        { accountCode: apAccountCode, debit: 0, credit: Number(amount), description: "ذمم دائنة شركة شقيقة" },
-      ],
-    });
+    let toResult: { journalId: number };
+    try {
+      toResult = await financialEngine.postJournalEntry({
+        companyId: Number(toCompanyId),
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref,
+        description: description ?? `معاملة بين الشركات ${ref}`,
+        type: "intercompany",
+        sourceType: "intercompany",
+        sourceId: 0,
+        sourceKey: `finance:intercompany:to:${fromTimestamp}`,
+        lines: [
+          { accountCode: expenseAccountCode, debit: Number(amount), credit: 0, description: "مصروف شركة شقيقة" },
+          { accountCode: apAccountCode, debit: 0, credit: Number(amount), description: "ذمم دائنة شركة شقيقة" },
+        ],
+      });
+    } catch (err) {
+      // Compensating reversal outside any transaction so it actually persists
+      await rawExecute(
+        `UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
+        [fromResult.journalId, scope.companyId]
+      );
+      throw err;
+    }
 
     await rawExecute(
       `INSERT INTO intercompany_transactions (ref,"fromCompanyId","toCompanyId",amount,description,"transactionDate",status,"fromJournalId","toJournalId","createdBy")
        VALUES ($1,$2,$3,$4,$5,$6,'posted',$7,$8,$9)`,
-      [ref, scope.companyId, Number(toCompanyId), Number(amount), description ?? null, txDate, fromJournalId, toJournalId, scope.activeAssignmentId]
+      [ref, scope.companyId, Number(toCompanyId), Number(amount), description ?? null, txDate, fromResult.journalId, toResult.journalId, scope.activeAssignmentId]
     );
+
+    const fromJournalId = fromResult.journalId;
+    const toJournalId = toResult.journalId;
 
     emitEvent({
       companyId: scope.companyId,
@@ -929,12 +1042,18 @@ financeHardeningRouter.post("/intercompany", requirePermission("finance:create")
       entity: "intercompany_transactions",
       entityId: fromJournalId,
       after: { ref, toCompanyId: Number(toCompanyId), amount: Number(amount), txDate },
-    }).catch((err) => console.error("[audit] intercompany.created:", err));
+    }).catch((err) => logger.error(err, "[audit] intercompany.created:"));
 
-    res.status(201).json({
-      ref, fromJournalId, toJournalId, amount: Number(amount),
-      message: `تم تسجيل المعاملة البينية ${ref} وإنشاء قيدين محاسبيين`,
-    });
+    const [createdIntercompany] = await rawQuery<any>(
+      `SELECT ic.*, fc.name AS "fromCompanyName", tc.name AS "toCompanyName"
+       FROM intercompany_transactions ic
+       LEFT JOIN companies fc ON fc.id = ic."fromCompanyId"
+       LEFT JOIN companies tc ON tc.id = ic."toCompanyId"
+       WHERE ic.ref = $1 AND (ic."fromCompanyId" = $2 OR ic."toCompanyId" = $2) AND ic."deletedAt" IS NULL
+       LIMIT 1`,
+      [ref, scope.companyId]
+    );
+    res.status(201).json({ ...(createdIntercompany || { ref, fromJournalId, toJournalId, amount: Number(amount) }), message: `تم تسجيل المعاملة البينية ${ref} وإنشاء قيدين محاسبيين` });
   } catch (err) {
     handleRouteError(err, res, "Create intercompany transaction error:");
   }
@@ -1003,7 +1122,8 @@ financeHardeningRouter.get("/projects", requirePermission("finance:read"), async
        LEFT JOIN journal_lines jl ON jl."journalId"=je.id AND jl.debit > 0
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
        GROUP BY p.id
-       ORDER BY p."createdAt" DESC`,
+       ORDER BY p."createdAt" DESC
+       LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
@@ -1016,20 +1136,14 @@ financeHardeningRouter.post("/projects", requirePermission("finance:create"), as
   try {
     const scope = req.scope!;
 
-    const { name, description, budget, startDate, endDate, branchId, ref } = req.body as any;
-    if (!name) {
-      throw new ValidationError("اسم المشروع مطلوب", {
-        field: "name",
-        fix: "أدخل اسم المشروع",
-      });
-    }
+    const { name, description, budget, startDate, endDate, branchId, ref } = zodParse(createProjectSchema.safeParse(req.body ?? {}));
     const projectRef = ref ?? `PRJ-${Date.now()}`;
     const { insertId } = await rawExecute(
       `INSERT INTO projects ("companyId","branchId",ref,name,description,budget,"startDate","endDate","managerId")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [scope.companyId, branchId ?? scope.branchId, projectRef, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     emitEvent({
       companyId: scope.companyId,
@@ -1047,7 +1161,7 @@ financeHardeningRouter.post("/projects", requirePermission("finance:create"), as
       entity: "projects",
       entityId: insertId,
       after: { ref: projectRef, name, budget: Number(budget ?? 0), startDate, endDate },
-    }).catch((err) => console.error("[audit] finance_project.created:", err));
+    }).catch((err) => logger.error(err, "[audit] finance_project.created:"));
 
     res.status(201).json(row);
   } catch (err) {
@@ -1055,10 +1169,28 @@ financeHardeningRouter.post("/projects", requirePermission("finance:create"), as
   }
 });
 
+financeHardeningRouter.get("/projects/:id", requirePermission("finance:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(
+      `SELECT p.*, COALESCE(p.budget - p."spentAmount", 0) AS "budgetRemaining"
+       FROM projects p
+       WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("المشروع غير موجود");
+    res.json(row);
+  } catch (err) {
+    handleRouteError(err, res, "Project detail error:");
+  }
+});
+
 financeHardeningRouter.get("/projects/:id/costs", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!project) throw new NotFoundError("المشروع غير موجود");
 
     const costs = await rawQuery<any>(
@@ -1070,7 +1202,7 @@ financeHardeningRouter.get("/projects/:id/costs", requirePermission("finance:rea
        WHERE je."projectId"=$1 AND je."companyId"=$2 AND je."deletedAt" IS NULL AND je.status = 'posted'
        GROUP BY je.id
        ORDER BY je."createdAt" DESC`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
 
     const totalCost = costs.reduce((s: number, r: any) => s + Number(r.amount), 0);
@@ -1094,12 +1226,10 @@ financeHardeningRouter.get("/projects/:id/costs", requirePermission("finance:rea
 financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const today = new Date();
-
     const inflow30 = await rawQuery<any>(
       `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id=i."clientId"
+       LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
        WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
          AND i.status IN ('sent','partial','overdue')
          AND i."dueDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
@@ -1110,7 +1240,7 @@ financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:rea
     const inflow60 = await rawQuery<any>(
       `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id=i."clientId"
+       LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
        WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
          AND i.status IN ('sent','partial','overdue')
          AND i."dueDate" BETWEEN CURRENT_DATE + INTERVAL '31 days' AND CURRENT_DATE + INTERVAL '60 days'
@@ -1121,7 +1251,7 @@ financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:rea
     const inflow90 = await rawQuery<any>(
       `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id=i."clientId"
+       LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
        WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
          AND i.status IN ('sent','partial','overdue')
          AND i."dueDate" BETWEEN CURRENT_DATE + INTERVAL '61 days' AND CURRENT_DATE + INTERVAL '90 days'
@@ -1133,15 +1263,15 @@ financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:rea
       `SELECT po.ref, po."totalAmount" AS expected, po."expectedDelivery" AS "dueDate", s.name AS "supplierName", 'purchase_order' AS type
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id=po."supplierId"
-       WHERE po."companyId"=$1 AND po.status IN ('approved','pending')
+       WHERE po."companyId"=$1 AND po."deletedAt" IS NULL AND po.status IN ('approved','pending')
          AND po."expectedDelivery" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
        UNION ALL
-       SELECT 'PAYROLL' AS ref, COALESCE(SUM(em."baseSalary"),0) AS expected,
+       SELECT 'PAYROLL' AS ref, COALESCE(SUM(ea.salary),0) AS expected,
               (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')::date AS "dueDate",
               'رواتب الموظفين' AS "supplierName", 'payroll' AS type
        FROM employee_assignments ea
        JOIN employees em ON em.id=ea."employeeId"
-       WHERE ea."companyId"=$1 AND ea.status='active' AND em."baseSalary" IS NOT NULL
+       WHERE ea."companyId"=$1 AND ea.status='active' AND ea.salary IS NOT NULL
        GROUP BY 1,3,4,5`,
       [scope.companyId]
     );
@@ -1199,7 +1329,7 @@ financeHardeningRouter.get("/cost-center-report", requirePermission("finance:rea
          COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit ELSE 0 END),0) AS "totalRevenue"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId"=je.id
-       LEFT JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId"
+       LEFT JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId" AND coa."deletedAt" IS NULL
        WHERE ${conditions.join(" AND ")}
        GROUP BY je."costCenter"
        ORDER BY "totalExpenses" DESC`,
@@ -1243,14 +1373,14 @@ financeHardeningRouter.get("/posting-failures", requirePermission("finance:read"
 financeHardeningRouter.patch("/posting-failures/:id/resolve", requirePermission("finance:approve"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { affectedRows } = await rawExecute(
       `UPDATE financial_posting_failures SET resolved = true, "resolvedAt" = NOW(), "resolvedBy" = $1
        WHERE id = $2 AND "companyId" = $3 AND resolved = false`,
       [scope.userId, id, scope.companyId]
     );
     if (!affectedRows) throw new NotFoundError("السجل غير موجود أو مغلق مسبقاً");
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "posting_failure.resolved", entity: "financial_posting_failures", entityId: id }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "posting_failure.resolved", entity: "financial_posting_failures", entityId: id }).catch((e) => logger.error(e, "finance-hardening background task failed"));
     res.json({ message: "تم إغلاق المشكلة" });
   } catch (err) {
     handleRouteError(err, res, "Resolve posting failure error:");

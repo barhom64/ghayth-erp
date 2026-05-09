@@ -237,7 +237,7 @@ export default function ActionCenter() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
-              <p className="text-xs text-gray-500">{item.leaveType} — {item.days} يوم ({item.startDate} → {item.endDate})</p>
+              <p className="text-xs text-gray-500">{item.leaveType} — {item.days} يوم ({formatDateAr(item.startDate)} → {formatDateAr(item.endDate)})</p>
             </div>
           </div>
         );

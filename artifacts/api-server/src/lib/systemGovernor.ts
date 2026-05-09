@@ -1,4 +1,5 @@
 import { rawQuery } from "./rawdb.js";
+import { todayISO } from "./businessHelpers.js";
 
 // ─── System Governor — حاكم النظام ──────────────────────────────────────
 // Central control layer that can HALT operations based on business conditions.
@@ -46,16 +47,17 @@ const companyActiveGuard: GuardFn = async (companyId) => {
 // ─── Guard: Trial Limits ──────────────────────────────────────────────────
 
 const trialLimitsGuard: GuardFn = async (companyId, context) => {
-  const [company] = await rawQuery<{ plan: string }>(
-    `SELECT plan FROM companies WHERE id = $1`,
+  const [company] = await rawQuery<{ status: string }>(
+    `SELECT status FROM companies WHERE id = $1`,
     [companyId]
   );
-  if (!company || company.plan !== "trial") return { allowed: true, guardName: "trial_limits" };
+  if (!company || company.status !== "trial") return { allowed: true, guardName: "trial_limits" };
 
   if (context?.entity === "employees") {
     const [count] = await rawQuery<{ cnt: number }>(
       `SELECT COUNT(*)::int AS cnt FROM employees
-       WHERE id IN (SELECT "employeeId" FROM employee_assignments WHERE "companyId" = $1 AND status = 'active')`,
+       WHERE id IN (SELECT "employeeId" FROM employee_assignments WHERE "companyId" = $1 AND status = 'active')
+         AND "deletedAt" IS NULL`,
       [companyId]
     );
     if (count && count.cnt >= 25) {
@@ -73,11 +75,11 @@ const postingFailuresGuard: GuardFn = async (companyId) => {
      WHERE "companyId" = $1 AND resolved = false`,
     [companyId]
   );
-  if (result && result.cnt >= 10) {
+  if (result && result.cnt >= 25) {
     return {
       allowed: false,
       guardName: "posting_failures_threshold",
-      reason: `يوجد ${result.cnt} فشل قيد مالي غير محلول — يجب معالجتها قبل المتابعة`,
+      reason: `يوجد ${result.cnt} فشل قيد مالي غير محلول — راجعها في لوحة الحوكمة`,
     };
   }
   return { allowed: true, guardName: "posting_failures_threshold" };
@@ -85,27 +87,60 @@ const postingFailuresGuard: GuardFn = async (companyId) => {
 
 // ─── Guard: Unresolved Audit Violations ───────────────────────────────────
 
-const auditViolationsGuard: GuardFn = async (companyId) => {
+const auditViolationsGuard: GuardFn = async (companyId, context) => {
+  if (context?.role === "owner" || context?.role === "general_manager") {
+    return { allowed: true, guardName: "audit_violations" };
+  }
   const [result] = await rawQuery<{ cnt: number }>(
     `SELECT COUNT(*)::int AS cnt FROM audit_violations
-     WHERE "companyId" = $1 AND status = 'open' AND severity IN ('critical', 'high')`,
+     WHERE "companyId" = $1 AND status = 'open' AND priority = 'critical'`,
     [companyId]
   );
-  if (result && result.cnt >= 5) {
+  if (result && result.cnt >= 10) {
     return {
       allowed: false,
       guardName: "audit_violations",
-      reason: `يوجد ${result.cnt} مخالفة تدقيق عاجلة غير محلولة — يجب معالجتها`,
+      reason: `يوجد ${result.cnt} مخالفة تدقيق حرجة غير محلولة — راجعها في لوحة الحوكمة`,
     };
   }
   return { allowed: true, guardName: "audit_violations" };
+};
+
+// ─── Guard: System Stop (Red Button) ─────────────────────────────────────
+// The "red button" mechanism: administrators can insert rows into the
+// `system_stops` table to halt specific operation scopes during audits,
+// investigations, or emergencies.  Every guarded mutation checks this table.
+
+const systemStopGuard: GuardFn = async (companyId, context) => {
+  const scope: string = context?.guardScope ?? "all";
+  const rows = await rawQuery<{ scope: string; reason: string }>(
+    `SELECT scope, reason FROM system_stops
+     WHERE "companyId" = $1
+       AND active = true
+       AND (scope = $2 OR scope = 'all')
+     LIMIT 1`,
+    [companyId, scope]
+  ).catch(() => [{ scope: "all", reason: "فشل التحقق من إيقاف النظام" }] as any[]);
+
+  if (rows.length > 0) {
+    return {
+      allowed: false,
+      guardName: "system_stop",
+      reason: `⛔ إيقاف نظام (${rows[0].scope}): ${rows[0].reason}`,
+    };
+  }
+  return { allowed: true, guardName: "system_stop" };
 };
 
 // ─── Guard Registry ───────────────────────────────────────────────────────
 
 export type GuardScope = "financial" | "hr" | "operational" | "all";
 
+/** Scopes that are considered financial — errors in these guards must fail closed. */
+const FINANCIAL_SCOPES: ReadonlySet<GuardScope> = new Set(["financial"]);
+
 const GUARD_REGISTRY: Array<{ guard: GuardFn; scope: GuardScope }> = [
+  { guard: systemStopGuard, scope: "all" },
   { guard: companyActiveGuard, scope: "all" },
   { guard: financialPeriodGuard, scope: "financial" },
   { guard: trialLimitsGuard, scope: "all" },
@@ -123,7 +158,16 @@ export async function checkSystemGuards(
   );
 
   const results = await Promise.all(
-    applicableGuards.map((g) => g.guard(companyId, context))
+    applicableGuards.map((g) =>
+      g.guard(companyId, context).catch((err): GuardResult => {
+        // All guards fail closed — an error must NOT allow the operation.
+        return {
+          allowed: false,
+          guardName: "error",
+          reason: `فشل التحقق من حارس (${g.scope}) — تم رفض العملية احتياطياً: ${String(err)}`,
+        };
+      })
+    )
   );
 
   const violations = results.filter((r) => !r.allowed);
@@ -142,11 +186,23 @@ import type { Request, Response, NextFunction } from "express";
 export function requireGuards(scope: GuardScope = "financial") {
   return async (req: Request, _res: Response, next: NextFunction) => {
     if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return next();
-    const companyId = (req as any).scope?.companyId;
+    const s = (req as any).scope;
+    const companyId = s?.companyId;
     if (!companyId) return next();
+
+    // Prefer an explicit posting/document date from the request body;
+    // fall back to today only when the body carries no date field.
+    const body: Record<string, unknown> | undefined = req.body;
+    const postingDate =
+      (body?.postingDate as string | undefined) ??
+      (body?.invoiceDate as string | undefined) ??
+      (body?.date as string | undefined) ??
+      todayISO();
+
     const result = await checkSystemGuards(companyId, scope, {
-      date: new Date().toISOString().split("T")[0],
+      date: postingDate,
       entity: req.path.split("/")[1],
+      role: s?.role,
     });
     if (!result.allowed) {
       const reasons = result.violations.map(v => v.reason).join(" | ");

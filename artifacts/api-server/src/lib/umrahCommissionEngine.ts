@@ -1,5 +1,7 @@
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
-import { emitEvent, createGuardedJournalEntry, getAccountCodeFromMapping } from "./businessHelpers.js";
+import { emitEvent, createGuardedJournalEntry, getAccountCodeFromMapping, roundTo2 } from "./businessHelpers.js";
+import { NotFoundError } from "./errorHandler.js";
+import { logger } from "./logger.js";
 
 type QueryFn = (sql: string, params: any[]) => Promise<{ rows: any[] }>;
 
@@ -67,12 +69,13 @@ export async function calculateCommissionForPlan(
   month: number,
   year: number,
   userId: number,
+  companyId?: number,
 ): Promise<CalculationResult> {
   const [plan] = await rawQuery<CommissionPlan>(
-    `SELECT * FROM employee_commission_plans WHERE id = $1 AND status = 'active' AND "deletedAt" IS NULL`,
-    [planId]
+    `SELECT * FROM employee_commission_plans WHERE id = $1 AND "companyId" = $2 AND status = 'active' AND "deletedAt" IS NULL`,
+    [planId, companyId ?? 0]
   );
-  if (!plan) throw new Error("الخطة غير موجودة أو غير مفعّلة");
+  if (!plan) throw new NotFoundError("الخطة غير موجودة أو غير مفعّلة");
 
   const tiers = await rawQuery<CommissionTier>(
     `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 ORDER BY "tierOrder"`,
@@ -96,12 +99,12 @@ export async function calculateCommissionForPlan(
          "conditionMet"=$5, "conditionDetails"=$6, "completedTiers"=$7, "commissionAmount"=$8,
          "hasViolations"=$9, "finalAmount"=$10, "isExcludedMonth"=$11, status='calculated',
          "updatedBy"=$12, "updatedAt"=NOW()
-         WHERE id=$13`,
+         WHERE id=$13 AND "companyId"=$14`,
         [
           result.totalMutamers, result.avgProfitPerVisa, result.salesPercent, result.avgSalePrice,
           result.conditionMet, result.conditionDetails, result.completedTiers, result.commissionAmount,
           result.hasViolations, result.finalAmount, result.isExcludedMonth,
-          userId, existing.id,
+          userId, existing.id, plan.companyId,
         ]
       );
     } else {
@@ -126,7 +129,7 @@ export async function calculateCommissionForPlan(
       companyId: plan.companyId, branchId: plan.branchId, userId,
       action: "umrah.commission.calculated", entity: "employee_commission_plans", entityId: planId,
       after: { month, year, finalAmount: result.finalAmount, employeeId: plan.employeeId, assignmentId: plan.assignmentId },
-    }).catch(() => {});
+    }).catch((e) => logger.error(e, "umrah commission background task failed"));
 
     if (result.finalAmount > 0) {
       // GL: Debit Commission Expense, Credit Commission Payable (accrual) — BLOCKING
@@ -163,12 +166,13 @@ export async function simulateCommission(
   planId: number,
   month: number,
   year: number,
+  companyId?: number,
 ): Promise<CalculationResult> {
   const [plan] = await rawQuery<CommissionPlan>(
-    `SELECT * FROM employee_commission_plans WHERE id = $1 AND "deletedAt" IS NULL`,
-    [planId]
+    `SELECT * FROM employee_commission_plans WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+    [planId, companyId ?? 0]
   );
-  if (!plan) throw new Error("الخطة غير موجودة");
+  if (!plan) throw new NotFoundError("الخطة غير موجودة");
 
   const tiers = await rawQuery<CommissionTier>(
     `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 ORDER BY "tierOrder"`,
@@ -199,12 +203,13 @@ async function compute(
        COALESCE(AVG(pkg."sellPrice" - pkg."costPrice"), 0)::numeric(10,2) AS avg_profit,
        COALESCE(AVG(pkg."sellPrice"), 0)::numeric(10,2) AS avg_price
      FROM umrah_pilgrims p
-     LEFT JOIN umrah_packages pkg ON p."packageId" = pkg.id
+     LEFT JOIN umrah_packages pkg ON p."packageId" = pkg.id AND pkg."deletedAt" IS NULL
      WHERE p."companyId" = $1 AND p."seasonId" = $2
        AND EXTRACT(MONTH FROM p."createdAt") = $3
        AND EXTRACT(YEAR FROM p."createdAt") = $4
-       AND p."deletedAt" IS NULL`,
-    [plan.companyId, plan.seasonId, month, year]
+       AND p."deletedAt" IS NULL
+       AND p."createdBy" IN (SELECT u.id FROM users u WHERE u."employeeId" = $5)`,
+    [plan.companyId, plan.seasonId, month, year, plan.employeeId]
   )).rows[0] ?? { total: 0, avg_profit: 0, avg_price: 0 };
 
   const totalMutamers = Number(mutamerStats.total) || 0;
@@ -223,10 +228,10 @@ async function compute(
   const employeeSalesRes = (await queryFn(
     `SELECT COALESCE(SUM(ni."totalAmount"), 0)::numeric(12,2) AS emp_sales
      FROM umrah_nusk_invoices ni
-     JOIN umrah_pilgrims p ON p."companyId" = ni."companyId" AND p."groupId" = ni."groupId"
      WHERE ni."companyId" = $1 AND EXTRACT(MONTH FROM ni."issueDate") = $2 AND EXTRACT(YEAR FROM ni."issueDate") = $3
-       AND ni."deletedAt" IS NULL`,
-    [plan.companyId, month, year]
+       AND ni."deletedAt" IS NULL
+       AND ni."createdBy" IN (SELECT u.id FROM users u WHERE u."employeeId" = $4)`,
+    [plan.companyId, month, year, plan.employeeId]
   )).rows[0];
   const salesPercent = totalCompanySales > 0
     ? Math.round((Number(employeeSalesRes?.emp_sales) / totalCompanySales) * 10000) / 100
@@ -244,6 +249,7 @@ async function compute(
          SELECT 1 FROM umrah_pilgrims p
          WHERE p."companyId" = v."companyId" AND p."seasonId" = $4
            AND (p.id = v."mutamerId" OR p."groupId" = v."groupId")
+           AND p."deletedAt" IS NULL
        )`,
     [plan.companyId, year, month, plan.seasonId]
   )).rows[0];
@@ -270,8 +276,8 @@ async function compute(
   if (hasViolations && plan.violationBlocksCommission) finalAmount = 0;
   if (isExcludedMonth) finalAmount = 0;
 
-  finalAmount = Math.round(finalAmount * 100) / 100;
-  commissionAmount = Math.round(commissionAmount * 100) / 100;
+  finalAmount = roundTo2(finalAmount);
+  commissionAmount = roundTo2(commissionAmount);
 
   const completedTiers = plan.partialTiersAllowed
     ? tiers.filter((t) => totalMutamers >= t.fromCount).length
@@ -402,7 +408,7 @@ export async function calculateAllForCompany(
   const results: CalculationResult[] = [];
   for (const p of plans) {
     try {
-      const r = await calculateCommissionForPlan(p.id, month, year, userId);
+      const r = await calculateCommissionForPlan(p.id, month, year, userId, companyId);
       results.push(r);
     } catch (err) {
       await rawExecute(
@@ -410,7 +416,7 @@ export async function calculateAllForCompany(
          VALUES ($1,$2,$3,$4,false)`,
         [companyId, "commission_calculation", p.id,
          `فشل حساب عمولة الخطة ${p.id} شهر ${month}/${year}: ${String(err)}`]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "umrah commission background task failed"));
     }
   }
   return results;

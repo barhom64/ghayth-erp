@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Button } from "@/components/ui/button";
 import { Plus, Users, AlertTriangle, Plane, UserPlus } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { AdvancedFilters, useFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function UmrahPilgrims() {
+  const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
   const [page, setPage] = useState(1);
   const pageSize = 20;
@@ -52,13 +54,13 @@ export default function UmrahPilgrims() {
       key: "arrivalDate",
       header: "الوصول",
       sortable: true,
-      render: (p) => (p.arrivalDate ? new Date(p.arrivalDate).toLocaleDateString("ar-SA") : "-"),
+      render: (p) => formatDateAr(p.arrivalDate),
     },
     {
       key: "departureDate",
       header: "المغادرة",
       sortable: true,
-      render: (p) => (p.departureDate ? new Date(p.departureDate).toLocaleDateString("ar-SA") : "-"),
+      render: (p) => formatDateAr(p.departureDate),
     },
     {
       key: "status",
@@ -135,6 +137,7 @@ export default function UmrahPilgrims() {
         total={total}
         onPageChange={setPage}
         noToolbar
+        onRowClick={(row) => navigate(`/umrah/pilgrims/${row.id}`)}
       />
     </div>
   );

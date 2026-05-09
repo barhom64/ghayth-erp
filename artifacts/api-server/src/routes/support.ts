@@ -3,17 +3,20 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { logger } from "../lib/logger.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { slaDeadlineForPriority, haversineKm, loadBalanceAssign } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent, createGuardedJournalEntry, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { applyTransition, LifecycleError, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import type { ExtraValue } from "../lib/lifecycleEngine.js";
 const router = Router();
-router.use(authMiddleware);
 
 const createTicketSchema = z.object({
   title: z.string().optional(),
@@ -21,7 +24,7 @@ const createTicketSchema = z.object({
   description: z.string().min(1, "وصف المشكلة مطلوب"),
   clientId: z.coerce.number().optional(),
   category: z.string().optional(),
-  priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+  priority: z.enum(["low", "medium", "high", "urgent", "critical"]).optional(),
   slaDeadline: z.string().optional(),
   assigneeId: z.coerce.number().optional(),
 });
@@ -42,6 +45,33 @@ const createKbSchema = z.object({
   content: z.string().min(1, "محتوى المقال مطلوب"),
   category: z.string().optional(),
   tags: z.any().optional(),
+});
+
+const updateTicketSchema = z.object({
+  status: z.string().optional(),
+  assigneeId: z.coerce.number().optional().nullable(),
+  priority: z.enum(["low", "medium", "high", "urgent", "critical"]).optional(),
+  billableAmount: z.coerce.number().optional(),
+});
+
+const updateKbSchema = z.object({
+  title: z.string().optional(),
+  content: z.string().optional(),
+  category: z.string().optional(),
+  tags: z.any().optional(),
+  status: z.enum(["published", "draft", "archived"]).optional(),
+});
+
+const createFieldVisitSchema = z.object({
+  clientLat: z.coerce.number().optional().nullable(),
+  clientLon: z.coerce.number().optional().nullable(),
+  officeLat: z.coerce.number().optional().nullable(),
+  officeLon: z.coerce.number().optional().nullable(),
+  visitDate: z.string().optional().nullable(),
+});
+
+const kbFeedbackSchema = z.object({
+  helpful: z.any(),
 });
 
 const PRIORITY_KEYWORDS: Record<string, string[]> = {
@@ -70,7 +100,7 @@ router.get("/tickets", requirePermission("support:read"), async (req, res) => {
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
     if (priority) { where += ` AND t.priority = $${paramIdx}`; params.push(priority); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT t.*, cl.name AS "clientName", e.name AS "assigneeName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" LEFT JOIN employees e ON e.id=t."assigneeId" WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC`,
+      `SELECT t.*, cl.name AS "clientName", e.name AS "assigneeName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=t."assigneeId" AND e."deletedAt" IS NULL WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -86,9 +116,7 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
   // but nobody was emitting the event from the create handler).
   try {
     const scope = req.scope!;
-    const parsed = createTicketSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createTicketSchema.safeParse(req.body)) as any;
 
     const title = (b.title ?? b.subject ?? "").toString().trim();
     if (!title) {
@@ -110,7 +138,7 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
     // "مرجع غير صالح" — now we reject early with field="clientId".
     if (b.clientId) {
       const [client] = await rawQuery<{ id: number }>(
-        `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
         [Number(b.clientId), scope.companyId]
       );
       if (!client) {
@@ -121,7 +149,7 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
       }
     }
 
-    const ref = `TKT-${Date.now().toString(36).toUpperCase()}`;
+    const ref = generateTimeRef("TKT");
 
     const aiDetectedPriority = detectPriority(`${title} ${b.description || ''}`);
     const priority = b.priority || aiDetectedPriority;
@@ -135,13 +163,13 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
                 COUNT(st.id) AS "openTickets",
                 COALESCE(
                   (SELECT AVG(EXTRACT(EPOCH FROM (st2."resolvedAt" - st2."createdAt"))/3600)
-                   FROM support_tickets st2 WHERE st2."assigneeId"=e.id AND st2.status='resolved' AND st2."resolvedAt" IS NOT NULL),
+                   FROM support_tickets st2 WHERE st2."assigneeId"=e.id AND st2.status='resolved' AND st2."resolvedAt" IS NOT NULL AND st2."deletedAt" IS NULL),
                   999
                 ) AS "avgResolution"
          FROM employees e
          JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-         LEFT JOIN support_tickets st ON st."assigneeId"=e.id AND st.status NOT IN ('resolved','closed')
-         WHERE e.status='active'
+         LEFT JOIN support_tickets st ON st."assigneeId"=e.id AND st.status NOT IN ('resolved','closed') AND st."deletedAt" IS NULL
+         WHERE e.status='active' AND e."deletedAt" IS NULL
          GROUP BY e.id, e.name
          ORDER BY "openTickets" ASC, "avgResolution" ASC
          LIMIT 5`,
@@ -168,12 +196,12 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
       `INSERT INTO support_tickets ("companyId",ref,title,description,category,priority,status,"clientId","assigneeId","slaDeadline") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [scope.companyId, ref, title, b.description, b.category, priority, 'open', b.clientId ?? null, assigneeId, slaResolutionDeadline]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     if (assigneeId) {
       const [assigneeAssignment] = await rawQuery<any>(
-        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND status = 'active' LIMIT 1`,
-        [assigneeId]
+        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+        [assigneeId, scope.companyId]
       );
       if (assigneeAssignment) {
         createNotification({
@@ -185,7 +213,7 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
           priority: priority === 'critical' ? 'high' : 'normal',
           refType: "support_tickets",
           refId: insertId,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "support background task failed"));
       }
     }
 
@@ -197,7 +225,7 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
       entity: "support_tickets",
       entityId: insertId,
       after: { ref, title, priority, aiDetectedPriority, category: b.category, clientId: b.clientId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
 
     // Canonical creation event — mirrors employee.created in HR so the
     // support inbox audit trail finally sees every new ticket the same
@@ -217,7 +245,7 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
         assigneeId,
         clientId: b.clientId ?? null,
       }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
 
     res.status(201).json({
       ...row,
@@ -228,15 +256,64 @@ router.post("/tickets", requirePermission("support:create"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Create ticket error:"); }
 });
 
+router.post("/tickets/check-sla", requirePermission("support:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const breached = await rawQuery<any>(
+      `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."deletedAt" IS NULL WHERE t."companyId"=$1 AND t.status IN ('open','in_progress','field_visit') AND t."slaDeadline" < NOW() AND t."deletedAt" IS NULL`,
+      [scope.companyId]
+    );
+    for (const ticket of breached) {
+      logger.info({ ticketRef: ticket.ref }, "SLA breach — escalating to critical priority");
+      try {
+        await rawExecute(
+          `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND priority != 'critical' AND "deletedAt" IS NULL`,
+          [ticket.id, scope.companyId]
+        );
+        let notifAssignmentId = scope.activeAssignmentId;
+        if (ticket.assigneeId) {
+          const [asgn] = await rawQuery<any>(
+            `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+            [ticket.assigneeId, scope.companyId]
+          );
+          if (asgn) notifAssignmentId = asgn.id;
+        }
+        await createNotification({
+          companyId: scope.companyId,
+          assignmentId: notifAssignmentId,
+          type: "alert",
+          title: `SLA خرق: ${ticket.ref}`,
+          body: `التذكرة "${ticket.title}" تجاوزت SLA — تم تصعيد الأولوية إلى حرجة`,
+          priority: "high",
+          refType: "support_tickets",
+          refId: ticket.id,
+        });
+      } catch (e) { logger.error(e, "SLA breach notification error:"); }
+    }
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "support.sla.checked", entity: "support_tickets", entityId: 0,
+      details: JSON.stringify({ breachedCount: breached.length }),
+    }).catch((e) => logger.error(e, "support background task failed"));
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "preview", entity: "support_tickets", entityId: 0,
+      after: { breachedCount: breached.length },
+    }).catch((e) => logger.error(e, "support background task failed"));
+    res.json({ breached: breached.length, tickets: breached });
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
 router.get("/tickets/:id", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [ticket] = await rawQuery<any>(
-      `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" WHERE t.id=$1 AND t."companyId"=$2 AND t."deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."deletedAt" IS NULL WHERE t.id=$1 AND t."companyId"=$2 AND t."deletedAt" IS NULL`,
+      [id, scope.companyId]
     );
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
-    const replies = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE "ticketId"=$1 ORDER BY "createdAt"`, [ticket.id]);
+    const replies = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE "ticketId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" LIMIT 500`, [ticket.id]);
 
     const now = new Date();
     const slaDeadline = ticket.slaDeadline ? new Date(ticket.slaDeadline) : null;
@@ -252,10 +329,8 @@ router.get("/tickets/:id", requirePermission("support:read"), async (req, res) =
 router.post("/tickets/:id/replies", requirePermission("support:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createReplySchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
-    const ticketId = Number(req.params.id);
+    const b = zodParse(createReplySchema.safeParse(req.body)) as any;
+    const ticketId = parseId(req.params.id, "id");
 
     const [ticket] = await rawQuery<any>(`SELECT id, ref, title, "firstResponseAt", "slaDeadline", priority FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
@@ -265,14 +340,14 @@ router.post("/tickets/:id/replies", requirePermission("support:create"), async (
       [ticketId, scope.userId, b.authorName, b.message, b.isInternal || false]
     );
     if (!b.isInternal && !ticket.firstResponseAt) {
-      await rawExecute(`UPDATE support_tickets SET "firstResponseAt"=NOW(), "updatedAt"=NOW() WHERE id=$1`, [ticketId]);
+      await rawExecute(`UPDATE support_tickets SET "firstResponseAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
     }
 
     if (ticket.slaDeadline && new Date() > new Date(ticket.slaDeadline)) {
       try {
         await rawExecute(
-          `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND priority != 'critical'`,
-          [ticketId]
+          `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND priority != 'critical' AND "deletedAt" IS NULL`,
+          [ticketId, scope.companyId]
         );
         await createNotification({
           companyId: scope.companyId,
@@ -284,19 +359,19 @@ router.post("/tickets/:id/replies", requirePermission("support:create"), async (
           refType: "support_tickets",
           refId: Number(ticketId),
         });
-        console.log(`[SLA ESCALATION] Ticket ${ticket.ref} breached SLA — priority escalated to critical, notification created`);
+        logger.info({ ticketRef: ticket.ref }, "SLA escalation — priority escalated to critical, notification created");
       } catch (slaErr) {
-        console.error("Failed to handle SLA breach:", slaErr);
+        logger.error(slaErr, "Failed to handle SLA breach:");
       }
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE id=$1`, [insertId]);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.reply.created", entity: "ticket_replies", entityId: insertId, details: JSON.stringify({ ticketId, isInternal: b.isInternal || false }) }).catch(console.error);
+    const [row] = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.reply.created", entity: "ticket_replies", entityId: insertId, details: JSON.stringify({ ticketId, isInternal: b.isInternal || false }) }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "ticket_replies", entityId: insertId,
       after: { ticketId, message: b.message, isInternal: b.isInternal || false },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create reply error:"); }
 });
@@ -304,54 +379,59 @@ router.post("/tickets/:id/replies", requirePermission("support:create"), async (
 router.post("/tickets/:id/field-visit", requirePermission("support:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const ticketId = Number(req.params.id);
-    const b = req.body;
-
-    const [ticket] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
-    if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
+    const ticketId = parseId(req.params.id, "id");
+    const b = zodParse(createFieldVisitSchema.safeParse(req.body ?? {}));
 
     let distanceKm: number | null = null;
     if (b.clientLat && b.clientLon && b.officeLat && b.officeLon) {
-      distanceKm = haversineKm(Number(b.officeLat), Number(b.officeLon), Number(b.clientLat), Number(b.clientLon));
+      distanceKm = haversineKm(b.officeLat, b.officeLon, b.clientLat, b.clientLon);
     }
 
-    await rawExecute(
-      `UPDATE support_tickets SET status='field_visit', "updatedAt"=NOW() WHERE id=$1`,
-      [ticketId]
-    );
+    const row = await applyTransition<any>({
+      entity: "support_tickets",
+      id: ticketId,
+      scope,
+      action: "support.ticket.field_visit",
+      toState: "field_visit",
+      extraWhere: '"deletedAt" IS NULL',
+      after: { distanceKm, visitDate: b.visitDate },
+    });
 
-    if (ticket.assigneeId) {
+    if (row.assigneeId) {
       try {
         const [asgn] = await rawQuery<any>(
-          `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND status='active' LIMIT 1`,
-          [ticket.assigneeId]
+          `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
+          [row.assigneeId, scope.companyId]
         );
         if (asgn) {
           createNotification({
             companyId: scope.companyId,
             assignmentId: asgn.id,
             type: "field_visit",
-            title: `زيارة ميدانية — تذكرة ${ticket.ref}`,
+            title: `زيارة ميدانية — تذكرة ${row.ref}`,
             body: `زيارة ميدانية مطلوبة${distanceKm ? ` (${distanceKm.toFixed(1)} كم)` : ''} — ${b.visitDate || 'بأسرع وقت'}`,
             priority: "high",
             refType: "support_tickets",
             refId: ticketId,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "support background task failed"));
         }
-      } catch (e) { console.error("Field visit notification error:", e); }
+      } catch (e) { logger.error(e, "Field visit notification error:"); }
     }
 
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.ticket.field_visit", entity: "support_tickets", entityId: ticketId, details: JSON.stringify({ distanceKm, visitDate: b.visitDate }) }).catch(console.error);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "field_visits", entityId: ticketId,
-      after: { ticketId, distanceKm, visitDate: b.visitDate, assigneeId: ticket.assigneeId },
-    }).catch(console.error);
+      after: { ticketId, distanceKm, visitDate: b.visitDate, assigneeId: row.assigneeId },
+    }).catch((e) => logger.error(e, "support background task failed"));
     res.json({
       ticketId, status: 'field_visit', distanceKm,
-      visitDate: b.visitDate, assigneeId: ticket.assigneeId,
+      visitDate: b.visitDate, assigneeId: row.assigneeId,
     });
-  } catch (err) { handleRouteError(err, res, "Field visit error:"); }
+  } catch (err) {
+    const lcErr = lifecycleErrorResponse(err);
+    if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
+    handleRouteError(err, res, "Field visit error:");
+  }
 });
 
 // State machine for support tickets — the allowed transitions from each
@@ -371,27 +451,23 @@ const TICKET_TRANSITIONS: Record<string, readonly string[]> = {
 };
 
 router.patch("/tickets/:id", requirePermission("support:write"), async (req, res) => {
-  // Phase C — Support ticket update audit.
-  //   - state-machine guard on status changes (ConflictError on illegal
-  //     transitions instead of silent UPDATE)
-  //   - emits a separate event for each lifecycle transition (was
-  //     emitting only on resolve) so audit_logs sees every state change
-  //   - emits support.ticket.assigned when assignee changes
-  //   - emits support.ticket.updated on any non-status field change
   try {
     const scope = req.scope!;
-    const ticketId = Number(req.params.id);
+    const ticketId = parseId(req.params.id, "id");
+    const b = zodParse(updateTicketSchema.safeParse(req.body));
 
-    const [ticket] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
+    // Pre-read for transition validation and pre-update state snapshot.
+    const [ticket] = await rawQuery<any>(
+      `SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [ticketId, scope.companyId]
+    );
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
 
-    const b = req.body;
+    const statusChanging = b.status !== undefined && b.status !== ticket.status;
 
-    // State transition guard — if the caller is changing status, the
-    // requested value must be in the allowlist for the current state.
-    if (b.status !== undefined && b.status !== ticket.status) {
+    if (statusChanging) {
       const allowed = TICKET_TRANSITIONS[ticket.status] ?? [];
-      if (!allowed.includes(b.status)) {
+      if (!allowed.includes(b.status!)) {
         throw new ConflictError(
           `لا يمكن نقل التذكرة من "${ticket.status}" إلى "${b.status}"`,
           {
@@ -409,40 +485,31 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
       }
     }
 
-    const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
-    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); if (b.status === 'resolved') sets.push(`"resolvedAt"=NOW()`); }
-    if (b.assigneeId !== undefined) { params.push(b.assigneeId); sets.push(`"assigneeId"=$${params.length}`); }
-    if (b.priority !== undefined) { params.push(b.priority); sets.push(`priority=$${params.length}`); }
-    params.push(ticketId);
-    await rawExecute(`UPDATE support_tickets SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    const action = statusChanging
+      ? (b.status === "closed"
+          ? "support.ticket.closed"
+          : b.status === "resolved"
+            ? "support.ticket.resolved"
+            : "support.ticket.status_changed")
+      : "support.ticket.updated";
 
-    // Emit a specific event per lifecycle transition so audit_logs +
-    // downstream listeners (notification engine, rules engine, BI) see
-    // every state change. Was previously only emitting on resolved,
-    // meaning "closed" and "field_visit" and reopens were all invisible.
-    if (b.status !== undefined && b.status !== ticket.status) {
-      const closedStatuses = ["closed"];
-      const action = closedStatuses.includes(b.status)
-        ? "support.ticket.closed"
-        : b.status === "resolved"
-        ? "support.ticket.resolved"
-        : "support.ticket.status_changed";
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action,
-        entity: "support_tickets",
-        entityId: ticketId,
-        before: { status: ticket.status },
-        after: { status: b.status },
-        details: JSON.stringify({ from: ticket.status, to: b.status }),
-      }).catch(console.error);
-    }
+    const setExtras: Record<string, ExtraValue> = {};
+    if (b.assigneeId !== undefined) setExtras.assigneeId = b.assigneeId;
+    if (b.priority !== undefined) setExtras.priority = b.priority;
+    if (statusChanging && b.status === "resolved") setExtras.resolvedAt = { raw: "NOW()" };
 
-    // Assignee change emits its own event so the new agent's inbox sees
-    // it and the audit trail can track re-assignment history.
+    const row = await applyTransition<any>({
+      entity: "support_tickets",
+      id: ticketId,
+      scope,
+      action,
+      ...(statusChanging ? { toState: b.status } : {}),
+      setExtras: Object.keys(setExtras).length > 0 ? setExtras : undefined,
+      extraWhere: '"deletedAt" IS NULL',
+      after: { status: b.status, assigneeId: b.assigneeId, priority: b.priority },
+    });
+
+    // Post-commit: assignee change event (separate from status lifecycle).
     if (b.assigneeId !== undefined && b.assigneeId !== ticket.assigneeId) {
       emitEvent({
         companyId: scope.companyId,
@@ -453,44 +520,35 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
         entityId: ticketId,
         before: { assigneeId: ticket.assigneeId },
         after: { assigneeId: b.assigneeId },
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "support background task failed"));
     }
 
+    // Post-commit: resolution side-effects (billing + survey).
     let surveyQueued = false;
-    if (b.status === 'resolved') {
+    if (statusChanging && b.status === "resolved") {
       const createdAt = new Date(ticket.createdAt);
       const resolutionTimeHours = (Date.now() - createdAt.getTime()) / (1000 * 60 * 60);
-
       if (ticket.assigneeId) {
-        console.log(`[SUPPORT] Agent ${ticket.assigneeId} resolved ticket in ${resolutionTimeHours.toFixed(1)}h`);
+        logger.info({ assigneeId: ticket.assigneeId, resolutionTimeHours: resolutionTimeHours.toFixed(1) }, "Support agent resolved ticket");
       }
 
       const billableAmount = Number(b.billableAmount || 0);
       if (billableAmount > 0 && ticket.clientId) {
-        const arCode = await getAccountCodeFromMapping(scope.companyId, "support_ar", "debit", "1200");
-        const serviceRevenueCode = await getAccountCodeFromMapping(scope.companyId, "support_service_revenue", "credit", "4300");
-        await createGuardedJournalEntry({
-          companyId: scope.companyId,
-          branchId: scope.branchId || 0,
-          createdBy: scope.userId,
-          ref: `SUPPORT-${ticket.ref}`,
-          description: `قيد خدمة دعم فني — تذكرة ${ticket.ref}`,
-          sourceType: "support_ticket",
-          sourceId: ticketId,
-          lines: [
-            { accountCode: arCode, debit: billableAmount, credit: 0, description: `ذمم مدينة — دعم فني ${ticket.ref}`, clientId: ticket.clientId },
-            { accountCode: serviceRevenueCode, debit: 0, credit: billableAmount, description: `إيراد خدمة دعم — ${ticket.ref}`, clientId: ticket.clientId },
-          ],
-        }, { table: "support_tickets", id: ticketId });
+        try {
+          const { supportEngine } = await import("../lib/engines/index.js");
+          await supportEngine.postBillingGL(
+            { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+            { id: ticketId, ref: ticket.ref, clientId: ticket.clientId, billableAmount }
+          );
+        } catch (glErr) {
+          logger.error(glErr, "Support billing GL failed:");
+        }
       }
 
-      // Actually queue the satisfaction survey (used to just be a console.log).
-      // A scheduledAt in the future lets the email_queue_worker deliver it
-      // when it becomes due; until then it sits in 'pending'.
       if (ticket.clientId) {
         try {
           const [client] = await rawQuery<any>(
-            `SELECT id, name, email FROM clients WHERE id = $1 AND "companyId" = $2`,
+            `SELECT id, name, email FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
             [ticket.clientId, scope.companyId]
           );
           if (client?.email) {
@@ -511,29 +569,30 @@ router.patch("/tickets/:id", requirePermission("support:write"), async (req, res
             surveyQueued = true;
           }
         } catch (e) {
-          console.error("[SURVEY] Failed to queue satisfaction survey:", e);
+          logger.error(e, "[SURVEY] Failed to queue satisfaction survey:");
         }
       }
-
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1`, [ticketId]);
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "support_tickets", entityId: ticketId,
-      after: { status: b.status, assigneeId: b.assigneeId, priority: b.priority },
-    }).catch(console.error);
     res.json({ ...row, surveyQueued });
-  } catch (err) { handleRouteError(err, res, "Update ticket error:"); }
+  } catch (err) {
+    if (err instanceof LifecycleError) {
+      const typed = err.status === 404
+        ? new NotFoundError(err.message)
+        : new ConflictError(err.message, { field: err.field });
+      return handleRouteError(typed, res, "Update ticket error:");
+    }
+    handleRouteError(err, res, "Update ticket error:");
+  }
 });
 
 router.delete("/tickets/:id", requirePermission("support:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id, ref, status FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("التذكرة غير موجودة");
-    await rawExecute(`UPDATE support_tickets SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE support_tickets SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     emitEvent({
       companyId: scope.companyId,
@@ -544,56 +603,16 @@ router.delete("/tickets/:id", requirePermission("support:delete"), async (req, r
       entityId: id,
       before: { status: existing.status, ref: existing.ref },
       after: { status: "deleted" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "support_tickets", entityId: id,
       after: { ref: existing.ref, status: existing.status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
 
     res.json({ message: "تم حذف التذكرة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete ticket error:"); }
-});
-
-router.post("/tickets/check-sla", requirePermission("support:read"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const breached = await rawQuery<any>(
-      `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" WHERE t."companyId"=$1 AND t.status IN ('open','in_progress','field_visit') AND t."slaDeadline" < NOW() AND t."deletedAt" IS NULL`,
-      [scope.companyId]
-    );
-    for (const ticket of breached) {
-      console.log(`[SLA BREACH] Ticket ${ticket.ref} — escalating to critical priority`);
-      try {
-        await rawExecute(
-          `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND priority != 'critical'`,
-          [ticket.id]
-        );
-        await createNotification({
-          companyId: scope.companyId,
-          assignmentId: scope.activeAssignmentId,
-          type: "alert",
-          title: `SLA خرق: ${ticket.ref}`,
-          body: `التذكرة "${ticket.title}" تجاوزت SLA — تم تصعيد الأولوية إلى حرجة`,
-          priority: "high",
-          refType: "support_tickets",
-          refId: ticket.id,
-        });
-      } catch (e) { console.error("SLA breach notification error:", e); }
-    }
-    emitEvent({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "support.sla.checked", entity: "support_tickets", entityId: 0,
-      details: JSON.stringify({ breachedCount: breached.length }),
-    }).catch(console.error);
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "preview", entity: "support_tickets", entityId: 0,
-      after: { breachedCount: breached.length },
-    }).catch(console.error);
-    res.json({ breached: breached.length, tickets: breached });
-  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
 router.get("/replies", requirePermission("support:read"), async (req, res) => {
@@ -605,8 +624,9 @@ router.get("/replies", requirePermission("support:read"), async (req, res) => {
       `SELECT tr.id, t.ref AS "ticketId", t.title AS "ticketTitle", tr.message AS reply, tr."authorName" AS agent, tr."createdAt" AS date, t.status
        FROM ticket_replies tr
        JOIN support_tickets t ON t.id = tr."ticketId"
-       WHERE ${baseWhere}
-       ORDER BY tr."createdAt" DESC`,
+       WHERE ${baseWhere} AND tr."deletedAt" IS NULL AND t."deletedAt" IS NULL
+       ORDER BY tr."createdAt" DESC
+       LIMIT 500`,
       params
     );
     const total = rows.length;
@@ -624,7 +644,7 @@ router.get("/stats", requirePermission("support:read"), async (req, res) => {
     const [tickets] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='resolved') as resolved, COUNT(*) FILTER (WHERE status IN ('open','in_progress','field_visit') AND "slaDeadline" < NOW()) as "slaBreach" FROM support_tickets WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [avgRes] = await rawQuery<any>(`SELECT AVG(EXTRACT(EPOCH FROM ("resolvedAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND status='resolved' AND "resolvedAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]);
     const [firstResponse] = await rawQuery<any>(`SELECT AVG(EXTRACT(EPOCH FROM ("firstResponseAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND "firstResponseAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]);
-    const [csat] = await rawQuery<any>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [cid]).catch(() => [{ avg: null, total: 0 }]);
+    const [csat] = await rawQuery<any>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "support query failed"); return [{ avg: null, total: 0 }]; });
     res.json({
       totalTickets: Number(tickets.total), openTickets: Number(tickets.open),
       resolvedTickets: Number(tickets.resolved), slaBreach: Number(tickets.slaBreach),
@@ -639,10 +659,8 @@ router.get("/stats", requirePermission("support:read"), async (req, res) => {
 router.post("/tickets/:id/csat", requirePermission("support:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const ticketId = Number(req.params.id);
-    const parsed = createCSATSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const ticketId = parseId(req.params.id, "id");
+    const b = zodParse(createCSATSchema.safeParse(req.body)) as any;
     const { score, comment } = b;
     const [ticket] = await rawQuery<any>(`SELECT id, "assigneeId", status FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
@@ -657,13 +675,14 @@ router.post("/tickets/:id/csat", requirePermission("support:write"), async (req,
       `INSERT INTO ticket_csat_ratings ("ticketId","companyId","assigneeId",score,comment) VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("ticketId") DO UPDATE SET score=$4, comment=$5, "updatedAt"=NOW()`,
       [ticketId, scope.companyId, ticket.assigneeId, score, comment || null]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.ticket.csat_rated", entity: "ticket_csat_ratings", entityId: ticketId, details: JSON.stringify({ score }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.ticket.csat_rated", entity: "ticket_csat_ratings", entityId: ticketId, details: JSON.stringify({ score }) }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "ticket_csat", entityId: ticketId,
       after: { ticketId, score, comment: comment || null },
-    }).catch(console.error);
-    res.status(201).json({ ticketId, score, comment });
+    }).catch((e) => logger.error(e, "support background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM ticket_csat_ratings WHERE "ticketId"=$1 AND "companyId"=$2`, [ticketId, scope.companyId]);
+    res.status(201).json(row || { ticketId, score, comment });
   } catch (err) { handleRouteError(err, res, "CSAT error:"); }
 });
 
@@ -673,17 +692,17 @@ router.get("/csat", requirePermission("support:read"), async (req, res) => {
     const rows = await rawQuery<any>(
       `SELECT cr.*, t.ref AS "ticketRef", t.title AS "ticketTitle", e.name AS "assigneeName"
        FROM ticket_csat_ratings cr
-       LEFT JOIN support_tickets t ON t.id=cr."ticketId"
-       LEFT JOIN employees e ON e.id=cr."assigneeId"
+       LEFT JOIN support_tickets t ON t.id=cr."ticketId" AND t."deletedAt" IS NULL
+       LEFT JOIN employees e ON e.id=cr."assigneeId" AND e."deletedAt" IS NULL
        WHERE cr."companyId"=$1 ORDER BY cr."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
     const [avg] = await rawQuery<any>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [scope.companyId]);
     const agentStats = await rawQuery<any>(
       `SELECT cr."assigneeId", e.name AS "assigneeName", AVG(cr.score) AS avg, COUNT(*) AS total
-       FROM ticket_csat_ratings cr LEFT JOIN employees e ON e.id=cr."assigneeId"
+       FROM ticket_csat_ratings cr LEFT JOIN employees e ON e.id=cr."assigneeId" AND e."deletedAt" IS NULL
        WHERE cr."companyId"=$1 AND cr."assigneeId" IS NOT NULL
-       GROUP BY cr."assigneeId", e.name ORDER BY avg DESC`,
+       GROUP BY cr."assigneeId", e.name ORDER BY avg DESC LIMIT 200`,
       [scope.companyId]
     );
     res.json({ data: rows, avg: avg?.avg ? Number(avg.avg).toFixed(2) : null, total: Number(avg?.total || 0), agentStats });
@@ -694,11 +713,11 @@ router.get("/kb", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { q, category } = req.query as any;
-    const conditions = [`("companyId"=$1 OR "companyId" IS NULL)`, `status='published'`];
+    const conditions = [`("companyId"=$1 OR "companyId" IS NULL)`, `status='published'`, `"deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (category) { params.push(category); conditions.push(`category=$${params.length}`); }
     if (q) { params.push(`%${q}%`); conditions.push(`(title ILIKE $${params.length} OR content ILIKE $${params.length})`); }
-    const rows = await rawQuery<any>(`SELECT id, title, category, tags, views, helpful, "notHelpful", "createdAt", "updatedAt" FROM kb_articles WHERE ${conditions.join(' AND ')} ORDER BY views DESC`, params);
+    const rows = await rawQuery<any>(`SELECT id, title, category, tags, views, helpful, "notHelpful", "createdAt", "updatedAt" FROM kb_articles WHERE ${conditions.join(' AND ')} ORDER BY views DESC LIMIT 500`, params);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "KB list error:"); }
 });
@@ -706,10 +725,10 @@ router.get("/kb", requirePermission("support:read"), async (req, res) => {
 router.get("/kb/:id", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المقالة غير موجودة");
-    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1`, [id]).catch(() => {});
+    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]).catch((e) => logger.error(e, "support background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "KB article error:"); }
 });
@@ -717,21 +736,19 @@ router.get("/kb/:id", requirePermission("support:read"), async (req, res) => {
 router.post("/kb", requirePermission("support:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createKbSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(createKbSchema.safeParse(req.body)) as any;
     const { title, content, category, tags } = b;
     const { insertId } = await rawExecute(
       `INSERT INTO kb_articles (title, content, category, tags, status, views, helpful, "notHelpful", "companyId", "createdBy") VALUES ($1,$2,$3,$4,'published',0,0,0,$5,$6)`,
       [title, content || '', category || 'general', tags || null, scope.companyId, scope.userId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1`, [insertId]);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.created", entity: "kb_articles", entityId: insertId, details: JSON.stringify({ title, category: category || 'general' }) }).catch(console.error);
+    const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.created", entity: "kb_articles", entityId: insertId, details: JSON.stringify({ title, category: category || 'general' }) }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "knowledge_base", entityId: insertId,
       after: { title, category: category || 'general', tags },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "KB create error:"); }
 });
@@ -739,8 +756,8 @@ router.post("/kb", requirePermission("support:write"), async (req, res) => {
 router.patch("/kb/:id", requirePermission("support:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const b = req.body;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(updateKbSchema.safeParse(req.body));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
@@ -749,14 +766,14 @@ router.patch("/kb/:id", requirePermission("support:write"), async (req, res) => 
     if (b.tags !== undefined) { params.push(b.tags); sets.push(`tags=$${params.length}`); }
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE kb_articles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1`, [id]);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.updated", entity: "kb_articles", entityId: id, details: JSON.stringify({ title: b.title }) }).catch(console.error);
+    await rawExecute(`UPDATE kb_articles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.updated", entity: "kb_articles", entityId: id, details: JSON.stringify({ title: b.title }) }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "knowledge_base", entityId: id,
       after: { title: b.title, content: b.content, category: b.category, tags: b.tags, status: b.status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "KB update error:"); }
 });
@@ -764,14 +781,14 @@ router.patch("/kb/:id", requirePermission("support:write"), async (req, res) => 
 router.delete("/kb/:id", requirePermission("support:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     await rawExecute(`UPDATE kb_articles SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.deleted", entity: "kb_articles", entityId: id, details: "{}" }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.deleted", entity: "kb_articles", entityId: id, details: "{}" }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "knowledge_base", entityId: id,
       after: { id },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
     res.json({ message: "تم حذف المقالة بنجاح" });
   } catch (err) { handleRouteError(err, res, "KB delete error:"); }
 });
@@ -787,21 +804,21 @@ router.delete("/kb/:id", requirePermission("support:delete"), async (req, res) =
 router.post("/kb/:id/feedback", requirePermission("support:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const { helpful } = req.body;
+    const id = parseId(req.params.id, "id");
+    const { helpful } = zodParse(kbFeedbackSchema.safeParse(req.body ?? {}));
     const [row] = await rawQuery<any>(
-      `SELECT id FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      `SELECT id FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المقالة غير موجودة");
     if (helpful === true || helpful === 'true') {
       await rawExecute(
-        `UPDATE kb_articles SET helpful=COALESCE(helpful,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+        `UPDATE kb_articles SET helpful=COALESCE(helpful,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
     } else {
       await rawExecute(
-        `UPDATE kb_articles SET "notHelpful"=COALESCE("notHelpful",0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+        `UPDATE kb_articles SET "notHelpful"=COALESCE("notHelpful",0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
     }
@@ -809,12 +826,12 @@ router.post("/kb/:id/feedback", requirePermission("support:read"), async (req, r
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "support.kb.feedback", entity: "kb_articles", entityId: id,
       details: JSON.stringify({ helpful: helpful === true || helpful === 'true' }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "kb_feedback", entityId: id,
       after: { articleId: id, helpful: helpful === true || helpful === 'true' },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "support background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "KB feedback error:"); }
 });

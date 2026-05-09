@@ -69,14 +69,12 @@ export default function Tickets() {
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
-          <Link href="/tickets/new">
-            <a className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap">
+          <Link href="/tickets/new" className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               طلب جديد
-            </a>
-          </Link>
+            </Link>
         </div>
       </div>
 
@@ -90,18 +88,15 @@ export default function Tickets() {
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <p className="text-gray-400 text-4xl mb-3">🎫</p>
           <p className="text-gray-500 text-sm mb-4">لا توجد طلبات</p>
-          <Link href="/tickets/new">
-            <a className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
+          <Link href="/tickets/new" className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
               إنشاء طلب جديد
-            </a>
-          </Link>
+            </Link>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="divide-y divide-gray-100">
             {tickets.map((t: any) => (
-              <Link key={t.id} href={`/tickets/${t.id}`}>
-                <a className="block p-4 hover:bg-gray-50 transition-colors">
+              <Link key={t.id} href={`/tickets/${t.id}`} className="block p-4 hover:bg-gray-50 transition-colors">
                   <div className="flex items-start justify-between flex-wrap gap-2">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
@@ -118,8 +113,7 @@ export default function Tickets() {
                     </div>
                     <StatusBadge status={t.status} />
                   </div>
-                </a>
-              </Link>
+                </Link>
             ))}
           </div>
         </div>

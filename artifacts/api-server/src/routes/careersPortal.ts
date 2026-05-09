@@ -1,13 +1,18 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError,
+  parseId,
+  zodParse,
+} from "../lib/errorHandler.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
+import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 const SECRET: string = process.env.JWT_SECRET ?? (() => { throw new Error("JWT_SECRET is required for careers portal"); })();
@@ -37,7 +42,7 @@ const careersProfileUpdateSchema = z.object({
 });
 
 const careersResumeUpdateSchema = z.object({
-  resumeUrl: z.string().min(1, "رابط السيرة الذاتية مطلوب"),
+  resumeUrl: z.string().url("رابط السيرة الذاتية غير صالح"),
 });
 
 const careersApplySchema = z.object({
@@ -51,6 +56,7 @@ const portalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   validate: { ip: false, trustProxy: false },
+  store: makeRateLimitStore("careers:portal"),
 });
 
 function signApplicantToken(accountId: number): string {
@@ -71,16 +77,15 @@ function careersAuth(req: Request, res: Response, next: NextFunction): void {
     }
     (req as any).applicantId = payload.accountId;
     next();
-  } catch {
+  } catch (e) {
+    logger.warn(e, "careers portal JWT verification failed");
     res.status(401).json({ error: "انتهت الجلسة" });
   }
 }
 
 router.post("/auth/register", portalLimiter, async (req: Request, res: Response) => {
   try {
-    const parsed_careersRegisterSchema = careersRegisterSchema.safeParse(req.body);
-    if (!parsed_careersRegisterSchema.success) throw new ValidationError(parsed_careersRegisterSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_careersRegisterSchema.data;
+    const body = zodParse(careersRegisterSchema.safeParse(req.body));
     const { name, email, phone, password } = body;
 
     const existing = await rawQuery(
@@ -104,10 +109,14 @@ router.post("/auth/register", portalLimiter, async (req: Request, res: Response)
       companyId: 0, userId: result.insertId, action: "careers_register",
       entity: "applicant_accounts", entityId: result.insertId,
       after: { name: name.trim(), email: email.trim().toLowerCase() },
-    }).catch(console.error);
-    emitEvent({ companyId: 0, branchId: 0, userId: result.insertId, action: "careers.account.registered", entity: "applicant_accounts", entityId: result.insertId, details: JSON.stringify({ name: name.trim(), email: email.trim().toLowerCase() }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "careersPortal background task failed"));
+    emitEvent({ companyId: 0, branchId: 0, userId: result.insertId, action: "careers.account.registered", entity: "applicant_accounts", entityId: result.insertId, details: JSON.stringify({ name: name.trim(), email: email.trim().toLowerCase() }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
-    res.json({ token, accountId: result.insertId });
+    const [row] = await rawQuery<any>(
+      `SELECT id, name, email, phone, "createdAt" FROM applicant_accounts WHERE id = $1`,
+      [result.insertId]
+    );
+    res.status(201).json({ token, account: row || { id: result.insertId } });
   } catch (err) {
     handleRouteError(err, res, "تسجيل حساب متقدم");
   }
@@ -115,9 +124,7 @@ router.post("/auth/register", portalLimiter, async (req: Request, res: Response)
 
 router.post("/auth/login", portalLimiter, async (req: Request, res: Response) => {
   try {
-    const parsed_careersLoginSchema = careersLoginSchema.safeParse(req.body);
-    if (!parsed_careersLoginSchema.success) throw new ValidationError(parsed_careersLoginSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_careersLoginSchema.data;
+    const body = zodParse(careersLoginSchema.safeParse(req.body));
     const { email, password } = body;
 
     const rows = await rawQuery<{ id: number; passwordHash: string; isActive: boolean }>(
@@ -146,8 +153,8 @@ router.post("/auth/login", portalLimiter, async (req: Request, res: Response) =>
       companyId: 0, userId: account.id, action: "careers_login",
       entity: "applicant_accounts", entityId: account.id,
       after: { email: email.trim().toLowerCase() },
-    }).catch(console.error);
-    emitEvent({ companyId: 0, branchId: 0, userId: account.id, action: "careers.account.logged_in", entity: "applicant_accounts", entityId: account.id, details: JSON.stringify({ email: email.trim().toLowerCase() }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "careersPortal background task failed"));
+    emitEvent({ companyId: 0, branchId: 0, userId: account.id, action: "careers.account.logged_in", entity: "applicant_accounts", entityId: account.id, details: JSON.stringify({ email: email.trim().toLowerCase() }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
     res.json({ token, accountId: account.id });
   } catch (err) {
@@ -162,9 +169,10 @@ router.get("/jobs", portalLimiter, async (_req: Request, res: Response) => {
               "salaryMin", "salaryMax", status, "closingDate", "createdAt"
        FROM job_postings
        WHERE status = 'open'
+         AND "deletedAt" IS NULL
          AND ("isPublic" IS NULL OR "isPublic" = true)
          AND ("closingDate" IS NULL OR "closingDate" >= CURRENT_DATE)
-       ORDER BY "createdAt" DESC`
+       ORDER BY "createdAt" DESC LIMIT 500`
     );
     res.json({ data: rows });
   } catch (err) {
@@ -174,12 +182,13 @@ router.get("/jobs", portalLimiter, async (_req: Request, res: Response) => {
 
 router.get("/jobs/:id", portalLimiter, async (req: Request, res: Response) => {
   try {
+    const id = parseId(req.params.id, "id");
     const rows = await rawQuery(
       `SELECT id, title, department, location, type, description, requirements,
               "salaryMin", "salaryMax", status, "closingDate", "createdAt"
        FROM job_postings
-       WHERE id = $1 AND status = 'open'`,
-      [Number(req.params.id)]
+       WHERE id = $1 AND status = 'open' AND "deletedAt" IS NULL`,
+      [id]
     );
     if (rows.length === 0) {
       throw new NotFoundError("الوظيفة غير موجودة");
@@ -209,9 +218,7 @@ router.get("/me", careersAuth, async (req: Request, res: Response) => {
 
 router.patch("/me", careersAuth, async (req: Request, res: Response) => {
   try {
-    const parsed_careersProfileUpdateSchema = careersProfileUpdateSchema.safeParse(req.body);
-    if (!parsed_careersProfileUpdateSchema.success) throw new ValidationError(parsed_careersProfileUpdateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_careersProfileUpdateSchema.data;
+    const body = zodParse(careersProfileUpdateSchema.safeParse(req.body));
     const { name, phone, nationalId, gender, dateOfBirth, city, education, experienceYears, skills } = body;
     await rawExecute(
       `UPDATE applicant_accounts SET
@@ -233,8 +240,8 @@ router.patch("/me", careersAuth, async (req: Request, res: Response) => {
       companyId: 0, userId: (req as any).applicantId, action: "careers_update_profile",
       entity: "applicant_accounts", entityId: (req as any).applicantId,
       after: { name, phone, city, education, experienceYears },
-    }).catch(console.error);
-    emitEvent({ companyId: 0, branchId: 0, userId: (req as any).applicantId, action: "careers.profile.updated", entity: "applicant_accounts", entityId: (req as any).applicantId, details: JSON.stringify({ name, phone, city, education, experienceYears }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "careersPortal background task failed"));
+    emitEvent({ companyId: 0, branchId: 0, userId: (req as any).applicantId, action: "careers.profile.updated", entity: "applicant_accounts", entityId: (req as any).applicantId, details: JSON.stringify({ name, phone, city, education, experienceYears }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
     res.json({ message: "تم تحديث البيانات" });
   } catch (err) {
@@ -244,9 +251,7 @@ router.patch("/me", careersAuth, async (req: Request, res: Response) => {
 
 router.patch("/me/resume", careersAuth, async (req: Request, res: Response) => {
   try {
-    const parsed_careersResumeUpdateSchema = careersResumeUpdateSchema.safeParse(req.body);
-    if (!parsed_careersResumeUpdateSchema.success) throw new ValidationError(parsed_careersResumeUpdateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_careersResumeUpdateSchema.data;
+    const body = zodParse(careersResumeUpdateSchema.safeParse(req.body));
     const resumeUrl = body.resumeUrl.trim();
     if (!resumeUrl) {
       throw new ValidationError("رابط السيرة الذاتية مطلوب");
@@ -260,8 +265,8 @@ router.patch("/me/resume", careersAuth, async (req: Request, res: Response) => {
       companyId: 0, userId: (req as any).applicantId, action: "careers_update_resume",
       entity: "applicant_accounts", entityId: (req as any).applicantId,
       after: { resumeUrl },
-    }).catch(console.error);
-    emitEvent({ companyId: 0, branchId: 0, userId: (req as any).applicantId, action: "careers.resume.updated", entity: "applicant_accounts", entityId: (req as any).applicantId, details: JSON.stringify({ resumeUrl }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "careersPortal background task failed"));
+    emitEvent({ companyId: 0, branchId: 0, userId: (req as any).applicantId, action: "careers.resume.updated", entity: "applicant_accounts", entityId: (req as any).applicantId, details: JSON.stringify({ resumeUrl }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
     res.json({ message: "تم حفظ رابط السيرة الذاتية بنجاح" });
   } catch (err) {
@@ -277,7 +282,9 @@ router.get("/my-applications", careersAuth, async (req: Request, res: Response) 
        FROM job_applications ja
        JOIN job_postings jp ON jp.id = ja."postingId"
        WHERE ja."applicantAccountId" = $1
-       ORDER BY ja."createdAt" DESC`,
+         AND ja."deletedAt" IS NULL
+         AND jp."deletedAt" IS NULL
+       ORDER BY ja."createdAt" DESC LIMIT 500`,
       [(req as any).applicantId]
     );
     res.json({ data: rows });
@@ -288,14 +295,12 @@ router.get("/my-applications", careersAuth, async (req: Request, res: Response) 
 
 router.post("/apply", careersAuth, async (req: Request, res: Response) => {
   try {
-    const parsed_careersApplySchema = careersApplySchema.safeParse(req.body);
-    if (!parsed_careersApplySchema.success) throw new ValidationError(parsed_careersApplySchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_careersApplySchema.data;
+    const body = zodParse(careersApplySchema.safeParse(req.body));
     const { postingId, coverLetter } = body;
     const applicantId = (req as any).applicantId;
 
     const posting = await rawQuery(
-      `SELECT id, status FROM job_postings WHERE id = $1 AND status = 'open'`,
+      `SELECT id, status FROM job_postings WHERE id = $1 AND status = 'open' AND "deletedAt" IS NULL`,
       [postingId]
     );
     if (posting.length === 0) {
@@ -303,7 +308,7 @@ router.post("/apply", careersAuth, async (req: Request, res: Response) => {
     }
 
     const existing = await rawQuery(
-      `SELECT id FROM job_applications WHERE "postingId" = $1 AND "applicantAccountId" = $2`,
+      `SELECT id FROM job_applications WHERE "postingId" = $1 AND "applicantAccountId" = $2 AND "deletedAt" IS NULL`,
       [postingId, applicantId]
     );
     if (existing.length > 0) {
@@ -315,6 +320,7 @@ router.post("/apply", careersAuth, async (req: Request, res: Response) => {
       [applicantId]
     );
     const applicant = account[0];
+    if (!applicant) throw new NotFoundError("حساب المتقدم غير موجود");
 
     const result = await rawExecute(
       `INSERT INTO job_applications ("postingId", "applicantName", email, phone, "resumeUrl", "coverLetter", "applicantAccountId", status)
@@ -326,10 +332,18 @@ router.post("/apply", careersAuth, async (req: Request, res: Response) => {
       companyId: 0, userId: applicantId, action: "careers_apply",
       entity: "job_applications", entityId: result.insertId,
       after: { postingId, applicantId, coverLetter: coverLetter ? "provided" : null },
-    }).catch(console.error);
-    emitEvent({ companyId: 0, branchId: 0, userId: applicantId, action: "careers.application.submitted", entity: "job_applications", entityId: result.insertId, details: JSON.stringify({ postingId, applicantId }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "careersPortal background task failed"));
+    emitEvent({ companyId: 0, branchId: 0, userId: applicantId, action: "careers.application.submitted", entity: "job_applications", entityId: result.insertId, details: JSON.stringify({ postingId, applicantId }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
-    res.json({ applicationId: result.insertId, message: "تم تقديم طلبك بنجاح" });
+    const [row] = await rawQuery<any>(
+      `SELECT ja.id, ja.status, ja."coverLetter", ja."createdAt",
+              jp.title AS "jobTitle", jp.department, jp.location
+       FROM job_applications ja
+       JOIN job_postings jp ON jp.id = ja."postingId"
+       WHERE ja.id = $1 AND ja."deletedAt" IS NULL`,
+      [result.insertId]
+    );
+    res.status(201).json(row || { id: result.insertId });
   } catch (err) {
     handleRouteError(err, res, "تقديم طلب توظيف");
   }

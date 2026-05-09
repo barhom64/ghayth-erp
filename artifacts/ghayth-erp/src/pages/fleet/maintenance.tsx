@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { formatCurrency } from "@/lib/formatters";
 import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 
 export default function FleetMaintenancePage() {
+  const [, navigate] = useLocation();
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["fleet-maintenance"], "/fleet/maintenance");
   const items: any[] = data?.data || [];
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
@@ -84,6 +85,7 @@ export default function FleetMaintenancePage() {
         onRetry={() => refetch()}
         searchPlaceholder="بحث بالمركبة أو النوع أو الورشة..."
         emptyMessage="لا توجد سجلات صيانة"
+        onRowClick={(row) => navigate(`/fleet/maintenance/${row.id}`)}
       />
     </PageShell>
   );

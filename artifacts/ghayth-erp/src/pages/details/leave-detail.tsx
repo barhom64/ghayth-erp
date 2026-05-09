@@ -12,6 +12,8 @@ import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "معلق",
@@ -192,9 +194,17 @@ export default function LeaveDetail() {
                 entityType="leave"
                 entityId={id}
                 currentStatus={leave.status}
-                approveEndpoint={`/hr/leaves/${id}/approve`}
-                rejectEndpoint={`/hr/leaves/${id}/approve`}
-                returnEndpoint={`/hr/leaves/${id}/approve`}
+                approveEndpoint={`/hr/leave-requests/${id}/approve`}
+                rejectEndpoint={`/hr/leave-requests/${id}/approve`}
+                returnEndpoint={`/hr/leave-requests/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, reason: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, reason: notes })}
+                returnBody={(notes) => ({ approved: "returned", reason: notes })}
+                pendingStatuses={["pending", "returned"]}
+                invalidateKeys={[["leaves"], ["leave-requests"], ["leave-balance"], ["leave-stats"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث الإجازة" });
@@ -217,8 +227,11 @@ export default function LeaveDetail() {
         )}
       </div>
 
-      {id && <ApprovalTimeline entityType="hr_leave_request" entityId={id} />}
-      {id && <EntityDocuments entityType="hr_leave_request" entityId={id} />}
+      {id && <ApprovalTimeline entityType="leave" entityId={id} />}
+      {id && <EntityDocuments entityType="leave" entityId={id} />}
+
+      {id && <EntityComments entityType="leave" entityId={id} />}
+      {id && <EntityTags entityType="leave" entityId={id} />}
     </div>
   );
 

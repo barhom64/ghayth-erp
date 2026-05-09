@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -22,8 +22,10 @@ import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { formatDateAr } from "@/lib/formatters";
+import { PageStateWrapper } from "@/components/shared/page-state";
 
 function Support() {
+  const [, navigate] = useLocation();
   const { roleLevel } = useAppContext();
   const canManage = roleLevel >= 50;
   const { data: stats } = useApiQuery<any>(["support-stats"], "/support/stats");
@@ -108,10 +110,9 @@ function Support() {
   ];
 
   if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
+    <PageStateWrapper isLoading={false} error={error} onRetry={() => refetch()}>
+      <div />
+    </PageStateWrapper>
   );
 
   return (
@@ -191,6 +192,7 @@ function Support() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(t) => navigate(`/support/${t.id}`)}
             emptyMessage="لا توجد تذاكر"
             emptyIcon={<Headphones className="h-6 w-6 text-slate-400" />}
             noToolbar
@@ -281,10 +283,9 @@ function KBManagement() {
   };
 
   if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
+    <PageStateWrapper isLoading={false} error={error} onRetry={() => refetch()}>
+      <div />
+    </PageStateWrapper>
   );
 
   return (
@@ -316,7 +317,7 @@ function KBManagement() {
               <textarea className="w-full border rounded px-2 py-1 text-sm" rows={4} value={newForm.content} onChange={e => setNewForm(p => ({ ...p, content: e.target.value }))} />
             </div>
             <div className="col-span-2 flex gap-2">
-              <Button size="sm" onClick={handleCreate}>حفظ</Button>
+              <Button size="sm" onClick={handleCreate} rateLimitAware>حفظ</Button>
               <Button size="sm" variant="ghost" onClick={() => setShowNew(false)}>إلغاء</Button>
             </div>
           </CardContent>
@@ -339,7 +340,7 @@ function KBManagement() {
             rowClassName={(item) => editingId === item.id ? "bg-muted/50" : deletingId === item.id ? "bg-destructive/5" : ""}
             renderRowExtras={(item) => {
               if (editingId === item.id) return <div className="p-2 bg-muted/30"><InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(item.id, editForm)} onCancel={cancelEdit} isPending={isPending} /></div>;
-              if (deletingId === item.id) return <div className="p-2 bg-destructive/5"><InlineDeleteConfirm onConfirm={() => handleDelete(item.id)} onCancel={cancelDelete} isPending={isPending} itemName={item.title} entityType="kb_article" entityId={item.id} /></div>;
+              if (deletingId === item.id) return <div className="p-2 bg-destructive/5"><InlineDeleteConfirm onConfirm={() => handleDelete(item.id)} onCancel={cancelDelete} isPending={isPending} itemName={item.title} entityType="kb-article" entityId={item.id} /></div>;
               return null;
             }}
           />
@@ -350,7 +351,7 @@ function KBManagement() {
 }
 
 function CSATStats() {
-  const { data: csatResp, isLoading, isError } = useApiQuery<any>(["support-csat-stats"], "/support/csat");
+  const { data: csatResp, isLoading, isError, error } = useApiQuery<any>(["support-csat-stats"], "/support/csat");
   const stats = csatResp?.agentStats || [];
   const avg = csatResp?.avgScore;
 
@@ -368,10 +369,9 @@ function CSATStats() {
   ];
 
   if (isError) return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={() => window.location.reload()}>إعادة المحاولة</Button>
-    </div>
+    <PageStateWrapper isLoading={false} error={error} onRetry={() => window.location.reload()}>
+      <div />
+    </PageStateWrapper>
   );
 
   return (

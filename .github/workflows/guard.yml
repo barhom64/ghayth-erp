@@ -12,6 +12,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   guard:
     runs-on: ubuntu-latest
@@ -39,5 +43,28 @@ jobs:
           # inside Actions but we skip it explicitly to keep the log clean.
           HUSKY: '0'
 
-      - name: Run guard suite (typecheck + lint:patterns + audit:routes + audit:schema)
-        run: bash scripts/guard.sh
+      - name: Run guard suite
+        id: guard
+        run: |
+          set -o pipefail
+          bash scripts/guard.sh 2>&1 | tee /tmp/guard-output.txt
+        continue-on-error: true
+
+      - name: Post failure details to PR
+        if: steps.guard.outcome == 'failure' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('/tmp/guard-output.txt', 'utf8');
+            const last200 = output.split('\n').slice(-200).join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `### CI guard failure\n\n<details><summary>Last 200 lines of guard output</summary>\n\n\`\`\`\n${last200}\n\`\`\`\n\n</details>`
+            });
+
+      - name: Fail if guard failed
+        if: steps.guard.outcome == 'failure'
+        run: exit 1

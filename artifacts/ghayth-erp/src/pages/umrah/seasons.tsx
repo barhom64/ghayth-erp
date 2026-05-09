@@ -1,9 +1,12 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { PageShell } from "@/components/page-shell";
@@ -11,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Calendar } from "lucide-react";
 
 export default function UmrahSeasons() {
+  const [, navigate] = useLocation();
   const { data: resp, isLoading, isError, error, refetch } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const items = resp?.data || [];
   const [showForm, setShowForm] = useState(false);
@@ -41,8 +45,8 @@ export default function UmrahSeasons() {
 
   const columns: DataTableColumn<any>[] = [
     { key: "title", header: "العنوان", sortable: true, searchable: true },
-    { key: "startDate", header: "تاريخ البداية", sortable: true, render: (r: any) => r.startDate ? new Date(r.startDate).toLocaleDateString("ar-SA") : "-" },
-    { key: "endDate", header: "تاريخ النهاية", sortable: true, render: (r: any) => r.endDate ? new Date(r.endDate).toLocaleDateString("ar-SA") : "-" },
+    { key: "startDate", header: "تاريخ البداية", sortable: true, render: (r: any) => formatDateAr(r.startDate) },
+    { key: "endDate", header: "تاريخ النهاية", sortable: true, render: (r: any) => formatDateAr(r.endDate) },
     { key: "status", header: "الحالة", render: (r: any) => <PageStatusBadge status={r.status} /> },
     {
       key: "actions" as any, header: "إجراءات", render: (r: any) =>
@@ -72,8 +76,8 @@ export default function UmrahSeasons() {
         <Card>
           <CardContent className="p-4 grid grid-cols-3 gap-4">
             <div><Label>العنوان *</Label><Input value={form.title || ""} onChange={e => setForm({ ...form, title: e.target.value })} /></div>
-            <div><Label>تاريخ البداية *</Label><Input type="date" value={form.startDate || ""} onChange={e => setForm({ ...form, startDate: e.target.value })} /></div>
-            <div><Label>تاريخ النهاية *</Label><Input type="date" value={form.endDate || ""} onChange={e => setForm({ ...form, endDate: e.target.value })} /></div>
+            <div><Label>تاريخ البداية *</Label><UnifiedDateInput value={form.startDate || ""} onChange={v => setForm({ ...form, startDate: v })} showDualCalendar showPresets /></div>
+            <div><Label>تاريخ النهاية *</Label><UnifiedDateInput value={form.endDate || ""} onChange={v => setForm({ ...form, endDate: v })} showDualCalendar showPresets /></div>
             <div className="col-span-full flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
               <Button onClick={save} disabled={!form.title || !form.startDate || !form.endDate}>حفظ</Button>
@@ -82,7 +86,7 @@ export default function UmrahSeasons() {
         </Card>
       )}
 
-      <DataTable columns={columns} data={items} isLoading={isLoading} isError={isError} error={error} />
+      <DataTable columns={columns} data={items} isLoading={isLoading} isError={isError} error={error} onRowClick={(row) => navigate(`/umrah/seasons/${row.id}`)} />
     </PageShell>
   );
 }

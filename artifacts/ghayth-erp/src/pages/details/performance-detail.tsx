@@ -1,15 +1,24 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ActionHistory } from "@/components/approval-actions";
+import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
+import { useToast } from "@/hooks/use-toast";
 import { Edit, Star, Target, TrendingUp } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 /**
  * PerformanceDetail — unified detail page for a single performance
@@ -69,6 +78,8 @@ export default function PerformanceDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/hr/performance/:id");
   const id = params?.id ? Number(params.id) : null;
+
+  const { toast } = useToast();
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["performance", String(id)],
@@ -182,9 +193,21 @@ export default function PerformanceDetail() {
     return sections;
   }, [review, id]);
 
-  const handleEdit = () => {
-    setLocation(`/hr/performance/${id}/edit`);
-  };
+  const editDelete = useDetailEditDelete({
+    entityLabel: "تقييم الأداء",
+    patchPath: `/hr/performance/${id}`,
+    deletePath: `/hr/performance/${id}`,
+    listPath: "/hr/performance",
+    initialValues: review,
+    fields: [
+      { key: "overallRating", label: "التقييم العام", type: "number" },
+      { key: "strengths", label: "نقاط القوة" },
+      { key: "areasForImprovement", label: "مجالات التحسين" },
+      { key: "comments", label: "ملاحظات" },
+    ],
+    invalidateKeys: [["performance-review", String(id)], ["performance-reviews"]],
+    onSaved: () => refetch(),
+  });
 
   const ratingLabel = review?.overallRating
     ? RATING_LABELS[review.overallRating] || review.overallRating
@@ -192,6 +215,9 @@ export default function PerformanceDetail() {
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
+      <div className="md:col-span-3">
+        <InlineEditCard hook={editDelete} />
+      </div>
       {/* Primary info — hero rating + scores + narrative sections */}
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
@@ -318,8 +344,38 @@ export default function PerformanceDetail() {
       </Card>
 
       <div className="space-y-3">
-        {/* Action history — performance reviews don't have an approval
-            flow, but keeping the audit trail still matters. */}
+        {/* Approval actions */}
+        {id && review && ["pending", "draft", "returned"].includes(review.status) && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ApprovalActions
+                entityType="performance"
+                entityId={id}
+                currentStatus={review.status}
+                approveEndpoint={`/hr/performance/${id}/approve`}
+                rejectEndpoint={`/hr/performance/${id}/approve`}
+                returnEndpoint={`/hr/performance/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, notes })}
+                returnBody={(notes) => ({ approved: "returned", notes })}
+                pendingStatuses={["pending", "draft", "returned"]}
+                invalidateKeys={[["performance"]]}
+                onDone={() => {
+                  refetch();
+                  toast({ title: "تم تحديث التقييم" });
+                }}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Action history */}
         {id && (
           <Card>
             <CardHeader className="pb-2">
@@ -331,6 +387,11 @@ export default function PerformanceDetail() {
           </Card>
         )}
       </div>
+
+      {id && <ApprovalTimeline entityType="performance" entityId={id} />}
+
+      {id && <EntityComments entityType="performance" entityId={id} />}
+      {id && <EntityTags entityType="performance" entityId={id} />}
     </div>
   );
 
@@ -377,16 +438,7 @@ export default function PerformanceDetail() {
               sections={printSections}
             />
           )}
-          <GuardedButton
-            perm="hr:update"
-            variant="outline"
-            size="sm"
-            onClick={handleEdit}
-            disabled={!review || ["archived"].includes(review.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
+          <DetailActionButtons hook={editDelete} />
         </>
       }
     />

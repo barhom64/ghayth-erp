@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, ConflictError } from "../lib/errorHandler.js";
+import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
+import { handleRouteError, ValidationError , zodParse } from "../lib/errorHandler.js";
+import { logger } from "../lib/logger.js";
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import { z } from "zod";
@@ -22,7 +22,6 @@ const verifySignatureSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 function generateOTP(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -47,9 +46,7 @@ function getClientIP(req: Request): string {
 
 router.post("/request-otp", requirePermission("documents:write"), async (req, res: Response) => {
   try {
-    const parsed_requestOtpSchema = requestOtpSchema.safeParse(req.body);
-    if (!parsed_requestOtpSchema.success) throw new ValidationError(parsed_requestOtpSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_requestOtpSchema.data;
+    const body = zodParse(requestOtpSchema.safeParse(req.body));
     const scope = (req as any).scope!;
     const { entityType, entityId, action } = body;
     if (!entityType || !entityId || !action) {
@@ -62,18 +59,18 @@ router.post("/request-otp", requirePermission("documents:write"), async (req, re
     const userAgent = req.headers["user-agent"] || "";
 
     await rawExecute(
-      `INSERT INTO digital_signature_otps ("companyId","userId","entityType","entityId",action,otp,"expiresAt","ipAddress","deviceFingerprint","userAgent",used) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,false)`,
-      [scope.companyId, scope.userId, entityType, String(entityId), action, otp, expiresAt.toISOString(), ip, deviceFingerprint, userAgent]
+      `INSERT INTO digital_signature_otps ("companyId","userId","documentId","entityType","entityId",action,otp,"expiresAt","ipAddress","deviceFingerprint","userAgent",used) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,false)`,
+      [scope.companyId, scope.userId, String(entityId), entityType, String(entityId), action, otp, expiresAt.toISOString(), ip, deviceFingerprint, userAgent]
     );
 
-    console.log(`[DIGITAL_SIGNATURE] OTP requested by user ${scope.userId} for ${entityType}#${entityId} action=${action} IP=${ip}`);
+    logger.info({ userId: scope.userId, entityType, entityId, action, ip }, "Digital signature OTP requested");
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "request_otp",
       entity: entityType, entityId: Number(entityId),
       after: { action, ip, deviceFingerprint },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "digital_signature.otp_requested", entity: "digital_signature_otps", entityId: Number(entityId), details: JSON.stringify({ entityType, entityId, action, ip }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "digital-signature background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "digital_signature.otp_requested", entity: "digital_signature_otps", entityId: Number(entityId), details: JSON.stringify({ entityType, entityId, action, ip }) }).catch((e) => logger.error(e, "digital-signature background task failed"));
 
     res.json({
       message: "تم إرسال رمز التحقق (OTP) — صالح لمدة 10 دقائق",
@@ -89,9 +86,7 @@ router.post("/request-otp", requirePermission("documents:write"), async (req, re
 
 router.post("/verify", requirePermission("documents:write"), async (req, res: Response) => {
   try {
-    const parsed_verifySignatureSchema = verifySignatureSchema.safeParse(req.body);
-    if (!parsed_verifySignatureSchema.success) throw new ValidationError(parsed_verifySignatureSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_verifySignatureSchema.data;
+    const body = zodParse(verifySignatureSchema.safeParse(req.body));
     const scope = (req as any).scope!;
     const { otp, entityType, entityId, action } = body;
     if (!otp || !entityType || !entityId || !action) {
@@ -111,12 +106,12 @@ router.post("/verify", requirePermission("documents:write"), async (req, res: Re
       throw new ValidationError("رمز التحقق غير صحيح أو منتهي الصلاحية");
     }
 
-    await rawExecute(`UPDATE digital_signature_otps SET used=true, "usedAt"=NOW() WHERE id=$1`, [record.id]);
+    await rawExecute(`UPDATE digital_signature_otps SET used=true, "usedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [record.id, scope.companyId]);
 
-    const signatureRef = `SIG-${Date.now().toString(36).toUpperCase()}`;
+    const signatureRef = generateTimeRef("SIG");
     await rawExecute(
-      `INSERT INTO digital_signature_logs ("companyId","userId","entityType","entityId",action,"signatureRef","ipAddress","deviceFingerprint","userAgent","otpRef") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [scope.companyId, scope.userId, entityType, String(entityId), action, signatureRef, ip, deviceFingerprint, userAgent, record.id]
+      `INSERT INTO digital_signature_logs ("companyId","userId","documentId","entityType","entityId",action,"signatureRef","ipAddress","deviceFingerprint","userAgent","otpRef") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [scope.companyId, scope.userId, String(entityId), entityType, String(entityId), action, signatureRef, ip, deviceFingerprint, userAgent, record.id]
     );
 
     createAuditLog({
@@ -127,8 +122,8 @@ router.post("/verify", requirePermission("documents:write"), async (req, res: Re
       entity: entityType,
       entityId: Number(entityId),
       after: { signatureRef, ip, deviceFingerprint, action, verifiedAt: new Date().toISOString() },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "digital_signature.verified", entity: "digital_signature_logs", entityId: Number(entityId), details: JSON.stringify({ entityType, entityId, action, signatureRef, ip }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "digital-signature background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "digital_signature.verified", entity: "digital_signature_logs", entityId: Number(entityId), details: JSON.stringify({ entityType, entityId, action, signatureRef, ip }) }).catch((e) => logger.error(e, "digital-signature background task failed"));
 
     res.json({
       verified: true,
@@ -150,12 +145,12 @@ router.get("/logs", requirePermission("documents:write"), async (req, res: Respo
   try {
     const scope = (req as any).scope!;
     const { entityType, entityId } = req.query as any;
-    const conditions = [`"companyId"=$1`];
+    const conditions = [`dsl."companyId"=$1`];
     const params: any[] = [scope.companyId];
-    if (entityType) { params.push(entityType); conditions.push(`"entityType"=$${params.length}`); }
-    if (entityId) { params.push(String(entityId)); conditions.push(`"entityId"=$${params.length}`); }
+    if (entityType) { params.push(entityType); conditions.push(`dsl."entityType"=$${params.length}`); }
+    if (entityId) { params.push(String(entityId)); conditions.push(`dsl."entityId"=$${params.length}`); }
     const rows = await rawQuery<any>(
-      `SELECT dsl.*, e.name AS "userName" FROM digital_signature_logs dsl LEFT JOIN employees e ON e.id=dsl."userId" WHERE ${conditions.join(" AND ")} ORDER BY dsl."createdAt" DESC LIMIT 100`,
+      `SELECT dsl.*, e.name AS "userName" FROM digital_signature_logs dsl LEFT JOIN users u ON u.id=dsl."userId" LEFT JOIN employees e ON e.id=u."employeeId" WHERE ${conditions.join(" AND ")} ORDER BY dsl."createdAt" DESC LIMIT 100`,
       params
     );
     res.json({ data: rows, total: rows.length });

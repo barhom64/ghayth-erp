@@ -5,7 +5,7 @@ import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
 import { EntityDocuments } from "@/components/shared/entity-documents";
@@ -45,7 +45,7 @@ export default function TripDetailPage() {
   // Fuel logs filtered by trip
   const { data: fuelResp } = useApiQuery<any>(
     ["trip-fuel", id],
-    id ? `/fleet/fuel?tripId=${id}` : null,
+    id ? `/fleet/fuel-logs?tripId=${id}` : null,
     !!id
   );
   const allFuel: any[] = fuelResp?.data || [];
@@ -115,7 +115,7 @@ export default function TripDetailPage() {
           <InfoRow label="وقت البداية" value={trip?.startTime ? formatDateAr(trip.startTime) : undefined} />
           <InfoRow label="وقت النهاية" value={trip?.endTime ? formatDateAr(trip.endTime) : undefined} />
           <InfoRow label="المسافة" value={distance ? `${distance} كم` : undefined} />
-          <InfoRow label="الحالة" value={trip?.status} />
+          <InfoRow label="الحالة" value={resolveStatus(trip?.status ?? "", "trip")?.label || trip?.status} />
         </div>
         {trip?.notes && (
           <div className="pt-4 border-t">
@@ -163,19 +163,19 @@ export default function TripDetailPage() {
       key: "documents",
       label: "المستندات",
       icon: FolderOpen,
-      content: () => <EntityDocuments entityType="fleet_trip" entityId={id} />,
+      content: () => <EntityDocuments entityType="fleet-trip" entityId={id} />,
     },
     {
       key: "timeline",
       label: "السجل الزمني",
       icon: History,
-      content: () => <EntityTimeline entityType="fleet_trips" entityId={id} />,
+      content: () => <EntityTimeline entityType="fleet-trip" entityId={id} />,
     },
     {
       key: "comments",
       label: "التعليقات",
       icon: MessageCircle,
-      content: () => <EntityComments entityType="fleet_trip" entityId={id} />,
+      content: () => <EntityComments entityType="fleet-trip" entityId={id} />,
     },
   ];
 
@@ -214,9 +214,8 @@ export default function TripDetailPage() {
           variant: "default",
           onClick: async () => {
             try {
-              await apiFetch(`/fleet/trips/${id}`, {
-                method: "PATCH",
-                body: JSON.stringify({ status: "completed" }),
+              await apiFetch(`/fleet/trips/${id}/complete`, {
+                method: "POST",
               });
               queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
               toast({ title: "تم إكمال الرحلة بنجاح" });
@@ -237,9 +236,8 @@ export default function TripDetailPage() {
           variant: "outline",
           onClick: async () => {
             try {
-              await apiFetch(`/fleet/trips/${id}`, {
-                method: "PATCH",
-                body: JSON.stringify({ status: "cancelled" }),
+              await apiFetch(`/fleet/trips/${id}/cancel`, {
+                method: "POST",
               });
               queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
               toast({ title: "تم إلغاء الرحلة" });

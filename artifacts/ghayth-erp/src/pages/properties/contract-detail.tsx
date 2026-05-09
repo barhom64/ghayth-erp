@@ -12,6 +12,7 @@ import { EntityObligations } from "@/components/shared/entity-obligations";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
 import {
   FileText,
@@ -88,21 +89,21 @@ export default function ContractDetailPage() {
     { key: "dueDate", header: "الاستحقاق", sortable: true, render: (r) => formatDateAr(r.dueDate) },
     { key: "amount", header: "المبلغ", sortable: true, render: (r) => <span className="font-semibold">{formatCurrency(Number(r.amount) || 0)}</span> },
     { key: "paidAmount", header: "المدفوع", sortable: true, render: (r) => formatCurrency(Number(r.paidAmount) || 0) },
-    { key: "status", header: "الحالة", sortable: true, render: (r) => <Badge variant="outline">{r.status || "-"}</Badge> },
+    { key: "status", header: "الحالة", sortable: true, render: (r) => <PageStatusBadge status={r.status} domain="rent_payment" /> },
   ];
 
   const maintColumns: DataTableColumn<any>[] = [
     { key: "id", header: "#", sortable: true, render: (r) => <span className="font-mono text-xs">{r.id}</span> },
     { key: "title", header: "الموضوع", sortable: true, render: (r) => r.title || r.subject || "-" },
     { key: "date", header: "التاريخ", sortable: true, render: (r) => formatDateAr(r.date || r.createdAt) },
-    { key: "status", header: "الحالة", sortable: true, render: (r) => <Badge variant="outline">{r.status || "-"}</Badge> },
+    { key: "status", header: "الحالة", sortable: true, render: (r) => <PageStatusBadge status={r.status} domain="maintenance" /> },
   ];
 
   const inspColumns: DataTableColumn<any>[] = [
     { key: "id", header: "#", sortable: true, render: (r) => <span className="font-mono text-xs">{r.id}</span> },
     { key: "type", header: "النوع", sortable: true, render: (r) => r.type || r.inspectionType || "-" },
     { key: "date", header: "التاريخ", sortable: true, render: (r) => formatDateAr(r.date || r.inspectionDate || r.createdAt) },
-    { key: "status", header: "الحالة", sortable: true, render: (r) => <Badge variant="outline">{r.status || "-"}</Badge> },
+    { key: "status", header: "الحالة", sortable: true, render: (r) => <PageStatusBadge status={r.status} /> },
   ];
 
   const overviewContent = () => (
@@ -191,7 +192,7 @@ export default function ContractDetailPage() {
       icon: FolderOpen,
       content: () => (
         <div className="space-y-4">
-          <EntityObligations entityType="rental_contract" entityId={id} hideWhenEmpty />
+          <EntityObligations entityType="rental-contract" entityId={id} hideWhenEmpty />
           <EntityDocuments entityType="contract" entityId={id} />
         </div>
       ),
@@ -200,7 +201,7 @@ export default function ContractDetailPage() {
       key: "timeline",
       label: "السجل الزمني",
       icon: History,
-      content: () => <EntityTimeline entityType="rental_contracts" entityId={id} />,
+      content: () => <EntityTimeline entityType="rental-contract" entityId={id} />,
     },
     {
       key: "comments",
@@ -216,7 +217,7 @@ export default function ContractDetailPage() {
     contract?.startDate && { icon: Calendar, label: `${formatDateAr(contract.startDate)} — ${contract.endDate ? formatDateAr(contract.endDate) : ""}` },
   ].filter(Boolean) as Array<{ icon: any; label: string }>;
 
-  const badges = contract?.status ? <Badge variant="outline">{contract.status}</Badge> : null;
+  const badges = contract?.status ? <PageStatusBadge status={contract.status} domain="lease" /> : null;
 
   const notFound = !isLoading && !contract;
 
@@ -279,10 +280,12 @@ export default function ContractDetailPage() {
           variant: "outline",
           onClick: async () => {
             try {
-              await apiFetch(`/properties/contracts/${id}`, {
-                method: "PATCH",
+              const reason = window.prompt("سبب إنهاء العقد:");
+              if (!reason) return;
+              await apiFetch(`/properties/contracts/${id}/terminate`, {
+                method: "POST",
                 body: JSON.stringify({
-                  status: "terminated",
+                  reason,
                   terminationDate: todayLocal(),
                 }),
               });

@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Users2, FileText, Calendar, Banknote, Shield, ScrollText, Zap } from "lucide-react";
-import { formatCurrency, getCurrencySymbol } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, getCurrencySymbol } from "@/lib/formatters";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 import { fieldErrorClass, TextField, NumberField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
@@ -331,7 +331,7 @@ export default function ContractsCreate() {
                 </Select>
               </div>
               <TextField label="المستأجر" required value={form.tenantName} onChange={(v) => set("tenantName", v)} placeholder="اسم المستأجر" />
-              <TextField label="هاتف المستأجر" value={form.tenantPhone} onChange={(v) => set("tenantPhone", v)} dir="ltr" />
+              <TextField label="هاتف المستأجر" type="tel" inputMode="tel" value={form.tenantPhone} onChange={(v) => set("tenantPhone", v)} dir="ltr" />
               <TextField label="بريد المستأجر" value={form.tenantEmail} onChange={(v) => set("tenantEmail", v)} type="email" dir="ltr" />
               <TextField label="رقم هوية المستأجر" value={form.tenantIdNumber} onChange={(v) => set("tenantIdNumber", v)} placeholder="رقم الهوية أو الإقامة" />
             </div>
@@ -362,12 +362,12 @@ export default function ContractsCreate() {
                   </SelectContent>
                 </Select>
               </div>
-              <NumberField label={`الإيجار الشهري (${currency})`} required value={form.monthlyRent} onChange={(v) => set("monthlyRent", v)} error={fieldErrors.monthlyRent} />
-              <NumberField label={`الإيجار السنوي (${currency})`} value={form.yearlyRent} onChange={(v) => set("yearlyRent", v)} />
-              <NumberField label={`إجمالي قيمة العقد (${currency})`} value={form.totalContractValue} onChange={(v) => set("totalContractValue", v)} placeholder="يُحسب تلقائياً" />
+              <NumberField label={`الإيجار الشهري (${currency})`} required value={form.monthlyRent} onChange={(v) => set("monthlyRent", v)} step={0.01} min={0} error={fieldErrors.monthlyRent} />
+              <NumberField label={`الإيجار السنوي (${currency})`} value={form.yearlyRent} onChange={(v) => set("yearlyRent", v)} step={0.01} min={0} />
+              <NumberField label={`إجمالي قيمة العقد (${currency})`} value={form.totalContractValue} onChange={(v) => set("totalContractValue", v)} step={0.01} min={0} placeholder="يُحسب تلقائياً" />
               <NumberField label="عدد الأقساط" value={form.numberOfInstallments} onChange={(v) => set("numberOfInstallments", v)} placeholder="يُحسب من الدورة" />
               <NumberField label="يوم السداد (من الشهر)" value={form.paymentDay} onChange={(v) => set("paymentDay", v)} min={1} max={28} />
-              <NumberField label={`مبلغ التأمين (${currency})`} value={form.depositAmount} onChange={(v) => set("depositAmount", v)} />
+              <NumberField label={`مبلغ ا��تأمين (${currency})`} value={form.depositAmount} onChange={(v) => set("depositAmount", v)} step={0.01} min={0} />
             </div>
           </CardContent>
         </Card>
@@ -388,10 +388,10 @@ export default function ContractsCreate() {
                   </SelectContent>
                 </Select>
               </div>
-              <NumberField label={`قيمة الغرامة ${form.latePenaltyType === "percentage" ? "(%)" : `(${currency})`}`} value={form.latePenaltyValue} onChange={(v) => set("latePenaltyValue", v)} />
+              <NumberField label={`قيمة الغرامة ${form.latePenaltyType === "percentage" ? "(%)" : `(${currency})`}`} value={form.latePenaltyValue} onChange={(v) => set("latePenaltyValue", v)} step={0.01} min={0} />
               <NumberField label="فترة السماح (أيام)" value={form.gracePeriodDays} onChange={(v) => set("gracePeriodDays", v)} />
               <NumberField label="مدة إشعار الإنهاء (أيام)" value={form.terminationNoticeDays} onChange={(v) => set("terminationNoticeDays", v)} />
-              <NumberField label={`رسم الإنهاء المبكر (${currency})`} value={form.earlyTerminationFee} onChange={(v) => set("earlyTerminationFee", v)} />
+              <NumberField label={`رسم الإنهاء المبكر (${currency})`} value={form.earlyTerminationFee} onChange={(v) => set("earlyTerminationFee", v)} step={0.01} min={0} />
               <div>
                 <Label>حامل التأمين</Label>
                 <Select value={form.depositHolder} onValueChange={v => set("depositHolder", v)}>
@@ -492,7 +492,7 @@ export default function ContractsCreate() {
                     {schedulePreview.map(item => (
                       <tr key={item.num} className="border-t">
                         <td className="p-2 font-mono">{item.num}</td>
-                        <td className="p-2">{item.date}</td>
+                        <td className="p-2">{formatDateAr(item.date)}</td>
                         <td className="p-2 font-bold text-emerald-600">{formatCurrency(item.amount)}</td>
                       </tr>
                     ))}
@@ -531,7 +531,7 @@ export default function ContractsCreate() {
 
         <div className="flex justify-end gap-3 pt-6">
           <Button variant="outline" onClick={() => setLocation("/properties/contracts")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={createMut.isPending}>
+          <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
             {createMut.isPending ? "جاري الحفظ..." : "حفظ العقد"}
           </Button>
         </div>

@@ -1,11 +1,22 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { handleRouteError, zodParse } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
-router.use(authMiddleware);
+
+// ============================================================================
+// ZOD SCHEMAS
+// ============================================================================
+
+const impactPreviewSchema = z.object({
+  entityType: z.string().min(1, "نوع الكيان مطلوب"),
+  entityId: z.union([z.coerce.number(), z.string().min(1)]),
+  action: z.string().optional(),
+});
 
 interface ImpactItem {
   type: "financial" | "administrative" | "reporting";
@@ -14,32 +25,29 @@ interface ImpactItem {
   detail: string;
 }
 
-router.post("/", async (req, res): Promise<void> => {
+router.post("/", requirePermission("admin:write"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { entityType, entityId, action } = req.body;
-    if (!entityType || !entityId) {
-      throw new ValidationError("entityType and entityId are required");
-    }
+    const parsed = zodParse(impactPreviewSchema.safeParse(req.body));
+    const { entityType, entityId, action } = parsed;
 
     const impacts: ImpactItem[] = [];
 
     if (entityType === "request" || entityType === "requests") {
       const [request] = await rawQuery<any>(
-        `SELECT * FROM requests WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL)`,
+        `SELECT * FROM requests WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
         [entityId, scope.companyId]
       );
       if (request) {
-        if (request.requestType === "salary_advance" || request.requestType === "financial") {
-          const amount = request.amount || request.metadata?.amount;
-          if (amount) {
-            impacts.push({
-              type: "financial",
-              icon: "💰",
-              label: "أثر مالي",
-              detail: `خصم/إضافة مبلغ ${Number(amount).toLocaleString("ar-SA")} ر.س`,
-            });
-          }
+        const requestData = typeof request.data === "string" ? JSON.parse(request.data) : (request.data || {});
+        const amount = requestData.amount;
+        if (amount) {
+          impacts.push({
+            type: "financial",
+            icon: "💰",
+            label: "أثر مالي",
+            detail: `خصم/إضافة مبلغ ${Number(amount).toLocaleString("ar-SA")} ر.س`,
+          });
         }
         impacts.push({
           type: "administrative",
@@ -62,7 +70,7 @@ router.post("/", async (req, res): Promise<void> => {
          FROM hr_leave_requests lr
          LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
          LEFT JOIN employees e ON e.id = lr."employeeId"
-         WHERE lr.id = $1 AND lr."companyId" = $2`,
+         WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
         [entityId, scope.companyId]
       );
       if (leave) {
@@ -98,7 +106,7 @@ router.post("/", async (req, res): Promise<void> => {
       const [invoice] = await rawQuery<any>(
         `SELECT i.*, c.name AS "clientName"
          FROM invoices i
-         LEFT JOIN clients c ON c.id = i."clientId"
+         LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
          WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
         [entityId, scope.companyId]
       );
@@ -125,11 +133,15 @@ router.post("/", async (req, res): Promise<void> => {
     }
 
     if (entityType === "purchase_request" || entityType === "purchase_order") {
-      const tableName = entityType === "purchase_request" ? "purchase_requests" : "purchase_orders";
-      const [item] = await rawQuery<any>(
-        `SELECT * FROM ${tableName} WHERE id = $1 AND "companyId" = $2`,
-        [entityId, scope.companyId]
-      );
+      const [item] = entityType === "purchase_request"
+        ? await rawQuery<any>(
+            `SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`,
+            [entityId, scope.companyId]
+          )
+        : await rawQuery<any>(
+            `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+            [entityId, scope.companyId]
+          );
       if (item) {
         const amount = item.totalAmount || item.total || item.estimatedCost;
         if (amount) {
@@ -159,7 +171,7 @@ router.post("/", async (req, res): Promise<void> => {
 
     if (entityType === "expense") {
       const [expense] = await rawQuery<any>(
-        `SELECT je.*, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je LEFT JOIN journal_lines jl ON jl."journalId" = je.id WHERE je.id = $1 AND je."companyId" = $2 AND je.ref LIKE 'EXP%' GROUP BY je.id`,
+        `SELECT je.*, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je LEFT JOIN journal_lines jl ON jl."journalId" = je.id WHERE je.id = $1 AND je."companyId" = $2 AND je.ref LIKE 'EXP%' AND je."deletedAt" IS NULL GROUP BY je.id`,
         [entityId, scope.companyId]
       );
       if (expense) {
@@ -182,7 +194,7 @@ router.post("/", async (req, res): Promise<void> => {
       const [emp] = await rawQuery<any>(
         `SELECT e.name FROM employees e
          JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-         WHERE e.id = $1 AND ea."companyId" = $2`,
+         WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL`,
         [entityId, scope.companyId]
       );
       if (emp) {
@@ -216,8 +228,8 @@ router.post("/", async (req, res): Promise<void> => {
       );
       if (proj) {
         const [[taskCount], [phaseCount]] = await Promise.all([
-          rawQuery<any>(`SELECT COUNT(*) AS c FROM project_tasks WHERE "projectId" = $1 AND "companyId" = $2`, [entityId, scope.companyId]),
-          rawQuery<any>(`SELECT COUNT(*) AS c FROM project_phases WHERE "projectId" = $1 AND "companyId" = $2`, [entityId, scope.companyId]),
+          rawQuery<any>(`SELECT COUNT(*) AS c FROM project_tasks WHERE "projectId" = $1 AND "deletedAt" IS NULL`, [entityId]),
+          rawQuery<any>(`SELECT COUNT(*) AS c FROM project_phases WHERE "projectId" = $1`, [entityId]),
         ]);
         const tasks = Number(taskCount?.c || 0);
         const phases = Number(phaseCount?.c || 0);
@@ -275,8 +287,8 @@ router.post("/", async (req, res): Promise<void> => {
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "preview", entity: "impact_preview", entityId: Number(entityId) || 0,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "impact.previewed", entity: entityType, entityId: Number(entityId) || 0, details: JSON.stringify({ entityType, entityId, action }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "impactPreview background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "impact.previewed", entity: entityType, entityId: Number(entityId) || 0, details: JSON.stringify({ entityType, entityId, action }) }).catch((e) => logger.error(e, "impactPreview background task failed"));
     res.json({ impacts });
   } catch (err) {
     handleRouteError(err, res, "Impact preview error:");

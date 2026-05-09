@@ -1,0 +1,59 @@
+# scripts/ghost-row-allowlist.txt
+#
+# Ghost-row scanner exceptions — see scripts/src/check-ghost-rows.mjs.
+#
+# Each line is one of:
+#   routes/<file>.ts                  → skip the whole file
+#   routes/<file>.ts:<tableName>      → skip only that table within the file
+#
+# Use sparingly. The scanner exists because soft-deleted rows leaking
+# into normal reads (Task #161) is a high-severity, hard-to-spot bug.
+# Only add entries for genuinely intentional cases:
+#
+#   - Audit / activity log readers that must show deleted records.
+#   - "Trash" / restore-from-deleted UIs.
+#   - Reports that count or summarise soft-deleted rows.
+#
+# Format reminder: paths are relative to artifacts/api-server/src/, so
+# the file `artifacts/api-server/src/routes/foo.ts` is `routes/foo.ts`.
+
+# ──────────────────────────────────────────────────────────────────────
+# Pre-existing baseline (Task #163)
+# ──────────────────────────────────────────────────────────────────────
+# These entries were captured the day the scanner shipped so the guard
+# could be wired into `pnpm run guard` without retroactively breaking
+# the build for issues that were already present in main. They are
+# tracked separately by the existing project task:
+#
+#   "Stop deleted vendors and employees from showing up in legacy reports"
+#
+# As that task lands fixes, the corresponding lines below should be
+# removed (do NOT just leave them — the whole point is to surface
+# regressions, including regressions in code that has already been
+# audited once). New entries added below this baseline must include a
+# one-line comment explaining why the exception is intentional.
+routes/admin.ts:employees
+routes/documents.ts:document_templates
+routes/governance.ts:governance_audits
+routes/governance.ts:governance_compliance
+routes/governance.ts:governance_policies
+routes/governance.ts:governance_risks
+routes/marketing.ts:document_templates
+routes/marketing.ts:marketing_campaigns
+routes/publicData.ts:employees
+routes/recruitment.ts:job_postings
+routes/settings.ts:approval_chains
+routes/storage.ts:documents
+routes/training.ts:training_enrollments
+routes/umrah-entities.ts:employee_commission_tiers
+routes/umrah-entities.ts:umrah_agents
+routes/umrah-entities.ts:umrah_groups
+routes/umrah-entities.ts:umrah_import_changes
+routes/umrah-entities.ts:umrah_sub_agents
+routes/umrah.ts:fleet_drivers
+routes/umrah.ts:fleet_vehicles
+routes/umrah.ts:umrah_agents
+routes/umrah.ts:umrah_packages
+routes/umrah.ts:umrah_pilgrims
+routes/umrah.ts:umrah_sub_agents
+routes/umrah.ts:umrah_transport

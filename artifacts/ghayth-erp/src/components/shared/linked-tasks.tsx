@@ -21,7 +21,7 @@ interface LinkedTasksProps {
 }
 
 export function LinkedTasks({ entityType, entityId }: LinkedTasksProps) {
-  const extraParams = entityType === "property_unit" ? "&includeRelatedMaintenance=true" : "";
+  const extraParams = entityType === "property-unit" ? "&includeRelatedMaintenance=true" : "";
   const { data: tasksResp, isLoading } = useApiQuery<any>(
     ["linked-tasks", entityType, String(entityId)],
     `/tasks?linkedEntityType=${entityType}&linkedEntityId=${entityId}${extraParams}`,

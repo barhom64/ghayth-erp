@@ -151,9 +151,7 @@ export default function TaxSystemPage() {
                       {formatCurrency(Number(summary?.netVat || 0))}
                     </p>
                   )}
-                  <Badge className={`text-xs mt-1 ${summary?.status === "payable" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
-                    {summary?.status === "payable" ? "مستحقة الدفع" : "قابلة للاسترداد"}
-                  </Badge>
+                  <PageStatusBadge status={summary?.status || "pending"} domain="tax" />
                 </div>
               </CardContent>
             </Card>

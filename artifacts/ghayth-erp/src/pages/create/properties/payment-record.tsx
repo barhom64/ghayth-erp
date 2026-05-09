@@ -49,7 +49,7 @@ export default function PaymentRecord() {
     }
     setSaving(true);
     try {
-      await apiFetch(`/properties/contracts/${params?.contractId}/installments/${params?.installmentId}/pay`, {
+      await apiFetch(`/properties/contracts/${params?.contractId}/schedule/${params?.installmentId}/pay`, {
         method: "POST",
         body: JSON.stringify({
           amount: Number(form.amount),
@@ -103,7 +103,7 @@ export default function PaymentRecord() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/properties/contracts")}>إلغاء</Button>
-        <Button onClick={handleSave} disabled={saving} className="gap-2">
+        <Button onClick={handleSave} disabled={saving} className="gap-2" rateLimitAware>
           <Save className="h-4 w-4" /> {saving ? "جاري التسجيل..." : "تأكيد الدفع"}
         </Button>
       </div>

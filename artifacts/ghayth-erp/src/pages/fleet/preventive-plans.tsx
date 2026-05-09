@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Wrench, Plus, AlertCircle, CheckCircle, Clock } from "lucide-react";
 import { apiFetch } from "@/lib/api";
@@ -12,6 +13,7 @@ import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const SERVICE_TYPES: Record<string, string> = {
   oil_change: "تغيير زيت",
@@ -48,7 +50,7 @@ export default function PreventivePlansPage() {
     nextServiceDate: "", estimatedCost: "", notes: "",
   });
 
-  const { data, refetch } = useApiQuery<any>(
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["preventive-plans", vehicleFilter],
     `/fleet/preventive-plans${vehicleFilter && vehicleFilter !== "__all__" ? `?vehicleId=${vehicleFilter}` : ""}`
   );
@@ -74,6 +76,9 @@ export default function PreventivePlansPage() {
       refetch();
     } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
   };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={refetch} />;
 
   const overdueCount = plans.filter((p: any) => getDueStatus(p.nextServiceDate) === "overdue").length;
   const dueSoonCount = plans.filter((p: any) => getDueStatus(p.nextServiceDate) === "due_soon").length;
@@ -203,11 +208,11 @@ export default function PreventivePlansPage() {
             </div>
             <div>
               <Label>آخر خدمة</Label>
-              <Input type="date" value={form.lastServiceDate} onChange={(e) => setForm({ ...form, lastServiceDate: e.target.value })} />
+              <UnifiedDateInput value={form.lastServiceDate} onChange={(v) => setForm({ ...form, lastServiceDate: v })} showDualCalendar showPresets />
             </div>
             <div>
               <Label>موعد الخدمة القادمة</Label>
-              <Input type="date" value={form.nextServiceDate} onChange={(e) => setForm({ ...form, nextServiceDate: e.target.value })} />
+              <UnifiedDateInput value={form.nextServiceDate} onChange={(v) => setForm({ ...form, nextServiceDate: v })} showDualCalendar showPresets />
             </div>
             <div>
               <Label>التكلفة التقديرية (ر.س)</Label>
@@ -222,7 +227,7 @@ export default function PreventivePlansPage() {
               <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
             <div className="col-span-3 flex gap-2">
-              <Button onClick={handleSave}>حفظ</Button>
+              <Button onClick={handleSave} rateLimitAware>حفظ</Button>
               <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
             </div>
           </CardContent>

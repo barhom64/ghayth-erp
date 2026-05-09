@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -41,6 +41,7 @@ function PayrollLines({ runId }: { runId: number }) {
 }
 
 export default function PayrollPage() {
+  const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, isError } = useApiQuery<any>(["payroll", scopeQueryString], `/hr/payroll${scopeSuffix}`);
@@ -151,6 +152,7 @@ export default function PayrollPage() {
             noToolbar
             emptyMessage="لا توجد مسيرات رواتب"
             pageSize={20}
+            onRowClick={(row) => navigate(`/hr/payroll/${row.id}`)}
           />
         </TabsContent>
         <TabsContent value="details">

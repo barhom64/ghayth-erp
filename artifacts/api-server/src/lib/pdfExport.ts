@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import { rawQuery } from "./rawdb.js";
+import { NotFoundError } from "./errorHandler.js";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -141,16 +142,19 @@ function infoRow(doc: PDFKit.PDFDocument, label: string, value: string, x = 50, 
 
 export async function exportInvoicePdf(companyId: number, invoiceId: number): Promise<Buffer> {
   const [invoice] = await rawQuery<any>(
-    `SELECT i.*, b.name AS "branchName", b.address AS "branchAddress", b.phone AS "branchPhone"
-     FROM invoices i LEFT JOIN branches b ON b.id = i."branchId"
+    `SELECT i.*, c.name AS "clientName", c.phone AS "clientPhone",
+            b.name AS "branchName", b.address AS "branchAddress", b.phone AS "branchPhone"
+     FROM invoices i
+     LEFT JOIN clients c ON c.id = i."clientId"
+     LEFT JOIN branches b ON b.id = i."branchId"
      WHERE i.id = $1 AND i."companyId" = $2`,
     [invoiceId, companyId]
   );
-  if (!invoice) throw new Error("Invoice not found");
+  if (!invoice) throw new NotFoundError("Invoice not found");
 
   const lines = await rawQuery<any>(
     `SELECT description, quantity, "unitPrice", "lineTotal", "vatAmount", "lineGross"
-     FROM invoice_lines WHERE "invoiceId" = $1 ORDER BY "sortOrder"`,
+     FROM invoice_lines WHERE "invoiceId" = $1 ORDER BY id`,
     [invoiceId]
   );
 
@@ -215,12 +219,15 @@ export async function exportInvoicePdf(companyId: number, invoiceId: number): Pr
 
 export async function exportPurchaseOrderPdf(companyId: number, poId: number): Promise<Buffer> {
   const [po] = await rawQuery<any>(
-    `SELECT po.*, b.name AS "branchName", b.address AS "branchAddress", b.phone AS "branchPhone"
-     FROM purchase_orders po LEFT JOIN branches b ON b.id = po."branchId"
+    `SELECT po.*, s.name AS "supplierName", s.phone AS "supplierPhone",
+            b.name AS "branchName", b.address AS "branchAddress", b.phone AS "branchPhone"
+     FROM purchase_orders po
+     LEFT JOIN suppliers s ON s.id = po."supplierId"
+     LEFT JOIN branches b ON b.id = po."branchId"
      WHERE po.id = $1 AND po."companyId" = $2`,
     [poId, companyId]
   );
-  if (!po) throw new Error("Purchase order not found");
+  if (!po) throw new NotFoundError("Purchase order not found");
 
   const lines = await rawQuery<any>(
     `SELECT description, quantity, "unitPrice", "totalPrice"
@@ -274,7 +281,7 @@ export async function exportVoucherPdf(companyId: number, voucherId: number): Pr
      WHERE v.id = $1 AND v."companyId" = $2`,
     [voucherId, companyId]
   );
-  if (!voucher) throw new Error("Voucher not found");
+  if (!voucher) throw new NotFoundError("Voucher not found");
 
   const typeLabel = voucher.type === "receipt" ? "سند قبض / Receipt Voucher" : "سند صرف / Payment Voucher";
 
@@ -285,7 +292,7 @@ export async function exportVoucherPdf(companyId: number, voucherId: number): Pr
     title: `${typeLabel}: ${voucher.ref || voucher.id}`,
     companyName: voucher.branchName || "غيث ERP",
     address: voucher.branchAddress,
-    date: voucher.date ? new Date(voucher.date).toLocaleDateString("en-SA") : "",
+    date: voucher.createdAt ? new Date(voucher.createdAt).toLocaleDateString("en-SA") : "",
   });
 
   const y = doc.y;
@@ -310,7 +317,7 @@ export async function exportVoucherPdf(companyId: number, voucherId: number): Pr
 
 export async function exportPayrollSlipPdf(companyId: number, payrollId: number): Promise<Buffer> {
   const [record] = await rawQuery<any>(
-    `SELECT pr.*, e.name AS "employeeName", ea.position, ea."baseSalary",
+    `SELECT pr.*, e.name AS "employeeName", ea."jobTitle" AS position, ea.salary AS "baseSalary",
             b.name AS "branchName"
      FROM payroll_records pr
      JOIN employee_assignments ea ON ea.id = pr."employeeAssignmentId"
@@ -319,7 +326,7 @@ export async function exportPayrollSlipPdf(companyId: number, payrollId: number)
      WHERE pr.id = $1 AND pr."companyId" = $2`,
     [payrollId, companyId]
   );
-  if (!record) throw new Error("Payroll record not found");
+  if (!record) throw new NotFoundError("Payroll record not found");
 
   const doc = createDoc({ title: "Payroll Slip" });
   const buf = docToBuffer(doc);
@@ -342,10 +349,9 @@ export async function exportPayrollSlipPdf(companyId: number, payrollId: number)
       ["Basic Salary / الراتب الأساسي", Number(record.baseSalary || 0).toFixed(2)],
       ["Housing Allowance / بدل سكن", Number(record.housingAllowance || 0).toFixed(2)],
       ["Transport Allowance / بدل نقل", Number(record.transportAllowance || 0).toFixed(2)],
-      ["Other Allowances / بدلات أخرى", Number(record.otherAllowances || 0).toFixed(2)],
-      ["Overtime / أوفرتايم", Number(record.overtimePay || 0).toFixed(2)],
+      ["Overtime / أوفرتايم", Number(record.overtime || 0).toFixed(2)],
       ["Gross Salary / الراتب الإجمالي", Number(record.grossSalary || 0).toFixed(2)],
-      ["Deductions / الاستقطاعات", `-${Number(record.deductions || 0).toFixed(2)}`],
+      ["Deductions / الاستقطاعات", `-${Number(record.totalDeductions || 0).toFixed(2)}`],
       ["Net Salary / صافي الراتب", Number(record.netSalary || 0).toFixed(2)],
     ],
     [300, 195]
@@ -435,7 +441,7 @@ export async function exportFleetTripsPdf(companyId: number, startDate?: string,
      FROM fleet_trips t
      LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId"
      LEFT JOIN fleet_drivers d ON d.id = t."driverId"
-     WHERE t."companyId" = $1 ${dateFilter}
+     WHERE t."companyId" = $1 AND t."deletedAt" IS NULL ${dateFilter}
      ORDER BY t."startTime" DESC
      LIMIT 1000`,
     params

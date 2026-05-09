@@ -7,10 +7,13 @@ import { EntityPrintButton, type PrintSection } from "@/components/shared/entity
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { useToast } from "@/hooks/use-toast";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 /**
  * PayrollDetail — unified detail page for a single payroll record.
@@ -262,6 +265,14 @@ export default function PayrollDetail() {
                 approveEndpoint={`/hr/payroll/${id}/approve`}
                 rejectEndpoint={`/hr/payroll/${id}/approve`}
                 returnEndpoint={`/hr/payroll/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, notes })}
+                returnBody={(notes) => ({ approved: "returned", notes })}
+                pendingStatuses={["pending", "draft", "returned"]}
+                invalidateKeys={[["payroll"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث الراتب" });
@@ -283,6 +294,11 @@ export default function PayrollDetail() {
           </Card>
         )}
       </div>
+
+      {id && <ApprovalTimeline entityType="payroll" entityId={id} />}
+
+      {id && <EntityComments entityType="payroll" entityId={id} />}
+      {id && <EntityTags entityType="payroll" entityId={id} />}
     </div>
   );
 

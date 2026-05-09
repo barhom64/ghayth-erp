@@ -1,10 +1,14 @@
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
+import { handleRouteError, NotFoundError, ForbiddenError,
+  parseId,
+  zodParse,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { logger } from "../lib/logger.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
 
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -67,9 +71,6 @@ const createSubsidiaryAccountSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
-
-const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
 
 function requireFinance(scope: any): void {
   if (!FINANCE_ROLES.includes(scope.role)) {
@@ -134,12 +135,50 @@ router.get("/accounting-mappings", requirePermission("finance:read"), async (req
        LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
        LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
        WHERE am."companyId" = $1
-       ORDER BY am."operationType" ASC`,
+       ORDER BY am."operationType" ASC
+       LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
   } catch (err) {
     handleRouteError(err, res, "List accounting mappings error:");
+  }
+});
+
+router.post("/accounting-mappings/batch", requirePermission("finance:write"), async (req, res) => {
+  try {
+    const parsedBody = zodParse(batchAccountingMappingsSchema.safeParse(req.body));
+    const scope = req.scope!;
+    requireFinance(scope);
+    const { mappings } = parsedBody;
+
+    for (const m of mappings) {
+      await rawExecute(
+        `INSERT INTO accounting_mappings
+          ("companyId","operationType","operationLabel","debitAccountId","creditAccountId","debitAccountCode","creditAccountCode","isActive")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT ("companyId","operationType") DO UPDATE SET
+          "debitAccountId" = EXCLUDED."debitAccountId",
+          "creditAccountId" = EXCLUDED."creditAccountId",
+          "debitAccountCode" = EXCLUDED."debitAccountCode",
+          "creditAccountCode" = EXCLUDED."creditAccountCode",
+          "operationLabel" = EXCLUDED."operationLabel",
+          "isActive" = EXCLUDED."isActive",
+          "updatedAt" = NOW()`,
+        [
+          scope.companyId, m.operationType, m.operationLabel ?? m.operationType,
+          m.debitAccountId ?? null, m.creditAccountId ?? null,
+          m.debitAccountCode ?? null, m.creditAccountCode ?? null,
+          m.isActive ?? true,
+        ]
+      );
+    }
+
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "accounting_mappings", entityId: scope.companyId, after: { batch: true, count: mappings.length, operationTypes: mappings.map((m: any) => m.operationType) } }).catch((e) => logger.error(e, "accounting-engine background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.mappings.batch_updated", entity: "accounting_mappings", entityId: scope.companyId, details: JSON.stringify({ count: mappings.length, operationTypes: mappings.map((m: any) => m.operationType) }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
+    res.json({ message: "تم حفظ التوجيهات بنجاح", count: mappings.length });
+  } catch (err) {
+    handleRouteError(err, res, "Batch update accounting mappings error:");
   }
 });
 
@@ -165,9 +204,7 @@ router.get("/accounting-mappings/:operationType", requirePermission("finance:rea
 
 router.put("/accounting-mappings/:operationType", requirePermission("finance:write"), async (req, res) => {
   try {
-    const parsed_updateAccountingMappingSchema = updateAccountingMappingSchema.safeParse(req.body);
-    if (!parsed_updateAccountingMappingSchema.success) throw new ValidationError(parsed_updateAccountingMappingSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updateAccountingMappingSchema.data;
+    const body = zodParse(updateAccountingMappingSchema.safeParse(req.body));
     const scope = req.scope!;
     requireFinance(scope);
     const { operationType } = req.params;
@@ -222,48 +259,11 @@ router.put("/accounting-mappings/:operationType", requirePermission("finance:wri
        WHERE am."companyId" = $1 AND am."operationType" = $2`,
       [scope.companyId, operationType]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "accounting_mappings", entityId: updated?.id ?? 0, before: existing.length > 0 ? existing[0] : null, after: updated }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.mapping.updated", entity: "accounting_mappings", entityId: updated?.id ?? 0, details: JSON.stringify({ operationType }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "accounting_mappings", entityId: updated?.id ?? 0, before: existing.length > 0 ? existing[0] : null, after: updated }).catch((e) => logger.error(e, "accounting-engine background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.mapping.updated", entity: "accounting_mappings", entityId: updated?.id ?? 0, details: JSON.stringify({ operationType }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     res.json(updated);
   } catch (err) {
     handleRouteError(err, res, "Update accounting mapping error:");
-  }
-});
-
-router.post("/accounting-mappings/batch", requirePermission("finance:write"), async (req, res) => {
-  try {
-    const parsed_batchAccountingMappingsSchema = batchAccountingMappingsSchema.safeParse(req.body);
-    if (!parsed_batchAccountingMappingsSchema.success) throw new ValidationError(parsed_batchAccountingMappingsSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const parsedBody = parsed_batchAccountingMappingsSchema.data;
-    const scope = req.scope!;
-    requireFinance(scope);
-    const { mappings } = parsedBody;
-
-    for (const m of mappings) {
-      await rawExecute(
-        `INSERT INTO accounting_mappings
-          ("companyId","operationType","operationLabel","debitAccountId","creditAccountId","debitAccountCode","creditAccountCode","isActive")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-         ON CONFLICT ("companyId","operationType") DO UPDATE SET
-          "debitAccountId" = EXCLUDED."debitAccountId",
-          "creditAccountId" = EXCLUDED."creditAccountId",
-          "debitAccountCode" = EXCLUDED."debitAccountCode",
-          "creditAccountCode" = EXCLUDED."creditAccountCode",
-          "updatedAt" = NOW()`,
-        [
-          scope.companyId, m.operationType, m.operationLabel ?? m.operationType,
-          m.debitAccountId ?? null, m.creditAccountId ?? null,
-          m.debitAccountCode ?? null, m.creditAccountCode ?? null,
-          m.isActive ?? true,
-        ]
-      );
-    }
-
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "accounting_mappings", entityId: scope.companyId, after: { batch: true, count: mappings.length, operationTypes: mappings.map((m: any) => m.operationType) } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.mappings.batch_updated", entity: "accounting_mappings", entityId: scope.companyId, details: JSON.stringify({ count: mappings.length, operationTypes: mappings.map((m: any) => m.operationType) }) }).catch(console.error);
-    res.json({ message: "تم حفظ التوجيهات بنجاح", count: mappings.length });
-  } catch (err) {
-    handleRouteError(err, res, "Batch update accounting mappings error:");
   }
 });
 
@@ -293,11 +293,13 @@ router.get("/journal-templates", requirePermission("finance:read"), async (req, 
       conditions.push(`jt."operationType" = $${params.length}`);
     }
 
+    conditions.push(`jt."deletedAt" IS NULL`);
     const templates = await rawQuery<any>(
       `SELECT jt.*
        FROM journal_entry_templates jt
        WHERE ${conditions.join(" AND ")}
-       ORDER BY jt."operationType", jt.name`,
+       ORDER BY jt."operationType", jt.name
+       LIMIT 500`,
       params
     );
 
@@ -307,7 +309,7 @@ router.get("/journal-templates", requirePermission("finance:read"), async (req, 
          FROM journal_entry_template_lines tl
          LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId"
          WHERE tl."templateId" = $1
-         ORDER BY tl."sortOrder", tl.id`,
+         ORDER BY tl."sortOrder", tl.id LIMIT 500`,
         [t.id]
       );
     }
@@ -320,9 +322,7 @@ router.get("/journal-templates", requirePermission("finance:read"), async (req, 
 
 router.post("/journal-templates", requirePermission("finance:write"), async (req, res) => {
   try {
-    const parsed_createJournalTemplateSchema = createJournalTemplateSchema.safeParse(req.body);
-    if (!parsed_createJournalTemplateSchema.success) throw new ValidationError(parsed_createJournalTemplateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createJournalTemplateSchema.data;
+    const body = zodParse(createJournalTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
     requireFinance(scope);
     const { name, operationType, description, branchId, activityType, lines = [] } = body;
@@ -349,18 +349,19 @@ router.post("/journal-templates", requirePermission("finance:write"), async (req
     });
 
     const [template] = await rawQuery<any>(
-      `SELECT * FROM journal_entry_templates WHERE id = $1`, [result]
+      `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`, [result, scope.companyId]
     );
+    if (!template) throw new NotFoundError("القالب غير موجود");
     template.lines = await rawQuery<any>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
        LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId"
-       WHERE tl."templateId" = $1 ORDER BY tl."sortOrder"`,
+       WHERE tl."templateId" = $1 ORDER BY tl."sortOrder" LIMIT 500`,
       [result]
     );
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "journal_entry_templates", entityId: result, after: template }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.created", entity: "journal_entry_templates", entityId: result, details: JSON.stringify({ name, operationType }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "journal_entry_templates", entityId: result, after: template }).catch((e) => logger.error(e, "accounting-engine background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.created", entity: "journal_entry_templates", entityId: result, details: JSON.stringify({ name, operationType }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     res.status(201).json(template);
   } catch (err) {
     handleRouteError(err, res, "Create journal template error:");
@@ -369,52 +370,53 @@ router.post("/journal-templates", requirePermission("finance:write"), async (req
 
 router.put("/journal-templates/:id", requirePermission("finance:write"), async (req, res) => {
   try {
-    const parsed_updateJournalTemplateSchema = updateJournalTemplateSchema.safeParse(req.body);
-    if (!parsed_updateJournalTemplateSchema.success) throw new ValidationError(parsed_updateJournalTemplateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updateJournalTemplateSchema.data;
+    const body = zodParse(updateJournalTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
     requireFinance(scope);
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const { name, description, branchId, activityType, isActive, lines } = body;
 
     const [existing] = await rawQuery<any>(
-      `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
+      `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("القالب غير موجود");
 
-    await rawExecute(
-      `UPDATE journal_entry_templates SET
-        name = COALESCE($1, name),
-        description = COALESCE($2, description),
-        "branchId" = $3, "activityType" = $4,
-        "isActive" = COALESCE($5, "isActive"), "updatedAt" = NOW()
-       WHERE id = $6 AND "companyId" = $7`,
-      [name ?? null, description ?? null, branchId ?? null, activityType ?? null, isActive ?? null, Number(id), scope.companyId]
-    );
+    await withTransaction(async (client) => {
+      await client.query(
+        `UPDATE journal_entry_templates SET
+          name = COALESCE($1, name),
+          description = COALESCE($2, description),
+          "branchId" = $3, "activityType" = $4,
+          "isActive" = COALESCE($5, "isActive"), "updatedAt" = NOW()
+         WHERE id = $6 AND "companyId" = $7 AND "deletedAt" IS NULL`,
+        [name ?? null, description ?? null, branchId ?? null, activityType ?? null, isActive ?? null, id, scope.companyId]
+      );
 
-    if (Array.isArray(lines)) {
-      await rawExecute(`DELETE FROM journal_entry_template_lines WHERE "templateId" = $1`, [Number(id)]);
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        await rawExecute(
-          `INSERT INTO journal_entry_template_lines ("templateId","accountId","accountCode","lineType",description,"sortOrder")
-           VALUES ($1,$2,$3,$4,$5,$6)`,
-          [Number(id), line.accountId ?? null, line.accountCode ?? null, line.lineType, line.description ?? null, i]
-        );
+      if (Array.isArray(lines)) {
+        await client.query(`DELETE FROM journal_entry_template_lines WHERE "templateId" = $1`, [id]);
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          await client.query(
+            `INSERT INTO journal_entry_template_lines ("templateId","accountId","accountCode","lineType",description,"sortOrder")
+             VALUES ($1,$2,$3,$4,$5,$6)`,
+            [id, line.accountId ?? null, line.accountCode ?? null, line.lineType, line.description ?? null, i]
+          );
+        }
       }
-    }
+    });
 
-    const [template] = await rawQuery<any>(`SELECT * FROM journal_entry_templates WHERE id = $1`, [Number(id)]);
+    const [template] = await rawQuery<any>(`SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    if (!template) throw new NotFoundError("القالب غير موجود");
     template.lines = await rawQuery<any>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
        LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId"
-       WHERE tl."templateId" = $1 ORDER BY tl."sortOrder"`,
-      [Number(id)]
+       WHERE tl."templateId" = $1 ORDER BY tl."sortOrder" LIMIT 500`,
+      [id]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "journal_entry_templates", entityId: Number(id), before: existing, after: template }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.updated", entity: "journal_entry_templates", entityId: Number(id), details: JSON.stringify({ name, operationType: existing.operationType }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "journal_entry_templates", entityId: id, before: existing, after: template }).catch((e) => logger.error(e, "accounting-engine background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.updated", entity: "journal_entry_templates", entityId: id, details: JSON.stringify({ name, operationType: existing.operationType }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     res.json(template);
   } catch (err) {
     handleRouteError(err, res, "Update journal template error:");
@@ -424,15 +426,16 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
 router.delete("/journal-templates/:id", requirePermission("finance:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     requireFinance(scope);
     const [existing] = await rawQuery<any>(
       `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("القالب غير موجود");
-    await rawExecute(`UPDATE journal_entry_templates SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "journal_entry_templates", entityId: Number(req.params.id), before: existing }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.deleted", entity: "journal_entry_templates", entityId: Number(req.params.id), details: JSON.stringify({ name: existing.name }) }).catch(console.error);
+    await rawExecute(`UPDATE journal_entry_templates SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "journal_entry_templates", entityId: id, before: existing }).catch((e) => logger.error(e, "accounting-engine background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.deleted", entity: "journal_entry_templates", entityId: id, details: JSON.stringify({ name: existing.name }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     res.json({ message: "تم حذف القالب" });
   } catch (err) {
     handleRouteError(err, res, "Delete journal template error:");
@@ -451,14 +454,15 @@ router.get("/subsidiary-accounts", requirePermission("finance:read"), async (req
     const params: any[] = [scope.companyId];
 
     if (entityType) { params.push(entityType); conditions.push(`sa."entityType" = $${params.length}`); }
-    if (entityId) { params.push(Number(entityId)); conditions.push(`sa."entityId" = $${params.length}`); }
+    if (entityId) { params.push(Number(entityId) || 0); conditions.push(`sa."entityId" = $${params.length}`); }
 
     const rows = await rawQuery<any>(
       `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName", ca.type AS "accountType2", ca."currentBalance"
        FROM subsidiary_accounts sa
        JOIN chart_of_accounts ca ON ca.id = sa."accountId"
        WHERE ${conditions.join(" AND ")}
-       ORDER BY sa."entityType", sa."entityId"`,
+       ORDER BY sa."entityType", sa."entityId"
+       LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });
@@ -470,15 +474,16 @@ router.get("/subsidiary-accounts", requirePermission("finance:read"), async (req
 router.get("/subsidiary-accounts/entity/:entityType/:entityId", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { entityType, entityId } = req.params;
+    const { entityType } = req.params;
+    const entityId = parseId(req.params.entityId, "entityId");
     const rows = await rawQuery<any>(
       `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName", ca.type AS "accountType2",
               ca."currentBalance", ca."allowPosting"
        FROM subsidiary_accounts sa
        JOIN chart_of_accounts ca ON ca.id = sa."accountId"
        WHERE sa."companyId" = $1 AND sa."entityType" = $2 AND sa."entityId" = $3 AND sa."isActive" = true
-       ORDER BY sa."accountType"`,
-      [scope.companyId, entityType, Number(entityId)]
+       ORDER BY sa."accountType" LIMIT 500`,
+      [scope.companyId, entityType, entityId]
     );
     res.json({ data: rows, total: rows.length });
   } catch (err) {
@@ -488,9 +493,7 @@ router.get("/subsidiary-accounts/entity/:entityType/:entityId", requirePermissio
 
 router.post("/subsidiary-accounts", requirePermission("finance:write"), async (req, res) => {
   try {
-    const parsed_createSubsidiaryAccountSchema = createSubsidiaryAccountSchema.safeParse(req.body);
-    if (!parsed_createSubsidiaryAccountSchema.success) throw new ValidationError(parsed_createSubsidiaryAccountSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createSubsidiaryAccountSchema.data;
+    const body = zodParse(createSubsidiaryAccountSchema.safeParse(req.body));
     const scope = req.scope!;
     requireFinance(scope);
     const { entityType, entityId, accountType, accountId } = body;
@@ -506,11 +509,11 @@ router.post("/subsidiary-accounts", requirePermission("finance:write"), async (r
     const [row] = await rawQuery<any>(
       `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM subsidiary_accounts sa JOIN chart_of_accounts ca ON ca.id = sa."accountId"
-       WHERE sa.id = $1`,
-      [insertId]
+       WHERE sa.id = $1 AND sa."companyId" = $2`,
+      [insertId, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "subsidiary_accounts", entityId: insertId, after: row }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.subsidiary_account.created", entity: "subsidiary_accounts", entityId: insertId, details: JSON.stringify({ entityType, entityId, accountType }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "subsidiary_accounts", entityId: insertId, after: row }).catch((e) => logger.error(e, "accounting-engine background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.subsidiary_account.created", entity: "subsidiary_accounts", entityId: insertId, details: JSON.stringify({ entityType, entityId, accountType }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     res.status(201).json(row);
   } catch (err) {
     handleRouteError(err, res, "Create subsidiary account error:");
@@ -520,17 +523,18 @@ router.post("/subsidiary-accounts", requirePermission("finance:write"), async (r
 router.delete("/subsidiary-accounts/:id", requirePermission("finance:write"), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     requireFinance(scope);
     const [before] = await rawQuery<any>(
-      `SELECT * FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2`,
-      [Number(req.params.id), scope.companyId]
+      `SELECT * FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
     );
     await rawExecute(
-      `DELETE FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2`,
-      [Number(req.params.id), scope.companyId]
+      `DELETE FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "subsidiary_accounts", entityId: Number(req.params.id), before: before ?? null }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.subsidiary_account.deleted", entity: "subsidiary_accounts", entityId: Number(req.params.id), details: JSON.stringify({ entityType: before?.entityType, entityId: before?.entityId }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "subsidiary_accounts", entityId: id, before: before ?? null }).catch((e) => logger.error(e, "accounting-engine background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.subsidiary_account.deleted", entity: "subsidiary_accounts", entityId: id, details: JSON.stringify({ entityType: before?.entityType, entityId: before?.entityId }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     res.json({ message: "تم الحذف" });
   } catch (err) {
     handleRouteError(err, res, "Delete subsidiary account error:");
@@ -607,7 +611,7 @@ export async function createSubsidiaryAccountsForEntity(
       );
     }
   } catch (err) {
-    console.error("createSubsidiaryAccountsForEntity error:", err);
+    logger.error(err, "createSubsidiaryAccountsForEntity error:");
   }
 }
 

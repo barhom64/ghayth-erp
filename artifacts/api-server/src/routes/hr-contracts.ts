@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import {
@@ -8,8 +8,12 @@ import {
   ValidationError,
   NotFoundError,
   ForbiddenError,
+  ConflictError,
+  parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
-import { createAuditLog, createNotification, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, generateRef } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const contractsRouter = Router();
 contractsRouter.use(authMiddleware);
@@ -30,13 +34,28 @@ const createContractSchema = z.object({
   notes: z.string().optional(),
 });
 
+const rejectContractSchema = z.object({
+  reason: z.string().optional(),
+});
+
+const terminateContractSchema = z.object({
+  reason: z.string().optional(),
+});
+
+const renewContractSchema = z.object({
+  newEndDate: z.string().optional(),
+  newSalary: z.coerce.number().optional(),
+});
+
+const updateContractSchema = createContractSchema.partial();
+
 // ── List all contracts ──
 contractsRouter.get("/", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, employeeId, search } = req.query as Record<string, string>;
     const params: any[] = [scope.companyId];
-    let where = `ec."companyId" = $1`;
+    let where = `ec."companyId" = $1 AND ec."deletedAt" IS NULL`;
 
     if (status) {
       params.push(status);
@@ -72,7 +91,7 @@ contractsRouter.get("/", requirePermission("hr:read"), async (req, res) => {
 contractsRouter.get("/:id", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [contract] = await rawQuery<any>(
       `SELECT ec.*, e.name AS "employeeName", e."empNumber",
               e."nationalId", e."passportNumber",
@@ -84,7 +103,7 @@ contractsRouter.get("/:id", requirePermission("hr:read"), async (req, res) => {
        JOIN employee_assignments ea ON ea.id = ec."assignmentId"
        LEFT JOIN branches b ON b.id = ec."branchId"
        LEFT JOIN document_templates dt ON dt.id = ec."templateId"
-       WHERE ec.id = $1 AND ec."companyId" = $2`,
+       WHERE ec.id = $1 AND ec."companyId" = $2 AND ec."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العق�� غير موجود");
@@ -101,7 +120,7 @@ contractsRouter.post("/", requirePermission("hr:create"), async (req, res) => {
     const data = createContractSchema.parse(req.body);
 
     const [emp] = await rawQuery<any>(
-      `SELECT id, name FROM employees WHERE id = $1 AND "companyId" = $2`,
+      `SELECT e.id, e.name FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE e.id = $1 AND ea."companyId" = $2 LIMIT 1`,
       [data.employeeId, scope.companyId]
     );
     if (!emp) throw new NotFoundError("الموظف غير موجود");
@@ -121,7 +140,7 @@ contractsRouter.post("/", requirePermission("hr:create"), async (req, res) => {
     }
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('contract_number_seq') AS seq`);
-    const ref = `CTR-${new Date().getFullYear()}-${String(seqRow.seq).padStart(4, "0")}`;
+    const ref = generateRef("CTR", seqRow.seq);
 
     const [row] = await rawQuery<any>(
       `INSERT INTO employee_contracts (
@@ -152,9 +171,9 @@ contractsRouter.post("/", requirePermission("hr:create"), async (req, res) => {
 contractsRouter.patch("/:id", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
-      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("العقد غير موجود");
@@ -169,9 +188,10 @@ contractsRouter.patch("/:id", requirePermission("hr:update"), async (req, res) =
     ];
     const sets: string[] = [];
     const params: any[] = [];
+    const body = zodParse(updateContractSchema.safeParse(req.body));
     for (const key of allowed) {
-      if (req.body[key] !== undefined) {
-        params.push(key === "otherAllowances" ? JSON.stringify(req.body[key]) : req.body[key]);
+      if ((body as any)[key] !== undefined) {
+        params.push(key === "otherAllowances" ? JSON.stringify((body as any)[key]) : (body as any)[key]);
         sets.push(`"${key}" = $${params.length}`);
       }
     }
@@ -196,9 +216,9 @@ contractsRouter.patch("/:id", requirePermission("hr:update"), async (req, res) =
 contractsRouter.post("/:id/submit", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [contract] = await rawQuery<any>(
-      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود");
@@ -208,8 +228,8 @@ contractsRouter.post("/:id/submit", requirePermission("hr:create"), async (req, 
 
     const [updated] = await rawQuery<any>(
       `UPDATE employee_contracts SET "approvalStatus" = 'pending_approval', "updatedAt" = NOW()
-       WHERE id = $1 RETURNING *`,
-      [id]
+       WHERE id = $1 AND "companyId" = $2 RETURNING *`,
+      [id, scope.companyId]
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_submitted", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
@@ -224,9 +244,9 @@ contractsRouter.post("/:id/submit", requirePermission("hr:create"), async (req, 
 contractsRouter.post("/:id/approve", requirePermission("hr:approve"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [contract] = await rawQuery<any>(
-      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود");
@@ -237,12 +257,13 @@ contractsRouter.post("/:id/approve", requirePermission("hr:approve"), async (req
     const [updated] = await rawQuery<any>(
       `UPDATE employee_contracts
        SET "approvalStatus" = 'approved', "approvedBy" = $2, "approvedAt" = NOW(), "updatedAt" = NOW()
-       WHERE id = $1 RETURNING *`,
-      [id, scope.userId]
+       WHERE id = $1 AND "companyId" = $3 AND "approvalStatus" = 'pending_approval' RETURNING *`,
+      [id, scope.userId, scope.companyId]
     );
+    if (!updated) throw new ConflictError("تم تحديث العقد مسبقاً — أعد التحميل");
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_approved", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
-    await createNotification({ companyId: scope.companyId, assignmentId: contract.assignmentId, type: "contract_approved", title: "تم اعتماد العقد", body: `تم اعتماد العقد رقم ${contract.ref}`, refType: "contract", refId: id }).catch(() => {});
+    await createNotification({ companyId: scope.companyId, assignmentId: contract.assignmentId, type: "contract_approved", title: "تم اعتماد العقد", body: `تم اعتماد العقد رقم ${contract.ref}`, refType: "contract", refId: id }).catch((e) => logger.error(e, "hr-contracts background task failed"));
 
     res.json(updated);
   } catch (err) {
@@ -254,10 +275,11 @@ contractsRouter.post("/:id/approve", requirePermission("hr:approve"), async (req
 contractsRouter.post("/:id/reject", requirePermission("hr:approve"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const { reason } = req.body as { reason?: string };
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(rejectContractSchema.safeParse(req.body ?? {}));
+    const { reason } = b;
     const [contract] = await rawQuery<any>(
-      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود");
@@ -268,9 +290,10 @@ contractsRouter.post("/:id/reject", requirePermission("hr:approve"), async (req,
     const [updated] = await rawQuery<any>(
       `UPDATE employee_contracts
        SET "approvalStatus" = 'rejected', notes = COALESCE(notes, '') || E'\nسبب الرفض: ' || $2, "updatedAt" = NOW()
-       WHERE id = $1 RETURNING *`,
-      [id, reason || "لم يتم تحديد السبب"]
+       WHERE id = $1 AND "companyId" = $3 AND "approvalStatus" = 'pending_approval' RETURNING *`,
+      [id, reason || "لم يتم تحديد السبب", scope.companyId]
     );
+    if (!updated) throw new ConflictError("تم تحديث العقد مسبقاً — أعد التحميل");
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_rejected", entity: "employee_contract", entityId: id, after: { ref: contract.ref, reason } });
 
@@ -284,9 +307,9 @@ contractsRouter.post("/:id/reject", requirePermission("hr:approve"), async (req,
 contractsRouter.post("/:id/sign-company", requirePermission("hr:approve"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [contract] = await rawQuery<any>(
-      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود");
@@ -298,9 +321,10 @@ contractsRouter.post("/:id/sign-company", requirePermission("hr:approve"), async
       `UPDATE employee_contracts
        SET "signedByCompany" = TRUE, "companySignedAt" = NOW(), "companySignedBy" = $2, "updatedAt" = NOW(),
            "approvalStatus" = CASE WHEN "signedByEmployee" = TRUE THEN 'signed' ELSE "approvalStatus" END
-       WHERE id = $1 RETURNING *`,
-      [id, scope.userId]
+       WHERE id = $1 AND "companyId" = $3 AND "signedByCompany" = FALSE RETURNING *`,
+      [id, scope.userId, scope.companyId]
     );
+    if (!updated) throw new ConflictError("العقد تم توقيعه مسبقاً — أعد التحميل");
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_signed_company", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
 
@@ -314,12 +338,12 @@ contractsRouter.post("/:id/sign-company", requirePermission("hr:approve"), async
 contractsRouter.post("/:id/sign-employee", async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [contract] = await rawQuery<any>(
       `SELECT ec.* FROM employee_contracts ec
        JOIN employee_assignments ea ON ea.id = ec."assignmentId"
-       WHERE ec.id = $1 AND ec."companyId" = $2
-         AND ea."employeeId" = (SELECT id FROM employees WHERE id = $3 AND "companyId" = $2)`,
+       WHERE ec.id = $1 AND ec."companyId" = $2 AND ec."deletedAt" IS NULL
+         AND ea."employeeId" = $3`,
       [id, scope.companyId, scope.employeeId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود أو ليس لك");
@@ -331,8 +355,8 @@ contractsRouter.post("/:id/sign-employee", async (req, res) => {
       `UPDATE employee_contracts
        SET "signedByEmployee" = TRUE, "employeeSignedAt" = NOW(), "updatedAt" = NOW(),
            "approvalStatus" = CASE WHEN "signedByCompany" = TRUE THEN 'signed' ELSE "approvalStatus" END
-       WHERE id = $1 RETURNING *`,
-      [id]
+       WHERE id = $1 AND "companyId" = $2 RETURNING *`,
+      [id, scope.companyId]
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_signed_employee", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
@@ -347,9 +371,9 @@ contractsRouter.post("/:id/sign-employee", async (req, res) => {
 contractsRouter.post("/:id/activate", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [contract] = await rawQuery<any>(
-      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود");
@@ -360,8 +384,8 @@ contractsRouter.post("/:id/activate", requirePermission("hr:update"), async (req
     const [updated] = await rawQuery<any>(
       `UPDATE employee_contracts
        SET "approvalStatus" = 'active', status = 'active', "updatedAt" = NOW()
-       WHERE id = $1 RETURNING *`,
-      [id]
+       WHERE id = $1 AND "companyId" = $2 RETURNING *`,
+      [id, scope.companyId]
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_activated", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
@@ -376,10 +400,11 @@ contractsRouter.post("/:id/activate", requirePermission("hr:update"), async (req
 contractsRouter.post("/:id/terminate", requirePermission("hr:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const { reason } = req.body as { reason?: string };
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(terminateContractSchema.safeParse(req.body ?? {}));
+    const { reason } = b;
     const [contract] = await rawQuery<any>(
-      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود");
@@ -390,9 +415,9 @@ contractsRouter.post("/:id/terminate", requirePermission("hr:update"), async (re
     const [updated] = await rawQuery<any>(
       `UPDATE employee_contracts
        SET status = 'terminated', "approvalStatus" = 'terminated',
-           "terminatedAt" = NOW(), "terminatedBy" = $2, "terminationReason" = $3, "updatedAt" = NOW()
-       WHERE id = $1 RETURNING *`,
-      [id, scope.userId, reason || null]
+           notes = COALESCE($3, notes), "updatedBy" = $2, "updatedAt" = NOW()
+       WHERE id = $1 AND "companyId" = $4 RETURNING *`,
+      [id, scope.userId, reason || null, scope.companyId]
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_terminated", entity: "employee_contract", entityId: id, after: { ref: contract.ref, reason } });
@@ -407,40 +432,45 @@ contractsRouter.post("/:id/terminate", requirePermission("hr:update"), async (re
 contractsRouter.post("/:id/renew", requirePermission("hr:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const { newEndDate, newSalary } = req.body as { newEndDate?: string; newSalary?: number };
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(renewContractSchema.safeParse(req.body ?? {}));
+    const { newEndDate, newSalary } = b;
     const [contract] = await rawQuery<any>(
-      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("الع��د غير موجود");
 
     const [seqRow] = await rawQuery<any>(`SELECT nextval('contract_number_seq') AS seq`);
-    const ref = `CTR-${new Date().getFullYear()}-${String(seqRow.seq).padStart(4, "0")}`;
+    const ref = generateRef("CTR", seqRow.seq);
 
-    const newStart = contract.endDate || new Date().toISOString().split("T")[0];
+    const newStart = contract.endDate || todayISO();
 
-    const [newContract] = await rawQuery<any>(
-      `INSERT INTO employee_contracts (
-        "companyId", "employeeId", "assignmentId", "contractType",
-        "startDate", "endDate", salary, "housingAllowance", "transportAllowance",
-        "otherAllowances", "templateId", "branchId", ref, "approvalStatus", status, notes
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'draft','draft',$14)
-      RETURNING *`,
-      [
-        scope.companyId, contract.employeeId, contract.assignmentId, contract.contractType,
-        newStart, newEndDate || null,
-        newSalary || contract.salary, contract.housingAllowance, contract.transportAllowance,
-        JSON.stringify(contract.otherAllowances || {}),
-        contract.templateId, contract.branchId, ref,
-        `تجديد للعقد رقم ${contract.ref}`,
-      ]
-    );
+    const newContract = await withTransaction(async (client) => {
+      const insertRes = await client.query(
+        `INSERT INTO employee_contracts (
+          "companyId", "employeeId", "assignmentId", "contractType",
+          "startDate", "endDate", salary, "housingAllowance", "transportAllowance",
+          "otherAllowances", "templateId", "branchId", ref, "approvalStatus", status, notes
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'draft','draft',$14)
+        RETURNING *`,
+        [
+          scope.companyId, contract.employeeId, contract.assignmentId, contract.contractType,
+          newStart, newEndDate || null,
+          newSalary || contract.salary, contract.housingAllowance, contract.transportAllowance,
+          JSON.stringify(contract.otherAllowances || {}),
+          contract.templateId, contract.branchId, ref,
+          `تجديد للعقد رقم ${contract.ref}`,
+        ]
+      );
 
-    await rawExecute(
-      `UPDATE employee_contracts SET "renewalDate" = $2, "updatedAt" = NOW() WHERE id = $1`,
-      [id, newStart]
-    );
+      await client.query(
+        `UPDATE employee_contracts SET "renewalDate" = $2, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [id, newStart, scope.companyId]
+      );
+
+      return insertRes.rows[0];
+    });
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_renewed", entity: "employee_contract", entityId: newContract.id, after: {
       ref, previousRef: contract.ref,

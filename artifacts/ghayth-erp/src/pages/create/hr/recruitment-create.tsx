@@ -31,7 +31,7 @@ export default function RecruitmentCreate() {
   // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
   // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
   // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
-  const createMut = useApiMutation("/recruitment/postings", "POST", [["jobs"]], {
+  const createMut = useApiMutation("/hr/recruitment/postings", "POST", [["jobs"]], {
     successMessage: "تم إضافة الوظيفة بنجاح",
   });
   const { data: deptData, isLoading, isError } = useApiQuery<{ data: any[] }>(["departments-list"], "/settings/departments");
@@ -202,7 +202,7 @@ export default function RecruitmentCreate() {
       <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات الوظيفة (وصف وظيفي، نماذج)" />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/hr/recruitment")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.title || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!form.title || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "نشر الوظيفة"}
         </Button>
       </div>

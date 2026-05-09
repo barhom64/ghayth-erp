@@ -262,6 +262,7 @@ export function ConfirmDeleteDialog({
             onClick={handleConfirm}
             disabled={pending || loadingImpact}
             className="gap-1.5"
+            rateLimitAware
           >
             {pending ? (
               <>

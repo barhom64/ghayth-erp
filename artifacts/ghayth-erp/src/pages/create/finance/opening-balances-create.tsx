@@ -209,6 +209,7 @@ export default function OpeningBalancesCreatePage() {
                 <Input
                   type="number"
                   min="0"
+                  step="0.01"
                   value={line.debit}
                   onChange={(e) => updateLine(idx, "debit", e.target.value)}
                   placeholder="0"
@@ -216,6 +217,7 @@ export default function OpeningBalancesCreatePage() {
                 <Input
                   type="number"
                   min="0"
+                  step="0.01"
                   value={line.credit}
                   onChange={(e) => updateLine(idx, "credit", e.target.value)}
                   placeholder="0"
@@ -257,7 +259,7 @@ export default function OpeningBalancesCreatePage() {
         <Button variant="outline" onClick={() => setLocation("/finance/opening-balances")}>
           إلغاء
         </Button>
-        <Button onClick={handleSubmit} disabled={!isBalanced || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!isBalanced || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>

@@ -20,6 +20,8 @@ import { EntityFinancialProfile } from "@/components/shared/entity-financial-pro
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare } from "lucide-react";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
@@ -41,8 +43,7 @@ const VEHICLE_STATUS_OPTIONS = [
   { value: "available", label: "متاحة" },
   { value: "in_use", label: "قيد الاستخدام" },
   { value: "maintenance", label: "في الصيانة" },
-  { value: "reserved", label: "محجوزة" },
-  { value: "accident", label: "حادث" },
+  { value: "out_of_service", label: "خارج الخدمة" },
 ];
 
 const IMPACT_ICONS = {
@@ -84,8 +85,7 @@ export default function VehicleDetail() {
       case "available": return "success";
       case "in_use": return "info";
       case "maintenance": return "warning";
-      case "reserved": return "muted";
-      case "accident": return "destructive";
+      case "out_of_service": return "destructive";
       default: return "default";
     }
   };
@@ -171,7 +171,9 @@ export default function VehicleDetail() {
     </div>
   );
 
-  const overview = (
+  const overview = !vehicle ? (
+    <div className="text-sm text-muted-foreground p-4">جاري التحميل...</div>
+  ) : (
     <div className="space-y-4">
       {editing && (
         <Card>
@@ -773,14 +775,17 @@ export default function VehicleDetail() {
         <Card>
           <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5 text-muted-foreground" /> السجل الزمني</CardTitle></CardHeader>
           <CardContent>
-            {id && <EntityTimeline entityType="fleet_vehicles" entityId={id} maxItems={20} />}
+            {id && <EntityTimeline entityType="fleet-vehicle" entityId={id} maxItems={20} />}
           </CardContent>
         </Card>
       )}
 
       {id && (
-        <EntityObligations entityType="fleet_vehicle,fleet_maintenance,fleet_insurance" entityId={id} hideWhenEmpty />
+        <EntityObligations entityType="fleet-vehicle,fleet-maintenance,fleet-insurance" entityId={id} hideWhenEmpty />
       )}
+
+      {id && <EntityComments entityType="vehicle" entityId={id} />}
+      {id && <EntityTags entityType="vehicle" entityId={id} />}
     </div>
   );
 
@@ -791,7 +796,7 @@ export default function VehicleDetail() {
       backPath="/fleet/vehicles"
       backLabel="المركبات"
       status={vehicle ? { label: statusLabel, tone: vehicleStatusTone(vehicle.status) } : undefined}
-      entityType="fleet_vehicle"
+      entityType="fleet-vehicle"
       entityId={id || ""}
       isLoading={isLoading}
       error={isError ? error : undefined}

@@ -1,6 +1,7 @@
-import { eventBus, type EventPayload } from "./eventBus.js";
+import { eventBus, registerCrossDomainHandler, type EventPayload } from "./eventBus.js";
 import { pool, rawQuery, rawExecute } from "./rawdb.js";
-import { createNotification, getManagerAssignmentId, createJournalEntry, getAccountCodeFromMapping } from "./businessHelpers.js";
+import { logger } from "./logger.js";
+import { createNotification, getManagerAssignmentId, createGuardedJournalEntry, getAccountCodeFromMapping, todayISO, toDateISO, currentYear } from "./businessHelpers.js";
 import { computeDiff } from "./auditDiff.js";
 import { calculateAllForCompany } from "./umrahCommissionEngine.js";
 import { registerObligation, markObligationMet } from "./obligationsEngine.js";
@@ -20,7 +21,7 @@ async function logEvent(event: string, payload: EventPayload) {
       ]
     );
   } catch (err) {
-    console.error(`[EventLog] Failed to log ${event}:`, err);
+    logger.error(err, `[EventLog] Failed to log ${event}:`);
   }
 }
 
@@ -55,7 +56,7 @@ async function logAudit(event: string, payload: EventPayload) {
       ]
     );
   } catch (err) {
-    console.error(`[AuditLog] Failed to audit ${event}:`, err);
+    logger.error(err, `[AuditLog] Failed to audit ${event}:`);
   }
 }
 
@@ -84,11 +85,6 @@ export function registerEventListeners() {
   eventBus.on("employee.updated", async (payload) => {
     await logEvent("employee.updated", payload);
     await logAudit("employee.updated", { ...payload, action: "update" });
-  });
-
-  eventBus.on("employee.deleted", async (payload) => {
-    await logEvent("employee.deleted", payload);
-    await logAudit("employee.deleted", { ...payload, action: "delete" });
   });
 
   eventBus.on("invoice.created", async (payload) => {
@@ -123,7 +119,7 @@ export function registerEventListeners() {
 
     // Cross-module: mark financial obligation as fulfilled
     if (payload.companyId && payload.entityId) {
-      await markObligationMet(payload.companyId, "invoices", payload.entityId as number, "payment").catch(() => {});
+      await markObligationMet(payload.companyId, "invoices", payload.entityId as number, "payment").catch((e) => logger.error(e, "event listener background task failed"));
     }
   });
 
@@ -215,14 +211,14 @@ export function registerEventListeners() {
     await logAudit("crm.opportunity.created", { ...payload, action: "create" });
   });
 
-  eventBus.on("crm.opportunity.won", async (payload) => {
-    await logEvent("crm.opportunity.won", payload);
-    await logAudit("crm.opportunity.won", { ...payload, action: "update" });
+  eventBus.on("crm.deal.won", async (payload) => {
+    await logEvent("crm.deal.won", payload);
+    await logAudit("crm.deal.won", { ...payload, action: "update" });
   });
 
-  eventBus.on("crm.opportunity.lost", async (payload) => {
-    await logEvent("crm.opportunity.lost", payload);
-    await logAudit("crm.opportunity.lost", { ...payload, action: "update" });
+  eventBus.on("crm.deal.lost", async (payload) => {
+    await logEvent("crm.deal.lost", payload);
+    await logAudit("crm.deal.lost", { ...payload, action: "update" });
   });
 
   eventBus.on("task.created", async (payload) => {
@@ -246,11 +242,6 @@ export function registerEventListeners() {
   eventBus.on("task.completed", async (payload) => {
     await logEvent("task.completed", payload);
     await logAudit("task.completed", { ...payload, action: "update" });
-  });
-
-  eventBus.on("maintenance.completed", async (payload) => {
-    await logEvent("maintenance.completed", payload);
-    await logAudit("maintenance.completed", { ...payload, action: "maintenance_completed" });
   });
 
   eventBus.on("support.ticket.created", async (payload) => {
@@ -303,10 +294,6 @@ export function registerEventListeners() {
     await logEvent("warehouse.product.updated", payload);
     await logAudit("warehouse.product.updated", { ...payload, action: "update", entity: "warehouse_product" });
   });
-  eventBus.on("warehouse.product.status_changed", async (payload) => {
-    await logEvent("warehouse.product.status_changed", payload);
-    await logAudit("warehouse.product.status_changed", { ...payload, action: "status_change", entity: "warehouse_product" });
-  });
   eventBus.on("warehouse.product.deleted", async (payload) => {
     await logEvent("warehouse.product.deleted", payload);
     await logAudit("warehouse.product.deleted", { ...payload, action: "delete", entity: "warehouse_product" });
@@ -314,11 +301,6 @@ export function registerEventListeners() {
   eventBus.on("warehouse.movement.created", async (payload) => {
     await logEvent("warehouse.movement.created", payload);
     await logAudit("warehouse.movement.created", { ...payload, action: "create" });
-  });
-
-  eventBus.on("payroll.processed", async (payload) => {
-    await logEvent("payroll.processed", payload);
-    await logAudit("payroll.processed", { ...payload, action: "create" });
   });
 
   eventBus.on("payroll.completed", async (payload) => {
@@ -369,7 +351,7 @@ export function registerEventListeners() {
            VALUES ($1,$2,$3,$4,false)`,
           [payload.companyId, "expense_obligation", payload.entityId ?? 0,
            `فشل تسجيل التزام المصروف: ${String(oblErr)}`]
-        ).catch(() => {});
+        ).catch((e) => logger.error(e, "event listener background task failed"));
       }
     }
   });
@@ -407,11 +389,6 @@ export function registerEventListeners() {
   eventBus.on("purchase_request.rejected", async (payload) => {
     await logEvent("purchase_request.rejected", payload);
     await logAudit("purchase_request.rejected", { ...payload, action: "reject" });
-  });
-
-  eventBus.on("leave.stage1_approved", async (payload) => {
-    await logEvent("leave.stage1_approved", payload);
-    await logAudit("leave.stage1_approved", { ...payload, action: "approve" });
   });
 
   eventBus.on("leave.escalated", async (payload) => {
@@ -512,8 +489,8 @@ export function registerEventListeners() {
       const [letter] = await rawQuery<any>(
         `SELECT ol.*, e.name AS "employeeName", e.email AS "employeeEmail", e.phone AS "employeePhone"
          FROM official_letters ol
-         LEFT JOIN employees e ON e.id = ol."employeeId"
-         WHERE ol.id = $1 AND ol."companyId" = $2`,
+         LEFT JOIN employees e ON e.id = ol."employeeId" AND e."deletedAt" IS NULL
+         WHERE ol.id = $1 AND ol."companyId" = $2 AND ol."deletedAt" IS NULL`,
         [letterId, payload.companyId]
       );
 
@@ -535,19 +512,19 @@ export function registerEventListeners() {
       if (letter.employeePhone) {
         try {
           await rawExecute(
-            `INSERT INTO whatsapp_queue ("companyId","toPhone",message,status,"createdAt","refType","refId")
-             VALUES ($1,$2,$3,'pending',NOW(),'official_letter',$4)`,
-            [payload.companyId, letter.employeePhone, `${subject}\n\n${body}`, letterId]
+            `INSERT INTO whatsapp_queue ("companyId",phone,message,status,"scheduledAt")
+             VALUES ($1,$2,$3,'queued',NOW())`,
+            [payload.companyId, letter.employeePhone, `${subject}\n\n${body}`]
           );
-        } catch {
-          /* whatsapp_queue may not exist in every deployment — ignore */
+        } catch (e) {
+          logger.warn(e, "whatsapp_queue table may not exist in this deployment");
         }
       }
 
       // Mark the letter as dispatched so we never double-queue it.
       await rawExecute(
-        `UPDATE official_letters SET "sentAt" = NOW() WHERE id = $1 AND "sentAt" IS NULL`,
-        [letterId]
+        `UPDATE official_letters SET "sentAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "sentAt" IS NULL AND "deletedAt" IS NULL`,
+        [letterId, payload.companyId]
       );
 
       // Notify HR management that the letter went out.
@@ -573,7 +550,7 @@ export function registerEventListeners() {
          VALUES ($1,$2,$3,$4,false)`,
         [payload.companyId, "hr_letter_dispatch", payload.entityId ?? 0,
          `فشل إرسال الخطاب الرسمي: ${String(err)}`]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "event listener background task failed"));
     }
   });
 
@@ -701,14 +678,6 @@ export function registerEventListeners() {
     await logEvent("invoice.debit_memo", payload);
     await logAudit("invoice.debit_memo", { ...payload, action: "debit_memo", entity: "invoice" });
   });
-  eventBus.on("voucher.deleted", async (payload) => {
-    await logEvent("voucher.deleted", payload);
-    await logAudit("voucher.deleted", { ...payload, action: "delete", entity: "voucher" });
-  });
-  eventBus.on("expense.deleted", async (payload) => {
-    await logEvent("expense.deleted", payload);
-    await logAudit("expense.deleted", { ...payload, action: "delete", entity: "expense" });
-  });
   eventBus.on("journal.posted", async (payload) => {
     await logEvent("journal.posted", payload);
     await logAudit("journal.posted", { ...payload, action: "post", entity: "journal_entry" });
@@ -729,13 +698,13 @@ export function registerEventListeners() {
     await logEvent("fiscal.year_end_closed", payload);
     await logAudit("fiscal.year_end_closed", { ...payload, action: "close", entity: "fiscal_year" });
   });
-  eventBus.on("fiscal_period.close", async (payload) => {
-    await logEvent("fiscal_period.close", payload);
-    await logAudit("fiscal_period.close", { ...payload, action: "close", entity: "fiscal_period" });
+  eventBus.on("fiscal_period.closed", async (payload) => {
+    await logEvent("fiscal_period.closed", payload);
+    await logAudit("fiscal_period.closed", { ...payload, action: "close", entity: "fiscal_period" });
   });
-  eventBus.on("fiscal_period.reopen", async (payload) => {
-    await logEvent("fiscal_period.reopen", payload);
-    await logAudit("fiscal_period.reopen", { ...payload, action: "reopen", entity: "fiscal_period" });
+  eventBus.on("fiscal_period.reopened", async (payload) => {
+    await logEvent("fiscal_period.reopened", payload);
+    await logAudit("fiscal_period.reopened", { ...payload, action: "reopen", entity: "fiscal_period" });
   });
   eventBus.on("payment_run.executed", async (payload) => {
     await logEvent("payment_run.executed", payload);
@@ -768,7 +737,7 @@ export function registerEventListeners() {
           [payload.entityId, payload.companyId]
         );
         if (result.affectedRows > 0) {
-          console.log(`[EventReaction] Suspended ${result.affectedRows} commission plan(s) for terminated employee #${payload.entityId}`);
+          logger.info({ affectedRows: result.affectedRows, employeeId: payload.entityId }, "Suspended commission plans for terminated employee");
         }
       } catch (err) {
         await rawExecute(
@@ -776,7 +745,7 @@ export function registerEventListeners() {
            VALUES ($1,$2,$3,$4,false)`,
           [payload.companyId, "commission_suspension", payload.entityId ?? 0,
            `فشل تعليق خطط العمولة عند إنهاء خدمة الموظف: ${String(err)}`]
-        ).catch(() => {});
+        ).catch((e) => logger.error(e, "event listener background task failed"));
       }
     }
   });
@@ -801,11 +770,11 @@ export function registerEventListeners() {
       try {
         const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
         const month = Number(details.month) || new Date().getMonth() + 1;
-        const year = Number(details.year) || new Date().getFullYear();
+        const year = Number(details.year) || currentYear();
         const results = await calculateAllForCompany(payload.companyId, month, year, (payload.userId as number) || 0);
         if (results.length > 0) {
           const total = results.reduce((s, r) => s + r.finalAmount, 0);
-          console.log(`[EventReaction] Payroll run triggered commission calc: ${results.length} plans, total ${total} SAR`);
+          logger.info({ planCount: results.length, totalSAR: total }, "Payroll run triggered commission calculation");
           const mgr = await getManagerAssignmentId(payload.companyId, payload.branchId as number ?? 0);
           if (mgr) {
             await createNotification({
@@ -822,7 +791,7 @@ export function registerEventListeners() {
            VALUES ($1,$2,$3,$4,false)`,
           [payload.companyId, "commission_auto_calc", payload.entityId ?? 0,
            `فشل حساب العمولات التلقائي عند إنشاء مسيّر الرواتب: ${String(commErr)}`]
-        ).catch(() => {});
+        ).catch((e) => logger.error(e, "event listener background task failed"));
       }
     }
   });
@@ -856,7 +825,7 @@ export function registerEventListeners() {
             lines.push({ accountCode: commPayableCode, debit: comm, credit: 0, description: "تسوية عمولات مستحقة سابقاً" });
             lines.push({ accountCode: salaryPayableCode, debit: 0, credit: comm, description: "عمولات ضمن الرواتب" });
           }
-          await createJournalEntry({
+          await createGuardedJournalEntry({
             companyId: payload.companyId,
             branchId: (payload.branchId as number) || 0,
             createdBy: (payload.userId as number) || 0,
@@ -866,15 +835,11 @@ export function registerEventListeners() {
             sourceType: "payroll_runs",
             sourceId: payload.entityId as number,
             lines,
-          });
+          }, { table: "payroll_runs", id: payload.entityId as number });
         }
       } catch (glErr) {
-        await rawExecute(
-          `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
-           VALUES ($1,$2,$3,$4,false)`,
-          [payload.companyId, "payroll_gl_posting", payload.entityId ?? 0,
-           `فشل ترحيل قيد الرواتب: ${String(glErr)}`]
-        ).catch(() => {});
+        // createGuardedJournalEntry already records in financial_posting_failures
+        logger.error(glErr, `[EventListener] payroll GL posting failed for run #${payload.entityId}`);
       }
     }
   });
@@ -927,10 +892,6 @@ export function registerEventListeners() {
   eventBus.on("deposit.received", async (payload) => {
     await logEvent("deposit.received", payload);
     await logAudit("deposit.received", { ...payload, action: "receive", entity: "deposit" });
-  });
-  eventBus.on("deposit.refunded", async (payload) => {
-    await logEvent("deposit.refunded", payload);
-    await logAudit("deposit.refunded", { ...payload, action: "refund", entity: "deposit" });
   });
   // Phase C.4 — missing property lifecycle listeners.
   // Before this block PATCH/DELETE on units / contracts / buildings / owners /
@@ -1245,13 +1206,37 @@ export function registerEventListeners() {
 
     const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
 
-    // Cross-module: verify GL journal entry was posted
+    // Cross-module: auto-post GL journal for umrah agent invoice (AR ↔ Revenue)
     const [glEntry] = await rawQuery<any>(
-      `SELECT id FROM journal_entries WHERE "sourceType"='umrah_sales_invoices' AND "sourceId"=$1 AND "companyId"=$2 LIMIT 1`,
+      `SELECT id FROM journal_entries WHERE "sourceType"='umrah_sales_invoices' AND "sourceId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [payload.entityId, payload.companyId]
     );
     if (!glEntry) {
-      console.warn(`[EventReaction] Invoice #${payload.entityId} missing GL entry — will be posted on approval`);
+      try {
+        const total = Number((payload as any).after?.total ?? details.total ?? 0);
+        const ref = (payload as any).after?.ref ?? details.ref ?? "";
+        const subAgentId = (payload as any).after?.subAgentId ?? details.subAgentId ?? "";
+        if (total > 0) {
+          const arCode = await getAccountCodeFromMapping(payload.companyId, "umrah_receivables", "debit", "1200");
+          const revenueCode = await getAccountCodeFromMapping(payload.companyId, "umrah_revenue", "credit", "4100");
+          await createGuardedJournalEntry({
+            companyId: payload.companyId,
+            branchId: (payload.branchId as number) || 0,
+            createdBy: (payload.userId as number) || 0,
+            ref: `JE-UMR-${payload.entityId}`,
+            description: `فاتورة عمرة ${ref} — وكيل فرعي #${subAgentId}`,
+            type: "sales",
+            sourceType: "umrah_sales_invoices",
+            sourceId: payload.entityId as number,
+            lines: [
+              { accountCode: arCode, debit: total, credit: 0, description: `ذمم مدينة — فاتورة ${ref}` },
+              { accountCode: revenueCode, debit: 0, credit: total, description: `إيراد عمرة — فاتورة ${ref}` },
+            ],
+          }, { table: "umrah_sales_invoices", id: payload.entityId as number });
+        }
+      } catch (glErr) {
+        logger.error(glErr, `[EventListener] umrah invoice GL posting failed for #${payload.entityId}`);
+      }
     }
 
     // Cross-module: register receivable obligation for payment tracking
@@ -1274,7 +1259,7 @@ export function registerEventListeners() {
          VALUES ($1,$2,$3,$4,false)`,
         [payload.companyId, "obligation_registration", payload.entityId ?? 0,
          `فشل تسجيل الالتزام: ${String(oblErr)}`]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "event listener background task failed"));
     }
 
     // Notification to manager
@@ -1299,11 +1284,11 @@ export function registerEventListeners() {
 
     // Cross-module: verify GL journal entry was posted for the payment
     const [glEntry] = await rawQuery<any>(
-      `SELECT id FROM journal_entries WHERE "sourceType"='umrah_payments' AND "sourceId"=$1 AND "companyId"=$2 LIMIT 1`,
+      `SELECT id FROM journal_entries WHERE "sourceType"='umrah_payments' AND "sourceId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [payload.entityId, payload.companyId]
     );
     if (!glEntry) {
-      console.warn(`[EventReaction] Payment #${payload.entityId} missing GL entry — attempting recovery`);
+      logger.warn(`[EventReaction] Payment #${payload.entityId} missing GL entry — attempting recovery`);
       try {
         const sarAmount = Number(details.sarAmount) || 0;
         const method = (details.method as string) || "bank_transfer";
@@ -1313,7 +1298,7 @@ export function registerEventListeners() {
             getAccountCodeFromMapping(payload.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
             getAccountCodeFromMapping(payload.companyId, "invoice_payment_ar", "credit", "1200"),
           ]);
-          await createJournalEntry({
+          await createGuardedJournalEntry({
             companyId: payload.companyId,
             branchId: (payload.branchId as number) || 0,
             createdBy: (payload.userId as number) || 0,
@@ -1326,15 +1311,11 @@ export function registerEventListeners() {
               { accountCode: cashCode, debit: sarAmount, credit: 0 },
               { accountCode: arCode, debit: 0, credit: sarAmount },
             ],
-          });
+          }, { table: "umrah_payments", id: payload.entityId as number });
         }
       } catch (glErr) {
-        await rawExecute(
-          `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
-           VALUES ($1,$2,$3,$4,false)`,
-          [payload.companyId, "payment_gl_recovery", payload.entityId ?? 0,
-           `فشل استعادة قيد الدفعة: ${String(glErr)}`]
-        ).catch(() => {});
+        // createGuardedJournalEntry already records in financial_posting_failures
+        logger.error(glErr, `[EventListener] payment GL recovery failed for payment #${payload.entityId}`);
       }
     }
 
@@ -1342,11 +1323,11 @@ export function registerEventListeners() {
     if (details.allocations && Array.isArray(details.allocations)) {
       for (const alloc of details.allocations as Array<{ invoiceId: number }>) {
         const [inv] = await rawQuery<any>(
-          `SELECT status FROM umrah_sales_invoices WHERE id=$1 AND "companyId"=$2`,
+          `SELECT status FROM umrah_sales_invoices WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
           [alloc.invoiceId, payload.companyId]
         );
         if (inv?.status === "paid") {
-          await markObligationMet(payload.companyId, "umrah_sales_invoices", alloc.invoiceId, "payment").catch(() => {});
+          await markObligationMet(payload.companyId, "umrah_sales_invoices", alloc.invoiceId, "payment").catch((e) => logger.error(e, "event listener background task failed"));
         }
       }
     }
@@ -1378,17 +1359,17 @@ export function registerEventListeners() {
     // Cross-module: verify GL accrual was posted
     if (finalAmount > 0) {
       const [glEntry] = await rawQuery<any>(
-        `SELECT id FROM journal_entries WHERE "sourceType"='employee_commission_calculations' AND "sourceId"=$1 AND "companyId"=$2 LIMIT 1`,
+        `SELECT id FROM journal_entries WHERE "sourceType"='employee_commission_calculations' AND "sourceId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
         [planId, payload.companyId]
       );
       if (!glEntry) {
-        console.warn(`[EventReaction] Commission plan #${planId} missing GL accrual — attempting recovery`);
+        logger.warn(`[EventReaction] Commission plan #${planId} missing GL accrual — attempting recovery`);
         try {
           const [expenseCode, payableCode] = await Promise.all([
             getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "6200"),
             getAccountCodeFromMapping(payload.companyId, "commission_payable", "credit", "2150"),
           ]);
-          await createJournalEntry({
+          await createGuardedJournalEntry({
             companyId: payload.companyId,
             branchId: (payload.branchId as number) || 0,
             createdBy: (payload.userId as number) || 0,
@@ -1401,14 +1382,10 @@ export function registerEventListeners() {
               { accountCode: expenseCode, debit: finalAmount, credit: 0, description: `مصروف عمولة` },
               { accountCode: payableCode, debit: 0, credit: finalAmount, description: `عمولة مستحقة` },
             ],
-          });
+          }, { table: "employee_commission_plans", id: planId });
         } catch (glErr) {
-          await rawExecute(
-            `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,resolved)
-             VALUES ($1,$2,$3,$4,false)`,
-            [payload.companyId, "commission_gl_recovery", planId,
-             `فشل استعادة قيد العمولة: ${String(glErr)}`]
-          ).catch(() => {});
+          // createGuardedJournalEntry already records in financial_posting_failures
+          logger.error(glErr, `[EventListener] commission GL recovery failed for plan #${planId}`);
         }
       }
     }
@@ -1452,7 +1429,7 @@ export function registerEventListeners() {
           );
           if (existingLine) {
             await rawExecute(
-              `UPDATE payroll_lines SET commission=$1, "netSalary"="netSalary"+$1 WHERE id=$2`,
+              `UPDATE payroll_lines SET commission=$1, "netSalary"="netSalary"+$1 WHERE id=$2 AND "deletedAt" IS NULL`,
               [finalAmount, existingLine.id]
             );
           } else {
@@ -1468,7 +1445,7 @@ export function registerEventListeners() {
              VALUES ($1,$2,$3,$4,false)`,
             [payload.companyId, "commission_payroll_link", planId,
              `فشل ربط العمولة بمسير الرواتب — خطة ${planId} شهر ${month}/${year}: ${String(plErr)}`]
-          ).catch(() => {});
+          ).catch((e) => logger.error(e, "event listener background task failed"));
         }
       } else if (!activeRun && mgr) {
         await createNotification({
@@ -1553,5 +1530,127 @@ export function registerEventListeners() {
     }
   }
 
-  console.log("[EventSystem] All event listeners registered successfully");
+  // ─── Cross-Domain Invoice Creation ─────────────────────────────────────
+  // When Property, CRM, or other domains need to create invoices, they emit
+  // events instead of writing directly to the finance-owned invoices table.
+  // Finance domain processes these requests here.
+
+  const invoiceRequestHandler = async (payload: EventPayload) => {
+    if (!payload?.companyId) return;
+    const ref = payload.ref as string;
+    const subtotal = Number(payload.subtotal ?? 0);
+    const vatAmount = Number(payload.vatAmount ?? 0);
+    const total = Number(payload.total ?? subtotal + vatAmount);
+    await rawExecute(
+      `INSERT INTO invoices ("companyId","clientId",ref,description,subtotal,total,"vatAmount","vatRate","paidAmount",status,"dueDate","createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,15,0,'draft',$8,$9)`,
+      [
+        payload.companyId,
+        payload.clientId ?? null,
+        ref,
+        payload.description ?? "",
+        subtotal,
+        total,
+        vatAmount,
+        payload.dueDate ?? toDateISO(new Date(Date.now() + 14 * 86400000)),
+        payload.userId ?? 0,
+      ]
+    );
+  };
+
+  registerCrossDomainHandler("property.invoice.requested", invoiceRequestHandler);
+  registerCrossDomainHandler("crm.deal.invoice_requested", invoiceRequestHandler);
+  registerCrossDomainHandler("legal.invoice.requested", invoiceRequestHandler);
+  registerCrossDomainHandler("project.invoice.requested", invoiceRequestHandler);
+
+  // ─── Cross-Domain Fixed Asset Registration ────────────────────────────
+  // Fleet and Property domains emit events when they need to register
+  // a fixed asset. Finance domain processes these here.
+  registerCrossDomainHandler("finance.fixed_asset.requested", async (payload) => {
+    if (!payload?.companyId) return;
+    await rawExecute(
+      `INSERT INTO fixed_assets ("companyId","branchId",code,name,description,category,
+        "purchaseDate","purchaseCost","salvageValue","usefulLifeYears",
+        "depreciationMethod","currentBookValue","accumulatedDepreciation",
+        "assetAccountCode","depreciationAccountCode","accDepreciationAccountCode",status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'straight_line',$8,0,$11,$12,$13,'active')`,
+      [
+        payload.companyId,
+        payload.branchId ?? null,
+        payload.code,
+        payload.name,
+        payload.description ?? "",
+        payload.category ?? "أخرى",
+        payload.purchaseDate ?? todayISO(),
+        Number(payload.purchaseCost ?? 0),
+        Number(payload.salvageValue ?? 0),
+        Number(payload.usefulLifeYears ?? 5),
+        payload.assetAccountCode,
+        payload.depreciationAccountCode,
+        payload.accDepreciationAccountCode,
+      ]
+    );
+  });
+
+  // ─── Cross-Domain Warehouse Deduction ─────────────────────────────────
+  // Fleet domain emits events when maintenance uses spare parts.
+  // Warehouse domain processes the stock deduction here.
+  registerCrossDomainHandler("fleet.warehouse_deduction.requested", async (payload) => {
+    if (!payload?.companyId || !payload?.parts) return;
+    const parts = payload.parts as Array<{ productId: number; quantity: number; unitCost?: number }>;
+    const maintenanceId = payload.maintenanceId as number;
+    for (const part of parts) {
+      await rawExecute(
+        `UPDATE warehouse_products SET "currentStock"="currentStock"-$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+        [part.quantity, part.productId, payload.companyId]
+      );
+      await rawExecute(
+        `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy") VALUES ($1,$2,'out',$3,$4,$5,$6,$7)`,
+        [payload.companyId, part.productId, part.quantity, part.unitCost || 0, `MAINT-${maintenanceId}`, `صيانة مركبة - طلب #${maintenanceId}`, payload.userId ?? 0]
+      );
+    }
+  });
+
+  // ─── Cross-Domain Legal Case Creation ─────────────────────────────────
+  // Property domain emits events when overdue rent triggers legal action.
+  // Legal domain processes the case creation here.
+  registerCrossDomainHandler("property.legal_case.requested", async (payload) => {
+    if (!payload?.companyId) return;
+    await rawExecute(
+      `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty","lawyerName",status,priority,description) VALUES ($1,$2,$3,$4,$5,$6,'open',$7,$8)`,
+      [
+        payload.companyId,
+        payload.caseNumber,
+        payload.title,
+        payload.caseType ?? "civil",
+        payload.opposingParty ?? null,
+        payload.lawyerName ?? null,
+        payload.priority ?? "normal",
+        payload.description ?? "",
+      ]
+    );
+  });
+
+  // ─── Cross-Domain Legal Contract Creation ──────────────────────────────
+  // CRM domain emits events when a deal is won and a service contract
+  // needs to be created. Legal domain processes it here.
+  registerCrossDomainHandler("crm.legal_contract.requested", async (payload) => {
+    if (!payload?.companyId) return;
+    await rawExecute(
+      `INSERT INTO legal_contracts ("companyId",ref,title,"contractType","partyName","startDate","endDate",value,status,"createdBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9)`,
+      [
+        payload.companyId,
+        payload.ref,
+        payload.title,
+        payload.contractType ?? "service",
+        payload.partyName ?? "",
+        payload.startDate,
+        payload.endDate,
+        Number(payload.value ?? 0),
+        payload.userId ?? 0,
+      ]
+    );
+  });
+
+  logger.info("All event listeners registered successfully");
 }

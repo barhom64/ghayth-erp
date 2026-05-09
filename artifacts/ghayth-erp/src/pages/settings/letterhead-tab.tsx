@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +12,7 @@ import { LetterheadHeader } from "@/components/print-layout";
 import type { BranchLetterhead } from "@/components/print-layout";
 
 export function LetterheadSettings() {
-  const { data, refetch } = useApiQuery<any>(["settings-branches"], "/settings/branches");
+  const { data, refetch, isLoading, isError, error } = useApiQuery<any>(["settings-branches"], "/settings/branches");
   const branches = data?.data || [];
   const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
   const [form, setForm] = useState({
@@ -79,6 +80,9 @@ export function LetterheadSettings() {
     city: form.city,
   };
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
+
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -123,7 +127,7 @@ export function LetterheadSettings() {
                   <div className="md:col-span-2"><Label>نص التذييل</Label><textarea className="w-full border rounded-md p-2 h-16" value={form.footerText} onChange={(e) => setForm({ ...form, footerText: e.target.value })} placeholder="يظهر في أسفل كل مطبوعة..." /></div>
                 </div>
                 <div className="flex gap-2 pt-2">
-                  <Button onClick={handleSave} disabled={saving}>
+                  <Button onClick={handleSave} disabled={saving} rateLimitAware>
                     <Save className="h-4 w-4 me-1" />{saving ? "جاري الحفظ..." : "حفظ الكليشة"}
                   </Button>
                   <Button variant="outline" onClick={() => setShowPreview(!showPreview)}>

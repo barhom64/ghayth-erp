@@ -1,10 +1,10 @@
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, NotFoundError, parseId, zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
 
 /* ── Zod Schemas ────────────────────────────────────────────── */
 
@@ -15,7 +15,6 @@ const preferencesSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/", requirePermission("notifications:read"), async (req, res) => {
   try {
@@ -45,12 +44,12 @@ router.get("/", requirePermission("notifications:read"), async (req, res) => {
 router.patch("/:id/read", requirePermission("notifications:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     const { affectedRows } = await rawExecute(
       `UPDATE notifications SET "isRead" = true, "readAt" = NOW()
        WHERE id = $1 AND "assignmentId" = $2 RETURNING id`,
-      [Number(id), scope.activeAssignmentId]
+      [id, scope.activeAssignmentId]
     );
 
     if (!affectedRows) {
@@ -59,10 +58,10 @@ router.patch("/:id/read", requirePermission("notifications:write"), async (req, 
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "mark_notification_read",
-      entity: "notifications", entityId: Number(id),
+      entity: "notifications", entityId: id,
       after: { isRead: true },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "notification.read", entity: "notifications", entityId: Number(id), details: JSON.stringify({ isRead: true }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "notifications background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "notification.read", entity: "notifications", entityId: id, details: JSON.stringify({ isRead: true }) }).catch((e) => logger.error(e, "notifications background task failed"));
 
     res.json({ message: "تم تعليم الإشعار كمقروء" });
   } catch (err) {
@@ -99,9 +98,7 @@ router.get("/preferences", requirePermission("notifications:read"), async (req, 
 
 router.post("/preferences", requirePermission("notifications:write"), async (req, res) => {
   try {
-    const parsed_preferencesSchema = preferencesSchema.safeParse(req.body);
-    if (!parsed_preferencesSchema.success) throw new ValidationError(parsed_preferencesSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_preferencesSchema.data;
+    const body = zodParse(preferencesSchema.safeParse(req.body));
     const scope = req.scope!;
     const { channel, category, enabled } = body;
     const { insertId } = await rawExecute(
@@ -111,14 +108,14 @@ router.post("/preferences", requirePermission("notifications:write"), async (req
        RETURNING id`,
       [scope.userId, scope.companyId, channel || 'in_app', category || 'general', enabled !== false]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM notification_preferences WHERE id = $1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM notification_preferences WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "upsert_notification_preference",
       entity: "notification_preferences", entityId: insertId,
       after: { channel, category, enabled },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "notification.preference.updated", entity: "notification_preferences", entityId: insertId, details: JSON.stringify({ channel, category, enabled }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "notifications background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "notification.preference.updated", entity: "notification_preferences", entityId: insertId, details: JSON.stringify({ channel, category, enabled }) }).catch((e) => logger.error(e, "notifications background task failed"));
 
     res.status(201).json(row);
   } catch (err) {
@@ -139,8 +136,8 @@ router.patch("/mark-all-read", requirePermission("notifications:write"), async (
       companyId: scope.companyId, userId: scope.userId, action: "mark_all_notifications_read",
       entity: "notifications", entityId: 0,
       after: { updated: affectedRows },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "notification.all_read", entity: "notifications", entityId: 0, details: JSON.stringify({ updated: affectedRows }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "notifications background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "notification.all_read", entity: "notifications", entityId: 0, details: JSON.stringify({ updated: affectedRows }) }).catch((e) => logger.error(e, "notifications background task failed"));
 
     res.json({ message: "تم تعليم جميع الإشعارات كمقروءة", updated: affectedRows });
   } catch (err) {

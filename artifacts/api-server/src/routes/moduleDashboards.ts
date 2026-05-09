@@ -1,16 +1,17 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { todayISO, currentPeriod } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 const safeQuery = async <T = any>(sql: string, params: any[] = [], fallback: T[] = []): Promise<T[]> => {
   try {
     return await rawQuery<T>(sql, params);
-  } catch {
+  } catch (e) {
+    logger.error(e, "module dashboard query failed");
     return fallback;
   }
 };
@@ -24,14 +25,14 @@ router.get("/hr", requirePermission("hr:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
 
     const [employees, attendance, leaves, violations, contracts, evaluations] = await Promise.all([
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active FROM employee_assignments WHERE "companyId" = $1`, [cid]),
       sq1(`SELECT COUNT(*) FILTER (WHERE status = 'present') AS present, COUNT(*) FILTER (WHERE status = 'absent') AS absent, COUNT(*) FILTER (WHERE status = 'late') AS late, COUNT(*) FILTER (WHERE "lateMinutes" > 0) AS "lateCount", COALESCE(AVG("lateMinutes") FILTER (WHERE "lateMinutes" > 0), 0) AS "avgLateMinutes" FROM attendance WHERE "companyId" = $1 AND date = $2`, [cid, today]),
-      sq1(`SELECT COUNT(*) FILTER (WHERE status = 'pending') AS pending, COUNT(*) FILTER (WHERE status = 'approved') AS approved, COUNT(*) FILTER (WHERE status = 'rejected') AS rejected FROM hr_leave_requests WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) FILTER (WHERE status = 'pending') AS pending, COUNT(*) FILTER (WHERE status = 'approved') AS approved, COUNT(*) FILTER (WHERE status = 'rejected') AS rejected FROM hr_leave_requests WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COALESCE(SUM(deduction), 0) AS "totalDeductions" FROM employee_violations WHERE "companyId" = $1 AND period = $2 AND "deletedAt" IS NULL`, [cid, today.slice(0, 7)]),
-      sq1(`SELECT COUNT(*) AS "expiring" FROM employee_contracts WHERE "companyId" = $1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`, [cid]),
+      sq1(`SELECT COUNT(*) AS "expiring" FROM employee_contracts WHERE "companyId" = $1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total FROM employee_kpi_snapshots WHERE "companyId" = $1 AND "snapshotDate" >= CURRENT_DATE - INTERVAL '30 days'`, [cid]),
     ]);
 
@@ -61,11 +62,11 @@ router.get("/finance", requirePermission("finance:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const monthStart = new Date().toISOString().slice(0, 7) + "-01";
+    const monthStart = currentPeriod() + "-01";
 
     const [invoices, expenses, receivables, budgets] = await Promise.all([
       sq1(`SELECT COALESCE(SUM(total), 0) AS "totalRevenue", COALESCE(SUM("paidAmount"), 0) AS "totalPaid", COALESCE(SUM(total - "paidAmount"), 0) AS "outstanding", COUNT(*) AS count, COUNT(*) FILTER (WHERE status = 'overdue') AS overdue, COUNT(*) FILTER (WHERE status = 'paid') AS paid FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
-      sq1(`SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM expense_claims WHERE "companyId" = $1 AND "createdAt" >= $2`, [cid, monthStart]),
+      sq1(`SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM expense_claims WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" >= $2`, [cid, monthStart]),
       sq1(`SELECT COALESCE(SUM(total - "paidAmount"), 0) AS amount, COUNT(*) AS count FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('sent','partial','overdue') AND "dueDate" < CURRENT_DATE`, [cid]),
       sq1(`SELECT COUNT(*) AS total, 0 AS "avgUsage" FROM budget_lines bl JOIN chart_of_accounts ca ON ca.id = bl."accountId" WHERE ca."companyId" = $1`, [cid]),
     ]);
@@ -75,7 +76,7 @@ router.get("/finance", requirePermission("finance:read"), async (req, res) => {
     );
 
     const costCenters = await safeQuery(
-      `SELECT "accountCode" AS code, COALESCE(SUM(CASE WHEN type = 'debit' THEN amount ELSE 0 END), 0) AS debit, COALESCE(SUM(CASE WHEN type = 'credit' THEN amount ELSE 0 END), 0) AS credit FROM chart_of_accounts WHERE "companyId" = $1 GROUP BY "accountCode" LIMIT 10`, [cid]
+      `SELECT ca.code, ca.name, COALESCE(SUM(jl.debit), 0) AS debit, COALESCE(SUM(jl.credit), 0) AS credit FROM chart_of_accounts ca LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL) jl ON jl."accountCode" = ca.code WHERE ca."companyId" = $1 AND ca.type = 'expense' GROUP BY ca.code, ca.name ORDER BY debit DESC LIMIT 10`, [cid]
     );
 
     res.json({
@@ -98,14 +99,14 @@ router.get("/fleet", requirePermission("fleet:read"), async (req, res) => {
     const cid = scope.companyId;
 
     const [vehicles, trips, maintenance, fuel] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active' OR status = 'available') AS active, COUNT(*) FILTER (WHERE status = 'in_use') AS "inUse", COUNT(*) FILTER (WHERE status = 'needs_service') AS "needsService", COUNT(*) FILTER (WHERE status = 'out_of_service') AS "outOfService" FROM fleet_vehicles WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'in_progress') AS active, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COALESCE(SUM(distance), 0) AS "totalDistance", COALESCE(SUM(cost), 0) AS "totalCost" FROM fleet_trips WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'pending' OR status = 'scheduled') AS pending, COALESCE(SUM(cost), 0) AS "totalCost" FROM fleet_maintenance WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COALESCE(SUM("totalCost"), 0) AS "totalCost", COALESCE(SUM(liters), 0) AS "totalLiters" FROM fleet_fuel_logs WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active' OR status = 'available') AS active, COUNT(*) FILTER (WHERE status = 'in_use') AS "inUse", COUNT(*) FILTER (WHERE status = 'needs_service') AS "needsService", COUNT(*) FILTER (WHERE status = 'out_of_service') AS "outOfService" FROM fleet_vehicles WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'in_progress') AS active, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COALESCE(SUM(distance), 0) AS "totalDistance", COALESCE(SUM(cost), 0) AS "totalCost" FROM fleet_trips WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'pending' OR status = 'scheduled') AS pending, COALESCE(SUM(cost), 0) AS "totalCost" FROM fleet_maintenance WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COALESCE(SUM("totalCost"), 0) AS "totalCost", COALESCE(SUM(liters), 0) AS "totalLiters" FROM fleet_fuel_logs WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
     ]);
 
     const monthlyTrips = await safeQuery(
-      `SELECT TO_CHAR(DATE_TRUNC('month', "startTime"), 'YYYY-MM') AS month, COUNT(*) AS trips, COALESCE(SUM(distance), 0) AS distance, COALESCE(SUM(cost), 0) AS cost FROM fleet_trips WHERE "companyId" = $1 AND "startTime" >= CURRENT_DATE - INTERVAL '6 months' GROUP BY month ORDER BY month`, [cid]
+      `SELECT TO_CHAR(DATE_TRUNC('month', "startTime"), 'YYYY-MM') AS month, COUNT(*) AS trips, COALESCE(SUM(distance), 0) AS distance, COALESCE(SUM(cost), 0) AS cost FROM fleet_trips WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "startTime" >= CURRENT_DATE - INTERVAL '6 months' GROUP BY month ORDER BY month`, [cid]
     );
 
     res.json({
@@ -126,13 +127,13 @@ router.get("/legal", requirePermission("legal:read"), async (req, res) => {
     const cid = scope.companyId;
 
     const [contracts, cases, sessions] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COUNT(*) FILTER (WHERE status = 'active' AND "endDate"::date - CURRENT_DATE <= 30) AS "expiringSoon", COALESCE(SUM(value), 0) AS "totalValue" FROM legal_contracts WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE priority = 'high') AS "highPriority" FROM legal_cases WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COUNT(*) AS upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id = ls."caseId" WHERE lc."companyId" = $1 AND ls."sessionDate" >= CURRENT_DATE AND ls."sessionDate" <= CURRENT_DATE + INTERVAL '30 days'`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COUNT(*) FILTER (WHERE status = 'active' AND "endDate"::date - CURRENT_DATE <= 30) AS "expiringSoon", COALESCE(SUM(value), 0) AS "totalValue" FROM legal_contracts WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE priority = 'high') AS "highPriority" FROM legal_cases WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COUNT(*) AS upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id = ls."caseId" WHERE lc."companyId" = $1 AND lc."deletedAt" IS NULL AND ls."deletedAt" IS NULL AND ls."sessionDate" >= CURRENT_DATE AND ls."sessionDate" <= CURRENT_DATE + INTERVAL '30 days'`, [cid]),
     ]);
 
     const casesByStatus = await safeQuery(
-      `SELECT status, COUNT(*) AS count FROM legal_cases WHERE "companyId" = $1 GROUP BY status`, [cid]
+      `SELECT status, COUNT(*) AS count FROM legal_cases WHERE "companyId" = $1 AND "deletedAt" IS NULL GROUP BY status`, [cid]
     );
 
     res.json({
@@ -152,10 +153,10 @@ router.get("/properties", requirePermission("property:read"), async (req, res) =
     const cid = scope.companyId;
 
     const [units, rentalContracts, payments, maintenanceReqs] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'available') AS available, COUNT(*) FILTER (WHERE status = 'rented') AS rented, COUNT(*) FILTER (WHERE status = 'maintenance') AS "underMaintenance" FROM property_units WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COUNT(*) FILTER (WHERE "endDate"::date - CURRENT_DATE <= 30 AND status = 'active') AS "expiringSoon", COALESCE(SUM("monthlyRent"), 0) AS "monthlyIncome" FROM rental_contracts WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COALESCE(SUM(amount), 0) AS "totalDue", COALESCE(SUM("paidAmount"), 0) AS "totalCollected", COUNT(*) FILTER (WHERE status = 'pending' AND "dueDate" < CURRENT_DATE) AS overdue FROM rent_payments rp JOIN rental_contracts rc ON rc.id = rp."contractId" WHERE rc."companyId" = $1`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status NOT IN ('completed','closed')) AS open, COUNT(*) FILTER (WHERE priority = 'critical') AS critical FROM maintenance_requests WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'available') AS available, COUNT(*) FILTER (WHERE status = 'rented') AS rented, COUNT(*) FILTER (WHERE status = 'maintenance') AS "underMaintenance" FROM property_units WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COUNT(*) FILTER (WHERE "endDate"::date - CURRENT_DATE <= 30 AND status = 'active') AS "expiringSoon", COALESCE(SUM("monthlyRent"), 0) AS "monthlyIncome" FROM rental_contracts WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COALESCE(SUM(amount), 0) AS "totalDue", COALESCE(SUM("paidAmount"), 0) AS "totalCollected", COUNT(*) FILTER (WHERE status = 'pending' AND "dueDate" < CURRENT_DATE) AS overdue FROM rent_payments rp JOIN rental_contracts rc ON rc.id = rp."contractId" WHERE rc."companyId" = $1 AND rc."deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status NOT IN ('completed','closed')) AS open, COUNT(*) FILTER (WHERE priority = 'critical') AS critical FROM maintenance_requests WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
     ]);
 
     const occupancyRate = Number(units?.total ?? 0) > 0
@@ -212,13 +213,13 @@ router.get("/crm", async (req, res) => {
     const cid = scope.companyId;
 
     const [opportunities, contacts, activities] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'won') AS won, COUNT(*) FILTER (WHERE status = 'lost') AS lost, COALESCE(SUM(value), 0) AS "totalValue", COALESCE(SUM(value) FILTER (WHERE status = 'won'), 0) AS "wonValue" FROM crm_opportunities WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'won') AS won, COUNT(*) FILTER (WHERE status = 'lost') AS lost, COALESCE(SUM(value), 0) AS "totalValue", COALESCE(SUM(value) FILTER (WHERE status = 'won'), 0) AS "wonValue" FROM crm_opportunities WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total FROM crm_contacts WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COUNT(*) FILTER (WHERE status = 'pending' OR status = 'planned') AS pending FROM crm_activities WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE a."completedAt" IS NOT NULL) AS completed, COUNT(*) FILTER (WHERE a."completedAt" IS NULL) AS pending FROM crm_activities a JOIN crm_opportunities o ON o.id = a."opportunityId" WHERE o."companyId" = $1 AND o."deletedAt" IS NULL`, [cid]),
     ]);
 
     const pipeline = await safeQuery(
-      `SELECT ps.name, ps."order", COUNT(o.id) AS count, COALESCE(SUM(o.value), 0) AS value FROM crm_pipeline_stages ps LEFT JOIN crm_opportunities o ON o."stageId" = ps.id AND o."companyId" = $1 WHERE ps."companyId" = $1 GROUP BY ps.id, ps.name, ps."order" ORDER BY ps."order"`, [cid]
+      `SELECT ps.name, ps."order", COUNT(o.id) AS count, COALESCE(SUM(o.value), 0) AS value FROM crm_pipeline_stages ps LEFT JOIN crm_opportunities o ON o."pipelineStageId" = ps.id AND o."companyId" = $1 AND o."deletedAt" IS NULL WHERE ps."companyId" = $1 GROUP BY ps.id, ps.name, ps."order" ORDER BY ps."order"`, [cid]
     );
 
     res.json({
@@ -238,13 +239,13 @@ router.get("/store", async (req, res) => {
     const cid = scope.companyId;
 
     const [orders, products, revenue] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'pending') AS pending, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled FROM store_orders WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE "isActive" = true) AS active FROM store_products WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COALESCE(SUM(total), 0) AS "totalRevenue", COALESCE(SUM(total) FILTER (WHERE status = 'completed'), 0) AS "completedRevenue" FROM store_orders WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'pending') AS pending, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled FROM store_orders WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE "isActive" = true) AS active FROM store_products WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COALESCE(SUM("totalAmount"), 0) AS "totalRevenue", COALESCE(SUM("totalAmount") FILTER (WHERE status = 'completed'), 0) AS "completedRevenue" FROM store_orders WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
     ]);
 
     const monthlyOrders = await safeQuery(
-      `SELECT TO_CHAR(DATE_TRUNC('month', "createdAt"), 'YYYY-MM') AS month, COUNT(*) AS orders, COALESCE(SUM(total), 0) AS revenue FROM store_orders WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '6 months' GROUP BY month ORDER BY month`, [cid]
+      `SELECT TO_CHAR(DATE_TRUNC('month', "createdAt"), 'YYYY-MM') AS month, COUNT(*) AS orders, COALESCE(SUM("totalAmount"), 0) AS revenue FROM store_orders WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" >= CURRENT_DATE - INTERVAL '6 months' GROUP BY month ORDER BY month`, [cid]
     );
 
     res.json({
@@ -264,16 +265,16 @@ router.get("/support", async (req, res) => {
     const cid = scope.companyId;
 
     const [tickets, sla] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE status = 'resolved' OR status = 'closed') AS resolved, COUNT(*) FILTER (WHERE priority = 'critical' OR priority = 'high') AS "highPriority", COALESCE(AVG(EXTRACT(EPOCH FROM (COALESCE("resolvedAt", NOW()) - "createdAt")) / 3600) FILTER (WHERE status IN ('resolved','closed')), 0) AS "avgResolutionHours" FROM support_tickets WHERE "companyId" = $1`, [cid]),
-      sq1(`SELECT COUNT(*) FILTER (WHERE "slaBreached" = true) AS breached, COUNT(*) AS total FROM support_tickets WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '30 days'`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE status = 'resolved' OR status = 'closed') AS resolved, COUNT(*) FILTER (WHERE priority = 'critical' OR priority = 'high') AS "highPriority", COALESCE(AVG(EXTRACT(EPOCH FROM (COALESCE("resolvedAt", NOW()) - "createdAt")) / 3600) FILTER (WHERE status IN ('resolved','closed')), 0) AS "avgResolutionHours" FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COUNT(*) FILTER (WHERE "slaBreached" = true) AS breached, COUNT(*) AS total FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" >= CURRENT_DATE - INTERVAL '30 days'`, [cid]),
     ]);
 
     const byCategory = await safeQuery(
-      `SELECT COALESCE(category, 'غير مصنف') AS category, COUNT(*) AS count FROM support_tickets WHERE "companyId" = $1 GROUP BY category ORDER BY count DESC LIMIT 10`, [cid]
+      `SELECT COALESCE(category, 'غير مصنف') AS category, COUNT(*) AS count FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL GROUP BY category ORDER BY count DESC LIMIT 10`, [cid]
     );
 
     const weeklyTickets = await safeQuery(
-      `SELECT DATE("createdAt") AS date, COUNT(*) AS created, COUNT(*) FILTER (WHERE status IN ('resolved','closed')) AS resolved FROM support_tickets WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
+      `SELECT DATE("createdAt") AS date, COUNT(*) AS created, COUNT(*) FILTER (WHERE status IN ('resolved','closed')) AS resolved FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
     );
 
     res.json({
@@ -293,15 +294,15 @@ router.get("/tasks", async (req, res) => {
     const cid = scope.companyId;
 
     const [taskStats] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'todo' OR status = 'pending') AS pending, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE status = 'done' OR status = 'completed') AS completed, COUNT(*) FILTER (WHERE status NOT IN ('done','completed','cancelled') AND "dueDate" < CURRENT_DATE) AS overdue, COUNT(*) FILTER (WHERE priority = 'high' OR priority = 'critical') AS "highPriority" FROM tasks WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'todo' OR status = 'pending') AS pending, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE status = 'done' OR status = 'completed') AS completed, COUNT(*) FILTER (WHERE status NOT IN ('done','completed','cancelled') AND "scheduledDate" < CURRENT_DATE) AS overdue, COUNT(*) FILTER (WHERE priority = 'high' OR priority = 'critical') AS "highPriority" FROM tasks WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
     ]);
 
     const byPriority = await safeQuery(
-      `SELECT COALESCE(priority, 'normal') AS priority, COUNT(*) AS count FROM tasks WHERE "companyId" = $1 AND status NOT IN ('done','completed','cancelled') GROUP BY priority`, [cid]
+      `SELECT COALESCE(priority, 'normal') AS priority, COUNT(*) AS count FROM tasks WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status NOT IN ('done','completed','cancelled') GROUP BY priority`, [cid]
     );
 
     const weeklyCompleted = await safeQuery(
-      `SELECT DATE("updatedAt") AS date, COUNT(*) AS count FROM tasks WHERE "companyId" = $1 AND status IN ('done','completed') AND "updatedAt" >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
+      `SELECT DATE("completedAt") AS date, COUNT(*) AS count FROM tasks WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('done','completed') AND "completedAt" >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
     );
 
     res.json({
@@ -320,13 +321,13 @@ router.get("/warehouse", async (req, res) => {
     const cid = scope.companyId;
 
     const [products, movements, lowStock] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COALESCE(SUM("currentQty"), 0) AS "totalQty", COALESCE(SUM("currentQty" * COALESCE("unitCost", 0)), 0) AS "totalValue" FROM warehouse_products WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COALESCE(SUM("currentStock"), 0) AS "totalQty", COALESCE(SUM("currentStock" * COALESCE("costPrice", 0)), 0) AS "totalValue" FROM warehouse_products WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE type = 'in') AS "inCount", COUNT(*) FILTER (WHERE type = 'out') AS "outCount", COALESCE(SUM(quantity) FILTER (WHERE type = 'in'), 0) AS "inQty", COALESCE(SUM(quantity) FILTER (WHERE type = 'out'), 0) AS "outQty" FROM warehouse_movements WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '30 days'`, [cid]),
-      sq1(`SELECT COUNT(*) AS count FROM warehouse_products WHERE "companyId" = $1 AND "currentQty" <= COALESCE("minQty", 0) AND "currentQty" >= 0`, [cid]),
+      sq1(`SELECT COUNT(*) AS count FROM warehouse_products WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "currentStock" <= COALESCE("minStock", 0) AND "currentStock" >= 0`, [cid]),
     ]);
 
     const categories = await safeQuery(
-      `SELECT wc.name, COUNT(wp.id) AS "productCount", COALESCE(SUM(wp."currentQty"), 0) AS "totalQty" FROM warehouse_categories wc LEFT JOIN warehouse_products wp ON wp."categoryId" = wc.id AND wp."companyId" = $1 WHERE wc."companyId" = $1 GROUP BY wc.id, wc.name ORDER BY "productCount" DESC LIMIT 10`, [cid]
+      `SELECT wc.name, COUNT(wp.id) AS "productCount", COALESCE(SUM(wp."currentStock"), 0) AS "totalQty" FROM warehouse_categories wc LEFT JOIN warehouse_products wp ON wp."categoryId" = wc.id AND wp."companyId" = $1 AND wp."deletedAt" IS NULL WHERE wc."companyId" = $1 GROUP BY wc.id, wc.name ORDER BY "productCount" DESC LIMIT 10`, [cid]
     );
 
     const recentMovements = await safeQuery(

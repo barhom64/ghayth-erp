@@ -1,6 +1,5 @@
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +10,7 @@ import { ScrollText, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { DatePicker } from "@/components/ui/date-picker";
-import { PaginationBar } from "@/components/data-table-wrapper";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const ACTION_LABELS: Record<string, string> = {
   create: "إنشاء",
@@ -57,14 +56,42 @@ export default function AdminLogsPage() {
   const logs = logsData?.data || [];
   const total = logsData?.total || 0;
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
   const filteredLogs = userSearch
     ? logs.filter((l: any) =>
         l.userName?.includes(userSearch) || l.entity?.includes(userSearch) || l.action?.includes(userSearch) || String(l.entityId)?.includes(userSearch)
       )
     : logs;
+
+  const logColumns: DataTableColumn<any>[] = [
+    {
+      key: "expand",
+      header: "",
+      width: "32px",
+      render: (r: any) => expandedId === r.id
+        ? <ChevronUp className="h-4 w-4 text-gray-400" />
+        : <ChevronDown className="h-4 w-4 text-gray-400" />,
+    },
+    { key: "userName", header: "المستخدم", sortable: true, render: (r: any) => <span className="font-medium">{r.userName || "النظام"}</span> },
+    {
+      key: "action",
+      header: "الإجراء",
+      sortable: true,
+      render: (r: any) => (
+        <Badge className={cn("text-[10px]",
+          r.action?.includes("create") ? "bg-green-100 text-green-700" :
+          r.action?.includes("delete") ? "bg-red-100 text-red-700" :
+          r.action?.includes("update") ? "bg-blue-100 text-blue-700" :
+          "bg-gray-100 text-gray-700"
+        )}>
+          {ACTION_LABELS[r.action] || r.action}
+        </Badge>
+      ),
+    },
+    { key: "entity", header: "الكيان", sortable: true, render: (r: any) => <span className="text-gray-500">{ENTITY_LABELS[r.entity] || r.entity}</span> },
+    { key: "entityId", header: "المعرّف", render: (r: any) => <span className="font-mono text-xs text-gray-400">#{r.entityId}</span> },
+    { key: "reason", header: "السبب", render: (r: any) => <span className="text-xs text-gray-500 max-w-[150px] truncate block">{r.reason || "-"}</span> },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (r: any) => <span className="text-xs text-gray-400">{r.createdAt ? formatDateAr(r.createdAt) : "-"}</span> },
+  ];
 
   const renderChanges = (log: any) => {
     const beforeData = log.before || log.beforeData;
@@ -206,79 +233,39 @@ export default function AdminLogsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center justify-between">
-            <span>سجلات المراجعة</span>
-            <Badge variant="outline" className="text-xs">{total} سجل</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-gray-50">
-                <th className="p-3 text-start w-8"></th>
-                <th className="p-3 text-start">المستخدم</th>
-                <th className="p-3 text-start">الإجراء</th>
-                <th className="p-3 text-start">الكيان</th>
-                <th className="p-3 text-start">المعرّف</th>
-                <th className="p-3 text-start">السبب</th>
-                <th className="p-3 text-start">التاريخ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredLogs.length === 0 ? (
-                <tr><td colSpan={7} className="p-8 text-center text-gray-400">
-                  <ScrollText className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                  لا توجد سجلات
-                </td></tr>
-              ) : (
-                filteredLogs.map((log: any) => (
-                  <Fragment key={log.id}>
-                    <tr
-                      className={cn("border-b hover:bg-gray-50 cursor-pointer transition-colors", expandedId === log.id && "bg-amber-50/50")}
-                      onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
-                    >
-                      <td className="p-3">
-                        {expandedId === log.id ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
-                      </td>
-                      <td className="p-3 font-medium">{log.userName || "النظام"}</td>
-                      <td className="p-3">
-                        <Badge className={cn("text-[10px]",
-                          log.action?.includes("create") ? "bg-green-100 text-green-700" :
-                          log.action?.includes("delete") ? "bg-red-100 text-red-700" :
-                          log.action?.includes("update") ? "bg-blue-100 text-blue-700" :
-                          "bg-gray-100 text-gray-700"
-                        )}>
-                          {ACTION_LABELS[log.action] || log.action}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-gray-500">{ENTITY_LABELS[log.entity] || log.entity}</td>
-                      <td className="p-3 font-mono text-xs text-gray-400">#{log.entityId}</td>
-                      <td className="p-3 text-xs text-gray-500 max-w-[150px] truncate">{log.reason || "-"}</td>
-                      <td className="p-3 text-xs text-gray-400">{log.createdAt ? formatDateAr(log.createdAt) : "-"}</td>
-                    </tr>
-                    {expandedId === log.id && (
-                      <tr>
-                        <td colSpan={7} className="p-4 bg-gray-50 border-b">
-                          <div className="space-y-3">
-                            <div className="flex flex-wrap gap-4 text-xs text-gray-500">
-                              {log.ipAddress && <span>IP: <code className="bg-white px-1 rounded">{log.ipAddress}</code></span>}
-                              {log.scope && <span>النطاق: <code className="bg-white px-1 rounded">{JSON.stringify(log.scope)}</code></span>}
-                            </div>
-                            {renderChanges(log)}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                ))
-              )}
-            </tbody>
-          </table>
-          <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
-        </CardContent>
-      </Card>
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-semibold">سجلات المراجعة</span>
+          <Badge variant="outline" className="text-xs">{total} سجل</Badge>
+        </div>
+        <DataTable
+          columns={logColumns}
+          data={filteredLogs}
+          isLoading={isLoading}
+          isError={isError}
+          onRetry={() => window.location.reload()}
+          noToolbar
+          emptyMessage="لا توجد سجلات"
+          emptyIcon={<ScrollText className="h-8 w-8 mx-auto mb-2 text-gray-300" />}
+          onRowClick={(r: any) => setExpandedId(expandedId === r.id ? null : r.id)}
+          rowClassName={(r: any) => expandedId === r.id ? "bg-amber-50/50" : undefined}
+          renderRowExtras={(r: any) => expandedId === r.id ? (
+            <div className="p-4 bg-gray-50 border-b">
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-4 text-xs text-gray-500">
+                  {r.ipAddress && <span>IP: <code className="bg-white px-1 rounded">{r.ipAddress}</code></span>}
+                  {r.scope && <span>النطاق: <code className="bg-white px-1 rounded">{JSON.stringify(r.scope)}</code></span>}
+                </div>
+                {renderChanges(r)}
+              </div>
+            </div>
+          ) : null}
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+        />
+      </div>
     </div>
   );
 }

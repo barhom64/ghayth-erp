@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 
 export default function DriversPage() {
+  const [, navigate] = useLocation();
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["drivers"], "/fleet/drivers");
   const items: any[] = data?.data || [];
   const [previewDriver, setPreviewDriver] = useState<any>(null);
@@ -130,6 +131,7 @@ export default function DriversPage() {
         searchPlaceholder="بحث بالاسم أو الهاتف أو الرخصة..."
         emptyMessage="لا يوجد سائقين"
         emptyIcon={<Users className="h-6 w-6 text-slate-400" />}
+        onRowClick={(row) => navigate(`/fleet/drivers/${row.id}`)}
         renderRowExtras={(d) => {
           if (editingId === d.id) {
             return (

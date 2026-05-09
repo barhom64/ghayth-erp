@@ -1,4 +1,5 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,12 +27,13 @@ const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
 ];
 
 export default function TrainingPage() {
+  const [, navigate] = useLocation();
   const { permissions } = useAppContext();
   const canManage = permissions.canManageEmployees;
   const [filters, setFilters] = useFilters();
-  const { data, isLoading, isError, refetch: refetchPrograms } = useApiQuery<any>(["training-programs"], "/training/programs");
-  const { data: statsData } = useApiQuery<any>(["training-stats"], "/training/stats");
-  const { data: enrollmentsData, refetch: refetchEnrollments } = useApiQuery<any>(["training-enrollments"], "/training/enrollments");
+  const { data, isLoading, isError, refetch: refetchPrograms } = useApiQuery<any>(["training-programs"], "/hr/training/programs");
+  const { data: statsData } = useApiQuery<any>(["training-stats"], "/hr/training/stats");
+  const { data: enrollmentsData, refetch: refetchEnrollments } = useApiQuery<any>(["training-enrollments"], "/hr/training/enrollments");
   const items = data?.data || [];
   const enrollments = enrollmentsData?.data || [];
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
@@ -48,7 +50,7 @@ export default function TrainingPage() {
   ];
 
   const programActions = useInlineActions({
-    endpoint: "/training/programs",
+    endpoint: "/hr/training/programs",
     queryKeys: [["training-programs"], ["training-stats"]],
     onSuccess: () => refetchPrograms(),
   });
@@ -62,7 +64,7 @@ export default function TrainingPage() {
   ];
 
   const enrollmentActions = useInlineActions({
-    endpoint: "/training/enrollments",
+    endpoint: "/hr/training/enrollments",
     queryKeys: [["training-enrollments"], ["training-stats"]],
     onSuccess: () => refetchEnrollments(),
   });
@@ -131,7 +133,7 @@ export default function TrainingPage() {
       />
 
       <BulkActionsBar
-        entityType="training_program"
+        entityType="training-program"
         items={filtered}
         selectedIds={selectedIds}
         onToggle={toggleSelect}
@@ -177,7 +179,7 @@ export default function TrainingPage() {
                   </div>
                   <div className="space-y-2 text-sm text-gray-500">
                     {t.trainer && <p>المدرب: <span className="text-gray-700">{t.trainer}</span></p>}
-                    {t.startDate && <p>التاريخ: {t.startDate} {t.endDate ? `— ${t.endDate}` : ""}</p>}
+                    {t.startDate && <p>التاريخ: {formatDateAr(t.startDate)} {t.endDate ? `— ${formatDateAr(t.endDate)}` : ""}</p>}
                     {t.location && <p>الموقع: {t.location}</p>}
                     <div className="flex items-center justify-between pt-2 border-t">
                       <span>المشاركين: {t.enrolled || t.currentParticipants || 0}/{t.capacity || t.maxParticipants || 0}</span>
@@ -207,6 +209,7 @@ export default function TrainingPage() {
             noToolbar
             emptyMessage="لا توجد تسجيلات"
             pageSize={20}
+            onRowClick={(row) => navigate(`/hr/training/${row.programId || row.id}`)}
             renderRowExtras={(e) => {
               if (enrollmentActions.editingId === e.id) {
                 return (

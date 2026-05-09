@@ -1,11 +1,9 @@
 import { handleRouteError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/", requirePermission("audit:read"), async (req, res) => {
   try {
@@ -15,7 +13,9 @@ router.get("/", requirePermission("audit:read"), async (req, res) => {
       page = "1", limit: lim = "50",
       dateFrom, dateTo,
     } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Number(lim) || 50;
+    const offset = (pageNum - 1) * perPage;
 
     const conditions = [`al."companyId" = $1`];
     const params: any[] = [scope.companyId];
@@ -29,12 +29,12 @@ router.get("/", requirePermission("audit:read"), async (req, res) => {
       const likeIdx = params.length;
       conditions.push(`(al.action = $${actionIdx} OR al.action LIKE $${likeIdx})`);
     }
-    if (userId) { params.push(Number(userId)); conditions.push(`al."userId" = $${params.length}`); }
+    if (userId) { params.push(Number(userId) || 0); conditions.push(`al."userId" = $${params.length}`); }
     if (dateFrom) { params.push(String(dateFrom)); conditions.push(`al."createdAt" >= $${params.length}::timestamptz`); }
     if (dateTo) { params.push(String(dateTo) + "T23:59:59Z"); conditions.push(`al."createdAt" <= $${params.length}::timestamptz`); }
 
     const where = conditions.join(" AND ");
-    params.push(Number(lim));
+    params.push(perPage);
     const limitIdx = params.length;
     params.push(offset);
     const offsetIdx = params.length;
@@ -60,7 +60,7 @@ router.get("/", requirePermission("audit:read"), async (req, res) => {
       countParams
     );
 
-    res.json({ data: rows, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
+    res.json({ data: rows, total: Number(countRow?.total ?? 0), page: pageNum, pageSize: perPage });
   } catch (err) {
     handleRouteError(err, res, "Get audit logs error:");
   }
@@ -70,7 +70,7 @@ router.get("/entities", requirePermission("audit:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT DISTINCT entity FROM audit_logs WHERE "companyId" = $1 ORDER BY entity`,
+      `SELECT DISTINCT entity FROM audit_logs WHERE "companyId" = $1 ORDER BY entity LIMIT 500`,
       [scope.companyId]
     );
     const entities = rows.map((r: any) => r.entity);

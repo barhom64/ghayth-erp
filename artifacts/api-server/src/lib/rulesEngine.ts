@@ -1,6 +1,7 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { createNotification, getManagerAssignmentId, getDirectorAssignmentId } from "./businessHelpers.js";
 import { eventBus, type EventPayload } from "./eventBus.js";
+import { logger } from "./logger.js";
 
 interface BusinessRule {
   id: number;
@@ -44,7 +45,7 @@ function evaluateCondition(fieldValue: any, operator: string, conditionValue: st
 }
 
 function interpolateTemplate(template: string, data: Record<string, any>): string {
-  return template.replace(/\{(\w+)\}/g, (_, key) => {
+  return template.replace(/\{\{?(\w+)\}?\}/g, (_, key) => {
     return data[key] !== undefined ? String(data[key]) : `{${key}}`;
   });
 }
@@ -86,10 +87,10 @@ async function getTargetAssignmentId(
         };
         const roles = roleMap[target] || ["owner"];
         const [asgn] = await rawQuery<any>(
-          `SELECT id FROM employee_assignments 
-           WHERE "companyId" = $1 AND role = ANY($2) AND status = 'active' 
-           ORDER BY CASE role WHEN '${roles[0]}' THEN 1 ELSE 2 END LIMIT 1`,
-          [companyId, roles]
+          `SELECT id FROM employee_assignments
+           WHERE "companyId" = $1 AND role = ANY($2) AND status = 'active'
+           ORDER BY CASE WHEN role = $3 THEN 1 ELSE 2 END LIMIT 1`,
+          [companyId, roles, roles[0]]
         );
         return asgn?.id ?? null;
       }
@@ -190,11 +191,11 @@ async function executeAction(
 
     case "set_sla": {
       if (payload.entityId) {
-        const slaHours = Number(config.slaHours) || 4;
+        const slaHours = Math.max(1, Math.min(Number(config.slaHours) || 4, 720));
         await rawExecute(
-          `UPDATE support_tickets SET "slaDeadline" = NOW() + INTERVAL '${slaHours} hours' WHERE id = $1`,
-          [payload.entityId]
-        ).catch(() => {});
+          `UPDATE support_tickets SET "slaDeadline" = NOW() + make_interval(hours => $2) WHERE id = $1 AND "companyId" = $3`,
+          [payload.entityId, slaHours, companyId]
+        ).catch((e) => logger.error(e, "[RulesEngine] SLA update failed:"));
         return `sla_set_${slaHours}h`;
       }
       return "no_entity_for_sla";
@@ -233,7 +234,7 @@ async function logRuleExecution(
       ]
     );
   } catch (err) {
-    console.error("[RulesEngine] Failed to log rule execution:", err);
+    logger.error(err, "[RulesEngine] Failed to log rule execution:");
   }
 }
 
@@ -264,21 +265,19 @@ export async function evaluateRulesForEvent(eventName: string, payload: EventPay
 
         const result = await executeAction(rule, payload, templateData);
         await logRuleExecution(rule, payload, result, "success");
-        console.log(`[RulesEngine] Rule "${rule.name}" fired: ${result}`);
+        logger.info({ ruleName: rule.name, result }, "Business rule fired");
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         await logRuleExecution(rule, payload, errMsg, "error");
-        console.error(`[RulesEngine] Rule "${rule.name}" failed:`, err);
+        logger.error(err, `[RulesEngine] Rule "${rule.name}" failed:`);
       }
     }
   } catch (err) {
-    console.error("[RulesEngine] Failed to evaluate rules:", err);
+    logger.error(err, "[RulesEngine] Failed to evaluate rules:");
   }
 }
 
 export function registerRulesEngineListener() {
-  eventBus.on("*" as any, async (payload: EventPayload) => {});
-
   const trackedEvents = [
     "attendance.checkin",
     "attendance.checkout",
@@ -318,5 +317,5 @@ export function registerRulesEngineListener() {
     });
   }
 
-  console.log("[RulesEngine] Business rules engine registered for", trackedEvents.length, "events");
+  logger.info({ eventCount: trackedEvents.length }, "Business rules engine registered");
 }

@@ -11,6 +11,7 @@ import { ShoppingCart, User, Phone, Mail, Calendar, Package, Copy } from "lucide
 import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { resolveStatus } from "@/components/page-status-badge";
 
 export default function PurchaseOrderDetailPage() {
   const [, params] = useRoute("/finance/purchase-orders/:id");
@@ -82,7 +83,7 @@ export default function PurchaseOrderDetailPage() {
           <CardHeader><CardTitle>إجراءات الاعتماد</CardTitle></CardHeader>
           <CardContent>
             <ApprovalActions
-              entityType="purchase_order"
+              entityType="purchase-order"
               entityId={Number(id)}
               approveEndpoint={`/finance/purchase-orders/${id}/approve`}
               rejectEndpoint={`/finance/purchase-orders/${id}/reject`}
@@ -99,7 +100,7 @@ export default function PurchaseOrderDetailPage() {
       <Card>
         <CardHeader><CardTitle>سجل الإجراءات</CardTitle></CardHeader>
         <CardContent>
-          <ActionHistory entityType="purchase_order" entityId={Number(id)} defaultOpen />
+          <ActionHistory entityType="purchase-order" entityId={Number(id)} defaultOpen />
         </CardContent>
       </Card>
 
@@ -134,11 +135,11 @@ export default function PurchaseOrderDetailPage() {
         subtitle={po?.supplierName || undefined}
         backPath="/finance/purchase-orders"
         backLabel="العودة"
-        status={po?.status ? { label: po.status } : undefined}
+        status={po?.status ? { label: resolveStatus(po.status, "purchase")?.label || po.status } : undefined}
         refNumber={po?.ref || (po ? `#${po.id}` : undefined)}
         createdAt={po?.createdAt}
         updatedAt={po?.updatedAt}
-        entityType="purchase_order"
+        entityType="purchase-order"
         entityId={id || ""}
         overview={overview}
         actions={actions}
@@ -168,7 +169,7 @@ export default function PurchaseOrderDetailPage() {
               </div>}
               <div className="info-item" style={{ display: "flex", gap: "4px" }}>
                 <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-                <span className="info-value" style={{ fontWeight: 600 }}>{po.status || "-"}</span>
+                <span className="info-value" style={{ fontWeight: 600 }}>{resolveStatus(po.status, "purchase")?.label || po.status || "-"}</span>
               </div>
               {po.expectedDelivery && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
                 <span className="info-label" style={{ color: "#555" }}>التسليم المتوقع:</span>
@@ -224,7 +225,7 @@ export default function PurchaseOrderDetailPage() {
                 </div>}
                 <div className="info-item" style={{ display: "flex", gap: "4px" }}>
                   <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-                  <span className="info-value" style={{ fontWeight: 600 }}>{po.status || "-"}</span>
+                  <span className="info-value" style={{ fontWeight: 600 }}>{resolveStatus(po.status, "purchase")?.label || po.status || "-"}</span>
                 </div>
                 {po.expectedDelivery && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
                   <span className="info-label" style={{ color: "#555" }}>التسليم المتوقع:</span>

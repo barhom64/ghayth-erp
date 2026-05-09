@@ -1,13 +1,13 @@
-import { handleRouteError, ValidationError, NotFoundError, ConflictError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError, parseId, zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { hashPassword } from "../lib/auth.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { logger } from "../lib/logger.js";
 
 const createClientSchema = z.object({
   name: z.string().min(1, "اسم العميل مطلوب"),
@@ -21,14 +21,39 @@ const createClientSchema = z.object({
   language: z.enum(["ar", "en"]).optional().default("ar"),
 });
 
+const updateClientSchema = z.object({
+  name: z.string().min(1).optional(),
+  phone: z.string().optional().nullable(),
+  email: z.string().email("البريد الإلكتروني غير صالح").optional().nullable(),
+  classification: z.enum(["regular", "vip", "prospect", "wholesale", "new", "inactive"]).optional(),
+  source: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  isBlacklisted: z.boolean().optional(),
+});
+
+const autoCreateClientSchema = z.object({
+  phone: z.string().min(1, "رقم الهاتف مطلوب"),
+  name: z.string().optional(),
+  source: z.string().optional().default("auto"),
+});
+
+const createPortalAccountSchema = z.object({
+  email: z.string().min(1, "البريد الإلكتروني مطلوب"),
+  password: z.string().min(1, "كلمة المرور مطلوبة"),
+});
+
+const updatePortalAccountSchema = z.object({
+  isActive: z.boolean().optional(),
+  password: z.string().optional(),
+});
+
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search = "", classification = "", page = "1", limit: lim = "20" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const offset = (Math.max(Number(page) || 1, 1) - 1) * (Number(lim) || 20);
 
     const filters = parseScopeFilters(req);
     if (search) { filters.search = String(search); filters.searchColumns = ['name', 'email', 'phone']; }
@@ -43,7 +68,7 @@ router.get("/", requirePermission("crm:read"), async (req, res) => {
       paramIdx++;
     }
 
-    params.push(Number(lim));
+    params.push(Number(lim) || 20);
     const limitParam = paramIdx++;
     params.push(offset);
     const offsetParam = paramIdx++;
@@ -73,8 +98,7 @@ router.get("/", requirePermission("crm:read"), async (req, res) => {
 router.post("/", requirePermission("crm:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createClientSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createClientSchema.safeParse(req.body));
     const {
       name,
       phone,
@@ -85,18 +109,38 @@ router.post("/", requirePermission("crm:create"), async (req, res) => {
       type,
       nationality,
       language,
-    } = parsed.data;
+    } = parsed;
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO clients (name, phone, email, classification, source, notes, "type", nationality, language, "companyId", "isBlacklisted")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false)`,
-      [String(name).trim(), phone ?? null, email ?? null, classification, source ?? null, notes ?? null, type, nationality ?? null, language, scope.companyId]
-    );
+    const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments : null;
+    let insertedId: number = 0;
+    await withTransaction(async (txClient: any) => {
+      if (email) {
+        const { rows: [emailExists] } = await txClient.query(
+          `SELECT id FROM clients WHERE email = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1 FOR UPDATE`,
+          [email, scope.companyId]
+        );
+        if (emailExists) throw new ConflictError("البريد الإلكتروني مستخدم لعميل آخر", { field: "email", fix: "استخدم بريداً إلكترونياً مختلفاً أو ابحث عن العميل الموجود" });
+      }
+      if (phone) {
+        const { rows: [phoneExists] } = await txClient.query(
+          `SELECT id FROM clients WHERE phone = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1 FOR UPDATE`,
+          [phone, scope.companyId]
+        );
+        if (phoneExists) throw new ConflictError("رقم الهاتف مستخدم لعميل آخر", { field: "phone", fix: "استخدم رقم هاتف مختلفاً أو ابحث عن العميل الموجود" });
+      }
+      const { rows: [newRow] } = await txClient.query(
+        `INSERT INTO clients (name, phone, email, classification, source, notes, "type", nationality, language, "companyId", "isBlacklisted", attachments)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11) RETURNING id`,
+        [String(name).trim(), phone ?? null, email ?? null, classification, source ?? null, notes ?? null, type, nationality ?? null, language, scope.companyId, attachments ? JSON.stringify(attachments) : null]
+      );
+      insertedId = newRow.id;
+    });
 
     const [client] = await rawQuery<any>(
-      `SELECT * FROM clients WHERE id = $1 AND "deletedAt" IS NULL`,
-      [insertId]
+      `SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [insertedId, scope.companyId]
     );
+    if (!client) throw new NotFoundError("فشل في استرجاع العميل");
 
     createAuditLog({
       companyId: scope.companyId,
@@ -104,13 +148,13 @@ router.post("/", requirePermission("crm:create"), async (req, res) => {
       userId: scope.userId,
       action: "create",
       entity: "clients",
-      entityId: insertId,
+      entityId: insertedId,
       after: { name, phone, email, classification, source },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "clients background task failed"));
 
-    createSubsidiaryAccountsForEntity(scope.companyId, "client", insertId, name).catch(console.error);
+    createSubsidiaryAccountsForEntity(scope.companyId, "client", insertedId, name).catch((e) => logger.error(e, "clients background task failed"));
 
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "clients", entityId: insertId, details: JSON.stringify({ name, phone, email, classification, source }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "clients", entityId: insertedId, details: JSON.stringify({ name, phone, email, classification, source }) }).catch((e) => logger.error(e, "clients background task failed"));
 
     res.status(201).json(client);
   } catch (err) {
@@ -121,11 +165,11 @@ router.post("/", requirePermission("crm:create"), async (req, res) => {
 router.get("/:id", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     const [client] = await rawQuery<any>(
       `SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
 
     if (!client) {
@@ -138,28 +182,28 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
          FROM invoices
          WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
-        [Number(id), scope.companyId]
+        [id, scope.companyId]
       ),
       rawQuery<any>(
         `SELECT id, title, stage, value, probability, "expectedCloseDate", status
          FROM crm_opportunities
-         WHERE "clientId" = $1 AND "companyId" = $2
+         WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
-        [Number(id), scope.companyId]
+        [id, scope.companyId]
       ),
       rawQuery<any>(
         `SELECT id, ref, title, status, priority, category, "createdAt"
          FROM support_tickets
-         WHERE "clientId" = $1 AND "companyId" = $2
+         WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
-        [Number(id), scope.companyId]
+        [id, scope.companyId]
       ),
       rawQuery<any>(
         `SELECT id, name, status, budget, progress, "startDate", "endDate"
          FROM projects
          WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
-        [Number(id), scope.companyId]
+        [id, scope.companyId]
       ),
       rawQuery<any>(
         `SELECT
@@ -171,7 +215,7 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
            COUNT(*) FILTER (WHERE status NOT IN ('paid','cancelled') AND "dueDate" < CURRENT_DATE) AS "overdueCount"
          FROM invoices
          WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-        [Number(id), scope.companyId]
+        [id, scope.companyId]
       ),
       rawQuery<any>(
         `SELECT wq.id, wq.phone, wq.message, wq.status, wq."createdAt", 'whatsapp' AS channel
@@ -180,37 +224,37 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
          UNION ALL
          SELECT sq.id, sq."recipientPhone" AS phone, sq.message, sq.status, sq."createdAt", 'sms' AS channel
          FROM sms_queue sq
-         WHERE sq."companyId" = $2
+         WHERE sq."clientId" = $1 AND sq."companyId" = $2
          ORDER BY "createdAt" DESC LIMIT 20`,
-        [Number(id), scope.companyId]
-      ).catch(() => []),
+        [id, scope.companyId]
+      ).catch((e) => { logger.error(e, "clients query failed"); return []; }),
       rawQuery<any>(
         `(SELECT 'invoice' AS type, ref AS ref, status, total::text AS detail, "createdAt"
           FROM invoices WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)
          UNION ALL
          (SELECT 'opportunity' AS type, title AS ref, stage AS status, value::text AS detail, "createdAt"
-          FROM crm_opportunities WHERE "clientId" = $1 AND "companyId" = $2)
+          FROM crm_opportunities WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)
          UNION ALL
          (SELECT 'ticket' AS type, ref, status, priority AS detail, "createdAt"
-          FROM support_tickets WHERE "clientId" = $1 AND "companyId" = $2)
+          FROM support_tickets WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)
          UNION ALL
          (SELECT 'project' AS type, name AS ref, status, progress::text AS detail, "createdAt"
           FROM projects WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)
          ORDER BY "createdAt" DESC LIMIT 50`,
-        [Number(id), scope.companyId]
+        [id, scope.companyId]
       ),
     ]);
 
     const activeServices = {
       activeContracts: await rawQuery<any>(
         `SELECT id, title, "endDate" FROM legal_contracts
-         WHERE "companyId" = $2 AND status = 'active'
+         WHERE "companyId" = $2 AND status = 'active' AND "deletedAt" IS NULL
            AND ("partyName" = $3 OR id IN (
-             SELECT "contractId" FROM rental_contracts WHERE "tenantName" = $3 AND "companyId" = $2
+             SELECT "contractId" FROM rental_contracts WHERE "tenantName" = $3 AND "companyId" = $2 AND "deletedAt" IS NULL
            ))
          LIMIT 10`,
-        [Number(id), scope.companyId, client.name]
-      ).catch(() => []),
+        [id, scope.companyId, client.name]
+      ).catch((e) => { logger.error(e, "clients query failed"); return []; }),
       activeProjects: projects.filter((p: any) => p.status === 'active'),
       openTickets: tickets.filter((t: any) => t.status === 'open' || t.status === 'in_progress'),
     };
@@ -231,17 +275,17 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
   }
 });
 
-router.patch("/:id", requirePermission("crm:write"), async (req, res) => {
+router.patch("/:id", requirePermission("crm:update"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!existing) { throw new NotFoundError("العميل غير موجود"); }
 
-    const b = req.body;
+    const b = zodParse(updateClientSchema.safeParse(req.body));
     const sets: string[] = [];
     const params: any[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name = $${params.length}`); }
@@ -252,12 +296,13 @@ router.patch("/:id", requirePermission("crm:write"), async (req, res) => {
     if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes = $${params.length}`); }
     if (b.isBlacklisted !== undefined) { params.push(b.isBlacklisted); sets.push(`"isBlacklisted" = $${params.length}`); }
     if (sets.length === 0) { res.json(existing); return; }
-    params.push(Number(id));
-    await rawExecute(`UPDATE clients SET ${sets.join(",")} WHERE id = $${params.length}`, params);
-    const [updated] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "deletedAt" IS NULL`, [Number(id)]);
+    params.push(id, scope.companyId);
+    await rawExecute(`UPDATE clients SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`, params);
+    const [updated] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!updated) throw new NotFoundError("العميل غير موجود");
 
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.updated", entity: "clients", entityId: Number(id), details: JSON.stringify({ name: b.name, phone: b.phone, email: b.email, classification: b.classification }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "clients", entityId: Number(id), after: { name: b.name, phone: b.phone, email: b.email, classification: b.classification } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.updated", entity: "clients", entityId: id, details: JSON.stringify({ name: b.name, phone: b.phone, email: b.email, classification: b.classification }) }).catch((e) => logger.error(e, "clients background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "clients", entityId: id, after: { name: b.name, phone: b.phone, email: b.email, classification: b.classification } }).catch((e) => logger.error(e, "clients background task failed"));
 
     res.json(updated);
   } catch (err) {
@@ -268,10 +313,8 @@ router.patch("/:id", requirePermission("crm:write"), async (req, res) => {
 router.post("/auto-create", requirePermission("crm:create"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { phone, name, source = "auto" } = req.body as any;
-    if (!phone) {
-      throw new ValidationError("رقم الهاتف مطلوب");
-    }
+    const b = zodParse(autoCreateClientSchema.safeParse(req.body ?? {}));
+    const { phone, name, source } = b;
 
     const existing = await rawQuery<any>(
       `SELECT * FROM clients WHERE phone = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
@@ -284,7 +327,7 @@ router.post("/auto-create", requirePermission("crm:create"), async (req, res) =>
     }
 
     const clientName = name || `عميل ${phone.slice(-4)}`;
-    const code = `CLT-${Date.now().toString(36).toUpperCase()}`;
+    const code = generateTimeRef("CLT");
 
     const { insertId } = await rawExecute(
       `INSERT INTO clients (name, phone, classification, source, code, "companyId", "isBlacklisted")
@@ -292,7 +335,8 @@ router.post("/auto-create", requirePermission("crm:create"), async (req, res) =>
       [clientName, phone, source, code, scope.companyId]
     );
 
-    const [newClient] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "deletedAt" IS NULL`, [insertId]);
+    const [newClient] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    if (!newClient) throw new NotFoundError("فشل في استرجاع العميل");
 
     createAuditLog({
       companyId: scope.companyId,
@@ -302,9 +346,9 @@ router.post("/auto-create", requirePermission("crm:create"), async (req, res) =>
       entity: "clients",
       entityId: insertId,
       after: { name: clientName, phone, source, classification: "prospect", code },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "clients background task failed"));
 
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "clients", entityId: insertId, details: JSON.stringify({ name: clientName, phone, source }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "clients", entityId: insertId, details: JSON.stringify({ name: clientName, phone, source }) }).catch((e) => logger.error(e, "clients background task failed"));
 
     res.status(201).json({ ...newClient, isNew: true });
   } catch (err) {
@@ -315,16 +359,35 @@ router.post("/auto-create", requirePermission("crm:create"), async (req, res) =>
 router.delete("/:id", requirePermission("crm:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!existing) { throw new NotFoundError("العميل غير موجود"); }
-    await rawExecute(`UPDATE clients SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [Number(id), scope.companyId]);
 
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.deleted", entity: "clients", entityId: Number(id), details: JSON.stringify({ id: Number(id) }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delete", entity: "clients", entityId: Number(id) }).catch(console.error);
+    const [deps] = await rawQuery<any>(
+      `SELECT
+        (SELECT COUNT(*)::int FROM invoices WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status NOT IN ('cancelled','closed')) AS invoices,
+        (SELECT COUNT(*)::int FROM crm_opportunities WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND stage NOT IN ('closed_won','closed_lost')) AS opportunities,
+        (SELECT COUNT(*)::int FROM support_tickets WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status NOT IN ('closed','resolved')) AS tickets`,
+      [id, scope.companyId]
+    );
+    const blocking = [];
+    if (deps?.invoices > 0) blocking.push(`${deps.invoices} فاتورة نشطة`);
+    if (deps?.opportunities > 0) blocking.push(`${deps.opportunities} فرصة مفتوحة`);
+    if (deps?.tickets > 0) blocking.push(`${deps.tickets} تذكرة مفتوحة`);
+    if (blocking.length > 0) {
+      throw new ConflictError(
+        `لا يمكن حذف العميل — يوجد سجلات مرتبطة: ${blocking.join("، ")}`,
+        { field: "id", fix: "أغلق أو ألغِ السجلات المرتبطة أولاً" }
+      );
+    }
+
+    await rawExecute(`UPDATE clients SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.deleted", entity: "clients", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "clients background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delete", entity: "clients", entityId: id }).catch((e) => logger.error(e, "clients background task failed"));
 
     res.json({ message: "تم حذف العميل بنجاح" });
   } catch (err) {
@@ -335,17 +398,17 @@ router.delete("/:id", requirePermission("crm:delete"), async (req, res) => {
 router.get("/:id/portal-account", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!existing) { throw new NotFoundError("العميل غير موجود"); }
     const [account] = await rawQuery<any>(
       `SELECT id, email, "isActive", "mustChangePassword", "lastLoginAt", "createdAt"
        FROM client_portal_accounts
        WHERE "clientId" = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     res.json({ account: account || null });
   } catch (err) {
@@ -356,8 +419,9 @@ router.get("/:id/portal-account", requirePermission("crm:read"), async (req, res
 router.post("/:id/portal-account", requirePermission("crm:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
-    const { email: rawEmail, password } = req.body as { email: string; password: string };
+    const id = parseId(req.params.id, "id");
+    const b2 = zodParse(createPortalAccountSchema.safeParse(req.body ?? {}));
+    const { email: rawEmail, password } = b2;
 
     if (!rawEmail || !password) {
       throw new ValidationError("البريد الإلكتروني وكلمة المرور مطلوبان");
@@ -369,21 +433,21 @@ router.post("/:id/portal-account", requirePermission("crm:write"), async (req, r
 
     const [client] = await rawQuery<any>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!client) { throw new NotFoundError("العميل غير موجود"); }
 
     const [existing] = await rawQuery<any>(
       `SELECT id FROM client_portal_accounts WHERE "clientId" = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (existing) {
       throw new ConflictError("يوجد حساب بوابة لهذا العميل مسبقاً");
     }
 
     const [emailTaken] = await rawQuery<any>(
-      `SELECT id FROM client_portal_accounts WHERE email = $1`,
-      [email]
+      `SELECT id FROM client_portal_accounts WHERE email = $1 AND "companyId" = $2`,
+      [email, scope.companyId]
     );
     if (emailTaken) {
       throw new ConflictError("هذا البريد الإلكتروني مستخدم بالفعل في بوابة العملاء");
@@ -393,14 +457,14 @@ router.post("/:id/portal-account", requirePermission("crm:write"), async (req, r
     const { insertId } = await rawExecute(
       `INSERT INTO client_portal_accounts ("clientId", "companyId", email, "passwordHash", "isActive", "mustChangePassword")
        VALUES ($1, $2, $3, $4, true, true)`,
-      [Number(id), scope.companyId, email, passwordHash]
+      [id, scope.companyId, email, passwordHash]
     );
     const [account] = await rawQuery<any>(
-      `SELECT id, email, "isActive", "mustChangePassword", "createdAt" FROM client_portal_accounts WHERE id = $1`,
-      [insertId]
+      `SELECT id, email, "isActive", "mustChangePassword", "createdAt" FROM client_portal_accounts WHERE id = $1 AND "companyId" = $2`,
+      [insertId, scope.companyId]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "client_portal_accounts", entityId: insertId, details: JSON.stringify({ clientId: Number(id), email }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "client_portal_accounts", entityId: insertId, after: { clientId: Number(id), email } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "client_portal_accounts", entityId: insertId, details: JSON.stringify({ clientId: id, email }) }).catch((e) => logger.error(e, "clients background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "client_portal_accounts", entityId: insertId, after: { clientId: id, email } }).catch((e) => logger.error(e, "clients background task failed"));
 
     res.status(201).json({ account });
   } catch (err) {
@@ -411,14 +475,15 @@ router.post("/:id/portal-account", requirePermission("crm:write"), async (req, r
 router.patch("/:id/portal-account", requirePermission("crm:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
-    const { isActive, password } = req.body as { isActive?: boolean; password?: string };
+    const id = parseId(req.params.id, "id");
+    const b3 = zodParse(updatePortalAccountSchema.safeParse(req.body ?? {}));
+    const { isActive, password } = b3;
 
     const [account] = await rawQuery<any>(
       `SELECT cpa.id FROM client_portal_accounts cpa
        JOIN clients c ON c.id = cpa."clientId"
        WHERE cpa."clientId" = $1 AND cpa."companyId" = $2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!account) { throw new NotFoundError("حساب البوابة غير موجود"); }
 
@@ -444,15 +509,15 @@ router.patch("/:id/portal-account", requirePermission("crm:write"), async (req, 
     sets.push(`"updatedAt" = NOW()`);
     params.push(account.id);
     await rawExecute(
-      `UPDATE client_portal_accounts SET ${sets.join(",")} WHERE id = $${params.length}`,
-      params
+      `UPDATE client_portal_accounts SET ${sets.join(",")} WHERE id = $${params.length} AND "companyId" = $${params.length + 1}`,
+      [...params, scope.companyId]
     );
     const [updated] = await rawQuery<any>(
-      `SELECT id, email, "isActive", "mustChangePassword", "lastLoginAt", "createdAt" FROM client_portal_accounts WHERE id = $1`,
-      [account.id]
+      `SELECT id, email, "isActive", "mustChangePassword", "lastLoginAt", "createdAt" FROM client_portal_accounts WHERE id = $1 AND "companyId" = $2`,
+      [account.id, scope.companyId]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.updated", entity: "client_portal_accounts", entityId: account.id, details: JSON.stringify({ clientId: Number(id), isActive }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "client_portal_accounts", entityId: account.id, after: { clientId: Number(id), isActive, passwordChanged: !!password } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.updated", entity: "client_portal_accounts", entityId: account.id, details: JSON.stringify({ clientId: id, isActive }) }).catch((e) => logger.error(e, "clients background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "client_portal_accounts", entityId: account.id, after: { clientId: id, isActive, passwordChanged: !!password } }).catch((e) => logger.error(e, "clients background task failed"));
 
     res.json({ account: updated });
   } catch (err) {

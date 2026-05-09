@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { UnifiedDateInput, type DateInputVariant, type DateInputMode } from "@/components/ui/unified-date-input";
 import { cn } from "@/lib/utils";
 
 /**
@@ -66,6 +67,7 @@ interface TextFieldProps {
   placeholder?: string;
   dir?: "ltr" | "rtl";
   type?: string;
+  inputMode?: "text" | "tel" | "email" | "url" | "numeric" | "decimal" | "search" | "none";
   disabled?: boolean;
   hint?: ReactNode;
   className?: string;
@@ -82,6 +84,7 @@ export function TextField({
   placeholder,
   dir,
   type = "text",
+  inputMode,
   disabled,
   hint,
   className,
@@ -100,6 +103,7 @@ export function TextField({
       <Input
         id={id}
         type={type}
+        inputMode={inputMode}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
@@ -202,6 +206,73 @@ export function NumberField({
         step={step}
         disabled={disabled}
         className={fieldErrorClass(error)}
+      />
+    </FormFieldWrapper>
+  );
+}
+
+interface DateFieldProps {
+  label: string;
+  value: string;
+  onChange: (iso: string) => void;
+  error?: string;
+  required?: boolean;
+  placeholder?: string;
+  disabled?: boolean;
+  hint?: ReactNode;
+  className?: string;
+  id?: string;
+  variant?: DateInputVariant;
+  mode?: DateInputMode;
+  minDate?: string;
+  maxDate?: string;
+  noFuture?: boolean;
+  noPast?: boolean;
+}
+
+export function DateField({
+  label,
+  value,
+  onChange,
+  error,
+  required,
+  placeholder,
+  disabled,
+  hint,
+  className,
+  id,
+  variant = "default",
+  mode,
+  minDate,
+  maxDate,
+  noFuture,
+  noPast,
+}: DateFieldProps) {
+  return (
+    <FormFieldWrapper
+      label={label}
+      required={required}
+      error={error}
+      hint={hint}
+      className={className}
+      htmlFor={id}
+    >
+      <UnifiedDateInput
+        id={id}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        disabled={disabled}
+        variant={variant}
+        mode={mode}
+        required={required}
+        minDate={minDate}
+        maxDate={maxDate}
+        noFuture={noFuture}
+        noPast={noPast}
+        externalError={error}
+        showDualCalendar
+        showPresets
       />
     </FormFieldWrapper>
   );

@@ -8,6 +8,7 @@ import {
   useForm,
   FormProvider,
   useFormContext,
+  Controller,
   type DefaultValues,
   type FieldValues,
   type Path,
@@ -19,6 +20,7 @@ import type { ZodType } from "zod";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/lib/api";
@@ -173,6 +175,7 @@ export function FormShell<TSchema extends FieldValues>({
             variant={submitVariant}
             disabled={disabled || submitting}
             className="min-w-[7rem]"
+            rateLimitAware
           >
             {submitting ? "جارٍ الحفظ..." : submitLabel}
           </Button>
@@ -278,8 +281,39 @@ export function FormNumberField(
   return <FormTextField {...props} type="number" inputMode="numeric" />;
 }
 
-export function FormDateField(props: Omit<FormTextFieldProps, "type">) {
-  return <FormTextField {...props} type="date" />;
+export function FormDateField({
+  name,
+  label,
+  description,
+  required,
+  className,
+  disabled,
+}: Omit<FormTextFieldProps, "type" | "placeholder" | "autoComplete" | "inputMode">) {
+  const { control } = useFormContext();
+  return (
+    <FieldWrapper
+      name={name}
+      label={label}
+      description={description}
+      required={required}
+      className={className}
+    >
+      <Controller
+        name={name}
+        control={control}
+        render={({ field }) => (
+          <UnifiedDateInput
+            value={field.value ?? ""}
+            onChange={field.onChange}
+            disabled={disabled}
+            required={required}
+            showDualCalendar
+            showPresets
+          />
+        )}
+      />
+    </FieldWrapper>
+  );
 }
 
 export interface FormTextareaFieldProps extends BaseFieldProps {

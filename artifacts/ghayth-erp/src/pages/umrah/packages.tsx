@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +55,7 @@ const emptyForm: PackageForm = {
 const BoolIcon = ({ v }: { v?: boolean }) => v ? <Check className="h-4 w-4 text-green-600 mx-auto" /> : <X className="h-4 w-4 text-gray-300 mx-auto" />;
 
 export default function UmrahPackages() {
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const packagesQ = useApiQuery<any>(["umrah-packages"], "/umrah/packages");
   const seasonsQ = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
@@ -156,7 +158,7 @@ export default function UmrahPackages() {
         <p className="text-muted-foreground">إدارة باقات العمرة والأسعار والتفاصيل</p>
         <Button onClick={openCreate}><Plus className="h-4 w-4 ml-2" />إضافة باقة</Button>
       </div>
-      <DataTable columns={columns} data={rows} isLoading={packagesQ.isLoading} isError={packagesQ.isError} error={packagesQ.error} />
+      <DataTable columns={columns} data={rows} isLoading={packagesQ.isLoading} isError={packagesQ.isError} error={packagesQ.error} onRowClick={(row) => navigate(`/umrah/packages/${row.id}`)} />
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && closeDialog()}>
         <DialogContent className="max-w-lg">
@@ -216,7 +218,7 @@ export default function UmrahPackages() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog}>إلغاء</Button>
-            <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending || updateMut.isPending}>
+            <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending || updateMut.isPending} rateLimitAware>
               {createMut.isPending || updateMut.isPending ? "جاري الحفظ..." : isNew ? "إنشاء" : "حفظ"}
             </Button>
           </DialogFooter>

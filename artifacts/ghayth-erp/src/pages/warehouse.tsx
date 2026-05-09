@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,7 @@ export default function Warehouse() {
 }
 
 function ProductsTab() {
+  const [, navigate] = useLocation();
   const { roleLevel, scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
   const { data: stats } = useApiQuery<any>(["warehouse-stats", scopeQueryString], `/warehouse/stats${scopeQueryString ? `?${scopeQueryString}` : ""}`);
@@ -171,9 +172,10 @@ function ProductsTab() {
             page={page}
             pageSize={pageSize}
             onPageChange={setPage}
+            onRowClick={(row) => navigate(`/warehouse/products/${row.id}`)}
             renderRowExtras={(p) => {
               if (editingId === p.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(p.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
-              if (deletingId === p.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.name} entityType="warehouse_product" entityId={p.id} />;
+              if (deletingId === p.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.name} entityType="warehouse-product" entityId={p.id} />;
               return null;
             }}
           />
@@ -263,6 +265,7 @@ function MovementsTab() {
 }
 
 function CategoriesTab() {
+  const [, navigate] = useLocation();
   const { data: categoriesResp, isLoading, isError, error, refetch } = useApiQuery<any>(["warehouse-categories"], "/warehouse/categories");
   const categories = asList(categoriesResp);
   const [filters, setFilters] = useFilters();
@@ -308,6 +311,7 @@ function CategoriesTab() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(c) => navigate(`/warehouse/categories/${c.id}`)}
             emptyMessage="لا توجد تصنيفات"
             emptyIcon={<Layers className="h-6 w-6 text-slate-400" />}
             noToolbar
@@ -320,6 +324,7 @@ function CategoriesTab() {
 }
 
 function SuppliersTab() {
+  const [, navigate] = useLocation();
   const { data: suppliersResp, isLoading, isError, error, refetch } = useApiQuery<any>(["warehouse-suppliers"], "/warehouse/suppliers");
   const suppliers = asList(suppliersResp);
   const [filters, setFilters] = useFilters();
@@ -376,6 +381,7 @@ function SuppliersTab() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(s) => navigate(`/warehouse/suppliers/${s.id}`)}
             emptyMessage="لا يوجد موردون"
             emptyIcon={<Truck className="h-6 w-6 text-slate-400" />}
             noToolbar

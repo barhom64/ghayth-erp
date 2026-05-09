@@ -167,9 +167,11 @@ export default function ExpensesCreate() {
   const { data: vehiclesData } = useApiQuery<{ data: any[] }>(["fleet-vehicles"], "/fleet/vehicles");
   const { data: suppliersData } = useApiQuery<{ data: any[] }>(["suppliers-list"], "/warehouse/suppliers");
 
+  const { data: projectsData } = useApiQuery<{ data: any[] }>(["projects-list"], "/projects");
   const { data: contractsData } = useApiQuery<{ data: any[] }>(["contracts-list"], "/properties/contracts");
   const { data: unitsData } = useApiQuery<{ data: any[] }>(["units-list"], "/properties/units");
   const { data: legalCasesData } = useApiQuery<{ data: any[] }>(["legal-cases-list"], "/legal/cases");
+  const projects = projectsData?.data || [];
   const accounts = accountsData?.data || [];
   const expenseAccounts = accounts.filter((a: any) => a.type === "expense" || a.code?.startsWith("5"));
   // خزائن وبنوك فقط (11xx = نقد، 12xx = بنوك) — لتفادي اختيار حسابات مدينة/ذمم عن طريق الخطأ
@@ -440,7 +442,11 @@ export default function ExpensesCreate() {
             />
             <ProjectSelect
               value={form.projectId}
-              onChange={(v) => setForm({ ...form, projectId: v })}
+              onChange={(v) => {
+                const proj = projects.find((p: any) => String(p.id) === v);
+                const costCenter = proj ? `مشروع-${proj.name || proj.title}` : form.costCenter;
+                setForm({ ...form, projectId: v, costCenter });
+              }}
               label="المشروع المرتبط"
             />
             <FormFieldWrapper label="نوع الجهة المرتبطة">
@@ -738,7 +744,7 @@ export default function ExpensesCreate() {
 
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/finance/expenses")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={createMut.isPending}>
+          <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
             {createMut.isPending ? "جاري الحفظ..." : "حفظ المصروف"}
           </Button>
         </div>

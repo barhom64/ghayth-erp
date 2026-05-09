@@ -54,3 +54,17 @@ artifacts/api-server/.env
 
 # Local sandbox .env
 artifacts/api-server/.env
+
+# Ghayth ERP — generated audit outputs (re-runnable, not source)
+audit/inventory.json
+audit/all-routes.txt
+audit/api-smoke-results.json
+audit/report/*.csv
+audit/report/*.txt
+# Keep these tracked: audit/*.mjs scripts and the README
+
+# Stale FE inventory files (regenerable)
+/existing_components.txt
+/existing_pages.txt
+/imported_components.txt
+/imported_pages.txt

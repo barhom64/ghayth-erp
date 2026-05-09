@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -15,6 +15,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 
 
 export default function PerformancePage() {
+  const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
   const { data, isLoading, isError } = useApiQuery<any>(["performance"], "/hr/performance");
   const items = data?.data || [];
@@ -128,6 +129,7 @@ export default function PerformancePage() {
         noToolbar
         emptyMessage="لا توجد تقييمات"
         pageSize={20}
+        onRowClick={(row) => navigate(`/hr/performance/${row.id}`)}
       />
     </PageShell>
   );

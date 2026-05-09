@@ -1,17 +1,21 @@
-import { handleRouteError, ValidationError, ForbiddenError, NotFoundError, ConflictError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, ForbiddenError, NotFoundError, ConflictError,
+  parseId,
+  zodParse,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, pool } from "../lib/rawdb.js";
 import { hashPassword } from "../lib/auth.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
-import rateLimit from "express-rate-limit";
+import { logger } from "../lib/logger.js";
+import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
+import { getRedisRateLimitStatus } from "../lib/rateLimitStore.js";
 import { integrationService } from "../lib/integrationService.js";
 import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
-import crypto from "crypto";
+import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
+import crypto from "node:crypto";
+import { ADMIN_ROLES } from "../lib/rbacCatalog.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 const createUserSchema = z.object({
   email: z.string().min(1, "البريد الإلكتروني مطلوب"),
@@ -30,23 +34,69 @@ const createRoleSchema = z.object({
   permissions: z.array(z.string()).optional(),
 });
 
+const updateUserSchema = z.object({
+  isActive: z.boolean().optional(),
+  role: z.string().min(1).optional(),
+  employeeId: z.coerce.number().int().positive().optional().nullable(),
+});
+
+const createUserRoleSchema = z.object({
+  userId: z.coerce.number().int().positive("userId مطلوب"),
+  roleKey: z.string().min(1, "roleKey مطلوب"),
+});
+
+const createRolePermissionSchema = z.object({
+  role: z.string().min(1, "role مطلوب"),
+  permission: z.string().min(1, "permission مطلوب"),
+});
+
+const bulkRolePermissionsSchema = z.object({
+  role: z.string().min(1, "role مطلوب"),
+  permissions: z.array(z.string().min(1)).min(0),
+});
+
 const createIntegrationSchema = z.object({
   name: z.string().min(1, "اسم التكامل مطلوب"),
-  type: z.string().min(1, "نوع التكامل مطلوب"),
+  type: z.enum(["email", "sms", "whatsapp", "webhook"]),
   config: z.any().optional(),
   enabled: z.boolean().optional(),
+  status: z.enum(["active", "inactive", "error"]).optional(),
+  maxRetries: z.coerce.number().int().min(0).optional(),
 });
 
-const resetPasswordLimiter = rateLimit({
+const createCustomRoleSchema = z.object({
+  roleKey: z.string().min(1, "roleKey مطلوب").regex(/^[a-z_]+$/, "roleKey يجب أن يحتوي على أحرف إنجليزية صغيرة وشرطات سفلية فقط"),
+  label: z.string().min(1, "label مطلوب"),
+  level: z.coerce.number().int().min(1).max(99).optional().default(10),
+  modules: z.array(z.string()).optional().default([]),
+  permissions: z.array(z.string()).optional(),
+});
+
+const updateIntegrationSchema = z.object({
+  name: z.string().min(1, "اسم التكامل مطلوب").optional(),
+  type: z.enum(["email", "sms", "whatsapp", "webhook"]).optional(),
+  config: z.any().optional(),
+  status: z.enum(["active", "inactive", "error"]).optional(),
+  maxRetries: z.coerce.number().int().min(0).optional(),
+});
+
+const testIntegrationSchema = z.object({
+  testRecipient: z.string().optional(),
+});
+
+// Per-user limiter for admin password resets. The /admin router is mounted
+// after authMiddleware in routes/index.ts (and gated by requireMinLevel(90)),
+// so req.scope is always set here. Owner/admin roles are NOT exempted because
+// this is the admin endpoint itself — the cap is a per-actor safety net
+// against a runaway script, not against admins as a class.
+const resetPasswordLimiter = createPerUserLimiter({
+  prefix: "admin:reset-pw",
   windowMs: 60 * 1000,
   max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "تم تجاوز الحد الأقصى لمحاولات إعادة تعيين كلمة المرور. يرجى المحاولة بعد دقيقة" },
-  validate: { ip: false, trustProxy: false },
+  message: "تم تجاوز الحد الأقصى لمحاولات إعادة تعيين كلمة المرور. يرجى المحاولة بعد دقيقة",
+  skip: () => false,
 });
 
-const ADMIN_ROLES = ["owner", "admin", "general_manager"];
 const ADMIN_ROLE_LEVEL = 90;
 
 async function assertAdmin(req: any): Promise<void> {
@@ -60,7 +110,7 @@ async function assertAdmin(req: any): Promise<void> {
       [scope.userId, scope.companyId]
     );
     if (rows.length > 0 && rows[0].level >= ADMIN_ROLE_LEVEL) return;
-  } catch {}
+  } catch (e) { logger.error(e, "assertAdmin role-level query failed"); }
   if (ADMIN_ROLES.includes(scope.role)) return;
   throw new ForbiddenError("غير مصرح: صلاحيات المسؤول مطلوبة");
 }
@@ -90,20 +140,18 @@ router.get("/users", requirePermission("admin:read"), async (req, res) => {
       WHERE ea."companyId" = $1
          OR u.id IN (SELECT "userId" FROM user_roles WHERE "companyId" = $1)
       ORDER BY u."createdAt" DESC
+      LIMIT 500
     `, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (e: any) { console.error("Get users error:", e); handleRouteError(e, res, "خطأ غير متوقع"); }
+  } catch (e: any) { logger.error(e, "Get users error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
 router.post("/users", requirePermission("admin:write"), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const parsed = createUserSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    }
-    const { email, role, password, employeeId } = parsed.data;
+    const parsed = zodParse(createUserSchema.safeParse(req.body));
+    const { email, role, password, employeeId } = parsed;
     if (employeeId) {
       const [empCheck] = await rawQuery(
         `SELECT 1 FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 LIMIT 1`,
@@ -114,26 +162,31 @@ router.post("/users", requirePermission("admin:write"), async (req, res) => {
     const isAutoGenerated = !password;
     const tempPassword = password || crypto.randomBytes(16).toString('hex');
     const hashed = await hashPassword(tempPassword);
-    const r = await rawExecute(
-      `INSERT INTO users (email, "passwordHash", role, "employeeId", "isActive") VALUES ($1,$2,$3,$4,true)`,
-      [email, hashed, role || "employee", employeeId || null]
-    );
-    const newUserId = r.insertId;
-    const assignedRole = role || "employee";
-    const roleDef = PREDEFINED_ROLES.find(r => r.roleKey === assignedRole) || { roleKey: assignedRole, label: assignedRole, modules: [], level: 10 };
-    const customRoleDef = await rawQuery<any>(
-      `SELECT label, level, modules FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2 LIMIT 1`,
-      [scope.companyId, assignedRole]
-    ).then(rows => rows[0]).catch(() => null);
-    const finalDef = customRoleDef
-      ? { roleKey: assignedRole, label: customRoleDef.label, level: customRoleDef.level, modules: Array.isArray(customRoleDef.modules) ? customRoleDef.modules : JSON.parse(customRoleDef.modules || "[]") }
-      : roleDef;
-    await rawExecute(
-      `INSERT INTO user_roles ("userId","roleKey",label,level,modules,"companyId","createdAt")
-       VALUES ($1,$2,$3,$4,$5,$6,NOW())
-       ON CONFLICT ("userId","roleKey","companyId") DO UPDATE SET label=EXCLUDED.label, level=EXCLUDED.level, modules=EXCLUDED.modules`,
-      [newUserId, finalDef.roleKey, finalDef.label, finalDef.level, JSON.stringify(finalDef.modules), scope.companyId]
-    ).catch(() => {});
+    const newUserId = await withTransaction(async (tx) => {
+      const userRes = await tx.query(
+        `INSERT INTO users (email, "passwordHash", role, "employeeId", "isActive") VALUES ($1,$2,$3,$4,true) RETURNING id`,
+        [email, hashed, role || "employee", employeeId || null]
+      );
+      const userId = userRes.rows[0].id;
+      const assignedRole = role || "employee";
+      const roleDef = PREDEFINED_ROLES.find(r => r.roleKey === assignedRole) || { roleKey: assignedRole, label: assignedRole, modules: [], level: 10 };
+      const customRoleRes = await tx.query(
+        `SELECT label, level, modules FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2 LIMIT 1`,
+        [scope.companyId, assignedRole]
+      );
+      const customRoleDef = customRoleRes.rows[0];
+      const finalDef = customRoleDef
+        ? { roleKey: assignedRole, label: customRoleDef.label, level: customRoleDef.level, modules: Array.isArray(customRoleDef.modules) ? customRoleDef.modules : JSON.parse(customRoleDef.modules || "[]") }
+        : roleDef;
+      await tx.query(
+        `INSERT INTO user_roles ("userId","roleKey",label,level,modules,"companyId","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,NOW())
+         ON CONFLICT ("userId","roleKey","companyId") DO UPDATE SET label=EXCLUDED.label, level=EXCLUDED.level, modules=EXCLUDED.modules`,
+        [userId, finalDef.roleKey, finalDef.label, finalDef.level, JSON.stringify(finalDef.modules), scope.companyId]
+      );
+      return userId;
+    });
+    const r = { insertId: newUserId };
     if (isAutoGenerated) {
       rawExecute(
         `INSERT INTO email_queue ("companyId","toEmail","recipientName",subject,body,status,"createdAt","refType","refId")
@@ -146,13 +199,13 @@ router.post("/users", requirePermission("admin:write"), async (req, res) => {
           `مرحباً،\n\nتم إنشاء حساب لك في نظام غيث ERP.\n\nالبريد الإلكتروني: ${email}\nكلمة المرور المؤقتة: ${tempPassword}\n\nيرجى تغيير كلمة المرور فور تسجيل الدخول الأول.\n\nهذه الرسالة تلقائية، يرجى عدم الرد عليها.`,
           r.insertId,
         ]
-      ).catch((err) => console.error("Failed to queue welcome email:", err));
+      ).catch((err) => logger.error(err, "Failed to queue welcome email"));
     }
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "create", entity: "users", entityId: r.insertId,
       after: { email, role: role || "employee", employeeId: employeeId || null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -160,7 +213,7 @@ router.post("/users", requirePermission("admin:write"), async (req, res) => {
       entity: "users",
       entityId: r.insertId,
       details: JSON.stringify({ email, role: role || "employee" }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     res.status(201).json({
       id: r.insertId,
       email,
@@ -169,14 +222,14 @@ router.post("/users", requirePermission("admin:write"), async (req, res) => {
         ? "تم إنشاء الحساب. كلمة المرور المؤقتة قُيِّدت في قائمة الإيميلات للإرسال."
         : "تم إنشاء الحساب بنجاح.",
     });
-  } catch (e: any) { console.error("Create user error:", e); handleRouteError(e, res, "خطأ غير متوقع"); }
+  } catch (e: any) { logger.error(e, "Create user error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
 router.patch("/users/:id", requirePermission("admin:write"), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [userBelongs] = await rawQuery(
       `SELECT 1 FROM users u
        LEFT JOIN employees e ON e.id = u."employeeId"
@@ -188,7 +241,7 @@ router.patch("/users/:id", requirePermission("admin:write"), async (req, res) =>
       [id, scope.companyId]
     );
     if (!userBelongs) { throw new ForbiddenError("المستخدم لا ينتمي لشركتك"); }
-    const { isActive, role, employeeId } = req.body;
+    const { isActive, role, employeeId } = zodParse(updateUserSchema.safeParse(req.body));
     if (employeeId) {
       const [empCheck] = await rawQuery(
         `SELECT 1 FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 LIMIT 1`,
@@ -204,12 +257,16 @@ router.patch("/users/:id", requirePermission("admin:write"), async (req, res) =>
     if (!sets.length) { throw new ValidationError("لا توجد بيانات للتحديث"); }
     params.push(id);
     await rawExecute(`UPDATE users SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    // Revoke all refresh tokens when user is deactivated
+    if (isActive === false) {
+      await rawExecute(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`, [id]);
+    }
     if (role !== undefined) {
       const roleDef = PREDEFINED_ROLES.find(r => r.roleKey === role) || { roleKey: role, label: role, modules: [], level: 10 };
       const customRoleDef = await rawQuery<any>(
         `SELECT label, level, modules FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2 LIMIT 1`,
         [scope.companyId, role]
-      ).then(rows => rows[0]).catch(() => null);
+      ).then(rows => rows[0]).catch((e) => { logger.error(e, "custom role lookup failed"); return null; });
       const finalDef = customRoleDef
         ? { roleKey: role, label: customRoleDef.label, level: customRoleDef.level, modules: Array.isArray(customRoleDef.modules) ? customRoleDef.modules : JSON.parse(customRoleDef.modules || "[]") }
         : roleDef;
@@ -218,13 +275,13 @@ router.patch("/users/:id", requirePermission("admin:write"), async (req, res) =>
          VALUES ($1,$2,$3,$4,$5,$6,NOW())
          ON CONFLICT ("userId","roleKey","companyId") DO UPDATE SET label=EXCLUDED.label, level=EXCLUDED.level, modules=EXCLUDED.modules`,
         [id, finalDef.roleKey, finalDef.label, finalDef.level, JSON.stringify(finalDef.modules), scope.companyId]
-      ).catch(() => {});
+      ).catch((e) => logger.error(e, "admin background task failed"));
     }
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "users", entityId: id,
       after: { isActive, role, employeeId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -232,7 +289,7 @@ router.patch("/users/:id", requirePermission("admin:write"), async (req, res) =>
       entity: "users",
       entityId: id,
       details: JSON.stringify({ isActive, role, employeeId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     res.json({ success: true });
   } catch (e: any) { handleRouteError(e, res, "خطأ غير متوقع"); }
 });
@@ -241,7 +298,7 @@ router.delete("/users/:id", requirePermission("admin:write"), async (req, res) =
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     if (id === scope.userId) { throw new ValidationError("لا يمكنك حذف حسابك الخاص"); }
     const [userBelongs] = await rawQuery(
       `SELECT 1 FROM users u
@@ -254,28 +311,34 @@ router.delete("/users/:id", requirePermission("admin:write"), async (req, res) =
       [id, scope.companyId]
     );
     if (!userBelongs) { throw new ForbiddenError("المستخدم لا ينتمي لشركتك"); }
-    await rawExecute(
-      `DELETE FROM user_roles WHERE "userId"=$1 AND "companyId"=$2`,
-      [id, scope.companyId]
-    );
-    await rawExecute(
-      `DELETE FROM employee_assignments ea
-       USING employees e
-       WHERE ea."employeeId" = e.id AND e.id = (SELECT "employeeId" FROM users WHERE id=$1)
-         AND ea."companyId"=$2`,
-      [id, scope.companyId]
-    ).catch(() => {});
+    await withTransaction(async (tx) => {
+      await tx.query(
+        `DELETE FROM user_roles WHERE "userId"=$1 AND "companyId"=$2`,
+        [id, scope.companyId]
+      );
+      await tx.query(
+        `DELETE FROM employee_assignments ea
+         USING employees e
+         WHERE ea."employeeId" = e.id AND e.id = (SELECT "employeeId" FROM users WHERE id=$1)
+           AND ea."companyId"=$2`,
+        [id, scope.companyId]
+      );
+      await tx.query(
+        `UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`,
+        [id]
+      );
+    });
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "delete", entity: "users", entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "admin.user.deleted",
       entity: "users",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     res.json({ success: true, message: "تم إلغاء وصول المستخدم في شركتك" });
   } catch (e: any) { handleRouteError(e, res, "خطأ غير متوقع"); }
 });
@@ -284,7 +347,7 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [userBelongs] = await rawQuery(
       `SELECT 1 FROM users u
        LEFT JOIN employees e ON e.id = u."employeeId"
@@ -296,25 +359,23 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
       [id, scope.companyId]
     );
     if (!userBelongs) { throw new ForbiddenError("المستخدم لا ينتمي لشركتك"); }
-    const parsed = resetPasswordSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    }
-    const { newPassword } = parsed.data;
+    const parsed = zodParse(resetPasswordSchema.safeParse(req.body));
+    const { newPassword } = parsed;
     const hashed = await hashPassword(newPassword);
     const result = await rawExecute(`UPDATE users SET "passwordHash"=$1 WHERE id=$2`, [hashed, id]);
     if (result.affectedRows === 0) { throw new NotFoundError("المستخدم غير موجود"); }
+    await rawExecute(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`, [id]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "password_reset", entity: "users", entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "admin.user.password_reset",
       entity: "users",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     res.json({ success: true, message: "تم إعادة تعيين كلمة المرور بنجاح" });
   } catch (e: any) { handleRouteError(e, res, "خطأ غير متوقع"); }
 });
@@ -322,28 +383,17 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
 router.get("/roles", requirePermission("admin:read"), async (req, res) => {
   try {
     await assertAdmin(req);
-    const rows = await rawQuery(`SELECT * FROM roles ORDER BY name`);
+    const scope = req.scope!;
+    const rows = await rawQuery(`SELECT * FROM roles WHERE "companyId" = $1 ORDER BY name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (e: any) { console.error("Get roles error:", e); handleRouteError(e, res, "خطأ غير متوقع"); }
+  } catch (e: any) { logger.error(e, "Get roles error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
 router.post("/roles", requirePermission("admin:write"), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const parsed = createRoleSchema.safeParse({
-      name: req.body?.label,
-      description: req.body?.description,
-      permissions: req.body?.permissions,
-    });
-    if (!parsed.success) {
-      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    }
-    const { roleKey, label, level, modules, permissions: rolePermissions } = req.body;
-    if (!roleKey || !label) { throw new ValidationError("roleKey و label مطلوبان"); }
-    if (!/^[a-z_]+$/.test(roleKey)) { throw new ValidationError("roleKey يجب أن يحتوي على أحرف إنجليزية صغيرة وشرطات سفلية فقط"); }
-    const roleLevel = Math.max(1, Math.min(99, Number(level) || 10));
-    const mods = Array.isArray(modules) ? modules : [];
+    const { roleKey, label, level: roleLevel, modules: mods, permissions: rolePermissions } = zodParse(createCustomRoleSchema.safeParse(req.body ?? {}));
     await withTransaction(async (tx) => {
       await tx.query(
         `INSERT INTO custom_roles ("companyId","roleKey",label,level,modules,"createdBy","createdAt")
@@ -367,9 +417,9 @@ router.post("/roles", requirePermission("admin:write"), async (req, res) => {
     invalidatePermissionCache(roleKey, scope.companyId);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
-      action: "create", entity: "roles", entityId: roleKey,
+      action: "create", entity: "roles", entityId: 0,
       after: { roleKey, label, level: roleLevel, modules: mods },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -377,9 +427,10 @@ router.post("/roles", requirePermission("admin:write"), async (req, res) => {
       entity: "roles",
       entityId: 0,
       details: JSON.stringify({ roleKey, label, level: roleLevel }),
-    }).catch(console.error);
-    res.status(201).json({ success: true, roleKey, label, level: roleLevel, modules: mods });
-  } catch (e: any) { console.error("Create role error:", e); handleRouteError(e, res, "خطأ غير متوقع"); }
+    }).catch((e) => logger.error(e, "admin background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2`, [scope.companyId, roleKey]);
+    res.status(201).json(row || { roleKey, label, level: roleLevel, modules: mods });
+  } catch (e: any) { logger.error(e, "Create role error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
 const PREDEFINED_ROLES = [
@@ -404,9 +455,9 @@ router.get("/predefined-roles", requirePermission("admin:read"), async (req, res
     await assertAdmin(req);
     const scope = req.scope!;
     const customRows = await rawQuery<any>(
-      `SELECT "roleKey", label, level, modules FROM custom_roles WHERE "companyId"=$1 ORDER BY level DESC`,
+      `SELECT "roleKey", label, level, modules FROM custom_roles WHERE "companyId"=$1 ORDER BY level DESC LIMIT 500`,
       [scope.companyId]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "admin query failed"); return [] as any[]; });
     const customRoles = customRows.map((r: any) => ({
       roleKey: r.roleKey,
       label: r.label,
@@ -428,13 +479,13 @@ router.get("/user-roles/:userId", requirePermission("admin:read"), async (req, r
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const userId = Number(req.params.userId);
+    const userId = parseId(req.params.userId, "userId");
     if (!userId || isNaN(userId)) { throw new ValidationError("معرف غير صالح"); }
     if (!await userBelongsToCompany(userId, scope.companyId)) {
       throw new ForbiddenError("المستخدم لا ينتمي لشركتك");
     }
     const rows = await rawQuery(
-      `SELECT * FROM user_roles WHERE "userId"=$1 AND "companyId"=$2 ORDER BY level DESC`,
+      `SELECT * FROM user_roles WHERE "userId"=$1 AND "companyId"=$2 ORDER BY level DESC LIMIT 500`,
       [userId, scope.companyId]
     );
     res.json({ data: rows });
@@ -445,10 +496,7 @@ router.post("/user-roles", requirePermission("admin:write"), async (req, res) =>
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const { userId, roleKey } = req.body;
-    if (!userId || !roleKey || typeof userId !== "number") {
-      throw new ValidationError("بيانات غير صالحة: userId و roleKey مطلوبان");
-    }
+    const { userId, roleKey } = zodParse(createUserRoleSchema.safeParse(req.body));
     if (!await userBelongsToCompany(userId, scope.companyId)) {
       throw new ForbiddenError("المستخدم لا ينتمي لشركتك");
     }
@@ -457,7 +505,7 @@ router.post("/user-roles", requirePermission("admin:write"), async (req, res) =>
       const [customRole] = await rawQuery<any>(
         `SELECT "roleKey", label, modules, level FROM custom_roles WHERE "roleKey"=$1 AND "companyId"=$2 LIMIT 1`,
         [roleKey, scope.companyId]
-      ).catch(() => [] as any[]);
+      ).catch((e) => { logger.error(e, "admin query failed"); return [] as any[]; });
       if (customRole) {
         def = {
           roleKey: customRole.roleKey,
@@ -477,7 +525,7 @@ router.post("/user-roles", requirePermission("admin:write"), async (req, res) =>
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "roles", entityId: userId,
       after: { roleKey: def.roleKey, label: def.label },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -485,8 +533,9 @@ router.post("/user-roles", requirePermission("admin:write"), async (req, res) =>
       entity: "user_roles",
       entityId: userId,
       details: JSON.stringify({ roleKey: def.roleKey, label: def.label }),
-    }).catch(console.error);
-    res.status(201).json({ success: true, roleKey: def.roleKey });
+    }).catch((e) => logger.error(e, "admin background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM user_roles WHERE "userId"=$1 AND "roleKey"=$2 AND "companyId"=$3`, [userId, def.roleKey, scope.companyId]);
+    res.status(201).json(row || { userId, roleKey: def.roleKey });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -494,7 +543,7 @@ router.delete("/user-roles/:id", requirePermission("admin:write"), async (req, r
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     if (!id || isNaN(id)) { throw new ValidationError("معرف غير صالح"); }
     const [roleRecord] = await rawQuery(
       `SELECT id FROM user_roles WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
@@ -506,14 +555,14 @@ router.delete("/user-roles/:id", requirePermission("admin:write"), async (req, r
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "delete", entity: "roles", entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "admin.user_role.deleted",
       entity: "user_roles",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     res.json({ message: "تم حذف الدور بنجاح" });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
@@ -523,7 +572,7 @@ router.get("/integrations", requirePermission("admin:read"), async (req, res) =>
     await assertAdmin(req);
     const scope = req.scope!;
     const rows = await rawQuery(
-      `SELECT * FROM integrations WHERE "companyId"=$1 ORDER BY "createdAt" DESC`,
+      `SELECT id, "companyId", type, name, status, "lastSuccessAt", "lastFailureAt", "retryCount", "maxRetries", "createdAt", "updatedAt" FROM integrations WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
@@ -534,22 +583,18 @@ router.post("/integrations", requirePermission("admin:write"), async (req, res) 
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const parsed = createIntegrationSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    }
-    const { type, name, config, status, maxRetries } = req.body;
+    const { type, name, config, status, maxRetries } = zodParse(createIntegrationSchema.safeParse(req.body ?? {}));
     const r = await rawExecute(
       `INSERT INTO integrations ("companyId",type,name,config,status,"maxRetries")
        VALUES ($1,$2,$3,$4,$5,$6)`,
       [scope.companyId, type, name, JSON.stringify(config || {}), status || "inactive", maxRetries || 3]
     );
-    const [row] = await rawQuery(`SELECT * FROM integrations WHERE id=$1`, [r.insertId]);
+    const [row] = await rawQuery(`SELECT id, "companyId", type, name, status, "lastSuccessAt", "lastFailureAt", "retryCount", "maxRetries", "createdAt", "updatedAt" FROM integrations WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "create", entity: "integrations", entityId: r.insertId,
       after: { type, name, status: status || "inactive" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -557,7 +602,7 @@ router.post("/integrations", requirePermission("admin:write"), async (req, res) 
       entity: "integrations",
       entityId: r.insertId,
       details: JSON.stringify({ type, name, status: status || "inactive" }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
@@ -566,8 +611,8 @@ router.patch("/integrations/:id", requirePermission("admin:write"), async (req, 
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const b = req.body;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(updateIntegrationSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
     const params: any[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
@@ -579,15 +624,15 @@ router.patch("/integrations/:id", requirePermission("admin:write"), async (req, 
     if (sets.length === 1) { throw new ValidationError("لا توجد بيانات"); }
     params.push(id); params.push(scope.companyId);
     await rawExecute(
-      `UPDATE integrations SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`,
+      `UPDATE integrations SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`,
       params
     );
-    const [row] = await rawQuery(`SELECT * FROM integrations WHERE id=$1`, [id]);
+    const [row] = await rawQuery(`SELECT id, "companyId", type, name, status, "lastSuccessAt", "lastFailureAt", "retryCount", "maxRetries", "createdAt", "updatedAt" FROM integrations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "integrations", entityId: id,
       after: { name: b.name, type: b.type, status: b.status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -595,7 +640,7 @@ router.patch("/integrations/:id", requirePermission("admin:write"), async (req, 
       entity: "integrations",
       entityId: id,
       details: JSON.stringify({ name: b.name, type: b.type, status: b.status }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
@@ -604,22 +649,23 @@ router.delete("/integrations/:id", requirePermission("admin:write"), async (req,
   try {
     await assertAdmin(req);
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const result = await rawExecute(
       `DELETE FROM integrations WHERE id=$1 AND "companyId"=$2`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (result.affectedRows === 0) { throw new NotFoundError("التكامل غير موجود"); }
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
-      action: "delete", entity: "integrations", entityId: Number(req.params.id),
-    }).catch(console.error);
+      action: "delete", entity: "integrations", entityId: id,
+    }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "admin.integration.deleted",
       entity: "integrations",
-      entityId: Number(req.params.id),
-    }).catch(console.error);
+      entityId: id,
+    }).catch((e) => logger.error(e, "admin background task failed"));
     res.json({ message: "تم حذف التكامل" });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
@@ -628,29 +674,31 @@ router.post("/integrations/:id/test", requirePermission("admin:write"), async (r
   try {
     await assertAdmin(req);
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [integration] = await rawQuery<any>(
       `SELECT * FROM integrations WHERE id=$1 AND "companyId"=$2`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!integration) { throw new NotFoundError("التكامل غير موجود"); }
+    const { testRecipient } = zodParse(testIntegrationSchema.safeParse(req.body ?? {}));
 
     const result = await integrationService.send({
       companyId: scope.companyId,
       channel: integration.type,
-      recipient: req.body.testRecipient || "test@test.com",
+      recipient: testRecipient || "test@test.com",
       subject: "اختبار تكامل غيث ERP",
       body: "هذه رسالة اختبار من نظام غيث ERP للتحقق من إعداد التكامل.",
     });
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
-      action: "preview", entity: "gov_integrations", entityId: Number(req.params.id),
-    }).catch(console.error);
+      action: "preview", entity: "gov_integrations", entityId: id,
+    }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
-      action: "admin.integration.tested", entity: "gov_integrations", entityId: Number(req.params.id),
+      action: "admin.integration.tested", entity: "gov_integrations", entityId: id,
       details: JSON.stringify({ success: result.success, channel: integration.type }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     res.json({ success: result.success, error: result.error, logId: result.logId });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
@@ -659,17 +707,22 @@ router.get("/integration-logs", requirePermission("admin:read"), async (req, res
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const { channel, status, integrationId } = req.query as any;
+    const { channel, status, integrationId, limit: lim, offset: off } = req.query as any;
+    const pageLimit = Math.min(Number(lim) || 50, 200);
+    const pageOffset = Number(off) || 0;
     const conditions = [`"companyId"=$1`];
     const params: any[] = [scope.companyId];
     if (channel) { params.push(channel); conditions.push(`channel=$${params.length}`); }
     if (status) { params.push(status); conditions.push(`status=$${params.length}`); }
     if (integrationId) { params.push(Number(integrationId)); conditions.push(`"integrationId"=$${params.length}`); }
+    const where = conditions.join(" AND ");
+    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM integration_logs WHERE ${where}`, params);
+    params.push(pageLimit, pageOffset);
     const rows = await rawQuery(
-      `SELECT * FROM integration_logs WHERE ${conditions.join(" AND ")} ORDER BY "createdAt" DESC LIMIT 200`,
+      `SELECT id, "integrationId", channel, status, "errorMessage", "createdAt" FROM integration_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -681,14 +734,14 @@ router.post("/integration-logs/retry", requirePermission("admin:write"), async (
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "retry", entity: "integrations", entityId: 0,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "admin.integration_logs.retried",
       entity: "integration_logs",
       entityId: 0,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
@@ -703,7 +756,8 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
     try {
       await pool.query("SELECT 1");
       dbLatency = Date.now() - dbStart;
-    } catch {
+    } catch (e) {
+      logger.error(e, "admin health check DB ping failed");
       dbStatus = "error";
       dbLatency = Date.now() - dbStart;
     }
@@ -717,17 +771,17 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
         COUNT(*) FILTER (WHERE "isActive" = true) as active,
         COUNT(*) FILTER (WHERE "lastStatus" = 'failed') as failed
        FROM cron_jobs`
-    ).catch(() => [{ total: 0, active: 0, failed: 0 }]);
+    ).catch((e) => { logger.error(e, "admin query failed"); return [{ total: 0, active: 0, failed: 0 }]; });
 
     const recentCrons = await rawQuery<any>(
       `SELECT name, "lastRunAt", "lastStatus", "lastError", schedule, "isActive"
        FROM cron_jobs ORDER BY "lastRunAt" DESC NULLS LAST LIMIT 20`
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "admin query failed"); return []; });
 
     const recentCronLogs = await rawQuery<any>(
       `SELECT "jobName", status, duration, result, error, "createdAt"
        FROM cron_logs ORDER BY "createdAt" DESC LIMIT 20`
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "admin query failed"); return []; });
 
     const recentErrors = await rawQuery<any>(
       `SELECT action, entity, details, "createdAt"
@@ -735,33 +789,33 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
          AND ("companyId"=$1 OR "companyId" IS NULL)
        ORDER BY "createdAt" DESC LIMIT 20`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "admin query failed"); return []; });
 
     const [failedLogins] = await rawQuery<any>(
       `SELECT COUNT(*) as count FROM event_logs
        WHERE action IN ('login.failed','auth.failed') AND "createdAt" > NOW() - INTERVAL '24 hours'
          AND ("companyId"=$1 OR "companyId" IS NULL)`,
       [cid]
-    ).catch(() => [{ count: 0 }]);
+    ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
 
-    const [userCount] = await rawQuery<any>(`SELECT COUNT(*) as count FROM users`).catch(() => [{ count: 0 }]);
-    const [companyCount] = await rawQuery<any>(`SELECT COUNT(*) as count FROM companies`).catch(() => [{ count: 0 }]);
+    const [userCount] = await rawQuery<any>(`SELECT COUNT(*) as count FROM users`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
+    const [companyCount] = await rawQuery<any>(`SELECT COUNT(*) as count FROM companies`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
     const [employeeCount] = await rawQuery<any>(
-      `SELECT COUNT(*) as count FROM employees WHERE "companyId"=$1`,
+      `SELECT COUNT(DISTINCT e.id) as count FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE ea."companyId"=$1`,
       [cid]
-    ).catch(() => [{ count: 0 }]);
+    ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
 
     let dbSize = "N/A";
     try {
       const [sizeRow] = await rawQuery<any>(`SELECT pg_size_pretty(pg_database_size(current_database())) as size`);
       dbSize = sizeRow?.size || "N/A";
-    } catch {}
+    } catch (e) { logger.error(e, "admin stats: db size query failed"); }
 
     let tableCount = 0;
     try {
       const [tc] = await rawQuery<any>(`SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema='public'`);
       tableCount = Number(tc?.count || 0);
-    } catch {}
+    } catch (e) { logger.error(e, "admin stats: table count query failed"); }
 
     const [integrationStats] = await rawQuery<any>(
       `SELECT
@@ -770,12 +824,12 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
         COUNT(*) FILTER (WHERE status = 'error') as errored
        FROM integrations WHERE "companyId"=$1`,
       [cid]
-    ).catch(() => [{ total: 0, active: 0, errored: 0 }]);
+    ).catch((e) => { logger.error(e, "admin query failed"); return [{ total: 0, active: 0, errored: 0 }]; });
 
     const [pendingMessages] = await rawQuery<any>(
       `SELECT COUNT(*) as count FROM integration_logs WHERE status IN ('pending','retrying') AND "companyId"=$1`,
       [cid]
-    ).catch(() => [{ count: 0 }]);
+    ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
 
     res.json({
       timestamp: new Date().toISOString(),
@@ -795,6 +849,10 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
           errored: Number(integrationStats?.errored || 0),
           pendingMessages: Number(pendingMessages?.count || 0),
         },
+        // Rate-limit backend status. `fallback-memory` means caps are still
+        // enforced but only per-process — the operator should investigate
+        // why Redis is unreachable. See lib/rateLimitStore.ts.
+        redisRateLimit: getRedisRateLimitStatus(),
       },
       cronJobs: recentCrons,
       recentCronLogs,
@@ -815,7 +873,9 @@ router.get("/violations-report", requirePermission("admin:read"), async (req, re
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const { type, priority, status, department, from, to } = req.query as any;
+    const { type, priority, status, department, from, to, limit: lim, offset: off } = req.query as any;
+    const pageLimit = Math.min(Number(lim) || 50, 200);
+    const pageOffset = Number(off) || 0;
 
     const conditions = [`"companyId"=$1`];
     const params: any[] = [scope.companyId];
@@ -829,9 +889,10 @@ router.get("/violations-report", requirePermission("admin:read"), async (req, re
 
     const whereClause = conditions.join(" AND ");
 
+    const paginated = [...params, pageLimit, pageOffset];
     const violations = await rawQuery(
-      `SELECT * FROM audit_violations WHERE ${whereClause} ORDER BY "createdAt" DESC LIMIT 500`,
-      params
+      `SELECT * FROM audit_violations WHERE ${whereClause} ORDER BY "createdAt" DESC LIMIT $${paginated.length - 1} OFFSET $${paginated.length}`,
+      paginated
     );
 
     const [totalCount] = await rawQuery<any>(
@@ -882,7 +943,7 @@ router.patch("/violations/:id/resolve", requirePermission("admin:write"), async 
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
 
     const [existing] = await rawQuery<any>(
       `SELECT * FROM audit_violations WHERE id=$1 AND "companyId"=$2`,
@@ -891,25 +952,26 @@ router.patch("/violations/:id/resolve", requirePermission("admin:write"), async 
     if (!existing) { throw new NotFoundError("المخالفة غير موجودة"); }
     if (existing.status === "resolved") { throw new ValidationError("المخالفة تم حلها مسبقاً"); }
 
-    await rawExecute(
-      `UPDATE audit_violations SET status='resolved', "resolvedBy"=$1, "resolvedAt"=NOW() WHERE id=$2`,
-      [scope.activeAssignmentId || scope.userId, id]
+    const { affectedRows } = await rawExecute(
+      `UPDATE audit_violations SET status='resolved', "resolvedBy"=$1, "resolvedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status != 'resolved'`,
+      [scope.activeAssignmentId || scope.userId, id, scope.companyId]
     );
+    if (!affectedRows) throw new ConflictError("المخالفة تم حلها مسبقاً — أعد التحميل");
 
-    const [updated] = await rawQuery(`SELECT * FROM audit_violations WHERE id=$1`, [id]);
+    const [updated] = await rawQuery(`SELECT * FROM audit_violations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "resolve", entity: "audit_violations", entityId: id,
       before: { status: existing.status },
       after: { status: "resolved" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "admin.violation.resolved",
       entity: "audit_violations",
       entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     res.json(updated);
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
@@ -919,8 +981,8 @@ router.get("/security-log", requirePermission("admin:read"), async (req, res) =>
     await assertAdmin(req);
     const scope = req.scope!;
     const { userId, reason, from, to, page = "1", limit: lim = "50" } = req.query as any;
-    const pageNum = Math.max(Number(page), 1);
-    const pageSize = Math.min(Math.max(Number(lim), 1), 200);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const pageSize = Math.min(Math.max(Number(lim) || 50, 1), 200);
     const offset = (pageNum - 1) * pageSize;
 
     const conditions = [`sl."companyId" = $1`];
@@ -988,7 +1050,7 @@ router.get("/role-permissions", requirePermission("admin:read"), async (req, res
     const params: any[] = [scope.companyId];
     if (role) { params.push(role); conditions.push(`"role" = $${params.length}`); }
     const rows = await rawQuery<any>(
-      `SELECT id, role, permission, "companyId", "createdAt" FROM role_permissions WHERE ${conditions.join(" AND ")} ORDER BY role, permission`,
+      `SELECT id, role, permission, "companyId", "createdAt" FROM role_permissions WHERE ${conditions.join(" AND ")} ORDER BY role, permission LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });
@@ -999,10 +1061,7 @@ router.post("/role-permissions", requirePermission("admin:write"), async (req, r
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const { role, permission } = req.body as any;
-    if (!role || !permission) {
-      throw new ValidationError("role و permission مطلوبان");
-    }
+    const { role, permission } = zodParse(createRolePermissionSchema.safeParse(req.body));
     const r = await rawExecute(
       `INSERT INTO role_permissions (role, permission, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
       [role, permission, scope.companyId]
@@ -1012,7 +1071,7 @@ router.post("/role-permissions", requirePermission("admin:write"), async (req, r
       companyId: scope.companyId, userId: scope.userId,
       action: "create", entity: "role_permissions", entityId: r.insertId,
       after: { role, permission },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -1020,34 +1079,9 @@ router.post("/role-permissions", requirePermission("admin:write"), async (req, r
       entity: "role_permissions",
       entityId: r.insertId,
       details: JSON.stringify({ role, permission }),
-    }).catch(console.error);
-    res.status(201).json({ success: true, id: r.insertId, role, permission });
-  } catch (err) { handleRouteError(err, res, "admin"); }
-});
-
-router.delete("/role-permissions/:id", requirePermission("admin:write"), async (req, res) => {
-  try {
-    await assertAdmin(req);
-    const scope = req.scope!;
-    const id = Number(req.params.id);
-    const result = await rawExecute(
-      `DELETE FROM role_permissions WHERE id=$1 AND "companyId"=$2`,
-      [id, scope.companyId]
-    );
-    if (result.affectedRows === 0) { throw new NotFoundError("الصلاحية غير موجودة أو غير مصرح بحذفها"); }
-    invalidatePermissionCache(undefined, scope.companyId);
-    createAuditLog({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "delete", entity: "role_permissions", entityId: id,
-    }).catch(console.error);
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "admin.role_permission.deleted",
-      entity: "role_permissions",
-      entityId: id,
-    }).catch(console.error);
-    res.json({ message: "تم حذف الصلاحية" });
+    }).catch((e) => logger.error(e, "admin background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM role_permissions WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -1055,10 +1089,7 @@ router.put("/role-permissions/bulk", requirePermission("admin:write"), async (re
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const { role, permissions } = req.body as { role: string; permissions: string[] };
-    if (!role || !Array.isArray(permissions)) {
-      throw new ValidationError("role و permissions مطلوبان");
-    }
+    const { role, permissions } = zodParse(bulkRolePermissionsSchema.safeParse(req.body));
     await withTransaction(async (tx) => {
       await tx.query(`DELETE FROM role_permissions WHERE role=$1 AND "companyId"=$2`, [role, scope.companyId]);
       if (permissions.length > 0) {
@@ -1079,7 +1110,7 @@ router.put("/role-permissions/bulk", requirePermission("admin:write"), async (re
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "role_permissions", entityId: 0,
       after: { role, permissionCount: permissions.length },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -1087,15 +1118,42 @@ router.put("/role-permissions/bulk", requirePermission("admin:write"), async (re
       entity: "role_permissions",
       entityId: 0,
       details: JSON.stringify({ role, permissionCount: permissions.length }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "admin background task failed"));
     res.json({ success: true, role, count: permissions.length });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
+router.delete("/role-permissions/:id", requirePermission("admin:write"), async (req, res) => {
+  try {
+    await assertAdmin(req);
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const result = await rawExecute(
+      `DELETE FROM role_permissions WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    if (result.affectedRows === 0) { throw new NotFoundError("الصلاحية غير موجودة أو غير مصرح بحذفها"); }
+    invalidatePermissionCache(undefined, scope.companyId);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "role_permissions", entityId: id,
+    }).catch((e) => logger.error(e, "admin background task failed"));
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "admin.role_permission.deleted",
+      entity: "role_permissions",
+      entityId: id,
+    }).catch((e) => logger.error(e, "admin background task failed"));
+    res.json({ message: "تم حذف الصلاحية" });
+  } catch (err) { handleRouteError(err, res, "admin"); }
+});
+
+
 // ─── Governance: Policy Audit ───────────────────────────────────────────
 import { runFullPolicyAudit, ROLE_STRATEGIES, SENSITIVE_OPERATIONS, SEPARATION_OF_DUTIES } from "../lib/policyEngine.js";
 import { checkSystemGuards } from "../lib/systemGovernor.js";
-import { DOMAIN_REGISTRY, getSystemStats } from "../lib/domainRegistry.js";
+import { DOMAIN_REGISTRY, getSystemStats, getDomain } from "../lib/domainRegistry.js";
 import { STATE_MACHINES } from "../lib/lifecycleEngine.js";
 import { EVENT_CATALOG, countEventsByDomain } from "../lib/eventCatalog.js";
 import { PERMISSIONS, ROLE_PERMISSIONS } from "../lib/rbacCatalog.js";
@@ -1114,44 +1172,111 @@ router.get("/governance/role-strategies", requirePermission("admin:read"), async
 
 router.get("/governance/system-guards", requirePermission("admin:read"), async (req, res) => {
   try {
-    const scope = req.scope!;
-    const result = await checkSystemGuards(scope.companyId, "all", { date: new Date().toISOString().split("T")[0] });
+    const companyId = req.scope?.companyId;
+    if (!companyId) {
+      res.json({ allowed: true, violations: [], note: "no company scope" });
+      return;
+    }
+    const result = await checkSystemGuards(companyId, "all", { date: todayISO() });
     res.json(result);
-  } catch (err) { handleRouteError(err, res, "System guards error:"); }
+  } catch (err: any) {
+    logger.error(err, "System guards error");
+    res.status(500).json({ allowed: false, violations: [], error: "خطأ في فحص حراسة النظام" });
+  }
 });
 
 router.get("/governance/domain-registry", requirePermission("admin:read"), async (_req, res) => {
-  res.json({ domains: DOMAIN_REGISTRY, stats: getSystemStats() });
+  try {
+    res.json({ domains: DOMAIN_REGISTRY, stats: getSystemStats() });
+  } catch (err) { handleRouteError(err, res, "Domain registry error:"); }
 });
 
 router.get("/governance/gl-reconciliation", requirePermission("admin:read"), async (req, res) => {
-  const companyId = (req as any).companyId;
-  const mismatches = await rawQuery<any>(
-    `SELECT
-       coa.code,
-       coa.name,
-       coa."currentBalance" AS stored_balance,
-       COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)::numeric(15,2) AS computed_balance,
-       (coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0))::numeric(15,2) AS drift
-     FROM chart_of_accounts coa
-     LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
-       AND jl."journalId" IN (SELECT id FROM journal_entries WHERE "companyId" = $1 AND "deletedAt" IS NULL)
-     WHERE coa."companyId" = $1 AND coa."deletedAt" IS NULL AND coa."allowPosting" = true
-     GROUP BY coa.code, coa.name, coa."currentBalance"
-     HAVING ABS(coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)) > 0.01
-     ORDER BY ABS(coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)) DESC
-     LIMIT 50`,
-    [companyId]
-  );
-  res.json({
-    healthy: mismatches.length === 0,
-    driftCount: mismatches.length,
-    mismatches,
-  });
+  try {
+    const companyId = req.scope!.companyId;
+    const mismatches = await rawQuery<any>(
+      `SELECT
+         coa.code,
+         coa.name,
+         coa."currentBalance" AS stored_balance,
+         COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)::numeric(15,2) AS computed_balance,
+         (coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0))::numeric(15,2) AS drift
+       FROM chart_of_accounts coa
+       LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
+         AND jl."journalId" IN (SELECT id FROM journal_entries WHERE "companyId" = $1 AND "deletedAt" IS NULL)
+       WHERE coa."companyId" = $1 AND coa."deletedAt" IS NULL AND coa."allowPosting" = true
+       GROUP BY coa.code, coa.name, coa."currentBalance"
+       HAVING ABS(coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)) > 0.01
+       ORDER BY ABS(coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)) DESC
+       LIMIT 50`,
+      [companyId]
+    );
+    res.json({
+      healthy: mismatches.length === 0,
+      driftCount: mismatches.length,
+      mismatches,
+    });
+  } catch (err) { handleRouteError(err, res, "GL reconciliation error:"); }
 });
 
 router.get("/governance/lifecycle-machines", requirePermission("admin:read"), async (_req, res) => {
-  res.json({ machines: STATE_MACHINES, total: STATE_MACHINES.length });
+  try {
+    res.json({ machines: STATE_MACHINES, total: STATE_MACHINES.length });
+  } catch (err) { handleRouteError(err, res, "Lifecycle machines error:"); }
+});
+
+router.get("/governance/event-dlq", requirePermission("admin:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const onlyUnresolved = req.query.unresolved !== "false";
+    const rows = await rawQuery<any>(
+      `SELECT id, type, "eventName", "companyId", error, "retryCount", "resolvedAt", "createdAt"
+       FROM event_dlq
+       WHERE ("companyId"=$1 OR "companyId" IS NULL)
+         ${onlyUnresolved ? `AND "resolvedAt" IS NULL` : ""}
+       ORDER BY "createdAt" DESC LIMIT 200`,
+      [scope.companyId]
+    );
+    const summary = await rawQuery<any>(
+      `SELECT "eventName", COUNT(*)::int AS count
+       FROM event_dlq
+       WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "resolvedAt" IS NULL
+       GROUP BY "eventName" ORDER BY count DESC`,
+      [scope.companyId]
+    );
+    res.json({ entries: rows, total: rows.length, summary });
+  } catch (err) { handleRouteError(err, res, "DLQ list error:"); }
+});
+
+router.post("/governance/event-dlq/:id/replay", requirePermission("admin:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [entry] = await rawQuery<any>(
+      `SELECT id, "eventName", payload, "retryCount" FROM event_dlq WHERE id=$1 AND "resolvedAt" IS NULL AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      [id, scope.companyId]
+    );
+    if (!entry) throw new NotFoundError("لم يتم العثور على عنصر في قائمة الفشل");
+    if (!entry.eventName) throw new ValidationError("الحدث الأصلي غير معروف، لا يمكن إعادة المحاولة");
+
+    const { eventBus } = await import("../lib/eventBus.js");
+    const payload = typeof entry.payload === "string" ? JSON.parse(entry.payload) : entry.payload;
+    eventBus.emit(entry.eventName, payload);
+    await rawExecute(
+      `UPDATE event_dlq SET "retryCount"="retryCount"+1, "resolvedAt"=NOW() WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      [id, scope.companyId]
+    );
+    res.json({ replayed: true, eventName: entry.eventName });
+  } catch (err) { handleRouteError(err, res, "DLQ replay error:"); }
+});
+
+router.delete("/governance/event-dlq/:id", requirePermission("admin:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    await rawExecute(`UPDATE event_dlq SET "resolvedAt"=NOW() WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    res.json({ resolved: true });
+  } catch (err) { handleRouteError(err, res, "DLQ resolve error:"); }
 });
 
 router.get("/governance/event-catalog", requirePermission("admin:read"), async (req, res) => {
@@ -1173,7 +1298,7 @@ router.get("/governance/event-catalog", requirePermission("admin:read"), async (
 router.get("/governance/rbac-matrix", requirePermission("admin:read"), async (req, res) => {
   const scope = req.scope!;
   const customPerms = await rawQuery<any>(
-    `SELECT role, permission FROM role_permissions WHERE "companyId" = $1`,
+    `SELECT role, permission FROM role_permissions WHERE "companyId" = $1 LIMIT 500`,
     [scope.companyId]
   );
   res.json({
@@ -1336,6 +1461,256 @@ router.get("/system-registry/missing", requirePermission("admin:read"), async (r
       orphanNotifications: { items: orphanNotifications || [], count: orphanNotifications?.length || 0 },
     });
   } catch (err) { handleRouteError(err, res, "Missing registry items error:"); }
+});
+
+// ─── System Health Checks (structured pass/fail) ────────────────────────
+
+router.get("/system-health-checks", requirePermission("admin:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const checks: { name: string; status: "ok" | "warn" | "error"; detail?: string }[] = [];
+
+    // 1. Database connectivity
+    try {
+      const [row] = await rawQuery<{ c: number }>("SELECT 1 AS c");
+      checks.push({ name: "database", status: row?.c === 1 ? "ok" : "error", detail: row?.c === 1 ? "connected" : "query returned unexpected result" });
+    } catch (e: any) {
+      checks.push({ name: "database", status: "error", detail: e.message });
+    }
+
+    // 2. Domain tables exist in DB
+    const allTables = DOMAIN_REGISTRY.flatMap(d => d.tables);
+    const existingTables = await rawQuery<{ tablename: string }>(
+      `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`
+    );
+    const existingSet = new Set(existingTables.map(t => t.tablename));
+    const missingTables = allTables.filter(t => !existingSet.has(t));
+    checks.push({
+      name: "domain_tables",
+      status: missingTables.length === 0 ? "ok" : "warn",
+      detail: missingTables.length === 0
+        ? `all ${allTables.length} domain tables exist`
+        : `missing ${missingTables.length}: ${missingTables.slice(0, 10).join(", ")}`,
+    });
+
+    // 3. Cron jobs health
+    const staleCrons = await rawQuery<{ name: string; last_run: string }>(
+      `SELECT name, "lastRunAt"::text AS last_run FROM cron_jobs
+       WHERE enabled = true AND "lastRunAt" < NOW() - INTERVAL '25 hours'
+       ORDER BY "lastRunAt" ASC LIMIT 10`
+    ).catch((e) => { logger.error(e, "admin query failed"); return [] as any[]; });
+    checks.push({
+      name: "cron_jobs",
+      status: staleCrons.length === 0 ? "ok" : "warn",
+      detail: staleCrons.length === 0
+        ? "all enabled cron jobs ran within 25h"
+        : `${staleCrons.length} stale: ${staleCrons.map((c: any) => c.name).join(", ")}`,
+    });
+
+    // 4. Failed cron jobs in last 24h
+    const [failedCrons] = await rawQuery<{ c: number }>(
+      `SELECT COUNT(*)::int AS c FROM cron_logs WHERE status = 'failed' AND "createdAt" > NOW() - INTERVAL '24 hours'`
+    ).catch((e) => { logger.error(e, "admin query failed"); return [{ c: 0 }]; });
+    checks.push({
+      name: "cron_failures_24h",
+      status: (failedCrons?.c ?? 0) === 0 ? "ok" : "warn",
+      detail: `${failedCrons?.c ?? 0} failures in last 24h`,
+    });
+
+    // 5. DLQ unresolved entries
+    const [dlqCount] = await rawQuery<{ c: number }>(
+      `SELECT COUNT(*)::int AS c FROM event_dlq WHERE "resolvedAt" IS NULL AND ("companyId"=$1 OR "companyId" IS NULL)`,
+      [scope.companyId]
+    ).catch((e) => { logger.error(e, "admin query failed"); return [{ c: 0 }]; });
+    checks.push({
+      name: "event_dlq",
+      status: (dlqCount?.c ?? 0) === 0 ? "ok" : (dlqCount?.c ?? 0) > 10 ? "error" : "warn",
+      detail: `${dlqCount?.c ?? 0} unresolved entries`,
+    });
+
+    // 6. Financial period status
+    const [activePeriod] = await rawQuery<{ status: string; endDate: string }>(
+      `SELECT status, "endDate"::text FROM financial_periods
+       WHERE "companyId" = $1 AND "deletedAt" IS NULL
+       ORDER BY "endDate" DESC LIMIT 1`,
+      [scope.companyId]
+    ).catch((e) => { logger.error(e, "admin query failed"); return [null]; });
+    if (activePeriod) {
+      checks.push({
+        name: "financial_period",
+        status: activePeriod.status === "open" ? "ok" : "warn",
+        detail: `latest period: ${activePeriod.status}, ends ${activePeriod.endDate}`,
+      });
+    } else {
+      checks.push({ name: "financial_period", status: "warn", detail: "no financial periods found" });
+    }
+
+    // 7. GL balance drift (quick check — top 5 drifts)
+    const drifts = await rawQuery<{ code: string; drift: number }>(
+      `SELECT coa.code,
+              (coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0))::numeric(15,2) AS drift
+       FROM chart_of_accounts coa
+       LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
+         AND jl."journalId" IN (SELECT id FROM journal_entries WHERE "companyId" = $1 AND "deletedAt" IS NULL)
+       WHERE coa."companyId" = $1 AND coa."deletedAt" IS NULL AND coa."allowPosting" = true
+       GROUP BY coa.code, coa."currentBalance"
+       HAVING ABS(coa."currentBalance" - COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)) > 0.01
+       LIMIT 5`,
+      [scope.companyId]
+    ).catch((e) => { logger.error(e, "admin query failed"); return [] as any[]; });
+    checks.push({
+      name: "gl_balance_drift",
+      status: drifts.length === 0 ? "ok" : "warn",
+      detail: drifts.length === 0 ? "no balance drift" : `${drifts.length} accounts with drift`,
+    });
+
+    // 8. Posting failures in last 24h
+    const [postingFails] = await rawQuery<{ c: number }>(
+      `SELECT COUNT(*)::int AS c FROM financial_posting_failures
+       WHERE "companyId" = $1 AND "createdAt" > NOW() - INTERVAL '24 hours'`,
+      [scope.companyId]
+    ).catch((e) => { logger.error(e, "admin query failed"); return [{ c: 0 }]; });
+    checks.push({
+      name: "posting_failures_24h",
+      status: (postingFails?.c ?? 0) === 0 ? "ok" : "warn",
+      detail: `${postingFails?.c ?? 0} posting failures in last 24h`,
+    });
+
+    // 9. Domain engine coverage
+    const allDeclaredEngines = new Set(DOMAIN_REGISTRY.flatMap(d => d.engines));
+    const classBasedEngines = new Set([
+      "financialEngine", "fleetEngine", "hrEngine", "propertiesEngine",
+      "storeEngine", "crmEngine", "legalEngine", "umrahEngine",
+      "projectsEngine", "warehouseEngine", "supportEngine",
+    ]);
+    const legacyEngines = new Set([
+      "obligationsEngine", "lifecycleEngine", "workflowEngine",
+      "disciplineEngine", "rulesEngine",
+      "umrahCommissionEngine", "umrahImportEngine", "umrahInvoicingEngine",
+    ]);
+    const unimplemented = [...allDeclaredEngines].filter(
+      e => !classBasedEngines.has(e) && !legacyEngines.has(e)
+    );
+    checks.push({
+      name: "engine_coverage",
+      status: unimplemented.length === 0 ? "ok" : "warn",
+      detail: `${classBasedEngines.size} class-based + ${legacyEngines.size} legacy engines available` +
+        (unimplemented.length > 0 ? ` — missing: ${unimplemented.join(", ")}` : ""),
+    });
+
+    const overall = checks.every(c => c.status === "ok")
+      ? "healthy"
+      : checks.some(c => c.status === "error")
+        ? "degraded"
+        : "attention";
+
+    res.json({
+      status: overall,
+      timestamp: new Date().toISOString(),
+      checks,
+      summary: {
+        ok: checks.filter(c => c.status === "ok").length,
+        warn: checks.filter(c => c.status === "warn").length,
+        error: checks.filter(c => c.status === "error").length,
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "System health error:"); }
+});
+
+// ─── Domain Dependency Graph ────────────────────────────────────────────
+
+router.get("/system-health/dependency-graph", requirePermission("admin:read"), async (_req, res) => {
+  try {
+    const graph: { from: string; to: string; via: string }[] = [];
+
+    for (const d of DOMAIN_REGISTRY) {
+      if (d.glIntegration && d.id !== "finance") {
+        graph.push({ from: d.id, to: "finance", via: "GL posting" });
+      }
+    }
+
+    const crossDomainEvents = EVENT_CATALOG.filter((e: any) =>
+      e.consumers && e.consumers.length > 0
+    );
+    for (const evt of crossDomainEvents) {
+      const sourceDomain = evt.domain;
+      for (const consumer of evt.consumers) {
+        const targetDomain = DOMAIN_REGISTRY.find(d =>
+          d.engines.some(e => e.toLowerCase().includes(consumer.toLowerCase())) ||
+          d.id === consumer
+        );
+        if (targetDomain && targetDomain.id !== sourceDomain) {
+          graph.push({ from: sourceDomain, to: targetDomain.id, via: evt.name });
+        }
+      }
+    }
+
+    const uniqueEdges = Array.from(
+      new Map(graph.map(g => [`${g.from}->${g.to}:${g.via}`, g])).values()
+    );
+
+    const nodes = [...new Set(uniqueEdges.flatMap(e => [e.from, e.to]))].map(id => {
+      const d = getDomain(id);
+      return { id, label: d?.label ?? id, glIntegration: d?.glIntegration ?? false };
+    });
+
+    res.json({ nodes, edges: uniqueEdges, totalDependencies: uniqueEdges.length });
+  } catch (err) { handleRouteError(err, res, "Dependency graph error:"); }
+});
+
+// ============================================================================
+// SYSTEM STOPS — زر الإيقاف الطارئ (Red Button)
+// ============================================================================
+
+router.get("/system-stops", requirePermission("admin:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery(
+      `SELECT ss.*, COALESCE(emp.name, u.email) AS "activatedByName"
+       FROM system_stops ss
+       LEFT JOIN users u ON u.id = ss."activatedBy"
+       LEFT JOIN employees emp ON emp.id = u."employeeId"
+       WHERE ss."companyId" = $1
+       ORDER BY ss."createdAt" DESC`,
+      [scope.companyId]
+    );
+    res.json({ data: rows });
+  } catch (err) { handleRouteError(err, res, "List system stops"); }
+});
+
+const systemStopSchema = z.object({
+  scope: z.enum(["financial", "hr", "operational", "all"]).optional().default("all"),
+  reason: z.string().min(1, "سبب الإيقاف مطلوب"),
+});
+
+router.post("/system-stops", requirePermission("admin:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { scope: s, reason } = zodParse(systemStopSchema.safeParse(req.body));
+    const [row] = await rawQuery<{ id: number }>(
+      `INSERT INTO system_stops ("companyId", scope, reason, "activatedBy")
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [scope.companyId, s, reason, scope.userId]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, after: { scope: s, reason } }).catch(() => {});
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, details: `إيقاف نظام (${s}): ${reason}` }).catch(() => {});
+    res.status(201).json({ id: row.id, message: `تم تفعيل إيقاف النظام — النطاق: ${s}` });
+  } catch (err) { handleRouteError(err, res, "Create system stop"); }
+});
+
+router.patch("/system-stops/:id/deactivate", requirePermission("admin:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    await rawExecute(
+      `UPDATE system_stops SET active=false, "deactivatedBy"=$1, "deactivatedAt"=NOW(), "updatedAt"=NOW()
+       WHERE id=$2 AND "companyId"=$3 AND active=true`,
+      [scope.userId, id, scope.companyId]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, after: {} }).catch(() => {});
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, details: "إلغاء إيقاف النظام" }).catch(() => {});
+    res.json({ message: "تم إلغاء تفعيل الإيقاف" });
+  } catch (err) { handleRouteError(err, res, "Deactivate system stop"); }
 });
 
 export default router;

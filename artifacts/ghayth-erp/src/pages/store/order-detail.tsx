@@ -3,8 +3,8 @@ import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -89,26 +89,20 @@ export default function StoreOrderDetailPage() {
         <Card>
           <CardHeader><CardTitle>بنود الطلب</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-gray-50">
-                <th className="p-3 text-start">#</th>
-                <th className="p-3 text-start">المنتج</th>
-                <th className="p-3 text-start">الكمية</th>
-                <th className="p-3 text-start">السعر</th>
-                <th className="p-3 text-start">الإجمالي</th>
-              </tr></thead>
-              <tbody>
-                {items.map((item: any, i: number) => (
-                  <tr key={i} className="border-b">
-                    <td className="p-3 text-gray-400">{i + 1}</td>
-                    <td className="p-3 font-medium">{item.name || item.description || "-"}</td>
-                    <td className="p-3">{item.quantity || 1}</td>
-                    <td className="p-3">{formatCurrency(Number(item.price || item.unitPrice || 0))}</td>
-                    <td className="p-3 font-bold">{formatCurrency(Number(item.total || (item.quantity || 1) * (item.price || item.unitPrice || 0)))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              columns={[
+                { key: "_index", header: "#", render: (_r: any, i: number) => <span className="text-gray-400">{i + 1}</span> },
+                { key: "name", header: "المنتج", render: (r: any) => <span className="font-medium">{r.name || r.description || "-"}</span> },
+                { key: "quantity", header: "الكمية", sortable: true, render: (r: any) => r.quantity || 1 },
+                { key: "price", header: "السعر", sortable: true, render: (r: any) => formatCurrency(Number(r.price || r.unitPrice || 0)) },
+                { key: "total", header: "الإجمالي", sortable: true, render: (r: any) => <span className="font-bold">{formatCurrency(Number(r.total || (r.quantity || 1) * (r.price || r.unitPrice || 0)))}</span> },
+              ] satisfies DataTableColumn<any>[]}
+              data={items}
+              pageSize={0}
+              noToolbar
+              searchPlaceholder={null}
+              emptyMessage="لا توجد بنود"
+            />
           </CardContent>
         </Card>
       )}
@@ -150,7 +144,7 @@ export default function StoreOrderDetailPage() {
           </div>
           <div className="info-item" style={{ display: "flex", gap: "4px" }}>
             <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{order.status || "-"}</span>
+            <span className="info-value" style={{ fontWeight: 600 }}>{resolveStatus(order.status)?.label || order.status || "-"}</span>
           </div>
         </div>
 
@@ -169,8 +163,8 @@ export default function StoreOrderDetailPage() {
                   <td>{i + 1}</td>
                   <td>{item.name || item.description || "-"}</td>
                   <td>{item.quantity || 1}</td>
-                  <td>{Number(item.price || item.unitPrice || 0).toLocaleString()} ﷼</td>
-                  <td style={{ fontWeight: "bold" }}>{Number(item.total || (item.quantity || 1) * (item.price || item.unitPrice || 0)).toLocaleString()} ﷼</td>
+                  <td>{formatCurrency(Number(item.price || item.unitPrice || 0))}</td>
+                  <td style={{ fontWeight: "bold" }}>{formatCurrency(Number(item.total || (item.quantity || 1) * (item.price || item.unitPrice || 0)))}</td>
                 </tr>
               ))}
             </tbody>
@@ -181,7 +175,7 @@ export default function StoreOrderDetailPage() {
           <tbody>
             <tr>
               <td className="label" style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ الإجمالي:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{Number(order.totalAmount || 0).toLocaleString()} ﷼</td>
+              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(order.totalAmount || 0))}</td>
             </tr>
           </tbody>
         </table>
@@ -200,7 +194,7 @@ export default function StoreOrderDetailPage() {
             </div>
             <div className="info-item" style={{ display: "flex", gap: "4px" }}>
               <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{order.status || "-"}</span>
+              <span className="info-value" style={{ fontWeight: 600 }}>{resolveStatus(order.status)?.label || order.status || "-"}</span>
             </div>
           </div>
           {items.length > 0 && (
@@ -208,25 +202,25 @@ export default function StoreOrderDetailPage() {
               <thead><tr><th>#</th><th>المنتج</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
               <tbody>
                 {items.map((item: any, i: number) => (
-                  <tr key={i}><td>{i + 1}</td><td>{item.name || item.description || "-"}</td><td>{item.quantity || 1}</td><td>{Number(item.price || item.unitPrice || 0).toLocaleString()} ﷼</td><td style={{ fontWeight: "bold" }}>{Number(item.total || (item.quantity || 1) * (item.price || item.unitPrice || 0)).toLocaleString()} ﷼</td></tr>
+                  <tr key={i}><td>{i + 1}</td><td>{item.name || item.description || "-"}</td><td>{item.quantity || 1}</td><td>{formatCurrency(Number(item.price || item.unitPrice || 0))}</td><td style={{ fontWeight: "bold" }}>{formatCurrency(Number(item.total || (item.quantity || 1) * (item.price || item.unitPrice || 0)))}</td></tr>
                 ))}
               </tbody>
             </table>
           )}
           <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
             <tbody>
-              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ الإجمالي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{Number(order.totalAmount || 0).toLocaleString()} ﷼</td></tr>
+              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ الإجمالي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(order.totalAmount || 0))}</td></tr>
             </tbody>
           </table>
         </PrintDocument>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>{id && <EntityDocuments entityType="store_order" entityId={id} />}</div>
+        <div>{id && <EntityDocuments entityType="store-order" entityId={id} />}</div>
         <Card>
           <CardHeader><CardTitle className="text-lg">السجل الزمني</CardTitle></CardHeader>
           <CardContent>
-            {id && <EntityTimeline entityType="store_orders" entityId={id} maxItems={20} />}
+            {id && <EntityTimeline entityType="store-order" entityId={id} maxItems={20} />}
           </CardContent>
         </Card>
       </div>

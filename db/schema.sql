@@ -1322,6 +1322,7 @@ DROP SEQUENCE IF EXISTS public.invoices_id_seq;
 DROP TABLE IF EXISTS public.invoices;
 DROP SEQUENCE IF EXISTS public.invoice_payments_id_seq;
 DROP TABLE IF EXISTS public.invoice_payments;
+DROP SEQUENCE IF EXISTS public.journal_number_seq;
 DROP SEQUENCE IF EXISTS public.invoice_number_seq;
 DROP SEQUENCE IF EXISTS public.invoice_lines_id_seq;
 DROP TABLE IF EXISTS public.invoice_lines;
@@ -1879,7 +1880,8 @@ CREATE TABLE public.approval_chains (
     "minAmount" numeric DEFAULT 0,
     "maxAmount" numeric DEFAULT 999999999,
     "isActive" boolean DEFAULT true,
-    "createdAt" timestamp without time zone DEFAULT now()
+    "createdAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -1971,7 +1973,10 @@ CREATE TABLE public.attendance (
     method character varying(20) DEFAULT 'gps'::character varying,
     notes text,
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
-    "deviceId" character varying(100)
+    "deviceId" character varying(100),
+    "workType" character varying(20) DEFAULT 'office'::character varying,
+    "contractId" integer,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -2579,7 +2584,8 @@ CREATE TABLE public.budgets (
     notes text,
     "approvedBy" integer,
     "createdBy" integer,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -2664,7 +2670,8 @@ CREATE TABLE public.business_rules (
     "isActive" boolean DEFAULT true,
     "createdBy" integer,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "updatedAt" timestamp without time zone DEFAULT now()
+    "updatedAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -2846,6 +2853,7 @@ CREATE TABLE public.clients (
     "lastPaymentAt" timestamp without time zone,
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
     notes text,
+    attachments jsonb DEFAULT '[]'::jsonb,
     "deletedAt" timestamp with time zone
 );
 
@@ -2923,7 +2931,8 @@ CREATE TABLE public.communications_log (
     status character varying(20) DEFAULT 'sent'::character varying,
     "relatedType" character varying(50),
     "relatedId" integer,
-    "createdAt" timestamp without time zone DEFAULT now()
+    "createdAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -3622,6 +3631,10 @@ CREATE TABLE public.digital_signature_logs (
     "userAgent" text,
     metadata jsonb,
     "createdAt" timestamp with time zone DEFAULT now(),
+    "entityType" text,
+    "entityId" text,
+    "signatureRef" text,
+    "otpRef" integer,
     CONSTRAINT digital_signature_logs_action_check CHECK ((action = ANY (ARRAY['otp_requested'::text, 'otp_verified'::text, 'signed'::text, 'rejected'::text])))
 );
 
@@ -3660,7 +3673,12 @@ CREATE TABLE public.digital_signature_otps (
     used boolean DEFAULT false NOT NULL,
     "ipAddress" text,
     "deviceFingerprint" text,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "entityType" text,
+    "entityId" text,
+    action text,
+    "userAgent" text,
+    "usedAt" timestamp with time zone
 );
 
 
@@ -3774,7 +3792,8 @@ CREATE TABLE public.document_templates (
     "branchId" integer,
     "signatureUrl" text,
     "htmlContent" text,
-    "isDefault" boolean DEFAULT false
+    "isDefault" boolean DEFAULT false,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -3856,7 +3875,9 @@ CREATE TABLE public.documents (
     category character varying(50),
     status character varying(30) DEFAULT 'draft'::character varying,
     "storageKey" text,
-    "currentVersion" integer DEFAULT 1
+    "currentVersion" integer DEFAULT 1,
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -4012,7 +4033,13 @@ CREATE TABLE public.employee_contracts (
     "updatedAt" timestamp without time zone DEFAULT now(),
     "deletedAt" timestamp without time zone,
     "approvedBy" integer,
-    "approvedAt" timestamp without time zone
+    "approvedAt" timestamp without time zone,
+    "renewalDate" date,
+    "signedByEmployee" boolean DEFAULT false,
+    "employeeSignedAt" timestamp with time zone,
+    "signedByCompany" boolean DEFAULT false,
+    "companySignedAt" timestamp with time zone,
+    "companySignedBy" integer
 );
 
 
@@ -4055,7 +4082,8 @@ CREATE TABLE public.employee_development_plans (
     "updatedAt" timestamp with time zone DEFAULT now(),
     "trainingIds" jsonb DEFAULT '[]'::jsonb,
     "reviewDate" date,
-    progress integer DEFAULT 0
+    progress integer DEFAULT 0,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -4379,7 +4407,9 @@ CREATE TABLE public.employees (
     "sponsorNumber" character varying(50),
     "workPermitNumber" character varying(50),
     "workPermitExpiry" date,
-    "iqamaStatus" character varying(30) DEFAULT 'active'::character varying
+    "iqamaStatus" character varying(30) DEFAULT 'active'::character varying,
+    attachments jsonb DEFAULT '[]'::jsonb,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -4821,7 +4851,8 @@ CREATE TABLE public.fleet_drivers (
     longitude numeric(10,7),
     "lastLocationUpdate" timestamp without time zone,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "updatedAt" timestamp with time zone DEFAULT now()
 );
 
 
@@ -5067,7 +5098,8 @@ CREATE TABLE public.fleet_traffic_violations (
     "paidAt" timestamp with time zone,
     "paidBy" integer,
     notes text,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -5332,6 +5364,7 @@ CREATE TABLE public.gov_integration_links (
     "lastSyncAt" timestamp with time zone,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
     CONSTRAINT "gov_integration_links_syncStatus_check" CHECK ((("syncStatus")::text = ANY (ARRAY[('pending'::character varying)::text, ('synced'::character varying)::text, ('failed'::character varying)::text, ('skipped'::character varying)::text])))
 );
 
@@ -5412,7 +5445,8 @@ CREATE TABLE public.governance_audits (
     "endDate" date,
     findings text,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "companyId" integer
+    "companyId" integer,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -5491,7 +5525,8 @@ CREATE TABLE public.governance_compliance (
     "responsiblePerson" character varying(255),
     notes text,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "companyId" integer
+    "companyId" integer,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -5531,7 +5566,8 @@ CREATE TABLE public.governance_policies (
     "companyId" integer,
     version integer DEFAULT 1,
     "expiryDate" date,
-    "parentId" integer
+    "parentId" integer,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -5574,7 +5610,9 @@ CREATE TABLE public.governance_risks (
     "treatmentPlan" text,
     "treatmentOwner" text,
     "treatmentDueDate" date,
-    "treatmentStatus" text
+    "treatmentStatus" text,
+    "deletedAt" timestamp with time zone,
+    "updatedAt" timestamp with time zone DEFAULT now()
 );
 
 
@@ -5725,7 +5763,13 @@ CREATE TABLE public.hr_inquiry_memos (
     CONSTRAINT "hr_inquiry_memos_occurrenceCount_check" CHECK ((("occurrenceCount" >= 1) AND ("occurrenceCount" <= 4))),
     CONSTRAINT hr_memo_incident_chk CHECK (("incidentType" = ANY (ARRAY['late'::text, 'absence'::text, 'early_leave'::text, 'behavior'::text, 'organization'::text, 'gps_out_of_range'::text, 'custom'::text]))),
     CONSTRAINT hr_memo_source_chk CHECK ((source = ANY (ARRAY['manual'::text, 'auto'::text, 'manager'::text, 'hr'::text]))),
-    CONSTRAINT hr_memo_status_chk CHECK ((status = ANY (ARRAY['draft'::text, 'pending_employee'::text, 'pending_manager'::text, 'pending_gm'::text, 'approved'::text, 'rejected'::text, 'cancelled'::text, 'expired'::text])))
+    CONSTRAINT hr_memo_status_chk CHECK ((status = ANY (ARRAY['draft'::text, 'pending_employee'::text, 'pending_manager'::text, 'pending_gm'::text, 'approved'::text, 'rejected'::text, 'cancelled'::text, 'expired'::text, 'appeal_pending'::text, 'appeal_accepted'::text, 'closed'::text]))),
+    "appealReason" text,
+    "appealDate" timestamp with time zone,
+    "appealDecision" text,
+    "appealComment" text,
+    "appealDecidedAt" timestamp with time zone,
+    "closedAt" timestamp with time zone
 );
 
 
@@ -5806,7 +5850,8 @@ CREATE TABLE public.hr_leave_requests (
     "rejectedReason" text,
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT hr_leave_requests_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('cancelled'::character varying)::text, ('returned'::character varying)::text])))
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    CONSTRAINT hr_leave_requests_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('cancelled'::character varying)::text, ('returned'::character varying)::text, ('completed'::character varying)::text])))
 );
 
 
@@ -6178,6 +6223,18 @@ CREATE SEQUENCE public.invoice_number_seq
 
 
 --
+-- Name: journal_number_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.journal_number_seq
+    START WITH 1000
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
 -- Name: invoice_payments; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -6255,11 +6312,13 @@ CREATE TABLE public.invoices (
     "taxCategoryCode" character varying(10) DEFAULT 'S'::character varying,
     "exemptionReason" text,
     "projectId" integer,
+    "costCenter" character varying(100),
     "approvedBy" integer,
     "approvedAt" timestamp with time zone,
     "postedBy" integer,
     "postedAt" timestamp with time zone,
-    CONSTRAINT invoices_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending_approval'::character varying)::text, ('sent'::character varying)::text, ('partial'::character varying)::text, ('paid'::character varying)::text, ('overdue'::character varying)::text, ('cancelled'::character varying)::text, ('returned'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('delivered'::character varying)::text, ('ordered'::character varying)::text, ('posted'::character varying)::text, ('closed'::character varying)::text])))
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    CONSTRAINT chk_invoices_status CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('sent'::character varying)::text, ('partial'::character varying)::text, ('partially_paid'::character varying)::text, ('paid'::character varying)::text, ('overdue'::character varying)::text, ('void'::character varying)::text, ('rejected'::character varying)::text, ('cancelled'::character varying)::text, ('returned'::character varying)::text, ('delivered'::character varying)::text, ('ordered'::character varying)::text, ('posted'::character varying)::text, ('closed'::character varying)::text, ('invoiced'::character varying)::text])))
 );
 
 
@@ -6300,7 +6359,8 @@ CREATE TABLE public.job_applications (
     "interviewDate" timestamp without time zone,
     "createdAt" timestamp without time zone DEFAULT now(),
     "applicantAccountId" integer,
-    "coverLetter" text
+    "coverLetter" text,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -6345,7 +6405,8 @@ CREATE TABLE public.job_postings (
     "isPublic" boolean DEFAULT true,
     "closedAt" timestamp with time zone,
     "closedReason" text,
-    "reopenedAt" timestamp with time zone
+    "reopenedAt" timestamp with time zone,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -6541,7 +6602,8 @@ CREATE TABLE public.journal_entry_templates (
     "activityType" character varying(100),
     "isActive" boolean DEFAULT true NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -6586,7 +6648,8 @@ CREATE TABLE public.journal_lines (
     "propertyId" integer,
     "contractId" integer,
     "activityType" character varying(100),
-    "templateId" integer
+    "templateId" integer,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -6628,6 +6691,7 @@ CREATE TABLE public.kb_articles (
     "createdBy" integer,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
     CONSTRAINT kb_articles_status_check CHECK ((status = ANY (ARRAY['published'::text, 'draft'::text, 'archived'::text])))
 );
 
@@ -6998,7 +7062,8 @@ CREATE TABLE public.legal_sessions (
     result text,
     "nextSessionDate" timestamp without time zone,
     notes text,
-    "createdAt" timestamp without time zone DEFAULT now()
+    "createdAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -7091,7 +7156,8 @@ CREATE TABLE public.maintenance_requests (
     "costResponsibility" character varying(20) DEFAULT 'owner'::character varying,
     "closureReport" text,
     "materialsUsed" jsonb DEFAULT '[]'::jsonb,
-    "slaDeadline" timestamp with time zone
+    "slaDeadline" timestamp with time zone,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -7135,7 +7201,8 @@ CREATE TABLE public.marketing_campaigns (
     "companyId" integer,
     "createdBy" integer,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    revenue numeric(15,2) DEFAULT 0
+    revenue numeric(15,2) DEFAULT 0,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -7514,10 +7581,15 @@ CREATE INDEX idx_auto_detection_company ON public.auto_detection_log USING btree
 CREATE TABLE public.credit_memos (
     id integer NOT NULL,
     "companyId" integer NOT NULL,
+    "branchId" integer,
     "invoiceId" integer NOT NULL,
+    "clientId" integer,
     ref character varying(40),
     amount numeric(14,2) NOT NULL,
+    "netAmount" numeric(18,2),
+    "vatAmount" numeric(18,2),
     reason text,
+    "memoDate" date,
     status character varying(20) DEFAULT 'posted'::character varying,
     "journalEntryId" integer,
     "createdBy" integer,
@@ -7558,6 +7630,49 @@ CREATE INDEX idx_employees_company ON public.employees USING btree ("companyId",
 CREATE INDEX idx_employees_department ON public.employees USING btree ("companyId", department) WHERE ("deletedAt" IS NULL);
 CREATE INDEX idx_payroll_runs_company ON public.payroll_runs USING btree ("companyId", period, "deletedAt") WHERE ("deletedAt" IS NULL);
 CREATE INDEX idx_payroll_lines_run ON public.payroll_lines USING btree ("payrollRunId") WHERE ("deletedAt" IS NULL);
+
+-- Partial indexes for soft-delete filtering on high-traffic tables
+CREATE INDEX IF NOT EXISTS idx_clients_active ON public.clients USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_suppliers_active ON public.suppliers USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_tasks_active ON public.tasks USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_projects_active ON public.projects USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_project_tasks_active ON public.project_tasks USING btree ("projectId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_documents_active ON public.documents USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_requests_active ON public.requests USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_fleet_drivers_active ON public.fleet_drivers USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_fleet_maintenance_active ON public.fleet_maintenance USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_fleet_trips_active ON public.fleet_trips USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_fleet_fuel_logs_active ON public.fleet_fuel_logs USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_fleet_insurance_active ON public.fleet_insurance USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_property_units_active ON public.property_units USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_property_buildings_active ON public.property_buildings USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_rent_payments_active ON public.rent_payments USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_tenants_active ON public.tenants USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_journal_lines_active ON public.journal_lines USING btree ("journalEntryId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_employee_contracts_active ON public.employee_contracts USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_official_letters_active ON public.official_letters USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_hr_employee_loans_active ON public.hr_employee_loans USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_hr_overtime_requests_active ON public.hr_overtime_requests USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_hr_exit_requests_active ON public.hr_exit_requests USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_training_programs_active ON public.training_programs USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_store_products_active ON public.store_products USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_store_orders_active ON public.store_orders USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_warehouse_products_active ON public.warehouse_products USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_budgets_active ON public.budgets USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_legal_contracts_active ON public.legal_contracts USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_umrah_pilgrims_active ON public.umrah_pilgrims USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_umrah_groups_active ON public.umrah_groups USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_umrah_agents_active ON public.umrah_agents USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_performance_reviews_active ON public.performance_reviews USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_job_postings_active ON public.job_postings USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_vendor_contracts_active ON public.vendor_contracts USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_workflow_requests_active ON public.workflow_requests USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_approval_chains_active ON public.approval_chains USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_goods_receipts_active ON public.goods_receipts USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_shifts_active ON public.shifts USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_ticket_replies_active ON public.ticket_replies USING btree ("ticketId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_marketing_campaigns_active ON public.marketing_campaigns USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS idx_kb_articles_active ON public.kb_articles USING btree ("companyId") WHERE ("deletedAt" IS NULL);
 
 
 --
@@ -7788,7 +7903,10 @@ CREATE TABLE public.official_letters (
     "dispatchedVia" character varying(32),
     "approvedAt" timestamp with time zone,
     "approvedBy" integer,
-    "createdByAssignmentId" integer
+    "createdByAssignmentId" integer,
+    "deletedAt" timestamp with time zone,
+    ref character varying(50),
+    "branchId" integer
 );
 
 
@@ -8107,6 +8225,7 @@ CREATE TABLE public.performance_reviews (
     comments text,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
     CONSTRAINT performance_reviews_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('in_progress'::character varying)::text, ('completed'::character varying)::text, ('acknowledged'::character varying)::text])))
 );
 
@@ -8197,6 +8316,7 @@ CREATE TABLE public.policy_compliance_actions (
     "createdBy" integer,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
     CONSTRAINT policy_compliance_actions_status_check CHECK ((status = ANY (ARRAY['open'::text, 'in_progress'::text, 'done'::text, 'overdue'::text])))
 );
 
@@ -8636,7 +8756,9 @@ CREATE TABLE public.project_tasks (
     "completedAt" timestamp without time zone,
     "estimatedHours" numeric(8,2),
     "actualHours" numeric(8,2),
-    "createdAt" timestamp without time zone DEFAULT now()
+    "createdAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
+    progress numeric(5,2)
 );
 
 
@@ -8667,6 +8789,8 @@ ALTER SEQUENCE public.project_tasks_id_seq OWNED BY public.project_tasks.id;
 CREATE TABLE public.projects (
     id integer NOT NULL,
     "companyId" integer NOT NULL,
+    "branchId" integer,
+    ref character varying(100),
     name character varying(300) NOT NULL,
     description text,
     "clientId" integer,
@@ -9000,7 +9124,8 @@ CREATE TABLE public.public_holidays (
     description text,
     "isRecurring" boolean DEFAULT false,
     "createdAt" timestamp with time zone DEFAULT now(),
-    "updatedAt" timestamp with time zone DEFAULT now()
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -9081,8 +9206,9 @@ CREATE TABLE public.purchase_orders (
     "branchId" integer,
     "journalEntryId" integer,
     "glStatus" character varying(20) DEFAULT 'pending',
+    "paidAt" timestamp with time zone,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT purchase_orders_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('received'::character varying)::text, ('cancelled'::character varying)::text, ('completed'::character varying)::text, ('paid'::character varying)::text, ('confirmed'::character varying)::text, ('ordered'::character varying)::text, ('delivered'::character varying)::text])))
+    CONSTRAINT chk_purchase_orders_status CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('returned'::character varying)::text, ('received'::character varying)::text, ('partially_received'::character varying)::text, ('partial_received'::character varying)::text, ('cancelled'::character varying)::text, ('completed'::character varying)::text, ('paid'::character varying)::text, ('confirmed'::character varying)::text, ('ordered'::character varying)::text, ('delivered'::character varying)::text, ('sent'::character varying)::text, ('invoice_matched'::character varying)::text, ('invoice_mismatch'::character varying)::text, ('payment_scheduled'::character varying)::text])))
 );
 
 
@@ -9391,7 +9517,8 @@ CREATE TABLE public.rent_payments (
     "receiptNumber" character varying(50),
     notes text,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "updatedAt" timestamp without time zone DEFAULT now()
+    "updatedAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -9553,7 +9680,17 @@ CREATE TABLE public.requests (
     notes text,
     "reviewedBy" integer,
     "reviewedAt" timestamp without time zone,
-    "returnReason" text
+    "returnReason" text,
+    "deletedAt" timestamp with time zone,
+    ref character varying(50),
+    "requestDate" date,
+    "branchId" integer,
+    "approvedAt" timestamp without time zone,
+    "approvedBy" integer,
+    "convertedTo" integer,
+    "convertedType" character varying(50),
+    "closedAt" timestamp without time zone,
+    "closedBy" integer
 );
 
 
@@ -9887,7 +10024,8 @@ CREATE TABLE public.shifts (
     "splitBreakStart" time without time zone,
     "splitBreakEnd" time without time zone,
     "flexStartEarliest" time without time zone,
-    "flexStartLatest" time without time zone
+    "flexStartLatest" time without time zone,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10161,7 +10299,9 @@ CREATE TABLE public.store_orders (
     "companyId" integer,
     "branchId" integer,
     "paidAt" timestamp with time zone,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    "journalEntryId" integer
 );
 
 
@@ -10203,7 +10343,8 @@ CREATE TABLE public.store_products (
     "createdAt" timestamp without time zone DEFAULT now(),
     "companyId" integer,
     "isActive" boolean DEFAULT true NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10281,7 +10422,8 @@ CREATE TABLE public.suppliers (
     rating numeric(3,2) DEFAULT 5.0,
     status character varying(20) DEFAULT 'active'::character varying,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    category character varying(100)
 );
 
 
@@ -10461,6 +10603,36 @@ ALTER SEQUENCE public.system_settings_id_seq OWNED BY public.system_settings.id;
 
 
 --
+-- Name: system_stops; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.system_stops (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    scope character varying(20) DEFAULT 'company'::character varying,
+    reason text,
+    active boolean DEFAULT true,
+    "activatedBy" integer,
+    "deactivatedBy" integer,
+    "deactivatedAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now()
+);
+
+CREATE SEQUENCE public.system_stops_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+ALTER SEQUENCE public.system_stops_id_seq OWNED BY public.system_stops.id;
+ALTER TABLE ONLY public.system_stops ALTER COLUMN id SET DEFAULT nextval('public.system_stops_id_seq'::regclass);
+ALTER TABLE ONLY public.system_stops ADD CONSTRAINT system_stops_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: tasks; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -10492,7 +10664,8 @@ CREATE TABLE public.tasks (
     "assignmentId" integer,
     "linkedEntityType" character varying(50),
     "linkedEntityId" integer,
-    "autoGenerated" boolean DEFAULT false
+    "autoGenerated" boolean DEFAULT false,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10735,7 +10908,8 @@ CREATE TABLE public.training_enrollments (
     score numeric(5,2),
     "completedAt" timestamp without time zone,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "certificateUrl" text
+    "certificateUrl" text,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10784,7 +10958,8 @@ CREATE TABLE public.training_programs (
     "durationUnit" character varying(20) DEFAULT 'hours'::character varying,
     cost numeric(12,2) DEFAULT 0 NOT NULL,
     "maxParticipants" integer,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -10878,6 +11053,7 @@ CREATE TABLE public.umrah_agents (
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
     CONSTRAINT umrah_agents_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('inactive'::character varying)::text, ('suspended'::character varying)::text, ('blocked'::character varying)::text])))
 );
 
@@ -10963,7 +11139,9 @@ CREATE TABLE public.umrah_packages (
     duration integer DEFAULT 7,
     description text,
     status character varying(20) DEFAULT 'active'::character varying,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -11006,7 +11184,7 @@ CREATE TABLE public.umrah_penalties (
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
     CONSTRAINT umrah_penalties_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('invoiced'::character varying)::text, ('paid'::character varying)::text, ('waived'::character varying)::text]))),
-    CONSTRAINT umrah_penalties_type_check CHECK (((type)::text = ANY (ARRAY[('overstay'::character varying)::text, ('violation'::character varying)::text, ('lost'::character varying)::text, ('regulatory'::character varying)::text])))
+    CONSTRAINT umrah_penalties_type_check CHECK (((type)::text = ANY (ARRAY[('overstay'::character varying)::text, ('violation'::character varying)::text, ('lost'::character varying)::text, ('regulatory'::character varying)::text, ('manual'::character varying)::text])))
 );
 
 
@@ -11058,6 +11236,28 @@ CREATE TABLE public.umrah_pilgrims (
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
+    "branchId" integer,
+    "createdBy" integer,
+    "nuskNumber" character varying(50),
+    "passportExpiry" date,
+    "groupId" integer,
+    "subAgentId" integer,
+    "entryPort" character varying(100),
+    "entryFlight" character varying(50),
+    "exitPort" character varying(100),
+    "exitFlight" character varying(50),
+    "actualStayDays" integer,
+    "programDuration" integer,
+    "overstayDays" integer,
+    "borderNumber" character varying(50),
+    "mofaNumber" character varying(50),
+    "isInsideKingdom" boolean DEFAULT false,
+    "hasUmrahPermit" boolean DEFAULT false,
+    "passportNumber_hash" character varying(16),
+    "visaNumber_hash" character varying(16),
+    "mofaNumber_hash" character varying(16),
+    "borderNumber_hash" character varying(16),
     CONSTRAINT umrah_pilgrims_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('arrived'::character varying)::text, ('active'::character varying)::text, ('overstayed'::character varying)::text, ('departed'::character varying)::text, ('violated'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
@@ -11139,6 +11339,8 @@ CREATE TABLE public.umrah_transport (
     cost numeric(12,2) DEFAULT 0,
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
+    "updatedAt" timestamp with time zone DEFAULT now(),
     CONSTRAINT umrah_transport_status_check CHECK (((status)::text = ANY (ARRAY[('scheduled'::character varying)::text, ('in_progress'::character varying)::text, ('completed'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
@@ -11257,6 +11459,19 @@ CREATE TABLE public.umrah_nusk_invoices (
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
     "deletedAt" timestamp with time zone
+);
+
+CREATE TABLE public.audit_umrah_access (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "userId" integer NOT NULL,
+    action text NOT NULL,
+    entity text NOT NULL,
+    "entityId" integer,
+    "ipAddress" text,
+    "userAgent" text,
+    details jsonb,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
 CREATE TABLE public.umrah_violations (
@@ -11894,7 +12109,8 @@ CREATE TABLE public.workflow_instances (
     "completedAt" timestamp with time zone,
     data jsonb DEFAULT '{}'::jsonb,
     "createdAt" timestamp with time zone DEFAULT now(),
-    "updatedAt" timestamp with time zone DEFAULT now()
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -15133,10 +15349,8 @@ ALTER TABLE ONLY public.invoices
 
 --
 -- Name: invoices invoices_ref_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.invoices
-    ADD CONSTRAINT invoices_ref_key UNIQUE (ref);
+-- REMOVED: was UNIQUE(ref) without companyId — multi-tenant unsafe.
+-- The correct constraint is enforced by: invoices_ref_company_uq UNIQUE(companyId, ref) WHERE deletedAt IS NULL
 
 
 --
@@ -20387,28 +20601,35 @@ ALTER TABLE ONLY public.zatca_submission_log
 
 CREATE TABLE IF NOT EXISTS public.correspondence (
     id SERIAL PRIMARY KEY,
-    "companyId" integer NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-    "branchId" integer,
-    type varchar(50) NOT NULL DEFAULT 'outgoing',
-    "referenceNumber" varchar(100),
-    subject varchar(500) NOT NULL,
-    body text,
-    sender varchar(255),
-    recipient varchar(255),
-    department varchar(100),
-    status varchar(50) DEFAULT 'draft',
-    priority varchar(20) DEFAULT 'normal',
-    "attachmentUrl" text,
-    "relatedEntity" varchar(100),
-    "relatedEntityId" integer,
-    "sentAt" timestamptz,
-    "receivedAt" timestamptz,
-    "createdBy" integer,
-    "updatedBy" integer,
-    "deletedAt" timestamptz,
-    "createdAt" timestamptz DEFAULT now(),
-    "updatedAt" timestamptz DEFAULT now()
+    "companyId" INTEGER NOT NULL,
+    "branchId" INTEGER,
+    direction VARCHAR(10) NOT NULL CHECK (direction IN ('outgoing', 'incoming')),
+    ref VARCHAR(50) NOT NULL,
+    subject VARCHAR(500) NOT NULL,
+    content TEXT,
+    "entityType" VARCHAR(50),
+    "entityId" INTEGER,
+    "senderName" VARCHAR(300),
+    "senderOrg" VARCHAR(300),
+    "recipientName" VARCHAR(300),
+    "recipientOrg" VARCHAR(300),
+    channel VARCHAR(30) DEFAULT 'internal',
+    status VARCHAR(30) DEFAULT 'draft',
+    "sentAt" TIMESTAMP WITH TIME ZONE,
+    "receivedAt" TIMESTAMP WITH TIME ZONE,
+    "respondedAt" TIMESTAMP WITH TIME ZONE,
+    "responseRef" VARCHAR(50),
+    attachments JSONB DEFAULT '[]',
+    notes TEXT,
+    "createdBy" INTEGER,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS correspondence_company_idx ON correspondence("companyId");
+CREATE INDEX IF NOT EXISTS correspondence_direction_idx ON correspondence("companyId", direction);
+CREATE INDEX IF NOT EXISTS correspondence_entity_idx ON correspondence("entityType", "entityId");
+CREATE INDEX IF NOT EXISTS correspondence_ref_idx ON correspondence(ref);
 
 CREATE TABLE IF NOT EXISTS public.company_documents (
     id SERIAL PRIMARY KEY,
@@ -20450,10 +20671,14 @@ CREATE TABLE IF NOT EXISTS public.debit_memos (
     "invoiceId" integer,
     "clientId" integer,
     amount numeric(15,2) NOT NULL DEFAULT 0,
+    "netAmount" numeric(18,2),
+    "vatAmount" numeric(18,2),
     reason text,
+    "memoDate" date,
     status varchar(50) DEFAULT 'draft',
     "approvedBy" integer,
     "approvedAt" timestamptz,
+    "createdBy" integer,
     "deletedAt" timestamptz,
     "createdAt" timestamptz DEFAULT now(),
     "updatedAt" timestamptz DEFAULT now()
@@ -20562,6 +20787,244 @@ CREATE INDEX IF NOT EXISTS legal_cases_company_status_idx ON public.legal_cases 
 CREATE INDEX IF NOT EXISTS financial_posting_failures_company_idx ON public.financial_posting_failures USING btree ("companyId", resolved);
 CREATE INDEX IF NOT EXISTS event_logs_company_action_idx ON public.event_logs USING btree ("companyId", action);
 CREATE INDEX IF NOT EXISTS event_logs_created_idx ON public.event_logs USING btree ("createdAt" DESC);
+
+--
+-- Cross-domain event Dead Letter Queue. Captures events whose handlers
+-- failed so they can be inspected and replayed without losing the
+-- cross-domain effect (e.g. fixed asset registration after vehicle creation).
+--
+CREATE TABLE IF NOT EXISTS public.event_dlq (
+    id integer NOT NULL,
+    type text NOT NULL,
+    "eventName" text,
+    payload jsonb NOT NULL,
+    error text NOT NULL,
+    "companyId" integer,
+    "retryCount" integer DEFAULT 0,
+    "resolvedAt" timestamp without time zone,
+    "createdAt" timestamp without time zone DEFAULT now()
+);
+
+CREATE SEQUENCE IF NOT EXISTS public.event_dlq_id_seq AS integer;
+ALTER TABLE ONLY public.event_dlq ALTER COLUMN id SET DEFAULT nextval('public.event_dlq_id_seq'::regclass);
+ALTER SEQUENCE public.event_dlq_id_seq OWNED BY public.event_dlq.id;
+ALTER TABLE ONLY public.event_dlq ADD CONSTRAINT event_dlq_pkey PRIMARY KEY (id);
+
+CREATE INDEX IF NOT EXISTS event_dlq_unresolved_idx ON public.event_dlq USING btree ("createdAt" DESC) WHERE ("resolvedAt" IS NULL);
+CREATE INDEX IF NOT EXISTS event_dlq_company_idx ON public.event_dlq USING btree ("companyId", "createdAt" DESC);
+CREATE INDEX IF NOT EXISTS event_dlq_event_idx ON public.event_dlq USING btree ("eventName") WHERE ("resolvedAt" IS NULL);
+
+-- salary_history — tracks salary changes over time
+CREATE TABLE IF NOT EXISTS public.salary_history (
+    id integer NOT NULL,
+    "employeeId" integer NOT NULL,
+    "assignmentId" integer,
+    "companyId" integer NOT NULL,
+    "oldSalary" numeric(18,2) DEFAULT 0,
+    "newSalary" numeric(18,2) DEFAULT 0,
+    "effectiveDate" date DEFAULT CURRENT_DATE,
+    "changedBy" integer,
+    "createdAt" timestamp without time zone DEFAULT now()
+);
+CREATE SEQUENCE IF NOT EXISTS public.salary_history_id_seq AS integer;
+ALTER TABLE ONLY public.salary_history ALTER COLUMN id SET DEFAULT nextval('public.salary_history_id_seq'::regclass);
+ALTER SEQUENCE public.salary_history_id_seq OWNED BY public.salary_history.id;
+ALTER TABLE ONLY public.salary_history ADD CONSTRAINT salary_history_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS salary_history_employee_idx ON public.salary_history USING btree ("employeeId", "effectiveDate" DESC);
+
+-- payment_run_items — individual POs included in a payment run
+CREATE TABLE IF NOT EXISTS public.payment_run_items (
+    id integer NOT NULL,
+    "runId" integer NOT NULL,
+    "poId" integer NOT NULL,
+    "supplierId" integer,
+    amount numeric(18,2) NOT NULL,
+    "journalId" integer
+);
+CREATE SEQUENCE IF NOT EXISTS public.payment_run_items_id_seq AS integer;
+ALTER TABLE ONLY public.payment_run_items ALTER COLUMN id SET DEFAULT nextval('public.payment_run_items_id_seq'::regclass);
+ALTER SEQUENCE public.payment_run_items_id_seq OWNED BY public.payment_run_items.id;
+ALTER TABLE ONLY public.payment_run_items ADD CONSTRAINT payment_run_items_pkey PRIMARY KEY (id);
+
+--
+-- Missing primary key constraints (29 tables)
+--
+ALTER TABLE ONLY public.audit_logs_archive ADD CONSTRAINT audit_logs_archive_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.customer_advances ADD CONSTRAINT customer_advances_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.employee_commission_calculations ADD CONSTRAINT employee_commission_calculations_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.employee_commission_plans ADD CONSTRAINT employee_commission_plans_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.employee_commission_tiers ADD CONSTRAINT employee_commission_tiers_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.employee_kpi_snapshots ADD CONSTRAINT employee_kpi_snapshots_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.employee_salary_components ADD CONSTRAINT employee_salary_components_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.financial_posting_failures ADD CONSTRAINT financial_posting_failures_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_employee_loans ADD CONSTRAINT hr_employee_loans_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_excuse_requests ADD CONSTRAINT hr_excuse_requests_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_exit_clearance ADD CONSTRAINT hr_exit_clearance_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_exit_requests ADD CONSTRAINT hr_exit_requests_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_loan_installments ADD CONSTRAINT hr_loan_installments_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.hr_overtime_requests ADD CONSTRAINT hr_overtime_requests_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.integration_logs_archive ADD CONSTRAINT integration_logs_archive_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.payment_runs ADD CONSTRAINT payment_runs_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.property_contracts ADD CONSTRAINT property_contracts_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.purchase_order_lines ADD CONSTRAINT purchase_order_lines_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_groups ADD CONSTRAINT umrah_groups_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_import_batches ADD CONSTRAINT umrah_import_batches_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_import_changes ADD CONSTRAINT umrah_import_changes_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_nusk_invoices ADD CONSTRAINT umrah_nusk_invoices_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_payment_allocations ADD CONSTRAINT umrah_payment_allocations_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_payments ADD CONSTRAINT umrah_payments_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_pricing ADD CONSTRAINT umrah_pricing_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_sales_invoice_items ADD CONSTRAINT umrah_sales_invoice_items_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_sales_invoices ADD CONSTRAINT umrah_sales_invoices_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_sub_agents ADD CONSTRAINT umrah_sub_agents_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.umrah_violations ADD CONSTRAINT umrah_violations_pkey PRIMARY KEY (id);
+
+--
+-- Missing FK indexes on high-traffic tables
+--
+
+-- journal_lines (critical for reporting JOINs)
+CREATE INDEX IF NOT EXISTS idx_journal_lines_account ON public.journal_lines USING btree ("accountId");
+CREATE INDEX IF NOT EXISTS idx_journal_lines_department ON public.journal_lines USING btree ("departmentId") WHERE "departmentId" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_journal_lines_project ON public.journal_lines USING btree ("projectId") WHERE "projectId" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_journal_lines_employee ON public.journal_lines USING btree ("employeeId") WHERE "employeeId" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_journal_lines_company ON public.journal_lines USING btree ("companyId");
+
+-- attendance
+CREATE INDEX IF NOT EXISTS idx_attendance_branch ON public.attendance USING btree ("branchId");
+CREATE INDEX IF NOT EXISTS idx_attendance_assignment ON public.attendance USING btree ("assignmentId");
+
+-- invoices
+CREATE INDEX IF NOT EXISTS idx_invoices_client ON public.invoices USING btree ("clientId") WHERE "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_invoices_project ON public.invoices USING btree ("projectId") WHERE "projectId" IS NOT NULL AND "deletedAt" IS NULL;
+
+-- invoice_lines
+CREATE INDEX IF NOT EXISTS idx_invoice_lines_invoice ON public.invoice_lines USING btree ("invoiceId");
+
+-- warehouse_movements
+CREATE INDEX IF NOT EXISTS idx_warehouse_movements_product ON public.warehouse_movements USING btree ("productId");
+CREATE INDEX IF NOT EXISTS idx_warehouse_movements_company ON public.warehouse_movements USING btree ("companyId");
+CREATE INDEX IF NOT EXISTS idx_warehouse_movements_branch ON public.warehouse_movements USING btree ("branchId") WHERE "branchId" IS NOT NULL;
+
+-- project_tasks
+CREATE INDEX IF NOT EXISTS idx_project_tasks_project ON public.project_tasks USING btree ("projectId");
+CREATE INDEX IF NOT EXISTS idx_project_tasks_assignee ON public.project_tasks USING btree ("assigneeId") WHERE "assigneeId" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_project_tasks_phase ON public.project_tasks USING btree ("phaseId") WHERE "phaseId" IS NOT NULL;
+
+-- project_resources
+CREATE INDEX IF NOT EXISTS idx_project_resources_project ON public.project_resources USING btree ("projectId");
+CREATE INDEX IF NOT EXISTS idx_project_resources_employee ON public.project_resources USING btree ("employeeId");
+
+-- project_costs
+CREATE INDEX IF NOT EXISTS idx_project_costs_project ON public.project_costs USING btree ("projectId");
+
+-- hr_leave_requests
+CREATE INDEX IF NOT EXISTS idx_hr_leave_requests_type ON public.hr_leave_requests USING btree ("leaveTypeId");
+
+-- hr_employee_loans
+CREATE INDEX IF NOT EXISTS idx_hr_employee_loans_company ON public.hr_employee_loans USING btree ("companyId", status);
+CREATE INDEX IF NOT EXISTS idx_hr_employee_loans_employee ON public.hr_employee_loans USING btree ("employeeId");
+CREATE INDEX IF NOT EXISTS idx_hr_employee_loans_assignment ON public.hr_employee_loans USING btree ("assignmentId");
+
+-- payroll_lines
+CREATE INDEX IF NOT EXISTS idx_payroll_lines_assignment ON public.payroll_lines USING btree ("assignmentId");
+CREATE INDEX IF NOT EXISTS idx_payroll_lines_employee ON public.payroll_lines USING btree ("employeeId");
+
+-- rental_contracts
+CREATE INDEX IF NOT EXISTS idx_rental_contracts_unit ON public.rental_contracts USING btree ("unitId");
+CREATE INDEX IF NOT EXISTS idx_rental_contracts_tenant ON public.rental_contracts USING btree ("tenantId");
+
+-- crm_opportunities
+CREATE INDEX IF NOT EXISTS idx_crm_opportunities_company ON public.crm_opportunities USING btree ("companyId") WHERE "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_crm_opportunities_client ON public.crm_opportunities USING btree ("clientId") WHERE "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_crm_opportunities_assigned ON public.crm_opportunities USING btree ("assignedTo") WHERE "deletedAt" IS NULL;
+
+-- crm_activities
+CREATE INDEX IF NOT EXISTS idx_crm_activities_opportunity ON public.crm_activities USING btree ("opportunityId");
+
+-- support_tickets
+CREATE INDEX IF NOT EXISTS idx_support_tickets_client ON public.support_tickets USING btree ("clientId") WHERE "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_support_tickets_assignee ON public.support_tickets USING btree ("assigneeId") WHERE "deletedAt" IS NULL;
+
+-- fleet_vehicles
+CREATE INDEX IF NOT EXISTS idx_fleet_vehicles_branch ON public.fleet_vehicles USING btree ("branchId") WHERE "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_fleet_vehicles_driver ON public.fleet_vehicles USING btree ("assignedDriverId") WHERE "assignedDriverId" IS NOT NULL AND "deletedAt" IS NULL;
+
+-- fleet_maintenance
+CREATE INDEX IF NOT EXISTS idx_fleet_maintenance_vehicle ON public.fleet_maintenance USING btree ("vehicleId");
+CREATE INDEX IF NOT EXISTS idx_fleet_maintenance_company ON public.fleet_maintenance USING btree ("companyId");
+
+-- fleet_trips
+CREATE INDEX IF NOT EXISTS idx_fleet_trips_vehicle ON public.fleet_trips USING btree ("vehicleId");
+CREATE INDEX IF NOT EXISTS idx_fleet_trips_driver ON public.fleet_trips USING btree ("driverId");
+CREATE INDEX IF NOT EXISTS idx_fleet_trips_company ON public.fleet_trips USING btree ("companyId");
+
+-- fleet_fuel_logs
+CREATE INDEX IF NOT EXISTS idx_fleet_fuel_logs_vehicle ON public.fleet_fuel_logs USING btree ("vehicleId");
+CREATE INDEX IF NOT EXISTS idx_fleet_fuel_logs_company ON public.fleet_fuel_logs USING btree ("companyId");
+
+-- bank_statements
+CREATE INDEX IF NOT EXISTS idx_bank_statements_matched_journal ON public.bank_statements USING btree ("matchedJournalLineId");
+
+-- budget_approval_requests
+CREATE INDEX IF NOT EXISTS idx_budget_approval_requests_source ON public.budget_approval_requests USING btree ("sourceId");
+
+-- journal_entry_template_lines
+CREATE INDEX IF NOT EXISTS idx_journal_entry_template_lines_account ON public.journal_entry_template_lines USING btree ("accountId");
+
+-- accounting_mappings
+CREATE INDEX IF NOT EXISTS idx_accounting_mappings_debit ON public.accounting_mappings USING btree ("debitAccountId");
+CREATE INDEX IF NOT EXISTS idx_accounting_mappings_credit ON public.accounting_mappings USING btree ("creditAccountId");
+
+--
+-- Name: request_number_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE IF NOT EXISTS public.request_number_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: letter_number_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE IF NOT EXISTS public.letter_number_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: correspondence_outgoing_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE IF NOT EXISTS public.correspondence_outgoing_seq
+    START WITH 1000
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: correspondence_incoming_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE IF NOT EXISTS public.correspondence_incoming_seq
+    START WITH 1000
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
 
 --
 -- PostgreSQL database dump complete

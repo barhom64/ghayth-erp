@@ -3,21 +3,31 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog, createNotification, emitEvent, createGuardedJournalEntry, getAccountCodeFromMapping } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, currentMonthPadded, generateTimeRef, roundTo2 } from "../lib/businessHelpers.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 const STAGE_ORDER = ['lead', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost'];
+
+const CRM_TRANSITIONS: Record<string, readonly string[]> = {
+  lead:        ["qualified", "closed_lost"],
+  qualified:   ["proposal", "negotiation", "closed_lost"],
+  proposal:    ["negotiation", "closed_won", "closed_lost"],
+  negotiation: ["proposal", "closed_won", "closed_lost"],
+  closed_won:  [],
+  closed_lost: ["qualified"],
+};
 
 // ── Zod validation schemas ──────────────────────────────────────────
 const createOpportunitySchema = z.object({
@@ -33,6 +43,7 @@ const createOpportunitySchema = z.object({
   expectedCloseDate: z.string({ invalid_type_error: "تاريخ الإغلاق المتوقع يجب أن يكون نصاً" }).optional().nullable(),
   assignedTo: z.coerce.number({ invalid_type_error: "معرّف الموظف المسؤول يجب أن يكون رقماً" }).optional().nullable(),
   notes: z.string({ invalid_type_error: "الملاحظات يجب أن تكون نصاً" }).optional().nullable(),
+  nextFollowUp: z.string({ invalid_type_error: "تاريخ المتابعة القادمة يجب أن يكون نصاً" }).optional().nullable(),
 });
 
 const updateOpportunitySchema = z.object({
@@ -50,6 +61,7 @@ const updateOpportunitySchema = z.object({
   assignedTo: z.coerce.number({ invalid_type_error: "معرّف الموظف المسؤول يجب أن يكون رقماً" }).optional().nullable(),
   notes: z.string({ invalid_type_error: "الملاحظات يجب أن تكون نصاً" }).optional().nullable(),
   lostReason: z.string({ invalid_type_error: "سبب الخسارة يجب أن يكون نصاً" }).optional().nullable(),
+  nextFollowUp: z.string({ invalid_type_error: "تاريخ المتابعة القادمة يجب أن يكون نصاً" }).optional().nullable(),
 });
 
 const convertOpportunitySchema = z.object({
@@ -100,7 +112,7 @@ router.get("/opportunities", requirePermission("crm:read"), async (req, res) => 
     if (stage) { where += ` AND o.stage = $${paramIdx}`; params.push(stage); paramIdx++; }
     if (status) { where += ` AND o.status = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" LEFT JOIN employees e ON e.id=o."assignedTo" WHERE ${where} AND o."deletedAt" IS NULL ORDER BY o.id DESC`,
+      `SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" AND e."deletedAt" IS NULL WHERE ${where} AND o."deletedAt" IS NULL ORDER BY o.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -115,10 +127,9 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
   // errors instead of deep 23503 FK errors, and keeps the existing
   // obligations engine wiring + event emission untouched.
   try {
-    const parsed = createOpportunitySchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createOpportunitySchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
 
     const title = (b.title ?? "").toString().trim();
     if (!title) {
@@ -181,7 +192,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
     // Pre-check: clientId must resolve to an active client in this company.
     if (b.clientId) {
       const [client] = await rawQuery<{ id: number }>(
-        `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
         [Number(b.clientId), scope.companyId]
       );
       if (!client) {
@@ -200,7 +211,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
       const [asn] = await rawQuery<{ id: number }>(
         `SELECT e.id FROM employees e
            JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-          WHERE e.id = $1 AND ea."companyId" = $2 LIMIT 1`,
+          WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL LIMIT 1`,
         [Number(b.assignedTo), scope.companyId]
       );
       if (!asn) {
@@ -212,8 +223,8 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO crm_opportunities ("companyId",title,"clientId","contactName","contactPhone","contactEmail",source,stage,value,probability,"expectedCloseDate","assignedTo",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-      [scope.companyId, title, b.clientId ?? null, b.contactName ?? null, b.contactPhone ?? null, b.contactEmail ?? null, b.source ?? null, stage, value, probability, b.expectedCloseDate ?? null, b.assignedTo ?? null, b.notes ?? null]
+      `INSERT INTO crm_opportunities ("companyId",title,"clientId","contactName","contactPhone","contactEmail",source,stage,value,probability,"expectedCloseDate","assignedTo",notes,"nextFollowUp") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [scope.companyId, title, b.clientId ?? null, b.contactName ?? null, b.contactPhone ?? null, b.contactEmail ?? null, b.source ?? null, stage, value, probability, b.expectedCloseDate ?? null, b.assignedTo ?? null, b.notes ?? null, b.nextFollowUp ?? null]
     );
 
     const stageConfig = STAGE_AUTO_ACTIONS[stage];
@@ -225,14 +236,14 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
           `INSERT INTO crm_activities ("opportunityId",type,description,"scheduledAt","createdBy") VALUES ($1,'follow_up',$2,$3,$4)`,
           [insertId, stageConfig.description, followUpDate.toISOString(), scope.userId]
         );
-      } catch (actErr) { console.error("Failed to create auto activity:", actErr); }
+      } catch (actErr) { logger.error(actErr, "Failed to create auto activity:"); }
     }
 
     if (b.assignedTo) {
       try {
         const [asgn] = await rawQuery<any>(
-          `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND status='active' LIMIT 1`,
-          [b.assignedTo]
+          `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
+          [b.assignedTo, scope.companyId]
         );
         if (asgn) {
           createNotification({
@@ -244,12 +255,12 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
             priority: "normal",
             refType: "crm_opportunities",
             refId: insertId,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "crm background task failed"));
         }
-      } catch (e) { console.error("CRM notification error:", e); }
+      } catch (e) { logger.error(e, "CRM notification error:"); }
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -259,7 +270,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
       entity: "crm_opportunities",
       entityId: insertId,
       after: { title, clientId: b.clientId ?? null, value, stage, assignedTo: b.assignedTo ?? null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
 
     // Register CRM follow-up obligation — terminal stages were filtered out
     // at validation time above so every opportunity reaching this point is
@@ -281,7 +292,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
           { hoursAfterDue: 72, notifyRole: "general_manager" },
         ],
       });
-    } catch (obErr) { console.error("CRM opportunity obligation failed:", obErr); }
+    } catch (obErr) { logger.error(obErr, "CRM opportunity obligation failed:"); }
 
     emitEvent({
       companyId: scope.companyId,
@@ -291,7 +302,7 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
       entity: "crm_opportunities",
       entityId: insertId,
       details: JSON.stringify({ title, value, stage, clientId: b.clientId ?? null, assignedTo: b.assignedTo ?? null }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
 
     res.status(201).json({ ...row, autoAction: stageConfig?.description });
   } catch (err) { handleRouteError(err, res, "Create opportunity error:"); }
@@ -299,13 +310,12 @@ router.post("/opportunities", requirePermission("crm:create"), async (req, res) 
 
 router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, res) => {
   try {
-    const parsed = updateOpportunitySchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(updateOpportunitySchema.safeParse(req.body));
     const scope = req.scope!;
-    const oppId = Number(req.params.id);
-    const b = req.body;
+    const oppId = parseId(req.params.id, "id");
+    const b = parsed;
 
-    const [existing] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2`, [oppId, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [oppId, scope.companyId]);
     if (!existing) throw new NotFoundError("الفرصة غير موجودة");
 
     // Phase C domain 2 — stage transition guard. Mirrors the Support
@@ -339,14 +349,6 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
         });
       }
 
-      const CRM_TRANSITIONS: Record<string, readonly string[]> = {
-        lead:        ["qualified", "closed_lost"],
-        qualified:   ["proposal", "negotiation", "closed_lost"],
-        proposal:    ["negotiation", "closed_won", "closed_lost"],
-        negotiation: ["proposal", "closed_won", "closed_lost"],
-        closed_won:  [],
-        closed_lost: ["qualified"],
-      };
       const allowed = CRM_TRANSITIONS[existing.stage] ?? [];
       if (!allowed.includes(b.stage)) {
         throw new ConflictError(
@@ -366,7 +368,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
       }
 
       if (b.stage === "closed_won") {
-        console.warn(`[crm] opportunity ${oppId} set to closed_won via PATCH — prefer /opportunities/${oppId}/convert`);
+        logger.warn(`[crm] opportunity ${oppId} set to closed_won via PATCH — prefer /opportunities/${oppId}/convert`);
       }
     }
 
@@ -409,7 +411,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
       const [asn] = await rawQuery<{ id: number }>(
         `SELECT e.id FROM employees e
            JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-          WHERE e.id = $1 AND ea."companyId" = $2 LIMIT 1`,
+          WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL LIMIT 1`,
         [Number(b.assignedTo), scope.companyId]
       );
       if (!asn) {
@@ -423,7 +425,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
     // Pre-check clientId FK on update.
     if (b.clientId !== undefined && b.clientId !== null) {
       const [client] = await rawQuery<{ id: number }>(
-        `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
         [Number(b.clientId), scope.companyId]
       );
       if (!client) {
@@ -450,8 +452,9 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
     if (b.expectedCloseDate !== undefined) { params.push(b.expectedCloseDate || null); sets.push(`"expectedCloseDate"=$${params.length}`); }
     if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
     if (b.source !== undefined) { params.push(b.source); sets.push(`source=$${params.length}`); }
-    params.push(oppId);
-    await rawExecute(`UPDATE crm_opportunities SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    if (b.nextFollowUp !== undefined) { params.push(b.nextFollowUp || null); sets.push(`"nextFollowUp"=$${params.length}`); }
+    params.push(oppId, scope.companyId);
+    await rawExecute(`UPDATE crm_opportunities SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
 
     let autoActions: string[] = [];
 
@@ -467,7 +470,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
             [oppId, `[تلقائي] ${stageConfig.description}`, followUpDate.toISOString(), scope.userId]
           );
           autoActions.push(`متابعة تلقائية بعد ${stageConfig.followUpDays} أيام`);
-        } catch (actErr) { console.error("Auto activity creation failed:", actErr); }
+        } catch (actErr) { logger.error(actErr, "Auto activity creation failed:"); }
       }
 
       if (b.stage === 'proposal') {
@@ -479,14 +482,14 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
             [oppId, '[تلقائي] تصعيد — لم يرد العميل على العرض خلال أسبوع', escalationDate.toISOString(), scope.userId]
           );
           autoActions.push('تصعيد تلقائي بعد 7 أيام إن لم يُرد');
-        } catch (e) { console.error("Escalation activity error:", e); }
+        } catch (e) { logger.error(e, "Escalation activity error:"); }
       }
 
       if (existing.assignedTo) {
         try {
           const [asgn] = await rawQuery<any>(
-            `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND status='active' LIMIT 1`,
-            [existing.assignedTo]
+            `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
+            [existing.assignedTo, scope.companyId]
           );
           if (asgn) {
             createNotification({
@@ -498,9 +501,9 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
               priority: "normal",
               refType: "crm_opportunities",
               refId: oppId,
-            }).catch(console.error);
+            }).catch((e) => logger.error(e, "crm background task failed"));
           }
-        } catch (e) { console.error("Stage change notification error:", e); }
+        } catch (e) { logger.error(e, "Stage change notification error:"); }
       }
     }
 
@@ -508,7 +511,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
       await handleDealWon(scope, existing, b.value ?? existing.value);
       autoActions.push('إنشاء عقد + فاتورة + تحديث إيرادات العميل');
       // Mark follow-up obligation as met and emit deal-won event
-      await markObligationMet(scope.companyId, "crm_opportunity", oppId, "follow_up").catch(console.error);
+      await markObligationMet(scope.companyId, "crm_opportunity", oppId, "follow_up").catch((e) => logger.error(e, "crm background task failed"));
       emitEvent({
         companyId: scope.companyId,
         userId: scope.userId,
@@ -516,7 +519,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
         entity: "crm_opportunities",
         entityId: oppId,
         details: `صفقة ناجحة: ${existing.title} — ${b.value ?? existing.value} ريال`,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "crm background task failed"));
     }
 
     if (b.stage === 'closed_lost' && existing.stage !== 'closed_lost') {
@@ -526,9 +529,9 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
           `INSERT INTO crm_activities ("opportunityId",type,description,"scheduledAt","completedAt","createdBy") VALUES ($1,'analysis',$2,NOW(),NOW(),$3)`,
           [oppId, `تحليل خسارة: ${b.lostReason || 'غير محدد'} — القيمة المفقودة: ${existing.value} ريال`, scope.userId]
         );
-      } catch (e) { console.error("Lost analysis error:", e); }
+      } catch (e) { logger.error(e, "Lost analysis error:"); }
       // Cancel follow-up obligation and emit deal-lost event
-      await cancelObligation(scope.companyId, "crm_opportunity", oppId).catch(console.error);
+      await cancelObligation(scope.companyId, "crm_opportunity", oppId).catch((e) => logger.error(e, "crm background task failed"));
       emitEvent({
         companyId: scope.companyId,
         userId: scope.userId,
@@ -536,7 +539,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
         entity: "crm_opportunities",
         entityId: oppId,
         details: `صفقة خاسرة: ${existing.title} — السبب: ${b.lostReason || 'غير محدد'}`,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "crm background task failed"));
     }
 
     // Stage change (non-terminal) → refresh follow-up obligation window
@@ -563,7 +566,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
             { hoursAfterDue: 72, notifyRole: "general_manager" },
           ],
         });
-      } catch (obErr) { console.error("CRM stage-change obligation refresh failed:", obErr); }
+      } catch (obErr) { logger.error(obErr, "CRM stage-change obligation refresh failed:"); }
 
       emitEvent({
         companyId: scope.companyId,
@@ -572,10 +575,10 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
         entity: "crm_opportunities",
         entityId: oppId,
         details: `تغيير مرحلة: ${existing.title} — من ${existing.stage} إلى ${b.stage}`,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "crm background task failed"));
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1`, [oppId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [oppId, scope.companyId]);
 
     // Build a tracked-field diff so the audit log reflects what
     // actually changed instead of just `{ stage, status }`. Same
@@ -601,7 +604,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
       before: existing,
       after: row,
       reason: `حقول معدّلة: ${Object.keys(changedFields).join("، ") || "بلا تغيير"}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
 
     // Generic updated event for non-stage edits. The stage_changed /
     // deal.won / deal.lost events already cover lifecycle transitions,
@@ -619,7 +622,7 @@ router.patch("/opportunities/:id", requirePermission("crm:update"), async (req, 
         before: existing,
         after: row,
         details: JSON.stringify({ changedFields }),
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "crm background task failed"));
     }
 
     res.json({ ...row, autoActions });
@@ -630,80 +633,93 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
   try {
     let clientId = opp.clientId;
 
-    if (!clientId && opp.contactName) {
-      const existing = await rawQuery<any>(
-        `SELECT id FROM clients WHERE "companyId"=$1 AND (name=$2 OR phone=$3 OR email=$4) LIMIT 1`,
-        [scope.companyId, opp.contactName || '', opp.contactPhone || '', opp.contactEmail || '']
-      );
-      if (existing.length > 0) {
-        clientId = existing[0].id;
-      } else {
-        const { insertId: newClientId } = await rawExecute(
-          `INSERT INTO clients ("companyId",name,phone,email,source,classification) VALUES ($1,$2,$3,$4,'crm','regular')`,
-          [scope.companyId, opp.contactName, opp.contactPhone || null, opp.contactEmail || null]
+    if (!clientId && opp.contactName?.trim()) {
+      await withTransaction(async (txClient: any) => {
+        const { rows: existing } = await txClient.query(
+          `SELECT id FROM clients WHERE "companyId"=$1 AND "deletedAt" IS NULL AND (name=$2 OR phone=$3 OR email=$4) LIMIT 1 FOR UPDATE`,
+          [scope.companyId, opp.contactName.trim(), opp.contactPhone || '', opp.contactEmail || '']
         );
-        clientId = newClientId;
-      }
-      await rawExecute(`UPDATE crm_opportunities SET "clientId"=$1 WHERE id=$2`, [clientId, opp.id]);
+        if (existing.length > 0) {
+          clientId = existing[0].id;
+        } else {
+          const { rows: [newRow] } = await txClient.query(
+            `INSERT INTO clients ("companyId",name,phone,email,source,classification) VALUES ($1,$2,$3,$4,'crm','regular') RETURNING id`,
+            [scope.companyId, opp.contactName, opp.contactPhone || null, opp.contactEmail || null]
+          );
+          clientId = newRow.id;
+        }
+        await txClient.query(`UPDATE crm_opportunities SET "clientId"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [clientId, opp.id, scope.companyId]);
+      });
     }
 
-    const contractRef = `CTR-CRM-${Date.now().toString(36).toUpperCase()}`;
-    const contractStart = new Date().toISOString().split('T')[0];
-    const contractEnd = new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0];
     try {
-      await rawExecute(
-        `INSERT INTO legal_contracts ("companyId",ref,title,"contractType","partyName","startDate","endDate",value,status,"createdBy") VALUES ($1,$2,$3,'service',$4,$5,$6,$7,'active',$8)`,
-        [scope.companyId, contractRef, `عقد خدمات - ${opp.title}`, opp.contactName || 'عميل', contractStart, contractEnd, dealValue, scope.userId]
+      const { crmEngine } = await import("../lib/engines/index.js");
+      crmEngine.requestLegalContractCreation(
+        { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+        {
+          ref: generateTimeRef("CTR-CRM"),
+          title: `عقد خدمات - ${opp.title}`,
+          contractType: "service",
+          partyName: opp.contactName || 'عميل',
+          startDate: todayISO(),
+          endDate: toDateISO(new Date(Date.now() + 365 * 86400000)),
+          value: dealValue,
+        }
       );
     } catch (contractErr) {
-      console.error("Failed to create legal contract for deal-won:", contractErr);
+      logger.error(contractErr, "Failed to request legal contract for deal-won:");
     }
 
-    const monthNum = String(new Date().getMonth() + 1).padStart(2, "0");
-    const yearShort = String(new Date().getFullYear()).slice(2);
+    const monthNum = currentMonthPadded();
+    const yearShort = String(currentYear()).slice(2);
     const invoiceRef = `INV-CRM-${yearShort}${monthNum}-${opp.id}`;
-    const vatAmount = dealValue * 0.15;
-    const totalAmount = dealValue + vatAmount;
+    const vatAmount = roundTo2(dealValue * 0.15);
+    const totalAmount = roundTo2(dealValue + vatAmount);
+
+    // Request invoice creation via CRM Engine (event-based, no direct write to finance table)
     try {
-      await rawExecute(
-        `INSERT INTO invoices ("companyId","clientId",ref,description,subtotal,total,"vatAmount","vatRate","paidAmount",status,"dueDate","createdBy") VALUES ($1,$2,$3,$4,$5,$6,$7,15,0,'draft',$8,$9)`,
-        [scope.companyId, clientId, invoiceRef, `فاتورة أولى - ${opp.title}`, dealValue, totalAmount, vatAmount, new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0], scope.userId]
+      const { crmEngine } = await import("../lib/engines/index.js");
+      await crmEngine.requestInvoiceCreation(
+        { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+        {
+          clientId: clientId || 0,
+          opportunityId: opp.id,
+          ref: invoiceRef,
+          description: `فاتورة أولى - ${opp.title}`,
+          subtotal: dealValue,
+          vatAmount,
+          total: totalAmount,
+          dueDate: toDateISO(new Date(Date.now() + 14 * 86400000)),
+        }
       );
     } catch (invoiceErr) {
-      console.error("Failed to create invoice for deal-won:", invoiceErr);
+      logger.error(invoiceErr, "Failed to request invoice for deal-won:");
     }
 
-    const arCode = await getAccountCodeFromMapping(scope.companyId, "invoice_ar", "debit", "1200");
-    const revenueCode = await getAccountCodeFromMapping(scope.companyId, "invoice_revenue", "credit", "4000");
-    const vatCode = await getAccountCodeFromMapping(scope.companyId, "invoice_vat_payable", "credit", "2300");
-    await createGuardedJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId || 0,
-      createdBy: scope.userId,
-      ref: invoiceRef,
-      description: `قيد فاتورة CRM — ${opp.title}`,
-      sourceType: "crm_deal_won",
-      sourceId: opp.id,
-      lines: [
-        { accountCode: arCode, debit: totalAmount, credit: 0, description: `ذمم مدينة — ${opp.title}`, clientId: clientId || undefined },
-        { accountCode: revenueCode, debit: 0, credit: dealValue, description: `إيراد مبيعات — ${opp.title}`, clientId: clientId || undefined },
-        { accountCode: vatCode, debit: 0, credit: vatAmount, description: `ضريبة قيمة مضافة — ${opp.title}` },
-      ],
-    }, { table: "crm_opportunities", id: opp.id });
+    // GL posting via CRM Engine → Financial Engine (with period check + sourceKey)
+    try {
+      const { crmEngine } = await import("../lib/engines/index.js");
+      await crmEngine.postDealWonGL(
+        { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+        { id: opp.id, clientId: clientId || 0, amount: dealValue, vatAmount, description: `قيد فاتورة CRM — ${opp.title}` }
+      );
+    } catch (jeErr) {
+      logger.error(jeErr, "CRM deal-won GL posting via engine failed:");
+    }
 
     if (clientId) {
       try {
-        await rawExecute(`UPDATE clients SET "totalRevenue"=COALESCE("totalRevenue",0)+$1 WHERE id=$2`, [dealValue, clientId]);
+        await rawExecute(`UPDATE clients SET "totalRevenue"=COALESCE("totalRevenue",0)+$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [dealValue, clientId, scope.companyId]);
       } catch (revenueErr) {
-        console.error("Failed to update client totalRevenue:", revenueErr);
+        logger.error(revenueErr, "Failed to update client totalRevenue:");
       }
     }
 
     if (opp.assignedTo) {
       try {
         const [asgn] = await rawQuery<any>(
-          `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND status='active' LIMIT 1`,
-          [opp.assignedTo]
+          `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
+          [opp.assignedTo, scope.companyId]
         );
         if (asgn) {
           createNotification({
@@ -715,23 +731,24 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
             priority: "normal",
             refType: "crm_opportunities",
             refId: opp.id,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "crm background task failed"));
         }
-      } catch (e) { console.error("Deal won notification error:", e); }
+      } catch (e) { logger.error(e, "Deal won notification error:"); }
     }
   } catch (err) {
-    console.error("Handle deal won error:", err);
+    logger.error(err, "Handle deal won error:");
   }
 }
 
 router.get("/opportunities/:id", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" LEFT JOIN employees e ON e.id=o."assignedTo" WHERE o.id=$1 AND o."companyId"=$2`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" AND e."deletedAt" IS NULL WHERE o.id=$1 AND o."companyId"=$2 AND o."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الفرصة غير موجودة");
 
     const activities = await rawQuery<any>(
-      `SELECT * FROM crm_activities WHERE "opportunityId"=$1 ORDER BY "scheduledAt" DESC`,
+      `SELECT * FROM crm_activities WHERE "opportunityId"=$1 ORDER BY "scheduledAt" DESC LIMIT 500`,
       [row.id]
     );
     const overdueActivities = activities.filter((a: any) => !a.completedAt && new Date(a.scheduledAt) < new Date());
@@ -739,7 +756,7 @@ router.get("/opportunities/:id", requirePermission("crm:read"), async (req, res)
     res.json({
       ...row, activities, overdueActivities,
       stageConfig: STAGE_AUTO_ACTIONS[row.stage],
-      nextStages: row.stage === 'closed_won' || row.stage === 'closed_lost' ? [] : STAGE_ORDER.slice(STAGE_ORDER.indexOf(row.stage) + 1),
+      nextStages: CRM_TRANSITIONS[row.stage] ?? [],
     });
   } catch (err) { handleRouteError(err, res, "Get opportunity error:"); }
 });
@@ -750,10 +767,9 @@ router.get("/opportunities/:id", requirePermission("crm:read"), async (req, res)
 // atomic transition via the lifecycle engine.
 router.post("/opportunities/:id/convert", requirePermission("crm:update"), async (req, res) => {
   try {
-    const parsed = convertOpportunitySchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(convertOpportunitySchema.safeParse(req.body));
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -767,7 +783,7 @@ router.post("/opportunities/:id/convert", requirePermission("crm:update"), async
       });
     }
 
-    const dealValue = (req.body?.value as number | undefined) ?? existing.value ?? 0;
+    const dealValue = (parsed.value as number | undefined) ?? existing.value ?? 0;
 
     // handleDealWon creates / resolves the client and writes a contract +
     // invoice using the global pool. It is idempotent enough for first-call
@@ -777,8 +793,8 @@ router.post("/opportunities/:id/convert", requirePermission("crm:update"), async
     // Re-read the opportunity to pick up the clientId that handleDealWon may
     // have just populated, so we can mirror it into convertedClientId.
     const [afterDealWon] = await rawQuery<any>(
-      `SELECT "clientId" FROM crm_opportunities WHERE id=$1`,
-      [id]
+      `SELECT "clientId" FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
     );
     const convertedClientId = afterDealWon?.clientId ?? null;
 
@@ -788,7 +804,7 @@ router.post("/opportunities/:id/convert", requirePermission("crm:update"), async
       scope,
       action: "crm.opportunity.converted",
       toState: "won",
-      reason: (req.body?.notes as string | undefined)?.trim(),
+      reason: (parsed.notes as string | undefined)?.trim(),
       setExtras: {
         stage: "closed_won",
         convertedAt: { raw: "NOW()" },
@@ -802,12 +818,12 @@ router.post("/opportunities/:id/convert", requirePermission("crm:update"), async
       companyId: scope.companyId, userId: scope.userId,
       action: "crm.opportunity.converted", entity: "crm_opportunities", entityId: id,
       details: JSON.stringify({ convertedClientId, stage: "closed_won" }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "crm_opportunities", entityId: id,
       after: { stage: "closed_won", convertedClientId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
     res.json({ ...updated, event: "crm.opportunity.converted", convertedClientId });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -819,11 +835,11 @@ router.post("/opportunities/:id/convert", requirePermission("crm:update"), async
 router.delete("/opportunities/:id", requirePermission("crm:delete"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الفرصة غير موجودة");
-    await rawExecute(`UPDATE crm_opportunities SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    await cancelObligation(scope.companyId, "crm_opportunity", id).catch(console.error);
+    await rawExecute(`UPDATE crm_opportunities SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    await cancelObligation(scope.companyId, "crm_opportunity", id).catch((e) => logger.error(e, "crm background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -831,11 +847,11 @@ router.delete("/opportunities/:id", requirePermission("crm:delete"), async (req,
       entity: "crm_opportunities",
       entityId: id,
       details: `حذف فرصة CRM`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "crm_opportunities", entityId: id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
     res.json({ message: "تم حذف الفرصة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete opportunity error:"); }
 });
@@ -846,7 +862,7 @@ router.delete("/opportunities/:id", requirePermission("crm:delete"), async (req,
 router.get("/opportunities/:id/related", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [base] = await rawQuery<any>(
       `SELECT id, "clientId", "contactName", "contactPhone", "contactEmail"
          FROM crm_opportunities
@@ -881,7 +897,7 @@ router.get("/opportunities/:id/related", requirePermission("crm:read"), async (r
     const rows = await rawQuery<any>(
       `SELECT o.*, cl.name AS "clientName"
          FROM crm_opportunities o
-         LEFT JOIN clients cl ON cl.id = o."clientId"
+         LEFT JOIN clients cl ON cl.id = o."clientId" AND cl."deletedAt" IS NULL
         WHERE o."companyId" = $1
           AND o.id <> $2
           AND o."deletedAt" IS NULL
@@ -909,24 +925,23 @@ router.get("/opportunities/:id/related", requirePermission("crm:read"), async (r
 router.get("/opportunities/:id/activities", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const oppId = Number(req.params.id);
+    const oppId = parseId(req.params.id, "id");
     const [opp] = await rawQuery<any>(
       `SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [oppId, scope.companyId]
     );
     if (!opp) throw new NotFoundError("الفرصة غير موجودة");
-    const rows = await rawQuery<any>(`SELECT * FROM crm_activities WHERE "opportunityId"=$1 ORDER BY "createdAt" DESC`, [oppId]);
+    const rows = await rawQuery<any>(`SELECT * FROM crm_activities WHERE "opportunityId"=$1 ORDER BY "createdAt" DESC LIMIT 500`, [oppId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "CRM activities error:"); }
 });
 
 router.post("/opportunities/:id/activities", requirePermission("crm:create"), async (req, res) => {
   try {
-    const parsed = createActivitySchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createActivitySchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
-    const oppId = Number(req.params.id);
+    const b = parsed;
+    const oppId = parseId(req.params.id, "id");
     const [opp] = await rawQuery<any>(
       `SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [oppId, scope.companyId]
@@ -936,17 +951,17 @@ router.post("/opportunities/:id/activities", requirePermission("crm:create"), as
       `INSERT INTO crm_activities ("opportunityId",type,description,"scheduledAt","createdBy") VALUES ($1,$2,$3,$4,$5)`,
       [oppId, b.type, b.description, b.scheduledAt, scope.userId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM crm_activities WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT ca.* FROM crm_activities ca JOIN crm_opportunities co ON co.id = ca."opportunityId" WHERE ca.id=$1 AND co."companyId"=$2 AND co."deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "crm.activity.created", entity: "crm_activities", entityId: insertId,
       details: JSON.stringify({ opportunityId: oppId, type: b.type }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "crm_activities", entityId: insertId,
       after: { opportunityId: oppId, type: b.type, description: b.description },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create activity error:"); }
 });
@@ -954,66 +969,84 @@ router.post("/opportunities/:id/activities", requirePermission("crm:create"), as
 router.get("/pipeline", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const result: any[] = [];
-    for (const stage of STAGE_ORDER) {
-      const [row] = await rawQuery<any>(`SELECT COUNT(*) as count, COALESCE(SUM(value),0) as value FROM crm_opportunities WHERE "companyId"=$1 AND stage=$2`, [scope.companyId, stage]);
-      result.push({ stage, count: Number(row.count), value: Number(row.value), autoAction: STAGE_AUTO_ACTIONS[stage]?.description });
-    }
+    const stageRows = await rawQuery<any>(
+      `SELECT stage, COUNT(*) as count, COALESCE(SUM(value),0) as value FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL GROUP BY stage`,
+      [scope.companyId]
+    );
+    const stageMap = new Map(stageRows.map((r: any) => [r.stage, r]));
+    const result: any[] = STAGE_ORDER.map((stage) => {
+      const row = stageMap.get(stage);
+      return { stage, count: Number(row?.count ?? 0), value: Number(row?.value ?? 0), autoAction: STAGE_AUTO_ACTIONS[stage]?.description };
+    });
     res.json({ data: result, total: result.length, page: 1, pageSize: result.length });
   } catch (err) { handleRouteError(err, res, "CRM pipeline error:"); }
 });
 
 router.post("/followup-check", requirePermission("crm:create"), async (req, res) => {
   try {
-    const parsed = followupCheckSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(followupCheckSchema.safeParse(req.body));
     const scope = req.scope!;
     const overdueActivities = await rawQuery<any>(
       `SELECT ca.*, co.title AS "oppTitle", co.stage, co."assignedTo", e.name AS "assigneeName"
        FROM crm_activities ca
-       JOIN crm_opportunities co ON co.id=ca."opportunityId"
-       LEFT JOIN employees e ON e.id=co."assignedTo"
+       JOIN crm_opportunities co ON co.id=ca."opportunityId" AND co."deletedAt" IS NULL
+       LEFT JOIN employees e ON e.id=co."assignedTo" AND e."deletedAt" IS NULL
        WHERE co."companyId"=$1 AND ca."completedAt" IS NULL AND ca."scheduledAt" < NOW()
-       ORDER BY ca."scheduledAt" ASC`,
+       ORDER BY ca."scheduledAt" ASC
+       LIMIT 500`,
       [scope.companyId]
     );
 
     const escalated: any[] = [];
-    for (const activity of overdueActivities) {
-      const overdueDays = Math.floor((Date.now() - new Date(activity.scheduledAt).getTime()) / (1000 * 60 * 60 * 24));
-      if (overdueDays >= 3 && activity.assignedTo) {
-        try {
-          const [asgn] = await rawQuery<any>(
-            `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND status='active' LIMIT 1`,
-            [activity.assignedTo]
-          );
-          if (asgn) {
-            createNotification({
-              companyId: scope.companyId,
-              assignmentId: asgn.id,
-              type: "crm_overdue",
-              title: `متابعة متأخرة: ${activity.oppTitle}`,
-              body: `نشاط متأخر ${overdueDays} أيام: ${activity.description?.substring(0, 100)}`,
-              priority: "high",
-              refType: "crm_opportunities",
-              refId: activity.opportunityId,
-            }).catch(console.error);
-          }
-        } catch (e) { console.error("Follow-up escalation error:", e); }
-        escalated.push({ activityId: activity.id, oppTitle: activity.oppTitle, overdueDays });
+    const escalationCandidates = overdueActivities
+      .map((activity: any) => ({
+        ...activity,
+        overdueDays: Math.floor((Date.now() - new Date(activity.scheduledAt).getTime()) / (1000 * 60 * 60 * 24)),
+      }))
+      .filter((a: any) => a.overdueDays >= 3 && a.assignedTo);
+
+    // Batch-fetch active assignments for all relevant employeeIds
+    const uniqueEmployeeIds = [...new Set(escalationCandidates.map((a: any) => a.assignedTo))];
+    const assignmentMap = new Map<number, number>();
+    if (uniqueEmployeeIds.length > 0) {
+      try {
+        const asgnRows = await rawQuery<any>(
+          `SELECT DISTINCT ON ("employeeId") id, "employeeId" FROM employee_assignments WHERE "employeeId" = ANY($1) AND status='active'`,
+          [uniqueEmployeeIds]
+        );
+        for (const row of asgnRows) {
+          assignmentMap.set(row.employeeId, row.id);
+        }
+      } catch (e) { logger.error(e, "Follow-up batch assignment lookup error:"); }
+    }
+
+    for (const activity of escalationCandidates) {
+      const assignmentId = assignmentMap.get(activity.assignedTo);
+      if (assignmentId) {
+        createNotification({
+          companyId: scope.companyId,
+          assignmentId,
+          type: "crm_overdue",
+          title: `متابعة متأخرة: ${activity.oppTitle}`,
+          body: `نشاط متأخر ${activity.overdueDays} أيام: ${activity.description?.substring(0, 100)}`,
+          priority: "high",
+          refType: "crm_opportunities",
+          refId: activity.opportunityId,
+        }).catch((e) => logger.error(e, "crm background task failed"));
       }
+      escalated.push({ activityId: activity.id, oppTitle: activity.oppTitle, overdueDays: activity.overdueDays });
     }
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "crm.followup.checked", entity: "crm_activities", entityId: 0,
       details: JSON.stringify({ totalOverdue: overdueActivities.length, escalated: escalated.length }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "preview", entity: "crm_activities", entityId: 0,
       after: { totalOverdue: overdueActivities.length, escalated: escalated.length },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "crm background task failed"));
     res.json({ totalOverdue: overdueActivities.length, escalated: escalated.length, details: escalated });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -1026,33 +1059,33 @@ router.get("/analytics", requirePermission("crm:read"), async (req, res) => {
     const conversionRates: any[] = [];
     let prevCount: number | null = null;
     for (const stage of STAGE_ORDER) {
-      const [row] = await rawQuery<any>(`SELECT COUNT(*) as count FROM crm_opportunities WHERE "companyId"=$1 AND stage=$2`, [cid, stage]);
-      const count = Number(row.count);
+      const [row] = await rawQuery<any>(`SELECT COUNT(*) as count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage=$2`, [cid, stage]);
+      const count = Number(row?.count ?? 0);
       const rate = prevCount !== null && prevCount > 0 ? ((count / prevCount) * 100).toFixed(1) : null;
       conversionRates.push({ stage, count, conversionFromPrev: rate });
       if (!['closed_won', 'closed_lost'].includes(stage)) prevCount = count;
     }
 
     const [avgDeal] = await rawQuery<any>(
-      `SELECT AVG(EXTRACT(EPOCH FROM ("updatedAt"::timestamp - "createdAt"::timestamp))/86400) AS "avgDays" FROM crm_opportunities WHERE "companyId"=$1 AND stage='closed_won'`,
+      `SELECT AVG(EXTRACT(EPOCH FROM ("updatedAt"::timestamp - "createdAt"::timestamp))/86400) AS "avgDays" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage='closed_won'`,
       [cid]
     );
     const [revenue] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonRevenue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) AS "forecast" FROM crm_opportunities WHERE "companyId"=$1`,
+      `SELECT COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonRevenue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) AS "forecast" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
       [cid]
     );
     const [lostAnalysis] = await rawQuery<any>(
-      `SELECT COUNT(*) as "lostCount", COALESCE(SUM(value),0) as "lostValue" FROM crm_opportunities WHERE "companyId"=$1 AND stage='closed_lost'`,
+      `SELECT COUNT(*) as "lostCount", COALESCE(SUM(value),0) as "lostValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage='closed_lost'`,
       [cid]
     );
 
     res.json({
       conversionRates,
       avgDealDays: Number(avgDeal?.avgDays || 0).toFixed(1),
-      wonRevenue: Number(revenue.wonRevenue),
-      forecastRevenue: Number(revenue.forecast),
-      lostCount: Number(lostAnalysis.lostCount),
-      lostValue: Number(lostAnalysis.lostValue),
+      wonRevenue: Number(revenue?.wonRevenue ?? 0),
+      forecastRevenue: Number(revenue?.forecast ?? 0),
+      lostCount: Number(lostAnalysis?.lostCount ?? 0),
+      lostValue: Number(lostAnalysis?.lostValue ?? 0),
     });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -1061,9 +1094,9 @@ router.get("/stats", requirePermission("crm:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [opp] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) as "wonValue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) as "pipelineValue" FROM crm_opportunities WHERE "companyId"=$1`, [cid]);
+    const [opp] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) as "wonValue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) as "pipelineValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [overdue] = await rawQuery<any>(
-      `SELECT COUNT(*) as count FROM crm_activities ca JOIN crm_opportunities co ON co.id=ca."opportunityId" WHERE co."companyId"=$1 AND ca."completedAt" IS NULL AND ca."scheduledAt" < NOW()`,
+      `SELECT COUNT(*) as count FROM crm_activities ca JOIN crm_opportunities co ON co.id=ca."opportunityId" WHERE co."companyId"=$1 AND co."deletedAt" IS NULL AND ca."completedAt" IS NULL AND ca."scheduledAt" < NOW()`,
       [cid]
     );
     res.json({

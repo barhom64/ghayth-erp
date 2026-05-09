@@ -1,17 +1,21 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, Plus, CheckCircle, DollarSign } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const VIOLATION_TYPES: Record<string, string> = {
   speeding: "تجاوز السرعة",
@@ -28,11 +32,12 @@ const STATUS_OPTIONS = [
 ];
 
 export default function TrafficViolationsPage() {
+  const [, navigate] = useLocation();
   const [showForm, setShowForm] = useState(false);
   const [filters, setFilters] = useFilters();
   const [form, setForm] = useState({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: new Date().toISOString().split("T")[0], fineAmount: "", location: "", violationNumber: "", notes: "" });
 
-  const { data, refetch } = useApiQuery<any>(["traffic-violations"], "/fleet/traffic-violations");
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(["traffic-violations"], "/fleet/traffic-violations");
   const violations = asList(data?.data || data);
 
   const { data: vehicles } = useApiQuery<any>(["fleet-vehicles"], "/fleet/vehicles?limit=200");
@@ -40,13 +45,16 @@ export default function TrafficViolationsPage() {
   const vehicleList = asList(vehicles?.data || vehicles);
   const driverList = asList(drivers?.data || drivers);
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={refetch} />;
+
   const pendingFines = violations.filter((v: any) => v.status !== "paid").reduce((s: number, v: any) => s + Number(v.fineAmount || 0), 0);
   const paidFines = violations.filter((v: any) => v.status === "paid").reduce((s: number, v: any) => s + Number(v.fineAmount || 0), 0);
 
   const handleSave = async () => {
     if (!form.vehicleId || !form.violationType) { toast({ title: "المركبة ونوع المخالفة مطلوبان", variant: "destructive" }); return; }
     try {
-      await apiFetch("/fleet/traffic-violations", { method: "POST", body: JSON.stringify({ ...form, vehicleId: Number(form.vehicleId), driverId: form.driverId ? Number(form.driverId) : null, fineAmount: Number(form.fineAmount || 0) }) });
+      await apiFetch("/fleet/traffic-violations", { method: "POST", body: JSON.stringify({ ...form, vehicleId: Number(form.vehicleId), driverId: form.driverId && form.driverId !== "none" ? Number(form.driverId) : null, fineAmount: Number(form.fineAmount || 0) }) });
       toast({ title: "تم تسجيل المخالفة" });
       setShowForm(false);
       setForm({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: new Date().toISOString().split("T")[0], fineAmount: "", location: "", violationNumber: "", notes: "" });
@@ -120,11 +128,7 @@ export default function TrafficViolationsPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (v) => (
-        <Badge className={v.status === "paid" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
-          {v.status === "paid" ? "مدفوعة" : "غير مدفوعة"}
-        </Badge>
-      ),
+      render: (v) => <PageStatusBadge status={v.status === "pending" ? "unpaid" : v.status} domain="traffic_violation" />,
     },
     {
       key: "actions",
@@ -183,7 +187,7 @@ export default function TrafficViolationsPage() {
               <Select value={form.driverId} onValueChange={(v) => setForm({ ...form, driverId: v })}>
                 <SelectTrigger><SelectValue placeholder="اختر سائقاً" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">—</SelectItem>
+                  <SelectItem value="none">—</SelectItem>
                   {driverList.map((d: any) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -197,7 +201,7 @@ export default function TrafficViolationsPage() {
             </div>
             <div>
               <Label>تاريخ المخالفة</Label>
-              <Input type="date" value={form.violationDate} onChange={(e) => setForm({ ...form, violationDate: e.target.value })} />
+              <UnifiedDateInput value={form.violationDate} onChange={(v) => setForm({ ...form, violationDate: v })} showDualCalendar showPresets />
             </div>
             <div>
               <Label>مبلغ الغرامة (ر.س)</Label>
@@ -216,7 +220,7 @@ export default function TrafficViolationsPage() {
               <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
             <div className="flex items-end">
-              <Button onClick={handleSave} className="w-full">حفظ</Button>
+              <Button onClick={handleSave} className="w-full" rateLimitAware>حفظ</Button>
             </div>
             <div className="col-span-3">
               <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
@@ -251,6 +255,7 @@ export default function TrafficViolationsPage() {
         emptyMessage="لا توجد مخالفات مسجلة"
         emptyIcon={<AlertTriangle className="w-10 h-10 text-gray-300" />}
         rowClassName={(v) => v.status === "paid" ? "opacity-60" : undefined as any}
+        onRowClick={(row) => navigate(`/fleet/traffic-violations/${row.id}`)}
       />
     </PageShell>
   );

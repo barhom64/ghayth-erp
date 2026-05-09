@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
+import { formatCurrency } from "@/lib/formatters";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -13,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function UmrahInvoices() {
+  const [, navigate] = useLocation();
   const { data: resp, refetch, isLoading, isError, error } = useApiQuery<any>(["umrah-agent-invoices"], "/umrah/agent-invoices");
   const { data: agents } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
   const { data: seasons } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
@@ -48,8 +51,8 @@ export default function UmrahInvoices() {
 
   const kpiCards = [
     { label: "إجمالي الفواتير", value: items.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
-    { label: "الإجمالي (ريال)", value: totalAmount.toLocaleString(), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
-    { label: "المدفوع (ريال)", value: paidAmount.toLocaleString(), icon: Receipt, color: "text-green-600 bg-green-50" },
+    { label: "الإجمالي (ريال)", value: formatCurrency(totalAmount), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
+    { label: "المدفوع (ريال)", value: formatCurrency(paidAmount), icon: Receipt, color: "text-green-600 bg-green-50" },
   ];
 
   return (
@@ -121,9 +124,9 @@ export default function UmrahInvoices() {
           { key: "agentName", header: "الوكيل" },
           { key: "seasonTitle", header: "الموسم" },
           { key: "pilgrimCount", header: "عدد المعتمرين" },
-          { key: "servicesTotal", header: "الخدمات (ريال)", render: (inv) => Number(inv.servicesTotal).toLocaleString() },
-          { key: "penaltiesTotal", header: "الغرامات (ريال)", render: (inv) => <span className="text-red-600">{Number(inv.penaltiesTotal).toLocaleString()}</span> },
-          { key: "total", header: "الإجمالي (ريال)", render: (inv) => <span className="font-bold">{Number(inv.total).toLocaleString()}</span> },
+          { key: "servicesTotal", header: "الخدمات (ريال)", render: (inv) => formatCurrency(Number(inv.servicesTotal)) },
+          { key: "penaltiesTotal", header: "الغرامات (ريال)", render: (inv) => <span className="text-red-600">{formatCurrency(Number(inv.penaltiesTotal))}</span> },
+          { key: "total", header: "الإجمالي (ريال)", render: (inv) => <span className="font-bold">{formatCurrency(Number(inv.total))}</span> },
           { key: "status", header: "الحالة", render: (inv) => <PageStatusBadge status={inv.status} /> },
         ] as DataTableColumn<any>[]}
         data={filteredItems}
@@ -135,6 +138,7 @@ export default function UmrahInvoices() {
         emptyIcon={<Receipt className="h-6 w-6 text-slate-400" />}
         noToolbar
         pageSize={pageSize}
+        onRowClick={(row) => navigate(`/umrah/invoices/${row.id}`)}
       />
     </div>
   );

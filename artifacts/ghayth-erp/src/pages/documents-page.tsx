@@ -91,9 +91,8 @@ function DocumentsList() {
 
   const handleDownload = async (docId: number, fileName: string) => {
     try {
-      const token = localStorage.getItem("erp_token");
       const res = await fetch(`${BASE}/api/documents/${docId}/download`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: "include",
       });
       if (!res.ok) throw new Error("فشل التنزيل");
       const blob = await res.blob();
@@ -265,7 +264,7 @@ function FoldersTab() {
         <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div><Label>الاسم</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
           <div><Label>اللون</Label><Input value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} placeholder="#3B82F6" /></div>
-          <div className="md:col-span-2"><Button onClick={handleCreate} disabled={!form.name}>حفظ</Button></div>
+          <div className="md:col-span-2"><Button onClick={handleCreate} disabled={!form.name} rateLimitAware>حفظ</Button></div>
         </CardContent></Card>
       )}
       {isLoading ? (
@@ -335,7 +334,7 @@ function TemplatesTab() {
           <div><Label>الاسم</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
           <div><Label>التصنيف</Label><Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></div>
           <div className="md:col-span-2"><Label>الوصف</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-          <div className="md:col-span-2"><Button onClick={handleCreate} disabled={!form.name}>حفظ</Button></div>
+          <div className="md:col-span-2"><Button onClick={handleCreate} disabled={!form.name} rateLimitAware>حفظ</Button></div>
         </CardContent></Card>
       )}
       <DataTable

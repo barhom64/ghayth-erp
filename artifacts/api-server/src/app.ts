@@ -1,6 +1,7 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import { randomUUID } from "node:crypto";
 import router from "./routes/index.js";
@@ -66,12 +67,29 @@ if (process.env.CORS_ORIGINS) {
 if (process.env.CORS_ORIGIN) {
   process.env.CORS_ORIGIN.split(",").forEach(s => allowedOrigins.add(s.trim().replace(/\/$/, "")));
 }
-if (allowedOrigins.size === 0 && process.env.NODE_ENV === "development") {
+if (process.env.NODE_ENV !== "production") {
+  // In dev, the Replit proxy serves apps on http(s)://localhost (port 80/443),
+  // so the browser sends Origin: http://localhost for same-origin XHRs.
+  // Allow common dev origins so internal calls (e.g. activity tracking) don't 500.
+  allowedOrigins.add("http://localhost");
+  allowedOrigins.add("https://localhost");
   allowedOrigins.add("http://localhost:3000");
   allowedOrigins.add("http://localhost:5173");
+  allowedOrigins.add("http://localhost:80");
 }
 
 const isProduction = process.env.NODE_ENV === "production";
+
+const replitDevHostPattern: RegExp | null = (() => {
+  if (isProduction) return null;
+  const dev = process.env.REPLIT_DEV_DOMAIN;
+  if (!dev) return null;
+  const prefix = dev.split(".")[0];
+  if (!prefix) return null;
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^https://${escaped}\\.(?:[a-z0-9-]+\\.)?(?:repl\\.co|replit\\.dev)$`);
+})();
+
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) {
@@ -81,6 +99,8 @@ app.use(cors({
     const normalizedOrigin = origin.replace(/\/$/, "");
     if (allowedOrigins.has(normalizedOrigin)) {
       callback(null, true);
+    } else if (replitDevHostPattern && replitDevHostPattern.test(normalizedOrigin)) {
+      callback(null, true);
     } else if (!isProduction && allowedOrigins.size === 0) {
       callback(null, true);
     } else {
@@ -89,12 +109,31 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json({ limit: "100mb" }));
-app.use(express.urlencoded({ extended: true, limit: "100mb" }));
+app.use(cookieParser());
+// Higher body limit only for import/upload routes that receive large payloads
+app.use("/api/umrah/import", express.json({ limit: "50mb" }));
+app.use("/api/umrah/assign-bulk", express.json({ limit: "10mb" }));
+app.use("/api/storage", express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
 app.use(eventBusMiddleware);
 app.use(auditMiddleware);
 app.use(activityTrackerMiddleware());
+
+// NOTE: A blanket per-IP `globalLimiter` previously sat here on `/api`.
+// It violated the per-user rate-limit policy because every authenticated
+// request — admin or not, on a shared proxy IP or not — was counted
+// against the same per-IP bucket. The replacement lives in routes/index.ts:
+//  - `anonymousIpLimiter` is mounted on the truly anonymous routes
+//    (/api/auth, /api/portal, /api/public, /api/careers, /api/pdpl) and
+//    gives those endpoints the same anonymous-abuse protection.
+//  - `globalUserLimiter` is mounted right after authMiddleware as a
+//    catch-all per-user budget for every authenticated route, so admins
+//    on a shared IP aren't lumped together.
+//
+// The umrah-specific limiter that previously lived here as well was
+// moved into routes/index.ts for the same reason.
 
 app.get("/api/health", async (_req, res) => {
   try {

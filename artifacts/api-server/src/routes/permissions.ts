@@ -1,23 +1,24 @@
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
+import { handleRouteError, zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
 import { auditLog } from "../lib/audit.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
-router.use(authMiddleware);
+
+const PERMISSION_PATTERN = /^[a-zA-Z0-9_]+:[a-zA-Z0-9_]+$/;
 
 const rolePermissionSchema = z.object({
   role: z.string().min(1, "الدور مطلوب"),
-  permission: z.string().min(1, "الصلاحية مطلوبة"),
+  permission: z.string().min(1, "الصلاحية مطلوبة").regex(PERMISSION_PATTERN, "صيغة الصلاحية غير صالحة — يجب أن تكون module:action"),
 });
 
 const userPermissionCreateSchema = z.object({
   userId: z.coerce.number().int().positive("معرف المستخدم مطلوب"),
-  permission: z.string().min(1, "الصلاحية مطلوبة"),
+  permission: z.string().min(1, "الصلاحية مطلوبة").regex(PERMISSION_PATTERN, "صيغة الصلاحية غير صالحة — يجب أن تكون module:action"),
   type: z.enum(["grant", "revoke"]).optional(),
 });
 
@@ -58,7 +59,7 @@ function parseModules(raw: unknown, roleKey?: string): string[] {
       }
       if (Array.isArray(parsed)) return parsed;
       return [];
-    } catch { return []; }
+    } catch (e) { logger.warn(e, "failed to parse permission modules JSON"); return []; }
   }
   return [];
 }
@@ -79,7 +80,7 @@ router.get("/my", async (req, res) => {
       const customRow = await rawQuery<any>(
         `SELECT "roleKey", label, modules, level FROM custom_roles WHERE "roleKey"=$1 AND "companyId"=$2 LIMIT 1`,
         [roleKey, scope.companyId]
-      ).catch(() => [] as any[]);
+      ).catch((e) => { logger.error(e, "permissions query failed"); return [] as any[]; });
       if (customRow.length > 0) {
         roles = customRow;
       } else {
@@ -106,7 +107,7 @@ router.get("/my", async (req, res) => {
     const userPermRows = await rawQuery<any>(
       `SELECT permission, type FROM permissions WHERE "userId" = $1 AND ("companyId" IS NULL OR "companyId" = $2)`,
       [scope.userId, scope.companyId]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "permissions query failed"); return [] as any[]; });
     const grants = userPermRows.filter((p: any) => p.type === "grant").map((p: any) => p.permission as string);
     const revokes = new Set(userPermRows.filter((p: any) => p.type === "revoke").map((p: any) => p.permission as string));
     const grantedPerms = Array.from(new Set([...rolePerms, ...grants])).filter((p) => !revokes.has(p));
@@ -139,9 +140,7 @@ router.get("/role-permissions", requirePermission("permissions:read"), async (re
 router.post("/role-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = rolePermissionSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { role, permission } = parsed.data;
+    const { role, permission } = zodParse(rolePermissionSchema.safeParse(req.body));
 
     await rawExecute(
       `INSERT INTO role_permissions (role, permission, "companyId")
@@ -153,8 +152,8 @@ router.post("/role-permissions", requirePermission("admin:write"), requirePermis
 
     invalidatePermissionCache(role, scope.companyId);
     await auditLog(req, "role_permissions", scope.companyId, "create", null, { role, permission, companyId: scope.companyId });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "role_permissions", entityId: scope.companyId, after: { role, permission } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "permissions.role_permission.created", entity: "role_permissions", entityId: scope.companyId, details: JSON.stringify({ role, permission }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "role_permissions", entityId: scope.companyId, after: { role, permission } }).catch((e) => logger.error(e, "permissions background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "permissions.role_permission.created", entity: "role_permissions", entityId: scope.companyId, details: JSON.stringify({ role, permission }) }).catch((e) => logger.error(e, "permissions background task failed"));
     res.status(201).json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Add role permission error:");
@@ -164,9 +163,7 @@ router.post("/role-permissions", requirePermission("admin:write"), requirePermis
 router.delete("/role-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = rolePermissionSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { role, permission } = parsed.data;
+    const { role, permission } = zodParse(rolePermissionSchema.safeParse(req.body));
     const [before] = await rawQuery<any>(
       `SELECT * FROM role_permissions WHERE role = $1 AND permission = $2 AND "companyId" = $3`,
       [role, permission, scope.companyId]
@@ -177,8 +174,8 @@ router.delete("/role-permissions", requirePermission("admin:write"), requirePerm
     );
     invalidatePermissionCache(role, scope.companyId);
     await auditLog(req, "role_permissions", scope.companyId, "delete", { role, permission }, null);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "role_permissions", entityId: scope.companyId, before: before ?? { role, permission } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "permissions.role_permission.deleted", entity: "role_permissions", entityId: scope.companyId, details: JSON.stringify({ role, permission }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "role_permissions", entityId: scope.companyId, before: before ?? { role, permission } }).catch((e) => logger.error(e, "permissions background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "permissions.role_permission.deleted", entity: "role_permissions", entityId: scope.companyId, details: JSON.stringify({ role, permission }) }).catch((e) => logger.error(e, "permissions background task failed"));
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete role permission error:");
@@ -207,9 +204,19 @@ router.get("/user-permissions", requirePermission("permissions:read"), async (re
 router.post("/user-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = userPermissionCreateSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { userId, permission, type = "grant" } = parsed.data;
+    const { userId, permission, type = "grant" } = zodParse(userPermissionCreateSchema.safeParse(req.body));
+
+    const [targetUser] = await rawQuery<any>(
+      `SELECT u.id FROM users u
+       JOIN employees e ON e.id = u."employeeId"
+       JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $2
+       WHERE u.id = $1 LIMIT 1`,
+      [userId, scope.companyId]
+    );
+    if (!targetUser) {
+      res.status(403).json({ error: "المستخدم لا ينتمي لهذه الشركة", code: "CROSS_TENANT" });
+      return;
+    }
 
     await rawExecute(
       `INSERT INTO permissions ("userId", permission, type, "companyId", "grantedBy")
@@ -220,8 +227,8 @@ router.post("/user-permissions", requirePermission("admin:write"), requirePermis
     );
 
     await auditLog(req, "permissions", userId, "create", null, { userId, permission, type, companyId: scope.companyId });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "permissions", entityId: userId, after: { userId, permission, type } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "permissions.user_permission.created", entity: "permissions", entityId: userId, details: JSON.stringify({ userId, permission, type }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "permissions", entityId: userId, after: { userId, permission, type } }).catch((e) => logger.error(e, "permissions background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "permissions.user_permission.created", entity: "permissions", entityId: userId, details: JSON.stringify({ userId, permission, type }) }).catch((e) => logger.error(e, "permissions background task failed"));
     res.status(201).json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Add user permission error:");
@@ -231,9 +238,7 @@ router.post("/user-permissions", requirePermission("admin:write"), requirePermis
 router.delete("/user-permissions", requirePermission("admin:write"), requirePermission("permissions:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = userPermissionDeleteSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { userId, permission } = parsed.data;
+    const { userId, permission } = zodParse(userPermissionDeleteSchema.safeParse(req.body));
     const [before] = await rawQuery<any>(
       `SELECT * FROM permissions WHERE "userId" = $1 AND permission = $2 AND "companyId" = $3`,
       [userId, permission, scope.companyId]
@@ -243,8 +248,8 @@ router.delete("/user-permissions", requirePermission("admin:write"), requirePerm
       [userId, permission, scope.companyId]
     );
     await auditLog(req, "permissions", userId, "delete", { userId, permission }, null);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "permissions", entityId: userId, before: before ?? { userId, permission } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "permissions.user_permission.deleted", entity: "permissions", entityId: userId, details: JSON.stringify({ userId, permission }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "permissions", entityId: userId, before: before ?? { userId, permission } }).catch((e) => logger.error(e, "permissions background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "permissions.user_permission.deleted", entity: "permissions", entityId: userId, details: JSON.stringify({ userId, permission }) }).catch((e) => logger.error(e, "permissions background task failed"));
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete user permission error:");

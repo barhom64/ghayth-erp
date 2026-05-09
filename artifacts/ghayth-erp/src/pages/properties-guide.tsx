@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
+import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Building2, Home, Users2, Crown, FileText,
@@ -577,8 +578,8 @@ function PaymentsMockScreen() {
             <div className="px-2 py-2 text-[9px] font-medium">{p.tenant}</div>
             <div className="px-2 py-2 text-[9px] text-gray-600">{p.unit}</div>
             <div className="px-2 py-2 text-[9px] text-gray-600">{p.due}</div>
-            <div className="px-2 py-2 text-[9px] font-bold">{p.amount} ر.س</div>
-            <div className="px-2 py-2 text-[9px] text-emerald-600">{p.paid} ر.س</div>
+            <div className="px-2 py-2 text-[9px] font-bold">{formatCurrency(Number(p.amount.replace(/,/g, "")))}</div>
+            <div className="px-2 py-2 text-[9px] text-emerald-600">{formatCurrency(Number(p.paid.replace(/,/g, "")))}</div>
             <div className="px-2 py-2"><span className={cn("text-[8px] px-1 rounded", p.sColor)}>{p.status}</span></div>
             <div className="px-2 py-2">
               {p.action && <span className="text-[8px] text-emerald-600 border border-emerald-200 rounded px-1 py-0.5">{p.action}</span>}
@@ -671,7 +672,7 @@ function InspectionsMockScreen() {
               <div className="text-[9px] text-gray-500">
                 <span>المفتش: {insp.inspector}</span>
                 <span className="mx-2">·</span>
-                <span>الموعد: {insp.date}</span>
+                <span>الموعد: {formatDateAr(insp.date)}</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -731,11 +732,11 @@ function DepositsMockScreen() {
               </div>
               <div className="text-[9px] text-gray-500">
                 تاريخ الاستلام: {d.received}
-                {d.refund && <span className="mr-2 text-green-600"> · مُسترد: {d.refund} ر.س</span>}
+                {d.refund && <span className="mr-2 text-green-600"> · مُسترد: {formatCurrency(Number(d.refund.replace(/,/g, "")))}</span>}
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="font-bold text-[11px]">{d.amount} ر.س</div>
+              <div className="font-bold text-[11px]">{formatCurrency(Number(d.amount.replace(/,/g, "")))}</div>
               {d.status === "محتجزة" && (
                 <span className="text-[8px] border border-gray-300 rounded px-1.5 py-0.5 text-gray-600">استرداد</span>
               )}

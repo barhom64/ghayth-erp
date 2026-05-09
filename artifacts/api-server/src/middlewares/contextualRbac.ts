@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { rawQuery } from "../lib/rawdb.js";
+import { logger } from "../lib/logger.js";
 
 type OwnershipCheck = "company" | "branch" | "self" | "assignment";
 
@@ -70,7 +71,7 @@ export function requireOwnership(options: OwnershipOptions) {
     }
 
     const recordId = Number(req.params[idParam]);
-    if (!recordId || isNaN(recordId)) {
+    if (isNaN(recordId)) {
       // No numeric id in the route — nothing to check, let downstream
       // handlers deal with the missing/invalid id.
       next();
@@ -152,12 +153,8 @@ export function requireOwnership(options: OwnershipOptions) {
 
       next();
     } catch (err) {
-      console.error("[ContextualRBAC] Ownership check error:", err);
-      // Fail open — if the ownership lookup itself errors (e.g. column
-      // doesn't exist) we let downstream handlers proceed so we don't
-      // accidentally lock users out of an endpoint. The error is logged
-      // above for investigation.
-      next();
+      logger.error(err, "[ContextualRBAC] Ownership check error:");
+      res.status(500).json({ error: "خطأ في التحقق من الصلاحيات" });
     }
   };
 }

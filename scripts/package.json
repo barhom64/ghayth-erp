@@ -6,6 +6,7 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "lint:patterns": "node ./src/lint-patterns.mjs",
+    "audit:runtime": "ALL=1 node ./src/runtime-audit.cjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

@@ -122,9 +122,10 @@ export async function exportInvoicesExcel(companyId: number, startDate?: string,
   if (endDate) { params.push(endDate); dateFilter += ` AND i."createdAt" <= $${params.length}`; }
 
   const invoices = await rawQuery<any>(
-    `SELECT i.ref, i."clientName", i.status, i.subtotal, i."vatAmount", i.total, i."paidAmount",
+    `SELECT i.ref, c.name AS "clientName", i.status, i.subtotal, i."vatAmount", i.total, i."paidAmount",
             i.total - i."paidAmount" AS remaining, i."createdAt", i."dueDate"
      FROM invoices i
+     LEFT JOIN clients c ON c.id = i."clientId"
      WHERE i."companyId" = $1 AND i."deletedAt" IS NULL ${dateFilter}
      ORDER BY i."createdAt" DESC`,
     params
@@ -155,10 +156,9 @@ export async function exportPayrollExcel(companyId: number, period?: string): Pr
   if (period) { params.push(period); filter = ` AND pr.period = $${params.length}`; }
 
   const records = await rawQuery<any>(
-    `SELECT pr.period, e.name AS "employeeName", ea.position, ea."baseSalary",
-            pr."housingAllowance", pr."transportAllowance", pr."otherAllowances",
-            pr."overtimePay", pr."grossSalary", pr."deductions", pr."netSalary",
-            pr.status, pr."paidAt"
+    `SELECT pr.period, e.name AS "employeeName", ea."jobTitle" AS position, ea.salary AS "baseSalary",
+            pr."grossSalary", pr."totalDeductions", pr."netSalary",
+            pr.status, pr."createdAt" AS "paidAt"
      FROM payroll_records pr
      JOIN employee_assignments ea ON ea.id = pr."employeeAssignmentId"
      JOIN employees e ON e.id = ea."employeeId"
@@ -177,18 +177,18 @@ export async function exportPayrollExcel(companyId: number, period?: string): Pr
 
     sheets.push({
       name: `رواتب ${p}`,
-      headers: ["الموظف", "المسمى الوظيفي", "الراتب الأساسي", "بدل سكن", "بدل نقل", "بدلات أخرى", "أوفرتايم", "الراتب الإجمالي", "الاستقطاعات", "صافي الراتب", "الحالة"],
+      headers: ["الموظف", "المسمى الوظيفي", "الراتب الأساسي", "بدل سكن", "بدل نقل", "أوفرتايم", "الراتب الإجمالي", "الاستقطاعات", "صافي الراتب", "الحالة"],
       rows: [
         ...periodRows.map((r: any) => [
           r.employeeName, r.position || "",
           Number(r.baseSalary || 0), Number(r.housingAllowance || 0), Number(r.transportAllowance || 0),
-          Number(r.otherAllowances || 0), Number(r.overtimePay || 0), Number(r.grossSalary || 0),
-          Number(r.deductions || 0), Number(r.netSalary || 0),
+          Number(r.overtime || 0), Number(r.grossSalary || 0),
+          Number(r.totalDeductions || 0), Number(r.netSalary || 0),
           r.status === "paid" ? "مدفوع" : r.status === "approved" ? "معتمد" : "قيد المعالجة",
         ]),
-        ["الإجمالي", "", "", "", "", "", "", totalGross, "", totalNet, ""],
+        ["الإجمالي", "", "", "", "", "", totalGross, "", totalNet, ""],
       ],
-      colWidths: [25, 20, 14, 12, 12, 12, 12, 14, 12, 14, 10],
+      colWidths: [25, 20, 14, 12, 12, 12, 14, 12, 14, 10],
     });
   }
 
@@ -211,8 +211,12 @@ export async function exportAttendanceExcel(companyId: number, startDate?: strin
   if (endDate) { params.push(endDate); dateFilter += ` AND a.date <= $${params.length}`; }
 
   const records = await rawQuery<any>(
-    `SELECT e.name AS "employeeName", ea.position, a.date, a.status,
-            a."checkIn", a."checkOut", a."workHours", a.notes
+    `SELECT e.name AS "employeeName", ea."jobTitle" AS position, a.date, a.status,
+            a."checkIn", a."checkOut",
+            CASE WHEN a."checkIn" IS NOT NULL AND a."checkOut" IS NOT NULL
+              THEN ROUND(EXTRACT(EPOCH FROM (a."checkOut" - a."checkIn"))/3600.0, 2)
+              ELSE NULL END AS "workHours",
+            a.notes
      FROM attendance a
      JOIN employee_assignments ea ON ea.id = a."assignmentId"
      JOIN employees e ON e.id = ea."employeeId"
@@ -246,17 +250,19 @@ export async function exportAttendanceExcel(companyId: number, startDate?: strin
 
 export async function exportFleetExcel(companyId: number): Promise<Buffer> {
   const vehicles = await rawQuery<any>(
-    `SELECT v."plateNumber", v.make, v.model, v.year, v.status, v."driverName",
-            v."nextServiceDate", v."mileage", v.color,
+    `SELECT v."plateNumber", v.make, v.model, v.year, v.status,
+            fd.name AS "driverName",
+            v."nextServiceDate", v."currentMileage", v.color,
             COUNT(DISTINCT t.id) AS "totalTrips",
             SUM(fl.amount) AS "totalFuelCost",
             COUNT(DISTINCT m.id) AS "maintenanceCount"
      FROM fleet_vehicles v
-     LEFT JOIN fleet_trips t ON t."vehicleId" = v.id
+     LEFT JOIN fleet_drivers fd ON fd.id = v."assignedDriverId"
+     LEFT JOIN fleet_trips t ON t."vehicleId" = v.id AND t."deletedAt" IS NULL
      LEFT JOIN fleet_fuel_logs fl ON fl."vehicleId" = v.id
      LEFT JOIN fleet_maintenance m ON m."vehicleId" = v.id
-     WHERE v."companyId" = $1
-     GROUP BY v.id ORDER BY v."plateNumber"`,
+     WHERE v."companyId" = $1 AND v."deletedAt" IS NULL
+     GROUP BY v.id, fd.name ORDER BY v."plateNumber"`,
     [companyId]
   );
 
@@ -270,7 +276,7 @@ export async function exportFleetExcel(companyId: number): Promise<Buffer> {
     rows: vehicles.map((v: any) => [
       v.plateNumber, v.make, v.model, v.year,
       statusMap[v.status] || v.status,
-      v.driverName || "", Number(v.mileage || 0),
+      v.driverName || "", Number(v.currentMileage || 0),
       Number(v.totalTrips || 0), Number(v.totalFuelCost || 0),
       Number(v.maintenanceCount || 0),
       v.nextServiceDate ? new Date(v.nextServiceDate).toLocaleDateString("ar-SA") : "",
@@ -279,12 +285,12 @@ export async function exportFleetExcel(companyId: number): Promise<Buffer> {
   };
 
   const trips = await rawQuery<any>(
-    `SELECT v."plateNumber", d.name AS "driverName", t."startLocation", t."endLocation",
-            t."startTime", t."endTime", t.distance, t.purpose, t.status
+    `SELECT v."plateNumber", d.name AS "driverName", t."fromLocation", t."toLocation",
+            t."startTime", t."endTime", t.distance, t.status
      FROM fleet_trips t
      JOIN fleet_vehicles v ON v.id = t."vehicleId"
      LEFT JOIN fleet_drivers d ON d.id = t."driverId"
-     WHERE t."companyId" = $1
+     WHERE t."companyId" = $1 AND t."deletedAt" IS NULL
      ORDER BY t."startTime" DESC
      LIMIT 500`,
     [companyId]
@@ -292,14 +298,14 @@ export async function exportFleetExcel(companyId: number): Promise<Buffer> {
 
   const tripSheet: ExcelSheet = {
     name: "الرحلات",
-    headers: ["اللوحة", "السائق", "من", "إلى", "وقت الانطلاق", "وقت الوصول", "المسافة (كم)", "الغرض", "الحالة"],
+    headers: ["اللوحة", "السائق", "من", "إلى", "وقت الانطلاق", "وقت الوصول", "المسافة (كم)", "الحالة"],
     rows: trips.map((t: any) => [
-      t.plateNumber, t.driverName || "", t.startLocation || "", t.endLocation || "",
+      t.plateNumber, t.driverName || "", t.fromLocation || "", t.toLocation || "",
       t.startTime ? new Date(t.startTime).toLocaleString("ar-SA") : "",
       t.endTime ? new Date(t.endTime).toLocaleString("ar-SA") : "",
-      Number(t.distance || 0), t.purpose || "", t.status || "",
+      Number(t.distance || 0), t.status || "",
     ]),
-    colWidths: [12, 20, 20, 20, 18, 18, 12, 20, 12],
+    colWidths: [12, 20, 20, 20, 18, 18, 12, 12],
   };
 
   const wb = buildWorkbook([vehicleSheet, tripSheet]);

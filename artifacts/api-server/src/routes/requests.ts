@@ -1,10 +1,15 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError } from "../lib/errorHandler.js";
-import { createAuditLog, createNotification, emitEvent, getLegalResponsible } from "../lib/businessHelpers.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError,
+  parseId,
+  zodParse,
+} from "../lib/errorHandler.js";
+import { createAuditLog, createNotification, emitEvent, getLegalResponsible, currentPeriod, currentYear, generateRef } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
+import { MANAGER_ROLES , HR_APPROVAL_ROLES} from "../lib/rbacCatalog.js";
 
 /* ── Zod Schemas ───────────────────────────────────────────────── */
 
@@ -71,8 +76,6 @@ const VALID_REQUEST_TRANSITIONS: Record<string, string[]> = {
   closed: [],
 };
 
-const MANAGER_ROLES = ["owner", "general_manager", "hr_manager", "branch_manager"];
-
 async function validateRequestTransition(
   id: number,
   companyId: number,
@@ -80,7 +83,7 @@ async function validateRequestTransition(
   scope: any,
 ): Promise<any> {
   const [request] = await rawQuery<any>(
-    `SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL)`,
+    `SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`,
     [id, companyId]
   );
   if (!request) throw new NotFoundError("الطلب غير موجود");
@@ -122,7 +125,7 @@ async function validateRequestTransition(
     }
 
     if (data._budgetAccountCode && data._budgetAmount) {
-      const period = new Date().toISOString().slice(0, 7);
+      const period = currentPeriod();
       const [budget] = await rawQuery<any>(
         `SELECT amount, used FROM budgets WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3`,
         [companyId, data._budgetAccountCode, period]
@@ -154,7 +157,6 @@ async function validateRequestTransition(
 }
 
 const router = Router();
-router.use(authMiddleware);
 
 async function logCommunication(companyId: number, direction: string, subject: string, body: string, relatedType: string, relatedId: number) {
   try {
@@ -164,19 +166,19 @@ async function logCommunication(companyId: number, direction: string, subject: s
       [companyId, direction, subject, body, direction === 'inbound' ? 'received' : 'sent', relatedType, relatedId]
     );
   } catch (e) {
-    console.error("Failed to log communication:", e);
+    logger.error(e, "Failed to log communication:");
   }
 }
 
 router.get("/", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const isManager = ["owner", "general_manager", "hr_manager", "branch_manager"].includes(scope.role);
+    const isManager = HR_APPROVAL_ROLES.includes(scope.role);
     let rows;
     if (isManager) {
-      rows = await rawQuery(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r."companyId"=$1 OR r."companyId" IS NULL ORDER BY r."createdAt" DESC`, [scope.companyId]);
+      rows = await rawQuery(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE (r."companyId"=$1 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL ORDER BY r."createdAt" DESC LIMIT 500`, [scope.companyId]);
     } else {
-      rows = await rawQuery(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE (r."companyId"=$1 OR r."companyId" IS NULL) AND (r."requesterId"::text=$2 OR r."currentApprover"=$3) ORDER BY r."createdAt" DESC`, [scope.companyId, String(scope.activeAssignmentId), String(scope.activeAssignmentId)]);
+      rows = await rawQuery(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE (r."companyId"=$1 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL AND (r."requesterId"::text=$2 OR r."currentApprover"=$3) ORDER BY r."createdAt" DESC LIMIT 500`, [scope.companyId, String(scope.activeAssignmentId), String(scope.activeAssignmentId)]);
     }
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "requests"); }
@@ -184,10 +186,9 @@ router.get("/", requirePermission("requests:read"), async (req, res) => {
 
 router.post("/", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = createRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createRequestSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { typeId, requesterName, requester, title, description, priority, data, attachments } = req.body;
+    const { typeId, requesterName, requester, title, description, priority, data, attachments } = parsed as any;
     const resolvedRequesterName = requesterName || requester;
 
     if (!title || !String(title).trim()) {
@@ -230,8 +231,8 @@ router.post("/", requirePermission("requests:write"), async (req, res) => {
         a && typeof a.name === "string" && typeof a.size === "number" && a.size <= 5 * 1024 * 1024
       ).map((a: any) => ({ name: a.name, size: a.size, type: a.type || "", dataUrl: a.dataUrl || "" }));
     }
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('request_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
-    const ref = `REQ-${new Date().getFullYear()}-${String(seqRow.seq).padStart(4, "0")}`;
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('request_number_seq') AS seq`).catch((e) => { logger.error(e, "requests query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
+    const ref = generateRef("REQ", seqRow.seq);
 
     const r = await rawExecute(
       `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments, ref, "requestDate", "branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,CURRENT_DATE,$12)`,
@@ -247,9 +248,10 @@ router.post("/", requirePermission("requests:write"), async (req, res) => {
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "requests", entityId: r.insertId,
       after: { typeId: typeId ? Number(typeId) : null, title, description, priority: priority || "medium", ref },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.created", entity: "approval_requests", entityId: r.insertId }).catch(console.error);
-    res.status(201).json({ id: r.insertId, ref, title, description, priority: priority || "medium", status: "pending" });
+    }).catch((e) => logger.error(e, "requests background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.created", entity: "approval_requests", entityId: r.insertId }).catch((e) => logger.error(e, "requests background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM requests WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, ref, title, priority: priority || "medium", status: "pending" });
   } catch (err) { handleRouteError(err, res, "Create request error:"); }
 });
 
@@ -325,48 +327,48 @@ router.get("/catalog", requirePermission("requests:read"), async (req, res) => {
 router.get("/types", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM request_types WHERE "isActive"=true AND ("companyId"=$1 OR "companyId" IS NULL) ORDER BY name`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM request_types WHERE "isActive"=true AND ("companyId"=$1 OR "companyId" IS NULL) ORDER BY name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
 router.post("/types", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = createRequestTypeSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createRequestTypeSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { name, description, category, requiredFields, approvalFlow, isActive } = req.body;
+    const { name, description, category, requiredFields, approvalFlow, isActive } = parsed as any;
     const r = await rawExecute(
       `INSERT INTO request_types (name, description, category, "requiredFields", "approvalFlow", "isActive", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [name, description, category, requiredFields ? JSON.stringify(requiredFields) : '[]', approvalFlow ? JSON.stringify(approvalFlow) : '[]', isActive !== false, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "request_types", entityId: r.insertId, after: { name, category, isActive: isActive !== false } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request_type.created", entity: "request_types", entityId: r.insertId }).catch(console.error);
-    res.status(201).json({ id: r.insertId });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "request_types", entityId: r.insertId, after: { name, category, isActive: isActive !== false } }).catch((e) => logger.error(e, "requests background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request_type.created", entity: "request_types", entityId: r.insertId }).catch((e) => logger.error(e, "requests background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM request_types WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
 router.get("/workflows", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM workflows WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM workflows WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
 router.post("/workflows", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = createWorkflowSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(createWorkflowSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { name, description, steps } = req.body;
+    const { name, description, steps } = parsed as any;
     const r = await rawExecute(
       `INSERT INTO workflows (name, description, steps, "companyId") VALUES ($1,$2,$3,$4)`,
       [name, description, steps ? JSON.stringify(steps) : '[]', scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflows", entityId: r.insertId, after: { name, description } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "workflow.created", entity: "workflow_definitions", entityId: r.insertId }).catch(console.error);
-    res.status(201).json({ id: r.insertId });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflows", entityId: r.insertId, after: { name, description } }).catch((e) => logger.error(e, "requests background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "workflow.created", entity: "workflow_definitions", entityId: r.insertId }).catch((e) => logger.error(e, "requests background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM workflows WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
@@ -374,9 +376,9 @@ router.get("/stats", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [total] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]);
-    const [pending] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='pending' AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
-    const [approved] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='approved' AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
+    const [total] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
+    const [pending] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='pending' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
+    const [approved] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='approved' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
     const [types] = await rawQuery(`SELECT COUNT(*) as count FROM request_types WHERE "isActive"=true AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
     res.json({
       totalRequests: Number(total.count),
@@ -390,7 +392,8 @@ router.get("/stats", requirePermission("requests:read"), async (req, res) => {
 router.get("/:id", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL)`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الطلب غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "requests"); }
@@ -398,11 +401,10 @@ router.get("/:id", requirePermission("requests:read"), async (req, res) => {
 
 router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = updateRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(updateRequestSchema.safeParse(req.body));
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const b = req.body;
+    const id = parseId(req.params.id, "id");
+    const b = parsed as any;
 
     const [existing] = await rawQuery<any>(
       `SELECT id, status FROM requests WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
@@ -428,247 +430,280 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
       }
     }
 
-    const sets: string[] = [];
-    const params: any[] = [];
-    if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
-    if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
-    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
-    if (b.priority !== undefined) { params.push(b.priority); sets.push(`priority=$${params.length}`); }
-    if (b.currentApprover !== undefined) { params.push(b.currentApprover); sets.push(`"currentApprover"=$${params.length}`); }
-    if (b.attachments !== undefined) { params.push(JSON.stringify(b.attachments)); sets.push(`attachments=$${params.length}`); }
-    if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
-    if (b.returnReason !== undefined) { params.push(b.returnReason); sets.push(`"returnReason"=$${params.length}`); }
-    if (b.status && ['approved', 'rejected', 'returned'].includes(b.status)) {
-      params.push(scope.userId); sets.push(`"reviewedBy"=$${params.length}`);
-      params.push(new Date().toISOString()); sets.push(`"reviewedAt"=$${params.length}`);
-    }
-    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
-    params.push(id); params.push(scope.companyId);
-    const result = await rawExecute(`UPDATE requests SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
-    if (result.affectedRows === 0) throw new NotFoundError("الطلب غير موجود");
-    const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL)`, [id, scope.companyId]);
-    if (b.status && ['approved', 'rejected', 'in_review', 'returned'].includes(b.status)) {
-      const statusLabels: Record<string, string> = { approved: 'معتمد', rejected: 'مرفوض', in_review: 'قيد المراجعة', returned: 'مُرجع' };
-      await logCommunication(
-        scope.companyId, 'outbound',
-        `تحديث طلب: ${row?.title || '#' + id} — ${statusLabels[b.status] || b.status}`,
-        `تم تحديث حالة الطلب رقم ${id} إلى "${statusLabels[b.status] || b.status}" - ${b.notes || row?.title || ''}`,
-        'request', id
-      );
-      try {
-        await rawExecute(
-          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "actionByName", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          ['request', id, b.status, b.notes || b.returnReason || null, scope.userId, null, scope.companyId]
-        );
-      } catch (e) { console.error("Failed to log approval action:", e); }
+    // Build extras for non-status fields
+    const extras: Record<string, any> = {};
+    if (b.title !== undefined) extras.title = b.title;
+    if (b.description !== undefined) extras.description = b.description;
+    if (b.priority !== undefined) extras.priority = b.priority;
+    if (b.currentApprover !== undefined) extras.currentApprover = b.currentApprover;
+    if (b.attachments !== undefined) extras.attachments = JSON.stringify(b.attachments);
+    if (b.notes !== undefined) extras.notes = b.notes;
+    if (b.returnReason !== undefined) extras.returnReason = b.returnReason;
 
-      if (patchIsOverride) {
-        await createAuditLog({
-          companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-          action: "workflow_override", entity: "request", entityId: id,
-          before: { status: previousStatus },
-          after: { status: b.status, overriddenBy: scope.userId },
-          reason: b.notes || b.returnReason || "تدخل دور أعلى",
-        });
+    if (b.status !== undefined) {
+      // Status change — route through applyTransition
+      if (b.status && ['approved', 'rejected', 'returned'].includes(b.status)) {
+        extras.reviewedBy = scope.userId;
+        extras.reviewedAt = { raw: "NOW()" };
       }
-      await createAuditLog({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: `request_status_${b.status}`,
-        entity: "request",
-        entityId: id,
-        before: { status: previousStatus },
-        after: { status: b.status },
+
+      const statusAction = `request.status.${b.status}`;
+      const allowedFromStates = Object.entries(VALID_REQUEST_TRANSITIONS)
+        .filter(([, targets]) => targets.includes(b.status))
+        .map(([from]) => from);
+
+      const updated = await applyTransition({
+        entity: "requests",
+        id,
+        scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+        action: statusAction,
+        fromStates: allowedFromStates.length > 0 ? allowedFromStates : undefined,
+        toState: b.status,
         reason: b.notes || b.returnReason || undefined,
+        setExtras: Object.keys(extras).length > 0 ? extras : undefined,
+        extraWhere: `"deletedAt" IS NULL`,
+        after: { overrideLogged: patchIsOverride },
+        onApply: async (row, client) => {
+          if (['approved', 'rejected', 'in_review', 'returned'].includes(b.status)) {
+            const statusLabels: Record<string, string> = { approved: 'معتمد', rejected: 'مرفوض', in_review: 'قيد المراجعة', returned: 'مُرجع' };
+            await logCommunication(
+              scope.companyId, 'outbound',
+              `تحديث طلب: ${row?.title || '#' + id} — ${statusLabels[b.status] || b.status}`,
+              `تم تحديث حالة الطلب رقم ${id} إلى "${statusLabels[b.status] || b.status}" - ${b.notes || row?.title || ''}`,
+              'request', id
+            );
+            await client.query(
+              `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "actionByName", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+              ['request', id, b.status, b.notes || b.returnReason || null, scope.userId, null, scope.companyId]
+            );
+            if (patchIsOverride) {
+              await createAuditLog({
+                companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+                action: "workflow_override", entity: "requests", entityId: id,
+                before: { status: previousStatus },
+                after: { status: b.status, overriddenBy: scope.userId },
+                reason: b.notes || b.returnReason || "تدخل دور أعلى",
+              });
+            }
+          }
+        },
       });
+      const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [id, scope.companyId]);
+      res.json(row ?? updated);
+    } else {
+      // No status change — simple field update
+      if (Object.keys(extras).length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
+      const sets: string[] = [];
+      const params: any[] = [];
+      for (const [col, val] of Object.entries(extras)) {
+        params.push(val);
+        const colName = /[A-Z]/.test(col) ? `"${col}"` : col;
+        sets.push(`${colName}=$${params.length}`);
+      }
+      params.push(id); params.push(scope.companyId);
+      const result = await rawExecute(`UPDATE requests SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+      if (result.affectedRows === 0) throw new NotFoundError("الطلب غير موجود");
+      const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [id, scope.companyId]);
+      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.updated", entity: "approval_requests", entityId: id }).catch((e) => logger.error(e, "requests background task failed"));
+      res.json(row);
     }
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.updated", entity: "approval_requests", entityId: id }).catch(console.error);
-    res.json(row);
-  } catch (err) { handleRouteError(err, res, "requests"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "requests");
+  }
 });
 
 router.post("/:id/approve", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = approveRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(approveRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const { notes } = req.body;
+    const id = parseId(req.params.id, "id");
+    const { notes } = parsed;
 
     const request = await validateRequestTransition(id, scope.companyId, "approved", scope);
     const isOverride = request?._isOverride === true;
     if (isOverride && !notes) throw new ValidationError("يجب تحديد سبب التجاوز عند التدخل في طلب ليس مسنداً إليك", { field: "notes" });
 
-    const result = await rawExecute(
-      `UPDATE requests SET status='approved', notes=$1, "reviewedBy"=$2, "reviewedAt"=NOW(), "approvedAt"=NOW(), "approvedBy"=$2 WHERE id=$3 AND "companyId"=$4`,
-      [notes || null, scope.userId, id, scope.companyId]
-    );
-    if (result.affectedRows === 0) throw new NotFoundError("الطلب غير موجود");
-    await rawExecute(
-      `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('request',$1,$2,$3,$4,$5)`,
-      [id, isOverride ? 'approved_override' : 'approved', isOverride ? `[تدخل] ${notes}` : (notes || null), scope.userId, scope.companyId]
-    );
-    if (isOverride) {
-      await createAuditLog({
-        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-        action: "workflow_override", entity: "request", entityId: id,
-        before: { status: request.status, currentApprover: request.currentApprover },
-        after: { status: "approved", overriddenBy: scope.userId },
-        reason: notes || "تدخل دور أعلى",
-      });
-    }
-    await createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "request_status_approved", entity: "request", entityId: id,
-      before: { status: request.status }, after: { status: "approved" },
+    const updated = await applyTransition({
+      entity: "requests",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "request.approved",
+      fromStates: VALID_REQUEST_TRANSITIONS[request.status]?.includes("approved")
+        ? [request.status]
+        : ["pending", "in_review"],
+      toState: "approved",
       reason: notes || undefined,
-    });
-    const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1`, [id]);
-    await logCommunication(scope.companyId, 'outbound', `طلب معتمد: ${row?.title || '#'+id}`, `تمت الموافقة على الطلب رقم ${id}${notes ? ' - '+notes : ''}`, 'request', id);
-    if (row?.requesterId) {
-      await createNotification({
-        companyId: scope.companyId,
-        assignmentId: Number(row.requesterId),
+      setExtras: {
+        notes: notes || null,
+        reviewedBy: scope.userId,
+        reviewedAt: { raw: "NOW()" },
+        approvedAt: { raw: "NOW()" },
+        approvedBy: scope.userId,
+      },
+      after: { overrideLogged: isOverride },
+      onApply: async (row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('request',$1,$2,$3,$4,$5)`,
+          [id, isOverride ? 'approved_override' : 'approved', isOverride ? `[تدخل] ${notes}` : (notes || null), scope.userId, scope.companyId]
+        );
+        if (isOverride) {
+          await createAuditLog({
+            companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+            action: "workflow_override", entity: "requests", entityId: id,
+            before: { status: request.status, currentApprover: request.currentApprover },
+            after: { status: "approved", overriddenBy: scope.userId },
+            reason: notes || "تدخل دور أعلى",
+          });
+        }
+        await logCommunication(scope.companyId, 'outbound', `طلب معتمد: ${row?.title || '#'+id}`, `تمت الموافقة على الطلب رقم ${id}${notes ? ' - '+notes : ''}`, 'request', id);
+      },
+      notifications: request.requesterId ? [{
+        assignmentId: Number(request.requesterId),
         type: "request_approved",
         title: "تمت الموافقة على طلبك",
-        body: `طلبك "${row.title || '#' + id}" تمت الموافقة عليه${notes ? `. ملاحظات: ${notes}` : ""}`,
+        body: `طلبك "${request.title || '#' + id}" تمت الموافقة عليه${notes ? `. ملاحظات: ${notes}` : ""}`,
         priority: "medium",
         refType: "request",
         refId: id,
-      }).catch((e) => console.error("notify requester approved failed:", e));
-    }
-    emitEvent({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "request.approved", entity: "request", entityId: id,
-      before: { status: request.status }, after: { status: "approved" },
-    }).catch(console.error);
-    res.json({ ...row, actualImpact: { statusChange: { from: request.status, to: "approved" }, notifications: ["إشعار لمقدم الطلب بالاعتماد"], overrideLogged: isOverride } });
-  } catch (err) { handleRouteError(err, res, "requests"); }
+      }] : [],
+    });
+    res.json({ ...updated, actualImpact: { statusChange: { from: request.status, to: "approved" }, notifications: ["إشعار لمقدم الطلب بالاعتماد"], overrideLogged: isOverride } });
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "requests");
+  }
 });
 
 router.post("/:id/reject", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = rejectRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(rejectRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const { notes } = req.body;
+    const id = parseId(req.params.id, "id");
+    const { notes } = parsed;
     if (!notes) throw new ValidationError("يجب ذكر سبب الرفض", { field: "notes" });
 
     const request = await validateRequestTransition(id, scope.companyId, "rejected", scope);
     const isOverride = request?._isOverride === true;
 
-    const result = await rawExecute(
-      `UPDATE requests SET status='rejected', notes=$1, "reviewedBy"=$2, "reviewedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
-      [notes, scope.userId, id, scope.companyId]
-    );
-    if (result.affectedRows === 0) throw new NotFoundError("الطلب غير موجود");
-    await rawExecute(
-      `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('request',$1,$2,$3,$4,$5)`,
-      [id, isOverride ? 'rejected_override' : 'rejected', isOverride ? `[تدخل] ${notes}` : notes, scope.userId, scope.companyId]
-    );
-    if (isOverride) {
-      await createAuditLog({
-        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-        action: "workflow_override", entity: "request", entityId: id,
-        before: { status: request.status, currentApprover: request.currentApprover },
-        after: { status: "rejected", overriddenBy: scope.userId },
-        reason: notes,
-      });
-    }
-    await createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "request_status_rejected", entity: "request", entityId: id,
-      before: { status: request.status }, after: { status: "rejected" },
+    const updated = await applyTransition({
+      entity: "requests",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "request.rejected",
+      fromStates: VALID_REQUEST_TRANSITIONS[request.status]?.includes("rejected")
+        ? [request.status]
+        : ["pending", "in_review"],
+      toState: "rejected",
       reason: notes,
-    });
-    const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1`, [id]);
-    await logCommunication(scope.companyId, 'outbound', `طلب مرفوض: ${row?.title || '#'+id}`, `تم رفض الطلب رقم ${id} - السبب: ${notes}`, 'request', id);
-    if (row?.requesterId) {
-      await createNotification({
-        companyId: scope.companyId,
-        assignmentId: Number(row.requesterId),
+      setExtras: {
+        notes,
+        reviewedBy: scope.userId,
+        reviewedAt: { raw: "NOW()" },
+      },
+      after: { reason: notes, overrideLogged: isOverride },
+      onApply: async (row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('request',$1,$2,$3,$4,$5)`,
+          [id, isOverride ? 'rejected_override' : 'rejected', isOverride ? `[تدخل] ${notes}` : notes, scope.userId, scope.companyId]
+        );
+        if (isOverride) {
+          await createAuditLog({
+            companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+            action: "workflow_override", entity: "requests", entityId: id,
+            before: { status: request.status, currentApprover: request.currentApprover },
+            after: { status: "rejected", overriddenBy: scope.userId },
+            reason: notes,
+          });
+        }
+        await logCommunication(scope.companyId, 'outbound', `طلب مرفوض: ${row?.title || '#'+id}`, `تم رفض الطلب رقم ${id} - السبب: ${notes}`, 'request', id);
+      },
+      notifications: request.requesterId ? [{
+        assignmentId: Number(request.requesterId),
         type: "request_rejected",
         title: "تم رفض طلبك",
-        body: `طلبك "${row.title || '#' + id}" تم رفضه. السبب: ${notes}`,
+        body: `طلبك "${request.title || '#' + id}" تم رفضه. السبب: ${notes}`,
         priority: "high",
         refType: "request",
         refId: id,
-      }).catch((e) => console.error("notify requester rejected failed:", e));
-    }
-    emitEvent({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "request.rejected", entity: "request", entityId: id,
-      before: { status: request.status }, after: { status: "rejected", reason: notes },
-    }).catch(console.error);
-    res.json({ ...row, actualImpact: { statusChange: { from: request.status, to: "rejected" }, notifications: ["إشعار لمقدم الطلب بالرفض"], overrideLogged: isOverride } });
-  } catch (err) { handleRouteError(err, res, "requests"); }
+      }] : [],
+    });
+    res.json({ ...updated, actualImpact: { statusChange: { from: request.status, to: "rejected" }, notifications: ["إشعار لمقدم الطلب بالرفض"], overrideLogged: isOverride } });
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "requests");
+  }
 });
 
 router.post("/:id/return", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = returnRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(returnRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const { notes } = req.body;
+    const id = parseId(req.params.id, "id");
+    const { notes } = parsed;
     if (!notes) throw new ValidationError("يجب ذكر سبب الإرجاع", { field: "notes" });
 
     const request = await validateRequestTransition(id, scope.companyId, "returned", scope);
     const isOverride = request?._isOverride === true;
 
-    const result = await rawExecute(
-      `UPDATE requests SET status='returned', "returnReason"=$1, notes=$2, "reviewedBy"=$3, "reviewedAt"=NOW() WHERE id=$4 AND "companyId"=$5`,
-      [notes, notes, scope.userId, id, scope.companyId]
-    );
-    if (result.affectedRows === 0) throw new NotFoundError("الطلب غير موجود");
-    await rawExecute(
-      `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('request',$1,$2,$3,$4,$5)`,
-      [id, isOverride ? 'returned_override' : 'returned', isOverride ? `[تدخل] ${notes}` : notes, scope.userId, scope.companyId]
-    );
-    if (isOverride) {
-      await createAuditLog({
-        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-        action: "workflow_override", entity: "request", entityId: id,
-        before: { status: request.status, currentApprover: request.currentApprover },
-        after: { status: "returned", overriddenBy: scope.userId },
-        reason: notes,
-      });
-    }
-    await createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "request_status_returned", entity: "request", entityId: id,
-      before: { status: request.status }, after: { status: "returned" },
+    const updated = await applyTransition({
+      entity: "requests",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "request.returned",
+      fromStates: VALID_REQUEST_TRANSITIONS[request.status]?.includes("returned")
+        ? [request.status]
+        : ["pending", "in_review"],
+      toState: "returned",
       reason: notes,
-    });
-    const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1`, [id]);
-    await logCommunication(scope.companyId, 'outbound', `طلب مُرجع: ${row?.title || '#'+id}`, `تم إرجاع الطلب رقم ${id} للتعديل - السبب: ${notes}`, 'request', id);
-    if (row?.requesterId) {
-      await createNotification({
-        companyId: scope.companyId,
-        assignmentId: Number(row.requesterId),
+      setExtras: {
+        returnReason: notes,
+        notes,
+        reviewedBy: scope.userId,
+        reviewedAt: { raw: "NOW()" },
+      },
+      after: { reason: notes, overrideLogged: isOverride },
+      onApply: async (row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('request',$1,$2,$3,$4,$5)`,
+          [id, isOverride ? 'returned_override' : 'returned', isOverride ? `[تدخل] ${notes}` : notes, scope.userId, scope.companyId]
+        );
+        if (isOverride) {
+          await createAuditLog({
+            companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+            action: "workflow_override", entity: "requests", entityId: id,
+            before: { status: request.status, currentApprover: request.currentApprover },
+            after: { status: "returned", overriddenBy: scope.userId },
+            reason: notes,
+          });
+        }
+        await logCommunication(scope.companyId, 'outbound', `طلب مُرجع: ${row?.title || '#'+id}`, `تم إرجاع الطلب رقم ${id} للتعديل - السبب: ${notes}`, 'request', id);
+      },
+      notifications: request.requesterId ? [{
+        assignmentId: Number(request.requesterId),
         type: "request_returned",
         title: "تم إرجاع طلبك للتعديل",
-        body: `طلبك "${row.title || '#' + id}" تم إرجاعه. السبب: ${notes}`,
+        body: `طلبك "${request.title || '#' + id}" تم إرجاعه. السبب: ${notes}`,
         priority: "high",
         refType: "request",
         refId: id,
-      }).catch((e) => console.error("notify requester returned failed:", e));
-    }
-    emitEvent({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "request.returned", entity: "request", entityId: id,
-      before: { status: request.status }, after: { status: "returned", reason: notes },
-    }).catch(console.error);
-    res.json({ ...row, actualImpact: { statusChange: { from: request.status, to: "returned" }, notifications: ["إشعار لمقدم الطلب بالإرجاع"], overrideLogged: isOverride } });
-  } catch (err) { handleRouteError(err, res, "requests"); }
+      }] : [],
+    });
+    res.json({ ...updated, actualImpact: { statusChange: { from: request.status, to: "returned" }, notifications: ["إشعار لمقدم الطلب بالإرجاع"], overrideLogged: isOverride } });
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "requests");
+  }
 });
 
 router.get("/:id/actions", requirePermission("requests:read"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const rows = await rawQuery(
       `SELECT aa.*, u.email as "actionByEmail" FROM approval_actions aa LEFT JOIN users u ON aa."actionBy"=u.id WHERE aa."entityType"='request' AND aa."entityId"=$1 AND aa."companyId"=$2 ORDER BY aa."createdAt" DESC`,
       [id, scope.companyId]
@@ -680,13 +715,13 @@ router.get("/:id/actions", requirePermission("requests:read"), async (req, res) 
 router.delete("/:id", requirePermission("requests:write"), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     // Only the requester (while still pending/draft) or a manager may delete.
     // Approved/rejected/closed/converted requests are terminal — deleting them
     // would erase the audit trail of an already-processed decision and orphan
     // any downstream entities created via convert.
     const [request] = await rawQuery<any>(
-      `SELECT id, status, "requesterId", "convertedTo" FROM requests WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      `SELECT id, status, "requesterId", "convertedTo" FROM requests WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!request) throw new NotFoundError("الطلب غير موجود");
@@ -718,27 +753,26 @@ router.delete("/:id", requirePermission("requests:write"), async (req, res) => {
       entityId: id,
       action: "request_deleted",
       before: { status: request.status, requesterId: request.requesterId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "requests background task failed"));
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.deleted", entity: "approval_requests", entityId: id }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.deleted", entity: "approval_requests", entityId: id }).catch((e) => logger.error(e, "requests background task failed"));
     res.json({ message: "تم حذف الطلب بنجاح" });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
 router.post("/:id/convert", requirePermission("requests:write"), async (req, res) => {
   try {
-    const parsed = convertRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(convertRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const { targetType } = req.body;
+    const id = parseId(req.params.id, "id");
+    const { targetType } = parsed;
 
     if (!["maintenance", "purchase", "case"].includes(targetType)) {
       throw new ValidationError("نوع التحويل غير صالح. المتاح: maintenance, purchase, case", { field: "targetType" });
     }
 
     const [request] = await rawQuery<any>(
-      `SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL)`,
+      `SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!request) throw new NotFoundError("الطلب غير موجود");
@@ -749,30 +783,36 @@ router.post("/:id/convert", requirePermission("requests:write"), async (req, res
     let targetEndpoint = "";
 
     if (targetType === "maintenance") {
-      const { insertId } = await rawExecute(
-        `INSERT INTO support_tickets ("companyId", title, description, status, priority, "createdAt")
-         VALUES ($1, $2, $3, 'open', $4, NOW())`,
-        [scope.companyId, `صيانة: ${request.title}`, request.description || request.title, request.priority || "medium"]
-      );
+      const { supportEngine } = await import("../lib/engines/index.js");
+      const { insertId } = await supportEngine.createTicket({
+        companyId: scope.companyId,
+        title: `صيانة: ${request.title}`,
+        description: request.description || request.title,
+        priority: request.priority || "medium",
+      });
       createdId = insertId;
       targetEndpoint = `/support/${insertId}`;
     } else if (targetType === "purchase") {
-      const { insertId } = await rawExecute(
-        `INSERT INTO purchase_orders ("companyId", ref, description, status, "requestedBy", "createdAt")
-         VALUES ($1, $2, $3, 'draft', $4, NOW())`,
-        [scope.companyId, `PO-REQ-${id}`, request.title + (request.description ? `: ${request.description}` : ""), scope.userId]
-      );
+      const { financialEngine } = await import("../lib/engines/index.js");
+      const { insertId } = await financialEngine.createPurchaseOrder({
+        companyId: scope.companyId,
+        ref: `PO-REQ-${id}`,
+        description: request.title + (request.description ? `: ${request.description}` : ""),
+        requestedBy: scope.userId,
+      });
       createdId = insertId;
       targetEndpoint = `/finance/purchase-orders/${insertId}`;
     } else if (targetType === "case") {
-      // Auto-resolve the responsible lawyer/manager so the case is never
-      // stuck in "unassigned" purgatory after conversion from a request.
       const legalResp = await getLegalResponsible(scope.companyId);
-      const { insertId } = await rawExecute(
-        `INSERT INTO legal_cases ("companyId", title, description, status, priority, "caseType", "lawyerName", "createdAt")
-         VALUES ($1, $2, $3, 'open', $4, 'civil', $5, NOW())`,
-        [scope.companyId, `قضية: ${request.title}`, request.description || request.title, request.priority || "medium", legalResp?.employeeName ?? null]
-      );
+      const { legalEngine } = await import("../lib/engines/index.js");
+      const { insertId } = await legalEngine.createCase({
+        companyId: scope.companyId,
+        title: `قضية: ${request.title}`,
+        description: request.description || request.title,
+        priority: request.priority || "medium",
+        caseType: "civil",
+        lawyerName: legalResp?.employeeName ?? null,
+      });
       createdId = insertId;
       targetEndpoint = `/legal/cases/${insertId}`;
       if (legalResp?.assignmentId) {
@@ -785,7 +825,7 @@ router.post("/:id/convert", requirePermission("requests:write"), async (req, res
           priority: "high",
           refType: "legal_case",
           refId: insertId,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "requests background task failed"));
       }
       emitEvent({
         companyId: scope.companyId,
@@ -795,32 +835,36 @@ router.post("/:id/convert", requirePermission("requests:write"), async (req, res
         entity: "legal_case",
         entityId: insertId,
         after: { title: `قضية: ${request.title}`, lawyerName: legalResp?.employeeName ?? null, sourceRequestId: id },
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "requests background task failed"));
     }
 
-    await rawExecute(
-      `UPDATE requests SET status='closed', "convertedTo"=$1, "convertedType"=$2, "closedAt"=NOW(), "closedBy"=$5, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
-      [createdId, targetType, id, scope.companyId, scope.userId]
-    ).catch(async () => {
-      await rawExecute(
-        `UPDATE requests SET status='closed', "closedAt"=NOW(), "closedBy"=$3, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
-        [id, scope.companyId, scope.userId]
-      );
+    const updated = await applyTransition({
+      entity: "requests",
+      id,
+      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      action: "request.converted",
+      fromStates: ["approved"],
+      toState: "closed",
+      setExtras: {
+        convertedTo: createdId,
+        convertedType: targetType,
+        closedAt: { raw: "NOW()" },
+        closedBy: scope.userId,
+      },
+      after: { convertedTo: createdId, convertedType: targetType },
+      onApply: async (_row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('request',$1,'converted',$2,$3,$4)`,
+          [id, `تحويل إلى: ${targetType} (معرف: ${createdId})`, scope.userId, scope.companyId]
+        );
+        await logCommunication(
+          scope.companyId, 'outbound',
+          `طلب محوّل: ${request.title}`,
+          `تم تحويل الطلب رقم ${id} إلى ${targetType} (معرف: ${createdId})`,
+          'request', id
+        );
+      },
     });
-
-    await rawExecute(
-      `INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('request',$1,'converted',$2,$3,$4)`,
-      [id, `تحويل إلى: ${targetType} (معرف: ${createdId})`, scope.userId, scope.companyId]
-    ).catch(() => {});
-
-    await logCommunication(
-      scope.companyId, 'outbound',
-      `طلب محوّل: ${request.title}`,
-      `تم تحويل الطلب رقم ${id} إلى ${targetType} (معرف: ${createdId})`,
-      'request', id
-    );
-
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "requests", entityId: id, after: { status: "closed", convertedTo: createdId, convertedType: targetType } }).catch(console.error);
 
     res.json({
       success: true,
@@ -829,7 +873,11 @@ router.post("/:id/convert", requirePermission("requests:write"), async (req, res
       targetType,
       targetEndpoint,
     });
-  } catch (err) { handleRouteError(err, res, "requests"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "requests");
+  }
 });
 
 export default router;

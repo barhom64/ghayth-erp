@@ -7,9 +7,12 @@ import { EntityPrintButton, type PrintSection } from "@/components/shared/entity
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "معلق",
@@ -186,6 +189,17 @@ export default function SalaryAdvanceDetail() {
                 entityType="salary-advance"
                 entityId={id}
                 currentStatus={item.status}
+                approveEndpoint={`/finance/salary-advances/${id}/approve`}
+                rejectEndpoint={`/finance/salary-advances/${id}/approve`}
+                returnEndpoint={`/finance/salary-advances/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, notes })}
+                returnBody={(notes) => ({ approved: "returned", notes })}
+                pendingStatuses={["pending", "returned"]}
+                invalidateKeys={[["salary-advances"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث السلفة" });
@@ -206,6 +220,11 @@ export default function SalaryAdvanceDetail() {
           </Card>
         )}
       </div>
+
+      {id && <ApprovalTimeline entityType="salary-advance" entityId={id} />}
+
+      {id && <EntityComments entityType="salary-advance" entityId={id} />}
+      {id && <EntityTags entityType="salary-advance" entityId={id} />}
     </div>
   );
 

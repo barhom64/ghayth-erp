@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ const EXCUSE_TYPES: Record<string, string> = {
 };
 
 export default function ExcuseRequestsPage() {
+  const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
   const [filters, setFilters] = useFilters();
@@ -109,7 +110,7 @@ export default function ExcuseRequestsPage() {
       header: "إجراءات",
       render: (r) => (
         <ApprovalActions
-          entityType="excuse_request"
+          entityType="excuse-request"
           entityId={r.id}
           currentStatus={r.status}
           approveEndpoint={`/hr/excuse-requests/${r.id}/approve`}
@@ -163,7 +164,7 @@ export default function ExcuseRequestsPage() {
       <KpiGrid items={kpis} />
 
       <BulkActionsBar
-        entityType="excuse_request"
+        entityType="excuse-request"
         items={filtered}
         selectedIds={selectedIds}
         onToggle={toggleSelect}
@@ -188,6 +189,7 @@ export default function ExcuseRequestsPage() {
         emptyMessage="لا توجد طلبات استئذان"
         emptyIcon={<LogOut className="h-6 w-6 text-slate-400" />}
         pageSize={20}
+        onRowClick={(row) => navigate(`/hr/excuse-requests/${row.id}`)}
       />
     </PageShell>
   );

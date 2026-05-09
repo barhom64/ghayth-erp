@@ -2,6 +2,7 @@ import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { formatDateAr, formatTimeAr, formatCurrency } from "@/lib/formatters";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
@@ -16,10 +17,13 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   present: { label: "حاضر", color: "text-green-600 bg-green-50" },
   present_out_of_range: { label: "خارج النطاق", color: "text-orange-600 bg-orange-50" },
   present_off_day: { label: "حضور يوم عطلة", color: "text-purple-600 bg-purple-50" },
+  present_holiday: { label: "حضور عطلة رسمية", color: "text-purple-600 bg-purple-50" },
   absent: { label: "غائب", color: "text-red-600 bg-red-50" },
   late: { label: "متأخر", color: "text-orange-600 bg-orange-50" },
   leave: { label: "إجازة", color: "text-blue-600 bg-blue-50" },
+  on_leave: { label: "في إجازة", color: "text-blue-600 bg-blue-50" },
   holiday: { label: "عطلة", color: "text-purple-600 bg-purple-50" },
+  remote: { label: "عن بُعد", color: "text-cyan-600 bg-cyan-50" },
 };
 
 const severityConfig: Record<string, { label: string; color: string }> = {
@@ -63,10 +67,7 @@ const attendanceColumns: DataTableColumn<any>[] = [
   },
   {
     key: "status", header: "الحالة", searchable: true,
-    render: (r) => {
-      const cfg = statusConfig[r.status] ?? { label: r.status, color: "text-gray-600 bg-gray-50" };
-      return <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", cfg.color)}>{cfg.label}</span>;
-    },
+    render: (r) => <PageStatusBadge status={r.status} domain="attendance" />,
   },
 ];
 

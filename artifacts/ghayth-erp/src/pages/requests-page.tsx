@@ -188,6 +188,7 @@ function RequestCatalog() {
 }
 
 function RequestsList() {
+  const [, navigate] = useLocation();
   const { data, refetch } = useApiQuery<any>(["requests"], "/requests");
   const createMut = useApiMutation<unknown, Record<string, any>>("/requests", "POST", [["requests"]]);
   const [showForm, setShowForm] = useState(false);
@@ -468,7 +469,7 @@ function RequestsList() {
             <div><Label>الوصف</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
           </div>
           <FileDropZone files={attachments} onFilesChange={setAttachments} />
-          <Button onClick={handleSubmit} disabled={!form.title || createMut.isPending}>
+          <Button onClick={handleSubmit} disabled={!form.title || createMut.isPending} rateLimitAware>
             <Send className="h-4 w-4 me-1" />
             إرسال الطلب
           </Button>
@@ -501,6 +502,7 @@ function RequestsList() {
         pageSize={20}
         emptyMessage="لا توجد طلبات"
         emptyIcon={<ClipboardCheck className="h-10 w-10 text-gray-300" />}
+        onRowClick={(r: any) => navigate(`/requests/${r.id}`)}
         rowClassName={(r: any) => selectedIds.has(r.id) ? "bg-blue-50/50" : undefined}
         renderRowExtras={renderRowExtras}
       />
