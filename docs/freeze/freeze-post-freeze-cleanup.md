@@ -30,15 +30,27 @@ The harness now runs 16 scenarios per CI job (2 D-class POST reproductions + 14 
 
 Adding more list endpoints is mechanical — append to the array, no other changes needed.
 
-## Still deferred (not started in this sweep)
+## Sweep #2 — write-path harness scenarios (2026-05-09)
 
-### 1. RBAC v2 test debt — 27 files
+Extended `tests/integration/_fixtures/twoCompanies.ts` to seed one row per company in `clients`, `projects`, and `tasks`, then added 5 cross-tenant write scenarios:
 
-`docs/freeze/freeze-day-10-11-rbac.md` lists 27 test files that still need to be updated to reflect the new `authorize()`/`requirePermission()` role matrix. `employeesSmoke.test.ts` is the worked demo. Each remaining file is a one-off — they don't compose into a generic mass-rename.
+- DELETE `/api/clients/:id` (foreign client)
+- PATCH `/api/clients/:id` (foreign client)
+- DELETE `/api/projects/:id` (foreign project)
+- PATCH `/api/projects/:id` (foreign project)
+- DELETE `/api/tasks/:id` (foreign task)
 
-**Why deferred**: each file requires reading the route's intent, mapping it onto the new role grid, and updating expectations. Doing 27 of those without per-file context risks introducing false-green tests.
+Each asserts the response status is one of `[401, 403, 404, 422]` — never `200`/`204` (which would mean the mutation went through). Total dynamic scenarios per CI run is now **21** (2 D-class POST repros + 14 list no-leak + 5 cross-tenant writes).
 
-**Recommendation**: tackle these in feature batches as the routes are otherwise touched, not as a stand-alone sweep.
+Adding more write scenarios is mechanical: append to the `CROSS_TENANT_WRITE_CASES` array in the test file and seed any new tables in the fixture's `seedCompany`.
+
+## Resolved (not still deferred)
+
+### ~1. RBAC v2 test debt — 27 files~
+
+This was already addressed during the freeze recovery (see PR #209 and follow-ups). As of 2026-05-09, `bash scripts/guard.sh` reports **3256 tests passed / 0 failed / 2 skipped** on `main`. The 11 specific files flagged in `freeze-day-10-11-rbac.md` are no longer red.
+
+The remaining work is the **+100 endpoint migration goal** from the original Day 10-11 plan — that's a feature change, not test debt, and is out of scope for the cleanup sweeps.
 
 ### 2. `db/schema.sql` regeneration
 
@@ -64,13 +76,13 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f db/schema.sql
 
 **Why deferred**: Replit access required.
 
-### 3. Harness expansion beyond list endpoints
+### 2. Further harness expansion
 
-The current 14 list endpoints + 2 POST D-class repros covers reads broadly but writes narrowly. Future scenarios worth adding (each one is ~10 lines of test):
+Sweep #2 added the first 5 write scenarios (clients/projects/tasks DELETE+PATCH). Future scenarios worth adding when the surrounding feature is touched:
 
-- POST `/api/finance/journal/entries` with a foreign-tenant `accountId` → expect rejection
-- POST `/api/finance/vendors` with a foreign `companyId` in the body → expect server overrides with scope
-- DELETE `/api/clients/:id` where the id belongs to the other tenant → expect 404
+- POST `/api/finance/journal/entries` with a foreign-tenant `accountId` → expect rejection (needs `accounts` seed in fixture)
+- POST `/api/finance/vendors` with a foreign `companyId` in the body → server should override with scope
 - PATCH `/api/employees/:id` where the id belongs to the other tenant → expect 404
+- More tables under DELETE/PATCH: invoices, vendors, employees, requests
 
-**Why deferred**: each needs route-shape research and a fixture extension (more seed rows than the current 2-companies fixture provides).
+**Why deferred**: each needs a route-specific reading + a fixture extension (additional seed rows). The shape is now established by sweep #2; new scenarios are append-only.
