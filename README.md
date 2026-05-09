@@ -166,6 +166,7 @@ The frontend talks to the API via relative paths (`/api/...`) using Vite's dev p
 Deep-dive docs live under `docs/`:
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — layered architecture, runtime request flow, data-scoping model.
+- [`docs/RBAC_V2.md`](docs/RBAC_V2.md) — layered RBAC v2 (5 layers + approval limits + SoD).
 - [`docs/MODULES.md`](docs/MODULES.md) — map of every business module to its backend route file and frontend pages.
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — day-to-day workflow: migrations, seeding, adding routes/pages, conventions.
 - [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) — open operational gaps and technical debt tracked against the system audit.

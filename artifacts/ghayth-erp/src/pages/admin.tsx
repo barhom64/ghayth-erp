@@ -11,6 +11,7 @@ import { LogsTab } from "./admin/logs-tab";
 import { PermissionsTab } from "./admin/permissions-tab";
 import { SecurityLogTab } from "./admin/security-log-tab";
 import { AuditExplorerTab } from "./admin/audit-explorer-tab";
+import { RbacV2Tab } from "./admin/rbac-v2-tab";
 import { useLocation } from "wouter";
 
 export default function AdminPage() {
@@ -68,16 +69,18 @@ export default function AdminPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="users" dir="rtl">
-        <TabsList className="grid w-full grid-cols-7">
+      <Tabs defaultValue="rbac-v2" dir="rtl">
+        <TabsList className="grid w-full grid-cols-8">
+          <TabsTrigger value="rbac-v2">الصلاحيات الطبقية</TabsTrigger>
           <TabsTrigger value="users">المستخدمين</TabsTrigger>
           <TabsTrigger value="assign">إسناد الأدوار</TabsTrigger>
           <TabsTrigger value="roles">الأدوار</TabsTrigger>
           <TabsTrigger value="logs">السجلات</TabsTrigger>
-          <TabsTrigger value="permissions">الصلاحيات</TabsTrigger>
+          <TabsTrigger value="permissions">الصلاحيات (قديم)</TabsTrigger>
           <TabsTrigger value="security">سجل الأمن</TabsTrigger>
           <TabsTrigger value="audit">سجل المراجعة</TabsTrigger>
         </TabsList>
+        <TabsContent value="rbac-v2"><RbacV2Tab /></TabsContent>
         <TabsContent value="users"><UsersTab /></TabsContent>
         <TabsContent value="assign"><RoleAssignmentTab /></TabsContent>
         <TabsContent value="roles"><RolesTab /></TabsContent>

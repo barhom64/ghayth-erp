@@ -43,6 +43,7 @@ import rulesRouter from "./rules.js";
 import moduleDashboardsRouter from "./moduleDashboards.js";
 import adminRouter from "./admin.js";
 import permissionsRouter from "./permissions.js";
+import rbacV2Router from "./rbacV2.js";
 import auditLogsRouter from "./auditLogs.js";
 import searchRouter from "./search.js";
 import activityLogRouter from "./activityLog.js";
@@ -330,6 +331,7 @@ router.use("/rules", requireModule("settings"), requireMinLevel(70), rulesRouter
 router.use("/module-dashboards", requireModule("bi"), moduleDashboardsRouter);
 router.use("/admin", requireModule("admin"), requireMinLevel(90), adminRouter);
 router.use("/permissions", permissionsRouter);
+router.use("/rbac/v2", rbacV2Router);
 router.use("/audit-logs", requireMinLevel(70), auditLogsRouter);
 router.use("/search", searchRouter);
 router.use("/activity-log", requireMinLevel(70), activityLogRouter);
