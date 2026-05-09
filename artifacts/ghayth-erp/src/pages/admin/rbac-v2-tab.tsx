@@ -691,6 +691,8 @@ function SimulateDialog({ open, onClose, features }: { open: boolean; onClose: (
   const [action, setAction] = useState("view");
   const [result, setResult] = useState<any>(null);
   const [running, setRunning] = useState(false);
+  const [simTab, setSimTab] = useState<"check" | "effective">("check");
+  const [effective, setEffective] = useState<any>(null);
   const { toast } = useToast();
 
   const run = async () => {
@@ -709,71 +711,167 @@ function SimulateDialog({ open, onClose, features }: { open: boolean; onClose: (
     }
   };
 
+  const loadEffective = async () => {
+    if (!userId) return;
+    setRunning(true);
+    try {
+      const r = await apiFetch<any>(`/rbac/v2/users/${Number(userId)}/effective`);
+      setEffective(r);
+    } catch (err: any) {
+      toast({ title: "فشل التحميل", description: err?.message || "خطأ", variant: "destructive" });
+    } finally {
+      setRunning(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Eye className="h-5 w-5" />
             محاكاة الصلاحيات
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="text-xs text-gray-600 mb-1 block">رقم المستخدم</label>
-              <Input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="userId" />
+        <Tabs value={simTab} onValueChange={(v) => setSimTab(v as any)}>
+          <TabsList>
+            <TabsTrigger value="check">فحص فعل واحد</TabsTrigger>
+            <TabsTrigger value="effective">الصلاحيات الفعّالة الكاملة</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="check" className="mt-3 space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">رقم المستخدم</label>
+                <Input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="userId" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">الميزة</label>
+                <Select value={feature} onValueChange={setFeature}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {features.map((f) => (
+                      <SelectItem key={f.feature_key} value={f.feature_key} className="text-sm">{f.label_ar}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">الإجراء</label>
+                <Select value={action} onValueChange={setAction}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(features.find((f) => f.feature_key === feature)?.available_actions || ["view"]).map((a) => (
+                      <SelectItem key={a} value={a} className="text-sm">{ACTION_LABELS[a] || a}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <label className="text-xs text-gray-600 mb-1 block">الميزة</label>
-              <Select value={feature} onValueChange={setFeature}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {features.map((f) => (
-                    <SelectItem key={f.feature_key} value={f.feature_key} className="text-sm">{f.label_ar}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <Button onClick={run} disabled={!userId || running} className="w-full">
+              {running ? "جاري التشغيل..." : "تشغيل المحاكاة"}
+            </Button>
+            {result && (
+              <Card className={result.result?.allowed ? "border-green-300 bg-green-50" : "border-red-300 bg-red-50"}>
+                <CardContent className="p-4 text-sm space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Badge className={result.result?.allowed ? "bg-green-600" : "bg-red-600"}>
+                      {result.result?.allowed ? "مسموح" : "ممنوع"}
+                    </Badge>
+                    <span className="font-medium">{result.target?.userName}</span>
+                    <span className="text-gray-500">— {result.target?.role}</span>
+                  </div>
+                  {result.result?.reasonAr && <p className="text-red-700">{result.result.reasonAr}</p>}
+                  {result.result?.diagnostics && (
+                    <div className="text-xs space-y-1 text-gray-600">
+                      <div>النطاق المُمنوح: {SCOPE_LABELS[result.result.diagnostics.grantedScope] || result.result.diagnostics.grantedScope || "—"}</div>
+                      <div>الإجراءات الممنوحة: {(result.result.diagnostics.grantedActions || []).map((a: string) => ACTION_LABELS[a] || a).join(", ") || "—"}</div>
+                      {result.result.diagnostics.requiredFix && <div className="text-amber-700">الحل: {result.result.diagnostics.requiredFix}</div>}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="effective" className="mt-3 space-y-3">
+            <div className="flex gap-2">
+              <Input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="رقم المستخدم" className="flex-1" />
+              <Button onClick={loadEffective} disabled={!userId || running}>
+                {running ? "تحميل..." : "عرض الصلاحيات"}
+              </Button>
             </div>
-            <div>
-              <label className="text-xs text-gray-600 mb-1 block">الإجراء</label>
-              <Select value={action} onValueChange={setAction}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {(features.find((f) => f.feature_key === feature)?.available_actions || ["view"]).map((a) => (
-                    <SelectItem key={a} value={a} className="text-sm">{ACTION_LABELS[a] || a}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <Button onClick={run} disabled={!userId || running} className="w-full">
-            {running ? "جاري التشغيل..." : "تشغيل المحاكاة"}
-          </Button>
-          {result && (
-            <Card className={result.result?.allowed ? "border-green-300 bg-green-50" : "border-red-300 bg-red-50"}>
-              <CardContent className="p-4 text-sm space-y-2">
-                <div className="flex items-center gap-2">
-                  <Badge className={result.result?.allowed ? "bg-green-600" : "bg-red-600"}>
-                    {result.result?.allowed ? "مسموح" : "ممنوع"}
-                  </Badge>
-                  <span className="font-medium">{result.target?.userName}</span>
-                  <span className="text-gray-500">— {result.target?.role}</span>
+            {effective && (
+              <div className="space-y-3 max-h-[400px] overflow-auto">
+                <Card>
+                  <CardContent className="p-3 flex items-center gap-3">
+                    <span className="font-semibold">{effective.target?.userName}</span>
+                    <Badge variant="outline">{effective.target?.role}</Badge>
+                    {effective.target?.jobTitle && <span className="text-sm text-gray-500">— {effective.target.jobTitle}</span>}
+                  </CardContent>
+                </Card>
+                <div>
+                  <p className="text-xs font-semibold text-gray-600 mb-2">الأدوار المُعيَّنة ({effective.roles?.length || 0})</p>
+                  <div className="flex flex-wrap gap-1">
+                    {(effective.roles || []).map((r: any) => (
+                      <Badge key={r.role_id} className="text-xs" style={{ backgroundColor: r.color }}>
+                        {r.label_ar}
+                        {r.is_primary && " ★"}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
-                {result.result?.reasonAr && (
-                  <p className="text-red-700">{result.result.reasonAr}</p>
-                )}
-                {result.result?.diagnostics && (
-                  <div className="text-xs space-y-1 text-gray-600">
-                    <div>النطاق المُمنوح: {SCOPE_LABELS[result.result.diagnostics.grantedScope] || result.result.diagnostics.grantedScope || "—"}</div>
-                    <div>الإجراءات الممنوحة: {(result.result.diagnostics.grantedActions || []).map((a: string) => ACTION_LABELS[a] || a).join(", ") || "—"}</div>
-                    {result.result.diagnostics.requiredFix && <div className="text-amber-700">الحل: {result.result.diagnostics.requiredFix}</div>}
+                <div>
+                  <p className="text-xs font-semibold text-gray-600 mb-2">
+                    صلاحيات الميزات ({effective.grants?.length || 0})
+                  </p>
+                  <div className="border rounded text-xs">
+                    <div className="grid grid-cols-12 gap-2 py-1.5 px-2 bg-gray-100 font-semibold">
+                      <div className="col-span-4">الميزة</div>
+                      <div className="col-span-5">الإجراءات</div>
+                      <div className="col-span-2">النطاق</div>
+                      <div className="col-span-1">الدور</div>
+                    </div>
+                    {(effective.grants || []).map((g: any, i: number) => (
+                      <div key={i} className="grid grid-cols-12 gap-2 py-1 px-2 border-t hover:bg-gray-50">
+                        <div className="col-span-4 font-mono text-[10px]">{g.feature_key}</div>
+                        <div className="col-span-5">{(g.actions || []).map((a: string) => ACTION_LABELS[a] || a).join(", ")}</div>
+                        <div className="col-span-2">{SCOPE_LABELS[g.scope] || g.scope}</div>
+                        <div className="col-span-1 truncate" title={g.role_label}>{g.role_label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {(effective.fields || []).length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 mb-2">سياسات الحقول ({effective.fields.length})</p>
+                    <div className="flex flex-wrap gap-1">
+                      {effective.fields.map((f: any, i: number) => (
+                        <Badge key={i} variant="outline" className={`text-xs ${FIELD_MODE_COLORS[f.mode]}`}>
+                          {f.feature_key}.{f.field_name} = {FIELD_MODE_LABELS[f.mode]}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          )}
-        </div>
+                {(effective.limits || []).length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 mb-2">سقوف الاعتماد ({effective.limits.length})</p>
+                    <div className="border rounded text-xs">
+                      {effective.limits.map((l: any, i: number) => (
+                        <div key={i} className="grid grid-cols-3 gap-2 py-1 px-2 border-t first:border-t-0 hover:bg-gray-50">
+                          <div className="font-mono text-[10px]">{l.feature_key} · {l.action}</div>
+                          <div>{l.max_amount ? `${l.max_amount} ${l.currency}` : "بلا حد"}</div>
+                          <div>{l.requires_dual_control ? "ثنائي" : "—"}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>إغلاق</Button>
         </DialogFooter>
