@@ -30,7 +30,7 @@ export default function ShiftsManagementPage() {
   const isError = shiftsError || assignmentsError || empError;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const shifts = shiftsData?.data || [];
   const assignments = assignmentsData?.data || [];

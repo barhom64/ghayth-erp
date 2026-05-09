@@ -20,7 +20,7 @@ export function ReportsTab() {
   });
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const columns: DataTableColumn<any>[] = [
     { key: "title", header: "العنوان", sortable: true, render: (r) => <span className="font-medium">{r.title}</span> },

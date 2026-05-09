@@ -35,7 +35,7 @@ export default function PaymentRegisterPage() {
   });
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   if (payment && !form.paidAmount && remaining > 0) {
     setForm(f => ({ ...f, paidAmount: String(remaining) }));

@@ -225,7 +225,7 @@ export default function FinanceDashboard() {
     pendingManualJournals.isError;
 
   if (isAnyLoading) return <LoadingSpinner />;
-  if (isAnyError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isAnyError) return <ErrorState />;
 
   const periods = asList<FiscalPeriodRow>(fiscalPeriods.data?.data);
   const openPeriod = periods.find((p) => p.status === "open");

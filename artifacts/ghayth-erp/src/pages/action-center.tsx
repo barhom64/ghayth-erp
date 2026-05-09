@@ -166,7 +166,7 @@ export default function ActionCenter() {
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const summary = data?.summary || {};
   const pendingLeaves = data?.pendingLeaves || [];

@@ -198,7 +198,7 @@ export default function LoanDetail() {
       entityId={Number(id)}
       isLoading={isLoading}
       error={isError ? true : undefined}
-      onRetry={() => window.location.reload()}
+     
       overview={overview}
       actions={
         <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>

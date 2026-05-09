@@ -55,7 +55,7 @@ export default function ShiftsCreate() {
   const [selectedDays, setSelectedDays] = useState<string[]>(["0", "1", "2", "3", "4"]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const toggleDay = (day: string) => {
     setSelectedDays((prev) =>

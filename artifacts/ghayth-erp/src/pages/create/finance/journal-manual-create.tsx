@@ -46,7 +46,7 @@ export default function JournalManualCreatePage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const coa = coaData?.data ?? coaData ?? [];
 

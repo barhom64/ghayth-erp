@@ -71,7 +71,7 @@ export default function ContractDetailPage() {
   const inspections: any[] = inspResp?.data || [];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const monthlyRent = Number(contract?.monthlyRent) || 0;
   const totalPaid = schedule

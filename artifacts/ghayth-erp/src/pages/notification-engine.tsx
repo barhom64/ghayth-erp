@@ -75,7 +75,7 @@ function RoutingRulesTab() {
   };
 
   if (loadingR || loadingC) return <LoadingSpinner />;
-  if (errorR || errorC) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (errorR || errorC) return <ErrorState />;
 
   return (
     <div className="space-y-4">
@@ -175,7 +175,7 @@ function TemplatesTab() {
   const [newBody, setNewBody] = useState("");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const templates = asList(templatesData);
   const grouped = templates.reduce((acc: Record<string, Array<Record<string, unknown>>>, t: Record<string, unknown>) => {
@@ -390,7 +390,7 @@ function FallbackChainsTab() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const chains = asList(chainsData);
   const createChain = () => {
@@ -539,7 +539,7 @@ function WebhooksTab() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const webhooks = asList(webhooksData);
   const createWebhook = () => {
@@ -653,7 +653,7 @@ function DeliveryStatsTab() {
   const { data: logData, isLoading: loadingLog, isError: errorLog } = useApiQuery(["notif-delivery-log"], "/notification-engine/delivery-log?limit=20");
 
   if (loadingStats || loadingLog) return <LoadingSpinner />;
-  if (errorStats || errorLog) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (errorStats || errorLog) return <ErrorState />;
 
   const stats = statsData?.data as {
     byChannel?: Array<{ channel: string; total: number; delivered: number; failed: number; pending: number }>;
@@ -842,7 +842,7 @@ function PreferencesTab() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const saveAll = () => {
     const prefs = Object.entries(localPrefs).map(([category, channels]) => ({

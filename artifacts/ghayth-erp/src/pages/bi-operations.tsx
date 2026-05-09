@@ -387,7 +387,7 @@ function TrendTab({ from, to, departmentId }: { from: string; to: string; depart
   if (departmentId) params.set("departmentId", departmentId);
   const qs = params.toString() ? `?${params.toString()}` : "";
   const { data, isError } = useApiQuery<any>(["bi-trend", from, to, departmentId], `/bi/operations/trend${qs}`);
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   const rows = data?.data || [];
 
   return (
@@ -424,7 +424,7 @@ function ApprovalTimeliness({ from, to, departmentId }: { from: string; to: stri
   if (departmentId) params.set("departmentId", departmentId);
   const qs = params.toString() ? `?${params.toString()}` : "";
   const { data, isError } = useApiQuery<any>(["bi-approval-timeliness", from, to, departmentId], `/bi/operations/approval-timeliness${qs}`);
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return null;
 
   return (

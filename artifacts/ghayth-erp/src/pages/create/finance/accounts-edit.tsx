@@ -60,7 +60,7 @@ export default function AccountsEdit() {
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!account) return <div className="text-center py-16 text-gray-500">الحساب غير موجود</div>;
 
   return (

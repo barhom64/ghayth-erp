@@ -241,7 +241,7 @@ export default function ExpensesCreate() {
   }, [form.operationType, form.relatedEntityName, form.period, form.amount, form.autoDescription, form.expenseType]);
 
   if (accountsLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const vatAmount = form.vatRate ? Math.round(Number(form.amount) * (Number(form.vatRate) / 100) * 100) / 100 : 0;
   const totalWithVat = Number(form.amount) + vatAmount;

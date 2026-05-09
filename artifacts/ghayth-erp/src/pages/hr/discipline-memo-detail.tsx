@@ -466,7 +466,7 @@ export default function DisciplineMemoDetailPage() {
       entityId={id ?? ""}
       isLoading={isLoading}
       error={isError ? true : undefined}
-      onRetry={() => window.location.reload()}
+     
       actions={headerActions}
       overview={overview}
     />

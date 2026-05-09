@@ -118,7 +118,7 @@ export default function ViolationsPage() {
         title="المخالفات والجزاءات"
         breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "المخالفات والجزاءات" }]}
       >
-        <ErrorState onRetry={() => window.location.reload()} />
+        <ErrorState />
       </PageShell>
     );
   }

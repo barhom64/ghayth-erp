@@ -63,7 +63,7 @@ export default function LeavesCreate() {
   }, [form.startDate, form.endDate]);
 
   if (leaveTypesQ.isLoading || loadingEmp) return <LoadingSpinner />;
-  if (leaveTypesQ.isError || errorEmp) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (leaveTypesQ.isError || errorEmp) return <ErrorState />;
 
   const selectedType = leaveTypes.find((lt: any) => String(lt.id) === form.leaveTypeId);
 

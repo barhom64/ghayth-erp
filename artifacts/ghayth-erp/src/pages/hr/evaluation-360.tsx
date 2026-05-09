@@ -37,7 +37,7 @@ export default function Evaluation360Page() {
   const cycles = cyclesData?.data || [];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const filtered = applyFilters(cycles, filters, {
     searchFields: ["employeeName", "period"],

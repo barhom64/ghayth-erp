@@ -48,7 +48,7 @@ export function LogsTab() {
         data={items}
         isLoading={isLoading}
         isError={isError}
-        onRetry={() => window.location.reload()}
+       
         searchPlaceholder="بحث في السجلات..."
         emptyMessage="لا توجد سجلات"
         pageSize={20}

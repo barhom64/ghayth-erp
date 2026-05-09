@@ -369,7 +369,7 @@ function CSATStats() {
   ];
 
   if (isError) return (
-    <PageStateWrapper isLoading={false} error={error} onRetry={() => window.location.reload()}>
+    <PageStateWrapper isLoading={false} error={error}>
       <div />
     </PageStateWrapper>
   );

@@ -92,7 +92,7 @@ export default function OvertimeDetail() {
       updatedAt={item?.updatedAt}
       isLoading={isLoading}
       error={isError ? true : undefined}
-      onRetry={() => window.location.reload()}
+     
       actions={
         <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>
       }

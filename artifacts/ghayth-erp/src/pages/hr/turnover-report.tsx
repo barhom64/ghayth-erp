@@ -32,7 +32,7 @@ export default function TurnoverReportPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["turnover-report", String(year)], `/hr/turnover-report?year=${year}`);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
 
   const monthlyData = (data?.byMonth || []).map((m: any) => ({

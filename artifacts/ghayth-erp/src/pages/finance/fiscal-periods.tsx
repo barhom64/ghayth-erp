@@ -41,7 +41,7 @@ export default function FiscalPeriodsPage() {
   const [filters, setFilters] = useFilters();
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const filtered = applyFilters(items as unknown as Record<string, unknown>[], filters, {
     searchFields: ["name", "period"],

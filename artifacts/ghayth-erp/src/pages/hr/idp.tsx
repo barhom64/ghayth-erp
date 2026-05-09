@@ -45,7 +45,7 @@ export default function IDPPage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleSave = () => {
     if (!form.employeeId) { toast({ title: "الموظف مطلوب", variant: "destructive" }); return; }

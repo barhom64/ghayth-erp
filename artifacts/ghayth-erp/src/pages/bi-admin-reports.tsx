@@ -83,7 +83,7 @@ function DailyReportTab() {
   const { data, isLoading, isError } = useApiQuery<any>(["admin-report-daily", date], `/bi/admin-reports/daily?date=${date}`);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return <div className="text-center py-12 text-muted-foreground">لا توجد بيانات</div>;
 
   return (
@@ -169,7 +169,7 @@ function WeeklyReportTab() {
   const { data, isLoading, isError } = useApiQuery<any>(["admin-report-weekly"], "/bi/admin-reports/weekly");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return <div className="text-center py-12 text-muted-foreground">لا توجد بيانات</div>;
 
   const { current, previous, changes, period } = data;
@@ -241,7 +241,7 @@ function MonthlyReportTab() {
   const { data, isLoading, isError } = useApiQuery<any>(["admin-report-monthly"], "/bi/admin-reports/monthly");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return <div className="text-center py-12 text-muted-foreground">لا توجد بيانات</div>;
 
   const { current, previous, changes, weeklyTrend, period } = data;

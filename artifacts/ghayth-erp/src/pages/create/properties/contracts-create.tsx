@@ -83,7 +83,7 @@ export default function ContractsCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   if (loadingU || loadingT || loadingO) return <LoadingSpinner />;
-  if (errorU || errorT || errorO) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (errorU || errorT || errorO) return <ErrorState />;
 
   const set = (field: string, value: any) => {
     setIsDirty(true);

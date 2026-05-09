@@ -254,7 +254,7 @@ export function UsersTab() {
         data={items}
         isLoading={isLoading1 || isLoading2}
         isError={isError1 || isError2}
-        onRetry={() => window.location.reload()}
+       
         searchPlaceholder="بحث بالبريد أو اسم الموظف..."
         emptyMessage="لا يوجد مستخدمين"
         pageSize={0}

@@ -19,7 +19,7 @@ export default function TrainingAdvancedPage() {
   const isError = statsError || programsError || enrollmentsError;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const stats = statsData || {};
   const programs = programsData?.data || [];

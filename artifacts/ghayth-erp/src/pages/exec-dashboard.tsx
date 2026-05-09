@@ -47,7 +47,7 @@ export default function ExecDashboard() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const d = data || {};
 

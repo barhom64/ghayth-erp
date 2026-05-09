@@ -27,7 +27,7 @@ export default function UmrahInvoices() {
   const { toast } = useToast();
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const generate = async () => {
     try {

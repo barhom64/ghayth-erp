@@ -132,7 +132,7 @@ export default function UmrahTransportDetail() {
       entityId={id || 0}
       isLoading={isLoading}
       error={isError ? true : undefined}
-      onRetry={() => window.location.reload()}
+     
       createdAt={item?.createdAt}
       overview={overview}
       actions={

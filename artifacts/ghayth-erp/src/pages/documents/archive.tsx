@@ -75,7 +75,7 @@ export default function DocumentsArchive() {
         data={docs}
         isLoading={isLoading}
         isError={isError}
-        onRetry={() => window.location.reload()}
+       
         searchPlaceholder="بحث في الأرشيف..."
         emptyMessage="لا توجد مستندات"
       />
