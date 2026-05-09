@@ -2,12 +2,11 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { requirePermission, userHasPermission } from "../middlewares/permissionMiddleware.js";
 import { createAuditLog, emitEvent, toDateISO } from "../lib/businessHelpers.js";
 import { z } from "zod";
 import rateLimit from "express-rate-limit";
@@ -100,10 +99,10 @@ router.get("/employee-data-export/:employeeId", authMiddleware, pdplUserLimiter,
     const employeeId = parseId(req.params.employeeId, "employeeId");
 
     const isOwnData = scope.employeeId === employeeId;
-    const isHROrAbove = HR_ROLES.includes(scope.role);
+    const canExportEmployeeData = isOwnData || (await userHasPermission(scope, "hr:read"));
 
-    if (!isOwnData && !isHROrAbove) {
-      throw new ForbiddenError("يمكنك فقط تصدير بياناتك الشخصية أو يجب أن تكون مسؤول موارد بشرية");
+    if (!canExportEmployeeData) {
+      throw new ForbiddenError("يمكنك فقط تصدير بياناتك الشخصية أو يجب أن تملك صلاحية قراءة بيانات الموارد البشرية");
     }
 
     const [employee] = await rawQuery<any>(
