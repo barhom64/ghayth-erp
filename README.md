@@ -180,7 +180,8 @@ Recommended cadence: hourly during business hours + nightly retained 30 days + w
 Deep-dive docs live under `docs/`:
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — layered architecture, runtime request flow, data-scoping model.
-- [`docs/RBAC_V2.md`](docs/RBAC_V2.md) — layered RBAC v2 (5 layers + approval limits + SoD).
+- [`docs/RBAC_V2.md`](docs/RBAC_V2.md) — layered RBAC v2 (5 layers + approval limits + SoD + ABAC conditions).
+- [`docs/RBAC_COMPARISON.md`](docs/RBAC_COMPARISON.md) — RBAC v2 vs SAP S/4HANA, Oracle NetSuite, Odoo Enterprise, MS Dynamics 365.
 - [`docs/CATALOG_RULES.md`](docs/CATALOG_RULES.md) — pnpm catalog discipline + library bans (toast / router / icons / charts / forms).
 - [`docs/MODULES.md`](docs/MODULES.md) — map of every business module to its backend route file and frontend pages.
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — day-to-day workflow: migrations, seeding, adding routes/pages, conventions.

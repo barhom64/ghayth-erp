@@ -31,6 +31,7 @@ import {
   type Action,
   type Scope,
 } from "./featureCatalog.js";
+import { evaluateConditions, type AbacConditions } from "./abacConditions.js";
 
 export interface AccessSpec {
   feature: string;
@@ -372,6 +373,41 @@ export async function checkAccess(scope: RequestScope, spec: AccessSpec, columns
     };
   }
 
+  // ABAC conditions: evaluate any JSON conditions attached to the grant.
+  // Conditions narrow when the grant applies (status whitelist, amount
+  // ceiling/floor, ownership, business hours, day of week, IP prefix).
+  // First grant whose conditions PASS wins; otherwise we report the
+  // most informative failure.
+  let chosenGrant: RoleGrantRow | null = null;
+  let lastConditionFailure: { reasonAr?: string; code?: string } | null = null;
+  for (const grant of matchingGrants) {
+    const condResult = evaluateConditions(grant.conditions as AbacConditions | null, {
+      scope: { userId: scope.userId, companyId: scope.companyId, branchId: scope.branchId, employeeId: scope.employeeId },
+      record: spec.resource?.record ?? null,
+      userDepartmentId: ctx.departmentId,
+      ipAddress: null,
+    });
+    if (condResult.passed) {
+      chosenGrant = grant;
+      break;
+    }
+    lastConditionFailure = { reasonAr: condResult.failedReasonAr, code: condResult.failedReason };
+  }
+  if (!chosenGrant) {
+    return {
+      allowed: false,
+      reasonAr: lastConditionFailure?.reasonAr || "الشروط الإضافية على هذه الصلاحية غير محققة",
+      code: lastConditionFailure?.code || "CONDITION_FAILED",
+      diagnostics: {
+        matchedRoleIds: matchingGrants.map((g) => g.role_id),
+        grantedActions: bestGrant.actions as Action[],
+        grantedScope: bestGrant.scope as Scope,
+      },
+    };
+  }
+  // Use the grant that passed conditions for downstream decisions.
+  const winningGrant = chosenGrant;
+
   // Approval limit (for approve action).
   let limitInfo: AccessResult["approvalLimit"] = null;
   if (spec.action === "approve" && spec.amount) {
@@ -399,12 +435,12 @@ export async function checkAccess(scope: RequestScope, spec: AccessSpec, columns
   return {
     allowed: true,
     fieldPolicy,
-    scopeFilter: buildScopeFilter(bestGrant, ctx, { ...DEFAULT_COLUMNS, ...columns }),
+    scopeFilter: buildScopeFilter(winningGrant, ctx, { ...DEFAULT_COLUMNS, ...columns }),
     approvalLimit: limitInfo,
     diagnostics: {
       matchedRoleIds: matchingGrants.map((g) => g.role_id),
-      grantedActions: bestGrant.actions as Action[],
-      grantedScope: bestGrant.scope as Scope,
+      grantedActions: winningGrant.actions as Action[],
+      grantedScope: winningGrant.scope as Scope,
       yourCompanyId: scope.companyId,
     },
   };
