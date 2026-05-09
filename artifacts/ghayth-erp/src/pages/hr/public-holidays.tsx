@@ -144,7 +144,7 @@ export default function PublicHolidaysPage() {
       {isLoading ? (
         <LoadingSpinner />
       ) : isError ? (
-        <ErrorState onRetry={() => window.location.reload()} />
+        <ErrorState />
       ) : holidays.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-gray-400">لا توجد عطل لهذا العام</CardContent></Card>
       ) : (

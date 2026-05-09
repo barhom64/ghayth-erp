@@ -26,7 +26,7 @@ export default function GratuityPage() {
   );
 
   if (employeesLoading) return <LoadingSpinner />;
-  if (employeesError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (employeesError) return <ErrorState />;
 
   const handleCalc = () => {
     if (!form.employeeId) return;

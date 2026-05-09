@@ -148,7 +148,7 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
   const byType = data?.byType || {};
   const [viewMode, setViewMode] = useState<"tree" | "flat">("tree");
 
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const tree = useMemo(() => {
     if (!rows.length) return [];
@@ -313,7 +313,7 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
   const summary = data?.summary || {};
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const totalRevenue = Number(summary.totalRevenue || 0);
   const totalExpenses = Number(summary.totalExpenses || 0);
@@ -457,7 +457,7 @@ function BalanceSheet({ dateParams }: { dateParams: string }) {
   const equity = data?.equity || [];
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const totalAssets = Number(summary.totalAssets || 0);
   const totalLiabilities = Number(summary.totalLiabilities || 0);
@@ -554,7 +554,7 @@ function CashFlow({ dateParams }: { dateParams: string }) {
   const outflows = data?.outflows || [];
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const inflowColumns: DataTableColumn<any>[] = [
     { key: "description", header: "البيان", render: (f) => <span className="font-medium">{f.description || "-"}</span> },
@@ -636,7 +636,7 @@ function CashBankStatement({ dateParams }: { dateParams: string }) {
   const entries = data?.entries || [];
   const summary = data?.summary || {};
 
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const cashBankColumns: DataTableColumn<any>[] = [
     { key: "date", header: "التاريخ", render: (e) => <span className="text-xs text-gray-500">{e.date ? formatDateAr(e.date) : "-"}</span> },
@@ -711,7 +711,7 @@ function CustodyAdvances({ dateParams }: { dateParams: string }) {
   const summary = data?.summary || {};
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const custodyColumns: DataTableColumn<any>[] = [
     { key: "ref", header: "المرجع", render: (c) => <span className="font-mono text-xs text-blue-600">{c.ref}</span> },
@@ -785,7 +785,7 @@ function ExpensesAnalysis({ dateParams }: { dateParams: string }) {
   const rows = data?.data || [];
   const summary = data?.summary || {};
 
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const expensesColumns: DataTableColumn<any>[] = [
     { key: "label", header: groupBy === "account" ? "الحساب" : groupBy === "branch" ? "الفرع" : "الموظف", searchable: true, render: (r) => <span className="font-medium">{r.label || "-"}</span> },
@@ -851,7 +851,7 @@ function RevenueAnalysis({ dateParams }: { dateParams: string }) {
   const summary = data?.summary || {};
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const byAccountColumns: DataTableColumn<any>[] = [
     {
@@ -933,7 +933,7 @@ function BudgetVariance() {
   const rows = data?.data || [];
   const summary = data?.summary || {};
 
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const varianceColor = (v: number) => v >= 0 ? "#16a34a" : "#dc2626";
 
@@ -1038,7 +1038,7 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
     enabled
   );
 
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const rows = data?.rows || [];
   const summary = data?.summary || {};

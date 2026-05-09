@@ -100,7 +100,7 @@ export default function EmployeeActivationPage() {
   const lifecyclePending = patchMutation.isPending || terminateMutation.isPending;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const employees = data?.data || [];
 

@@ -39,7 +39,7 @@ export default function Intelligence() {
   ];
 
   if (loadingOverview) return <LoadingSpinner />;
-  if (overviewError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (overviewError) return <ErrorState />;
 
   return (
     <PageShell title="لوحة الذكاء">

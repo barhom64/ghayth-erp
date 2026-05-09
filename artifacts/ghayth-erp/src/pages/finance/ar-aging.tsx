@@ -49,7 +49,7 @@ export default function ArAgingPage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const clients = (data?.clients || []) as any[];
   const summary = data?.summary || {};

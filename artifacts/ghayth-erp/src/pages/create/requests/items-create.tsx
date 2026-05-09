@@ -21,7 +21,7 @@ export default function RequestsItemCreate() {
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleSubmit = () => {
     const firstError = validate({

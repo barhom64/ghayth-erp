@@ -113,7 +113,7 @@ export default function AdminRolesPage() {
   ];
 
   if (isLoading) return <DataTable columns={rolePermColumns} data={[]} isLoading={true} searchPlaceholder={null} noToolbar />;
-  if (isError) return <DataTable columns={rolePermColumns} data={[]} isError={true} onRetry={() => window.location.reload()} searchPlaceholder={null} noToolbar />;
+  if (isError) return <DataTable columns={rolePermColumns} data={[]} isError={true} searchPlaceholder={null} noToolbar />;
 
   const toggleNewRoleModule = (mod: string) => {
     setNewRole(prev => ({

@@ -31,7 +31,7 @@ export default function PilgrimDetail() {
   const { toast } = useToast();
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return <div className="p-8 text-center text-muted-foreground">جارٍ التحميل...</div>;
 
   const updateStatus = async () => {

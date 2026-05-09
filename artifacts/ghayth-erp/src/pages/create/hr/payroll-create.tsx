@@ -44,7 +44,7 @@ export default function PayrollCreate() {
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (loadingEmp || loadingBranch) return <LoadingSpinner />;
-  if (errorEmp || errorBranch) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (errorEmp || errorBranch) return <ErrorState />;
 
   const handleSubmit = () => {
     const firstError = validate({

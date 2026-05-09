@@ -30,7 +30,7 @@ export default function Evaluation360HistoryPage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const employee = data?.employee;
   const history = data?.history || [];

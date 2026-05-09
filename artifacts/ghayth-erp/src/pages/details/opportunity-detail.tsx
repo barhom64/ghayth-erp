@@ -216,7 +216,7 @@ export default function OpportunityDetail() {
         entityId={id!}
         isLoading={isLoading}
         error={isError ? error : undefined}
-        onRetry={() => window.location.reload()}
+       
         createdAt={opportunity?.createdAt}
         updatedAt={opportunity?.updatedAt}
         overview={overview}

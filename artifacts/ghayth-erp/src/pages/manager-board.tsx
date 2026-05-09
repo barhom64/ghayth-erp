@@ -90,7 +90,7 @@ export default function ManagerBoard() {
   );
 
   if (actionLoading) return <LoadingSpinner />;
-  if (actionError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (actionError) return <ErrorState />;
 
   const pending = actionData || {};
   const leaves = pending.pendingLeaves || [];

@@ -73,7 +73,7 @@ export default function Automation() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const filteredJobs = cronJobs.filter((j: any) => !jobSearch || j.name?.includes(jobSearch) || j.description?.includes(jobSearch));
   const filteredLogs = cronLogs.filter((l: any) => !logSearch || l.jobName?.includes(logSearch) || l.result?.includes(logSearch));

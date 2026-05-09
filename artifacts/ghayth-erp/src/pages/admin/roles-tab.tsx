@@ -54,7 +54,7 @@ export function RolesTab() {
   };
 
   if (isLoading1 || isLoading2) return <LoadingSpinner />;
-  if (isError1 || isError2) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError1 || isError2) return <ErrorState />;
 
   return (
     <div className="space-y-4">

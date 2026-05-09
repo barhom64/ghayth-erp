@@ -145,7 +145,7 @@ export default function PurchaseOrderDetailPage() {
         actions={actions}
         isLoading={isLoading}
         error={isError ? true : undefined}
-        onRetry={() => window.location.reload()}
+       
       />
 
       {po && (

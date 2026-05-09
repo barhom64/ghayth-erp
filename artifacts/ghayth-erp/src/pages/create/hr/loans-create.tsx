@@ -47,7 +47,7 @@ export default function LoansCreate() {
   );
 
   if (employeesQ.isLoading) return <LoadingSpinner />;
-  if (employeesQ.isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (employeesQ.isError) return <ErrorState />;
 
   const salary = Number(selectedEmployee?.salary || selectedEmployee?.basicSalary || 0);
   const maxLoan = salary * 3;

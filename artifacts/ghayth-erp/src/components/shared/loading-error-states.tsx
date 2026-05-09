@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { PageStateWrapper } from "./page-state";
 
@@ -27,9 +28,16 @@ export function LoadingSpinner() {
  * than the same generic line for every failure mode.
  */
 export function ErrorState({ onRetry, error }: { onRetry?: () => void; error?: unknown }) {
+  // When no explicit onRetry is provided, default to invalidating every
+  // active query so React Query refetches them — far cheaper than a full
+  // page reload (no re-bootstrap of auth, layout, settings, sidebar).
+  // Pages that need a stronger fallback can still pass their own onRetry.
+  const qc = useQueryClient();
+  const handleRetry = onRetry ?? (() => qc.invalidateQueries());
+
   if (error) {
     return (
-      <PageStateWrapper error={error} onRetry={onRetry}>
+      <PageStateWrapper error={error} onRetry={handleRetry}>
         <div />
       </PageStateWrapper>
     );
@@ -37,7 +45,7 @@ export function ErrorState({ onRetry, error }: { onRetry?: () => void; error?: u
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       <p className="text-red-600 text-lg mb-2">حدث خطأ في تحميل البيانات</p>
-      <Button variant="outline" onClick={onRetry ?? (() => window.location.reload())}>
+      <Button variant="outline" onClick={handleRetry}>
         إعادة المحاولة
       </Button>
     </div>

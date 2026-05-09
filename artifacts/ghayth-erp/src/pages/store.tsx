@@ -259,7 +259,7 @@ export default function StorePage() {
   const { data: stats, isLoading, isError } = useApiQuery<any>(["store-stats"], "/store/stats");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const s = stats || {};
   const statCards = [

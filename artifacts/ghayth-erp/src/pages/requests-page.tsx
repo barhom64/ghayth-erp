@@ -586,7 +586,7 @@ export default function RequestsPage() {
   const { data: stats, isLoading, isError } = useApiQuery<any>(["req-stats"], "/requests/stats");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const s = stats || {};
 

@@ -32,7 +32,7 @@ export default function TaxSystemPage() {
   const isError = summaryError || declError;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const declItems = declarations?.data || [];
 

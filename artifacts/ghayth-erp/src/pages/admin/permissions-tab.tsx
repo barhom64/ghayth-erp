@@ -186,7 +186,7 @@ export function PermissionsTab() {
   ];
 
   if (isLoading) return <DataTable columns={rolePermColumns} data={[]} isLoading={true} searchPlaceholder={null} noToolbar />;
-  if (isError) return <DataTable columns={rolePermColumns} data={[]} isError={true} onRetry={() => window.location.reload()} searchPlaceholder={null} noToolbar />;
+  if (isError) return <DataTable columns={rolePermColumns} data={[]} isError={true} searchPlaceholder={null} noToolbar />;
 
   return (
     <div className="space-y-6">

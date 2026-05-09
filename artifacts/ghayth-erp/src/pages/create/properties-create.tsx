@@ -56,7 +56,7 @@ export default function PropertiesCreate() {
   });
 
   if (loadingB || loadingO) return <LoadingSpinner />;
-  if (errorB || errorO) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (errorB || errorO) return <ErrorState />;
 
   const AMENITIES_LIST = [
     "مصعد", "موقف سيارة", "حراسة أمنية", "مسبح", "صالة رياضية",

@@ -27,7 +27,7 @@ export default function PropertyMaintenanceCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleSubmit = async () => {
     const firstError = validate({

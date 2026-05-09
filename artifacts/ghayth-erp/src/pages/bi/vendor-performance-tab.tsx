@@ -11,7 +11,7 @@ export function VendorPerformanceTab() {
   const rows = (data?.data || []) as any[];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const columns: DataTableColumn<any>[] = [
     { key: "vendorName", header: "المورد", sortable: true, searchable: true, className: "font-medium", render: (r) => r.vendorName },

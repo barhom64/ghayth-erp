@@ -49,7 +49,7 @@ export default function JournalCreate() {
   ]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const updateLine = (idx: number, field: keyof JournalLine, value: string) => {
     const updated = [...lines];

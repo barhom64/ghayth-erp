@@ -149,7 +149,7 @@ export default function UmrahPackages() {
   ];
 
   if (packagesQ.isLoading) return <LoadingSpinner />;
-  if (packagesQ.isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (packagesQ.isError) return <ErrorState />;
 
   return (
     <PageShell title="باقات العمرة" breadcrumbs={[{ label: "العمرة" }, { label: "الباقات" }]}>

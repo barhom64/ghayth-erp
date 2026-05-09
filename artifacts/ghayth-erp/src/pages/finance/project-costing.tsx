@@ -58,7 +58,7 @@ export default function ProjectCostingPage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const list: Project[] = data?.data ?? data ?? [];
 

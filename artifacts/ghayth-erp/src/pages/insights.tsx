@@ -97,7 +97,7 @@ export default function Insights() {
   };
 
   if (loadingSummary) return <LoadingSpinner />;
-  if (!summary && !loadingSummary) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (!summary && !loadingSummary) return <ErrorState />;
 
   const overview = summary?.overview ?? {};
   const usageStats = summary?.usageStats ?? {};

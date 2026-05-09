@@ -56,7 +56,7 @@ export default function SalaryAdvancesPage() {
   const canApprove = roleLevel >= 70;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const filtered = applyFilters(items as Record<string, any>[], filters, {
     searchFields: ["description", "ref", "employeeName"],
