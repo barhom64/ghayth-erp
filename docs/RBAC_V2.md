@@ -263,3 +263,68 @@ router.get("/leaves/:id",
 - [ ] ABAC conditions (`{ statusIn: ["draft"] }`) في `rbac_role_grants.conditions`
 - [ ] إضافة قواعد SoD مخصصة لكل قطاع
 - [ ] Time-bound grants (`rbac_user_grants.expires_at`) — جدول موجود، يحتاج cron تنظيف
+
+---
+
+## 11. Route migration grid (snapshot 9 May 2026)
+
+> Generated as the Day 10-11 freeze deliverable. Numbers reflect call-site counts of `authorize()` vs `requirePermission()` (and `requireAnyPermission()`) in each `routes/*.ts` file.
+>
+> **Total**: 103 `authorize()` / 1017 `requirePermission()` / 3 `requireAnyPermission()` ≈ **9.2% migrated**.
+
+### Files with at least one `authorize()` call (partial or full migration)
+
+| File                    | `authorize()` | Status      | Notes                                          |
+| ----------------------- | ------------: | ----------- | ---------------------------------------------- |
+| `rbacV2.ts`             | 23            | Full        | The migration's own admin endpoints             |
+| `hr.ts`                 | 13            | Partial     | Payroll + leave entry endpoints migrated       |
+| `properties.ts`         | 8             | Partial     | Maintenance request flow migrated              |
+| `finance-budget.ts`     | 6             | Partial     | Budget CRUD migrated                           |
+| `requests.ts`           | 5             | Partial     | Generic request CRUD migrated                  |
+| `finance-invoices.ts`   | 5             | Partial     | Invoice CRUD migrated                          |
+| `employees.ts`          | 5             | Partial     | Top-level CRUD migrated; `/onboarding-tasks`, `/job-titles`, `/documents`, `/obligations/seed` still legacy |
+| `tasks.ts`              | 4             | Partial     |                                                |
+| `support.ts`            | 4             | Partial     | Support tickets CRUD                           |
+| `legal.ts`              | 4             | Partial     |                                                |
+| `fleet.ts`              | 4             | Partial     |                                                |
+| `finance-custodies.ts`  | 4             | Partial     | Custody CRUD migrated                          |
+| `warehouse.ts`          | 3             | Partial     |                                                |
+| `finance-journal.ts`    | 3             | Partial     |                                                |
+| `finance-collection.ts` | 3             | Partial     |                                                |
+| `clients.ts`            | 3             | Partial     |                                                |
+| `projects.ts`           | 2             | Partial     |                                                |
+| `crm.ts`                | 2             | Partial     |                                                |
+| `finance-vendors.ts`    | 1             | Bootstrap   |                                                |
+| `documents.ts`          | 1             | Bootstrap   |                                                |
+
+### Files with zero `authorize()` calls (legacy-only)
+
+≈ 60 route files still rely entirely on `requirePermission()`. They are the priority queue for the next migration wave (target: 100 endpoints post-freeze):
+
+- **High-risk (financial / PII writes)** — should be migrated first:
+  `finance-zatca.ts`, `finance-recurring.ts`, `finance-purchase.ts`, `finance-cost-centers.ts`, `finance-algorithms.ts`, `finance-accounts.ts`, `finance-hardening.ts`, `finance-reports.ts`, `accounting-engine.ts`.
+- **Medium-risk (HR / operational writes)**:
+  `hr-contracts.ts`, `hr-discipline.ts`, `hr-exit.ts`, `hr-loans.ts`, `hr-overtime.ts`, `automation.ts`, `workflows.ts`, `rules.ts`.
+- **Low-risk (read-mostly)**:
+  `auditLogs.ts`, `activityLog.ts`, `bi.ts`, `moduleDashboards.ts`, `notifications.ts`, `dashboard.ts`, `execDashboard.ts`. (`health.ts`, `publicData.ts`, `careersPortal.ts`, `index.ts` are intentionally unguarded.)
+
+### Test debt from in-progress migration
+
+12 test files in `tests/unit/` assert specific `requirePermission(...)` strings against routes that have already migrated to `authorize()`. **They fail today, but they are NOT a production bug** — the route is correctly guarded by `authorize()`; the test's grep just doesn't see the legacy string anymore. The fix is to widen each assertion to accept either the legacy `requirePermission(...)` or the equivalent `authorize({...})` shape. Tracked under `docs/freeze/freeze-day-10-11-rbac.md`.
+
+### Why this is acceptable for the freeze
+
+- The 103 already-migrated routes cover all the heaviest privilege actions exercised by the static tenant-isolation scanner — every D-class fix from Day 3-5 landed on a route that uses `authorize()`.
+- `requirePermission()` is **not insecure**; it is the legacy guard that still enforces the permission. Migrating to `authorize()` adds field-masking, scope-aware resource checks, and ABAC hooks — all valuable, but additive, not corrective.
+- The freeze go/no-go decision (Day 14) does not block on full RBAC v2 migration; it blocks on tenant-isolation correctness, which Phase 9 has closed.
+
+### Migration command for future contributors
+
+For each unmigrated route handler:
+
+1. Look up the feature in `lib/rbac/featureCatalog.ts`. If absent, add it.
+2. Replace `requirePermission("hr:read")` with `authorize({ feature: "hr.<entity>", action: "list" /* or view */ })`.
+3. For detail handlers reading one row, add `resource: { table: "<table>", idParam: "id" }`.
+4. For approval handlers with a financial threshold, add `amount: { from: "body", field: "amount" }`.
+5. Wrap the response in `maskFields(req, payload)`.
+6. Run `pnpm --filter @workspace/api-server lint:permissions` and the route's smoke test.

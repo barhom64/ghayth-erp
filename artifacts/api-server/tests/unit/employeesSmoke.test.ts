@@ -14,6 +14,19 @@ function section(marker: string, len = 5000): string {
   return idx === -1 ? "" : SRC.slice(idx, idx + len);
 }
 
+// Each assertion that historically grepped for `requirePermission("hr:X")` is
+// updated to accept either the legacy guard or the new `authorize({ action: "Y" })`
+// form (see docs/RBAC_V2.md §11 for the migration status). Both guards enforce
+// the permission; this widens the test from "the literal legacy string is here"
+// to "some valid RBAC guard for this intent is here".
+function guardRe(actions: string[], legacy: string): RegExp {
+  const actionAlt = actions.join("|");
+  return new RegExp(
+    `requirePermission\\("${legacy}"\\)|authorize\\(\\{[^}]*action:\\s*"(?:${actionAlt})"`,
+    "s"
+  );
+}
+
 /** Grab the full handler body from a router registration to the next one. */
 function fullHandler(marker: string): string {
   const idx = SRC.indexOf(marker);
@@ -55,26 +68,26 @@ describe("Employees — permissions", () => {
 
   it("GET / and GET /:id require hr:read", () => {
     const listLine = section('router.get("/",', 200);
-    expect(listLine).toContain('requirePermission("hr:read")');
+    expect(listLine).toMatch(guardRe(["list"], "hr:read"));
     const detailLine = section('router.get("/:id",', 200);
-    expect(detailLine).toContain('requirePermission("hr:read")');
+    expect(detailLine).toMatch(guardRe(["view"], "hr:read"));
   });
 
   it("POST / requires hr:create", () => {
     const line = section('router.post("/",', 200);
-    expect(line).toContain('requirePermission("hr:create")');
+    expect(line).toMatch(guardRe(["create"], "hr:create"));
   });
 
   it("PATCH /:id and PATCH /onboarding-tasks/:id require hr:update", () => {
     const patchLine = section('router.patch("/:id",', 200);
-    expect(patchLine).toContain('requirePermission("hr:update")');
+    expect(patchLine).toMatch(guardRe(["update"], "hr:update"));
     const obLine = section('router.patch("/onboarding-tasks/:id",', 200);
-    expect(obLine).toContain('requirePermission("hr:update")');
+    expect(obLine).toMatch(guardRe(["update"], "hr:update"));
   });
 
   it("DELETE /:id requires hr:delete", () => {
     const line = section('router.delete("/:id",', 200);
-    expect(line).toContain('requirePermission("hr:delete")');
+    expect(line).toMatch(guardRe(["delete"], "hr:delete"));
   });
 
   it("POST /obligations/seed requires hr:update", () => {
