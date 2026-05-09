@@ -270,7 +270,7 @@ router.get("/products", requirePermission("warehouse:read"), async (req, res) =>
     const scope = req.scope!;
     const { search, status, page = "1", limit: lim = "50" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
     const filters = parseScopeFilters(req);
     if (search) { filters.search = String(search); filters.searchColumns = ['p.name', 'p.sku']; }
@@ -927,7 +927,7 @@ router.get("/categories", requirePermission("warehouse:read"), async (req, res) 
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
     const [countRow] = await rawQuery<any>(
@@ -996,7 +996,7 @@ router.get("/suppliers", requirePermission("warehouse:read"), async (req, res) =
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
     const [countRow] = await rawQuery<any>(

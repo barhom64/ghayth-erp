@@ -6908,7 +6908,7 @@ router.get("/company-documents", requirePermission("hr:read"), async (req, res) 
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
     const [countRow] = await rawQuery<any>(
@@ -6956,7 +6956,7 @@ router.get("/employee-documents", requirePermission("hr:read"), async (req, res)
     const scope = req.scope!;
     const { employeeId, page = "1", limit: lim = "50" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
     let paramIdx = 1;
