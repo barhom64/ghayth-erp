@@ -11,6 +11,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -470,7 +471,9 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create driver error:"); }
 });
 
-router.get("/vehicles/:id", requirePermission("fleet:read"), async (req, res) => {
+// RBAC v2: vehicle detail with scope check + maskFields. Branch-scoped
+// roles see only their branch's vehicles.
+router.get("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "view", resource: { table: "vehicles", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const vehicleId = parseId(req.params.id, "id");
@@ -866,7 +869,9 @@ router.get("/trips", requirePermission("fleet:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet trips error:"); }
 });
 
-router.get("/trips/:id", requirePermission("fleet:read"), async (req, res) => {
+// RBAC v2: trip detail. Drivers can have scope=self via fleet.trips.my
+// (self-service) for their own trips; managers via fleet.trips at branch.
+router.get("/trips/:id", authorize({ feature: "fleet.trips", action: "view", resource: { table: "trips", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const tripId = parseId(req.params.id, "id");

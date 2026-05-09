@@ -10,6 +10,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, currentMonthPadded, generateTimeRef, roundTo2 } from "../lib/businessHelpers.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -740,7 +741,9 @@ async function handleDealWon(scope: any, opp: any, dealValue: number) {
   }
 }
 
-router.get("/opportunities/:id", requirePermission("crm:read"), async (req, res) => {
+// RBAC v2: opportunity scope check (sales-rep template uses scope=self
+// to limit reps to their own opportunities; managers see team/branch).
+router.get("/opportunities/:id", authorize({ feature: "crm.opportunities", action: "view", resource: { table: "crm_opportunities", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
