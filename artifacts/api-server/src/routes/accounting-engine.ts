@@ -153,27 +153,29 @@ router.post("/accounting-mappings/batch", authorize({ feature: "finance.accounti
     requireFinance(scope);
     const { mappings } = parsedBody;
 
-    for (const m of mappings) {
-      await rawExecute(
-        `INSERT INTO accounting_mappings
-          ("companyId","operationType","operationLabel","debitAccountId","creditAccountId","debitAccountCode","creditAccountCode","isActive")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-         ON CONFLICT ("companyId","operationType") DO UPDATE SET
-          "debitAccountId" = EXCLUDED."debitAccountId",
-          "creditAccountId" = EXCLUDED."creditAccountId",
-          "debitAccountCode" = EXCLUDED."debitAccountCode",
-          "creditAccountCode" = EXCLUDED."creditAccountCode",
-          "operationLabel" = EXCLUDED."operationLabel",
-          "isActive" = EXCLUDED."isActive",
-          "updatedAt" = NOW()`,
-        [
-          scope.companyId, m.operationType, m.operationLabel ?? m.operationType,
-          m.debitAccountId ?? null, m.creditAccountId ?? null,
-          m.debitAccountCode ?? null, m.creditAccountCode ?? null,
-          m.isActive ?? true,
-        ]
-      );
-    }
+    await withTransaction(async (client) => {
+      for (const m of mappings) {
+        await client.query(
+          `INSERT INTO accounting_mappings
+            ("companyId","operationType","operationLabel","debitAccountId","creditAccountId","debitAccountCode","creditAccountCode","isActive")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           ON CONFLICT ("companyId","operationType") DO UPDATE SET
+            "debitAccountId" = EXCLUDED."debitAccountId",
+            "creditAccountId" = EXCLUDED."creditAccountId",
+            "debitAccountCode" = EXCLUDED."debitAccountCode",
+            "creditAccountCode" = EXCLUDED."creditAccountCode",
+            "operationLabel" = EXCLUDED."operationLabel",
+            "isActive" = EXCLUDED."isActive",
+            "updatedAt" = NOW()`,
+          [
+            scope.companyId, m.operationType, m.operationLabel ?? m.operationType,
+            m.debitAccountId ?? null, m.creditAccountId ?? null,
+            m.debitAccountCode ?? null, m.creditAccountCode ?? null,
+            m.isActive ?? true,
+          ]
+        );
+      }
+    });
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "accounting_mappings", entityId: scope.companyId, after: { batch: true, count: mappings.length, operationTypes: mappings.map((m: any) => m.operationType) } }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.mappings.batch_updated", entity: "accounting_mappings", entityId: scope.companyId, details: JSON.stringify({ count: mappings.length, operationTypes: mappings.map((m: any) => m.operationType) }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
@@ -570,48 +572,45 @@ export async function createSubsidiaryAccountsForEntity(
       );
     }
 
-    for (const acc of accountsToCreate) {
-      const [parentAccount] = await rawQuery<any>(
-        `SELECT id, code FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL`,
-        [companyId, acc.parentCode]
-      );
-      if (!parentAccount) continue;
-
-      const seqRes = await rawQuery<any>(
-        `SELECT COUNT(*) AS cnt FROM subsidiary_accounts WHERE "companyId" = $1 AND "accountType" = $2`,
-        [companyId, acc.accountType]
-      );
-      const seq = Number(seqRes[0]?.cnt ?? 0) + 1;
-      const newCode = `${acc.parentCode}-${String(entityId).padStart(4, "0")}`;
-      const [existingAcc] = await rawQuery<any>(
-        `SELECT id FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL`,
-        [companyId, newCode]
-      );
-
-      let accountId: number;
-      if (existingAcc) {
-        accountId = existingAcc.id;
-      } else {
-        const { insertId } = await rawExecute(
-          `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", level, "allowPosting", "isAnalytical", "isActive")
-           VALUES ($1,$2,$3,$4,
-             (SELECT type FROM chart_of_accounts WHERE id = $5),
-             $5,
-             (SELECT level + 1 FROM chart_of_accounts WHERE id = $5),
-             true, true, true)
-           RETURNING id`,
-          [companyId, newCode, `${entityName} - ${acc.suffix}`, `${entityName} - ${acc.suffix}`, parentAccount.id]
+    await withTransaction(async (client) => {
+      for (const acc of accountsToCreate) {
+        const { rows: [parentAccount] } = await client.query(
+          `SELECT id, code FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL`,
+          [companyId, acc.parentCode]
         );
-        accountId = insertId;
-      }
+        if (!parentAccount) continue;
 
-      await rawExecute(
-        `INSERT INTO subsidiary_accounts ("companyId","entityType","entityId","accountType","accountId")
-         VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT ("companyId","entityType","entityId","accountType") DO NOTHING`,
-        [companyId, entityType, entityId, acc.accountType, accountId]
-      );
-    }
+        const newCode = `${acc.parentCode}-${String(entityId).padStart(4, "0")}`;
+        const { rows: [existingAcc] } = await client.query(
+          `SELECT id FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL`,
+          [companyId, newCode]
+        );
+
+        let accountId: number;
+        if (existingAcc) {
+          accountId = existingAcc.id;
+        } else {
+          const { rows: [newAcc] } = await client.query(
+            `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", level, "allowPosting", "isAnalytical", "isActive")
+             VALUES ($1,$2,$3,$4,
+               (SELECT type FROM chart_of_accounts WHERE id = $5),
+               $5,
+               (SELECT level + 1 FROM chart_of_accounts WHERE id = $5),
+               true, true, true)
+             RETURNING id`,
+            [companyId, newCode, `${entityName} - ${acc.suffix}`, `${entityName} - ${acc.suffix}`, parentAccount.id]
+          );
+          accountId = newAcc.id;
+        }
+
+        await client.query(
+          `INSERT INTO subsidiary_accounts ("companyId","entityType","entityId","accountType","accountId")
+           VALUES ($1,$2,$3,$4,$5)
+           ON CONFLICT ("companyId","entityType","entityId","accountType") DO NOTHING`,
+          [companyId, entityType, entityId, acc.accountType, accountId]
+        );
+      }
+    });
   } catch (err) {
     logger.error(err, "createSubsidiaryAccountsForEntity error:");
   }
