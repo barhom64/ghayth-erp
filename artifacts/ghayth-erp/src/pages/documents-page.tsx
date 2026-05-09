@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { useToast } from "@/hooks/use-toast";
 
 const CATEGORIES = [
   { value: "contracts", label: "عقود" },
@@ -60,6 +61,7 @@ function CategoryBadge({ category }: { category: string }) {
 
 function DocumentsList() {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -105,7 +107,7 @@ function DocumentsList() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(err.message);
+      toast({ variant: "destructive", title: "فشل التنزيل", description: err.message });
     }
   };
 
