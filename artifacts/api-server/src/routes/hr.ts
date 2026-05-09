@@ -1107,7 +1107,7 @@ router.get("/attendance/today-summary", authorize({ feature: "hr", action: "list
   } catch (err) { handleRouteError(err, res, "Today summary error:"); }
 });
 
-router.get("/attendance/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/attendance/:id", authorize({ feature: "hr", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2857,7 +2857,7 @@ router.get("/violations", authorize({ feature: "hr", action: "list" }), async (r
   } catch (err) { logger.error(err, "Get violations error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
 
-router.get("/violations/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/violations/:id", authorize({ feature: "hr", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -3093,7 +3093,7 @@ router.get("/performance", authorize({ feature: "hr", action: "list" }), async (
   } catch (err) { logger.error(err, "Get performance error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
 
-router.get("/performance/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/performance/:id", authorize({ feature: "hr", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -4478,7 +4478,7 @@ router.delete("/violations/:id", authorize({ feature: "hr", action: "delete" }),
 });
 
 // ─── Single official letter with letterhead ──────────────
-router.get("/official-letters/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/official-letters/:id", authorize({ feature: "hr", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -4855,7 +4855,7 @@ router.post("/impact-preview/violation", authorize({ feature: "hr", action: "lis
 // EMPLOYEE OPERATIONAL STATUS — live state calculation
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/employee-status/:employeeId", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/employee-status/:employeeId", authorize({ feature: "hr", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { employeeId } = req.params;
@@ -5190,7 +5190,7 @@ router.post("/evaluation-cycles", authorize({ feature: "hr", action: "create" })
 });
 
 // GET /hr/evaluation-cycles/:id — get cycle details (access-controlled)
-router.get("/evaluation-cycles/:id", authorize({ feature: "hr", action: "list" }), async (req, res): Promise<any> => {
+router.get("/evaluation-cycles/:id", authorize({ feature: "hr", action: "view" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
@@ -5683,7 +5683,7 @@ router.get("/employees/:id/evaluation-history", authorize({ feature: "hr", actio
 });
 
 // GET /hr/upward-reviews/manager/:managerId — aggregated upward reviews for a manager (HR only)
-router.get("/upward-reviews/manager/:managerId", authorize({ feature: "hr", action: "list" }), async (req, res): Promise<any> => {
+router.get("/upward-reviews/manager/:managerId", authorize({ feature: "hr", action: "view" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const managerId = parseId(req.params.managerId, "managerId");
@@ -5946,7 +5946,7 @@ router.get("/transfers", authorize({ feature: "hr", action: "list" }), async (re
   } catch (err) { handleRouteError(err, res, "Transfers error:"); }
 });
 
-router.get("/transfers/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/transfers/:id", authorize({ feature: "hr", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -6384,7 +6384,7 @@ router.delete("/idp/:id", authorize({ feature: "hr", action: "delete" }), async 
 // END OF SERVICE GRATUITY — مكافأة نهاية الخدمة
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/gratuity/:employeeId", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/gratuity/:employeeId", authorize({ feature: "hr", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");
@@ -7053,7 +7053,7 @@ router.get("/excuse-requests", authorize({ feature: "hr", action: "list" }), asy
   } catch (err) { handleRouteError(err, res, "List excuse requests error:"); }
 });
 
-router.get("/excuse-requests/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/excuse-requests/:id", authorize({ feature: "hr", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

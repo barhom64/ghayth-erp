@@ -57,7 +57,7 @@ router.get("/cost-centers", authorize({ feature: "finance", action: "list" }), a
   } catch (err) { handleRouteError(err, res, "List cost centers error"); }
 });
 
-router.get("/cost-centers/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+router.get("/cost-centers/:id", authorize({ feature: "finance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

@@ -51,7 +51,7 @@ const renewContractSchema = z.object({
 const updateContractSchema = createContractSchema.partial();
 
 // ── List all contracts ──
-contractsRouter.get("/", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+contractsRouter.get("/", authorize({ feature: "hr.contracts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, employeeId, search } = req.query as Record<string, string>;
@@ -89,7 +89,7 @@ contractsRouter.get("/", authorize({ feature: "hr", action: "list" }), async (re
 });
 
 // ── Get single contract ──
-contractsRouter.get("/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+contractsRouter.get("/:id", authorize({ feature: "hr.contracts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -115,7 +115,7 @@ contractsRouter.get("/:id", authorize({ feature: "hr", action: "list" }), async 
 });
 
 // ── Create contract ──
-contractsRouter.post("/", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+contractsRouter.post("/", authorize({ feature: "hr.contracts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const data = createContractSchema.parse(req.body);
@@ -169,7 +169,7 @@ contractsRouter.post("/", authorize({ feature: "hr", action: "create" }), async 
 });
 
 // ── Update contract (draft only) ──
-contractsRouter.patch("/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+contractsRouter.patch("/:id", authorize({ feature: "hr.contracts", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -214,7 +214,7 @@ contractsRouter.patch("/:id", authorize({ feature: "hr", action: "update" }), as
 });
 
 // ── Submit for approval ──
-contractsRouter.post("/:id/submit", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+contractsRouter.post("/:id/submit", authorize({ feature: "hr.contracts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -369,7 +369,7 @@ contractsRouter.post("/:id/sign-employee", async (req, res) => {
 });
 
 // ── Activate contract (after both signatures) ──
-contractsRouter.post("/:id/activate", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+contractsRouter.post("/:id/activate", authorize({ feature: "hr.contracts", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -398,7 +398,7 @@ contractsRouter.post("/:id/activate", authorize({ feature: "hr", action: "update
 });
 
 // ── Terminate contract ──
-contractsRouter.post("/:id/terminate", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+contractsRouter.post("/:id/terminate", authorize({ feature: "hr.contracts", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -430,7 +430,7 @@ contractsRouter.post("/:id/terminate", authorize({ feature: "hr", action: "updat
 });
 
 // ── Renew contract ──
-contractsRouter.post("/:id/renew", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+contractsRouter.post("/:id/renew", authorize({ feature: "hr.contracts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

@@ -523,7 +523,7 @@ router.get("/pbx", authorize({ feature: "communications", action: "list" }), asy
   } catch (err) { handleRouteError(err, res, "PBX calls error:"); }
 });
 
-router.patch("/log/:id", authorize({ feature: "communications", action: "create" }), async (req, res): Promise<void> => {
+router.patch("/log/:id", authorize({ feature: "communications", action: "update" }), async (req, res): Promise<void> => {
   try {
     const parsed = zodParse(updateLogSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
@@ -631,7 +631,7 @@ router.post("/log/:id/convert", authorize({ feature: "communications", action: "
   } catch (err) { handleRouteError(err, res, "Communication convert error:"); }
 });
 
-router.delete("/log/:id", authorize({ feature: "communications", action: "create" }), async (req, res): Promise<void> => {
+router.delete("/log/:id", authorize({ feature: "communications", action: "delete" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -781,7 +781,7 @@ router.post("/push/subscribe", authorize({ feature: "communications", action: "c
   } catch (err) { handleRouteError(err, res, "Push subscribe error:"); }
 });
 
-router.delete("/push/unsubscribe", authorize({ feature: "communications", action: "create" }), async (req, res): Promise<void> => {
+router.delete("/push/unsubscribe", authorize({ feature: "communications", action: "delete" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { endpoint } = zodParse(pushUnsubscribeSchema.safeParse(req.body ?? {}));

@@ -220,7 +220,7 @@ router.post("/policies", authorize({ feature: "governance", action: "create" }),
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.get("/policies/:id", authorize({ feature: "governance", action: "list" }), async (req, res) => {
+router.get("/policies/:id", authorize({ feature: "governance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -243,7 +243,7 @@ router.get("/policies/:id", authorize({ feature: "governance", action: "list" })
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.patch("/policies/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
+router.patch("/policies/:id", authorize({ feature: "governance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -376,7 +376,7 @@ router.get("/policies/:id/module-links", authorize({ feature: "governance", acti
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.get("/module-policies/:module", authorize({ feature: "governance", action: "list" }), async (req, res) => {
+router.get("/module-policies/:module", authorize({ feature: "governance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const mod = req.params.module;
@@ -395,7 +395,7 @@ router.get("/module-policies/:module", authorize({ feature: "governance", action
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.delete("/policies/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
+router.delete("/policies/:id", authorize({ feature: "governance", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -448,7 +448,7 @@ router.post("/risks", authorize({ feature: "governance", action: "create" }), as
   } catch (err) { handleRouteError(err, res, "Create risk error:"); }
 });
 
-router.get("/risks/:id", authorize({ feature: "governance", action: "list" }), async (req, res) => {
+router.get("/risks/:id", authorize({ feature: "governance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -458,7 +458,7 @@ router.get("/risks/:id", authorize({ feature: "governance", action: "list" }), a
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.patch("/risks/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
+router.patch("/risks/:id", authorize({ feature: "governance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -489,7 +489,7 @@ router.patch("/risks/:id", authorize({ feature: "governance", action: "create" }
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.delete("/risks/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
+router.delete("/risks/:id", authorize({ feature: "governance", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -538,7 +538,7 @@ router.post("/audits", authorize({ feature: "governance", action: "create" }), a
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.get("/audits/:id", authorize({ feature: "governance", action: "list" }), async (req, res) => {
+router.get("/audits/:id", authorize({ feature: "governance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -548,7 +548,7 @@ router.get("/audits/:id", authorize({ feature: "governance", action: "list" }), 
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.patch("/audits/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
+router.patch("/audits/:id", authorize({ feature: "governance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -577,7 +577,7 @@ router.patch("/audits/:id", authorize({ feature: "governance", action: "create" 
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.delete("/audits/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
+router.delete("/audits/:id", authorize({ feature: "governance", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -626,7 +626,7 @@ router.post("/compliance", authorize({ feature: "governance", action: "create" }
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.get("/compliance/:id", authorize({ feature: "governance", action: "list" }), async (req, res) => {
+router.get("/compliance/:id", authorize({ feature: "governance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -636,7 +636,7 @@ router.get("/compliance/:id", authorize({ feature: "governance", action: "list" 
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.patch("/compliance/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
+router.patch("/compliance/:id", authorize({ feature: "governance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -666,7 +666,7 @@ router.patch("/compliance/:id", authorize({ feature: "governance", action: "crea
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.delete("/compliance/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
+router.delete("/compliance/:id", authorize({ feature: "governance", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -768,7 +768,7 @@ router.post("/compliance-actions", authorize({ feature: "governance", action: "c
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.patch("/compliance-actions/:actionId", authorize({ feature: "governance", action: "create" }), async (req, res) => {
+router.patch("/compliance-actions/:actionId", authorize({ feature: "governance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.actionId, "actionId");
@@ -796,7 +796,7 @@ router.patch("/compliance-actions/:actionId", authorize({ feature: "governance",
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.delete("/compliance-actions/:actionId", authorize({ feature: "governance", action: "create" }), async (req, res) => {
+router.delete("/compliance-actions/:actionId", authorize({ feature: "governance", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.actionId, "actionId");
@@ -847,7 +847,7 @@ router.post("/policies/:id/compliance-actions", authorize({ feature: "governance
 });
 
 
-router.patch("/risks/:id/treatment", authorize({ feature: "governance", action: "create" }), async (req, res) => {
+router.patch("/risks/:id/treatment", authorize({ feature: "governance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -903,7 +903,7 @@ router.post("/capa", authorize({ feature: "governance", action: "create" }), asy
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
-router.patch("/capa/:id", authorize({ feature: "governance", action: "create" }), async (req, res) => {
+router.patch("/capa/:id", authorize({ feature: "governance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

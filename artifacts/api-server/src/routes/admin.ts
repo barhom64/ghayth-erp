@@ -478,7 +478,7 @@ router.get("/predefined-roles", authorize({ feature: "admin", action: "list" }),
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.get("/user-roles/:userId", authorize({ feature: "admin", action: "list" }), async (req, res) => {
+router.get("/user-roles/:userId", authorize({ feature: "admin", action: "view" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;

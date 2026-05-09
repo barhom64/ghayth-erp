@@ -476,7 +476,7 @@ router.post("/:id/portal-account", authorize({ feature: "crm", action: "create" 
   }
 });
 
-router.patch("/:id/portal-account", authorize({ feature: "crm", action: "create" }), async (req, res) => {
+router.patch("/:id/portal-account", authorize({ feature: "crm", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

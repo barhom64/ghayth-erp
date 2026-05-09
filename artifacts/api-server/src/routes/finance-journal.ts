@@ -664,7 +664,7 @@ journalRouter.get("/vouchers", authorize({ feature: "finance", action: "list" })
   }
 });
 
-journalRouter.get("/vouchers/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+journalRouter.get("/vouchers/:id", authorize({ feature: "finance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -838,7 +838,7 @@ journalRouter.get("/salary-advances", authorize({ feature: "finance", action: "l
   }
 });
 
-journalRouter.get("/salary-advances/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+journalRouter.get("/salary-advances/:id", authorize({ feature: "finance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1022,7 +1022,7 @@ journalRouter.post("/journal", authorize({ feature: "finance", action: "create" 
   } catch (err) { handleRouteError(err, res, "Create journal entry error:"); }
 });
 
-journalRouter.get("/journal/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+journalRouter.get("/journal/:id", authorize({ feature: "finance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

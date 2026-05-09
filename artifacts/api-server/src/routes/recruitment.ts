@@ -61,7 +61,7 @@ const closePostingSchema = z.object({
 
 const router = Router();
 
-router.get("/postings", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/postings", authorize({ feature: "hr.recruitment", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM job_postings WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
@@ -69,7 +69,7 @@ router.get("/postings", authorize({ feature: "hr", action: "list" }), async (req
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.post("/postings", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.post("/postings", authorize({ feature: "hr.recruitment", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { title, department, location, type, description, requirements, salaryMin, salaryMax, status, closingDate } = zodParse(createPostingSchema.safeParse(req.body));
@@ -101,7 +101,7 @@ router.post("/postings", authorize({ feature: "hr", action: "create" }), async (
   } catch (err) { handleRouteError(err, res, "Create job posting error:"); }
 });
 
-router.get("/postings/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/postings/:id", authorize({ feature: "hr.recruitment", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -111,7 +111,7 @@ router.get("/postings/:id", authorize({ feature: "hr", action: "list" }), async 
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.patch("/postings/:id", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.patch("/postings/:id", authorize({ feature: "hr.recruitment", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -146,7 +146,7 @@ router.patch("/postings/:id", authorize({ feature: "hr", action: "create" }), as
 });
 
 // Close a job posting with cascade to open applications + candidate notifications.
-router.post("/postings/:id/close", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.post("/postings/:id/close", authorize({ feature: "hr.recruitment", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -196,7 +196,7 @@ router.post("/postings/:id/close", authorize({ feature: "hr", action: "create" }
 });
 
 // Reopen a previously closed job posting.
-router.post("/postings/:id/reopen", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.post("/postings/:id/reopen", authorize({ feature: "hr.recruitment", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -229,7 +229,7 @@ router.post("/postings/:id/reopen", authorize({ feature: "hr", action: "create" 
   }
 });
 
-router.delete("/postings/:id", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.delete("/postings/:id", authorize({ feature: "hr.recruitment", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -248,7 +248,7 @@ router.delete("/postings/:id", authorize({ feature: "hr", action: "create" }), a
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.get("/applications", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/applications", authorize({ feature: "hr.recruitment", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { postingId } = req.query;
@@ -260,7 +260,7 @@ router.get("/applications", authorize({ feature: "hr", action: "list" }), async 
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.post("/applications", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.post("/applications", authorize({ feature: "hr.recruitment", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { postingId, applicantName, email, phone, resumeUrl, status, notes, rating } = zodParse(createApplicationSchema.safeParse(req.body));
@@ -294,7 +294,7 @@ router.post("/applications", authorize({ feature: "hr", action: "create" }), asy
   } catch (err) { handleRouteError(err, res, "Create application error:"); }
 });
 
-router.get("/applications/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/applications/:id", authorize({ feature: "hr.recruitment", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -304,7 +304,7 @@ router.get("/applications/:id", authorize({ feature: "hr", action: "list" }), as
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.patch("/applications/:id", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.patch("/applications/:id", authorize({ feature: "hr.recruitment", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -340,7 +340,7 @@ router.patch("/applications/:id", authorize({ feature: "hr", action: "create" })
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.delete("/applications/:id", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.delete("/applications/:id", authorize({ feature: "hr.recruitment", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -359,7 +359,7 @@ router.delete("/applications/:id", authorize({ feature: "hr", action: "create" }
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
-router.get("/stats", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "hr.recruitment", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;

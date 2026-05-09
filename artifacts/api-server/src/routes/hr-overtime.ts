@@ -98,7 +98,7 @@ const approvalDecisionSchema = z.object({
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime — قائمة الطلبات
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/overtime", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/overtime", authorize({ feature: "hr.overtime", action: "list" }), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
@@ -146,7 +146,7 @@ router.get("/overtime", authorize({ feature: "hr", action: "list" }), async (req
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime/my — طلباتي (Self-Service)
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/overtime/my", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/overtime/my", authorize({ feature: "hr.overtime.my", action: "list" }), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
@@ -167,7 +167,7 @@ router.get("/overtime/my", authorize({ feature: "hr", action: "list" }), async (
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime/summary — ملخص شهري للربط بالرواتب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/overtime/summary", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/overtime/summary", authorize({ feature: "hr.overtime", action: "list" }), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
@@ -202,7 +202,7 @@ router.get("/overtime/summary", authorize({ feature: "hr", action: "list" }), as
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime/:id — تفاصيل الطلب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/overtime/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/overtime/:id", authorize({ feature: "hr.overtime", action: "view" }), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
@@ -227,7 +227,7 @@ router.get("/overtime/:id", authorize({ feature: "hr", action: "list" }), async 
 // ═══════════════════════════════════════════════════════════════════════════════
 // POST /hr/overtime — طلب وقت إضافي
 // ═══════════════════════════════════════════════════════════════════════════════
-router.post("/overtime", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.post("/overtime", authorize({ feature: "hr.overtime", action: "create" }), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
@@ -337,7 +337,7 @@ router.post("/overtime", authorize({ feature: "hr", action: "create" }), async (
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/overtime/:id/approve — اعتماد الطلب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/overtime/:id/approve", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action: "update" }), async (req, res) => {
   try {
     const b = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
     const { approved = true, reason, notes } = b;
@@ -451,7 +451,7 @@ router.patch("/overtime/:id/approve", authorize({ feature: "hr", action: "update
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/overtime/:id/reject — رفض الطلب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/overtime/:id/reject", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.patch("/overtime/:id/reject", authorize({ feature: "hr.overtime", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

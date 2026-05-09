@@ -112,7 +112,7 @@ const approvalDecisionSchema = z.object({
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/loans — قائمة السلف
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/loans", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/loans", authorize({ feature: "hr.loans", action: "list" }), async (req, res) => {
   try {
     await ensureLoanTables();
     const scope = req.scope!;
@@ -171,7 +171,7 @@ router.get("/loans", authorize({ feature: "hr", action: "list" }), async (req, r
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/loans/my — سلف الموظف الحالي (Self-Service)
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/loans/my", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/loans/my", authorize({ feature: "hr.loans.my", action: "list" }), async (req, res) => {
   try {
     await ensureLoanTables();
     const scope = req.scope!;
@@ -192,7 +192,7 @@ router.get("/loans/my", authorize({ feature: "hr", action: "list" }), async (req
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/loans/:id — تفاصيل السلفة مع الأقساط
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/loans/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/loans/:id", authorize({ feature: "hr.loans", action: "view" }), async (req, res) => {
   try {
     await ensureLoanTables();
     const scope = req.scope!;
@@ -225,7 +225,7 @@ router.get("/loans/:id", authorize({ feature: "hr", action: "list" }), async (re
 // ═══════════════════════════════════════════════════════════════════════════════
 // POST /hr/loans — طلب سلفة جديدة
 // ═══════════════════════════════════════════════════════════════════════════════
-router.post("/loans", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.post("/loans", authorize({ feature: "hr.loans", action: "create" }), async (req, res) => {
   try {
     await ensureLoanTables();
     const scope = req.scope!;
@@ -341,7 +341,7 @@ router.post("/loans", authorize({ feature: "hr", action: "create" }), async (req
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/loans/:id/approve — اعتماد السلفة + توليد جدول الأقساط
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/loans/:id/approve", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "update" }), async (req, res) => {
   try {
     const b = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
     const { approved = true, reason, notes } = b;
@@ -485,7 +485,7 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr", action: "update" }
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/loans/:id/reject — رفض السلفة
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/loans/:id/reject", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.patch("/loans/:id/reject", authorize({ feature: "hr.loans", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
