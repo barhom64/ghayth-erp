@@ -161,8 +161,8 @@ const yearEndCloseSchema = z.object({
 
 const openingBalanceLineSchema = z.object({
   accountCode: z.string(),
-  debit: z.number(),
-  credit: z.number(),
+  debit: z.coerce.number(),
+  credit: z.coerce.number(),
 });
 
 const openingBalancesSchema = z.object({
