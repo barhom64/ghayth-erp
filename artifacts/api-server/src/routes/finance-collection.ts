@@ -10,6 +10,7 @@ import {
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
@@ -33,7 +34,7 @@ const COLLECTION_STAGES = [
   { stage: 6, name: "legal_churned", label: "إشعار القانونية + تصنيف churned", daysOverdue: 60 },
 ];
 
-collectionRouter.get("/collection", requirePermission("finance:read"), async (req, res) => {
+collectionRouter.get("/collection", authorize({ feature: "finance.collection", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -80,7 +81,7 @@ collectionRouter.get("/collection", requirePermission("finance:read"), async (re
   }
 });
 
-collectionRouter.post("/collection/:invoiceId/action", requirePermission("finance:create"), async (req, res) => {
+collectionRouter.post("/collection/:invoiceId/action", authorize({ feature: "finance.collection", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -174,7 +175,7 @@ collectionRouter.post("/collection/:invoiceId/action", requirePermission("financ
   }
 });
 
-collectionRouter.get("/collection/:invoiceId/history", requirePermission("finance:read"), async (req, res) => {
+collectionRouter.get("/collection/:invoiceId/history", authorize({ feature: "finance.collection", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const invoiceId = parseId(req.params.invoiceId, "invoiceId");

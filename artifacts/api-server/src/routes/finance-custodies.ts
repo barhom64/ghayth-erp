@@ -11,6 +11,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import {
   emitEvent,
@@ -51,7 +52,7 @@ const approveCustodySchema = z.object({
   notes: z.string().optional(),
 });
 
-custodiesRouter.get("/custodies", requirePermission("finance:read"), async (req, res) => {
+custodiesRouter.get("/custodies", authorize({ feature: "finance.custodies", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status: filterStatus, employeeId, page = "1", limit: lim = "50", dateFrom, dateTo } = req.query as any;
@@ -291,7 +292,7 @@ custodiesRouter.get("/custodies/summary", requirePermission("finance:read"), asy
   }
 });
 
-custodiesRouter.get("/custodies/:id", requirePermission("finance:read"), async (req, res) => {
+custodiesRouter.get("/custodies/:id", authorize({ feature: "finance.custodies", action: "view", resource: { table: "custodies", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -392,7 +393,7 @@ custodiesRouter.get("/custodies/:id", requirePermission("finance:read"), async (
   }
 });
 
-custodiesRouter.post("/custodies", requirePermission("finance:create"), async (req, res) => {
+custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -801,7 +802,7 @@ custodiesRouter.post("/custodies/:id/settle", requirePermission("finance:create"
   }
 });
 
-custodiesRouter.patch("/custodies/:id/approve", requirePermission("finance:update"), async (req, res) => {
+custodiesRouter.patch("/custodies/:id/approve", authorize({ feature: "finance.custodies", action: "approve", resource: { table: "custodies", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
 
