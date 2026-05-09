@@ -709,7 +709,7 @@ router.get("/requests", async (req, res) => {
       conditions.push(`wi."requestType" = $${params.length}`);
     }
 
-    params.push(Number(limit) || 20);
+    params.push(Math.min(Number(limit) || 20, 500));
     const rows = await rawQuery<any>(
       `SELECT wi.id, wi."requestType", wi.title, wi.status, wi."slaStatus",
               wi."currentStepOrder", wi."createdAt", wi."completedAt",

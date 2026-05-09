@@ -177,7 +177,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
       paramIdx++;
     }
 
-    params.push(Number(lim) || 20);
+    params.push(Math.min(Number(lim) || 20, 500));
     const limitIdx = paramIdx++;
     params.push(offset);
     const offsetIdx = paramIdx++;

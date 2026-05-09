@@ -69,7 +69,7 @@ router.get("/", authorize({ feature: "crm.clients", action: "list" }), async (re
       paramIdx++;
     }
 
-    params.push(Number(lim) || 20);
+    params.push(Math.min(Number(lim) || 20, 500));
     const limitParam = paramIdx++;
     params.push(offset);
     const offsetParam = paramIdx++;
@@ -112,7 +112,8 @@ router.post("/", authorize({ feature: "crm", action: "create" }), async (req, re
       language,
     } = parsed;
 
-    const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments : null;
+    const rawAttachments = Array.isArray(req.body?.attachments) ? req.body.attachments.slice(0, 20) : null;
+    const attachments = rawAttachments ? rawAttachments.map((a: any) => ({ name: String(a?.name ?? ""), url: String(a?.url ?? ""), type: String(a?.type ?? "") })) : null;
     let insertedId: number = 0;
     await withTransaction(async (txClient: any) => {
       if (email) {

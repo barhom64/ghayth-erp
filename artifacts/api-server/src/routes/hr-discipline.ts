@@ -1216,7 +1216,7 @@ router.get("/auto-detection/log", authorize({ feature: "hr", action: "list" }), 
     const scope = req.scope!;
     const { limit, offset, fromDate, toDate } = req.query as any;
     const result = await getDetectionLog(scope.companyId, {
-      limit: limit ? Number(limit) : 50,
+      limit: Math.min(limit ? Number(limit) : 50, 500),
       offset: offset ? Number(offset) : 0,
       fromDate,
       toDate,

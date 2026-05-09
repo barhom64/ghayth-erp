@@ -414,19 +414,30 @@ router.post("/sod", authorize({ feature: "admin.roles", action: "create" }), asy
   }
 });
 
+const updateSodSchema = z.object({
+  labelAr: z.string().min(1).max(200).optional(),
+  featureA: z.string().min(1).optional(),
+  actionA: z.string().min(1).optional(),
+  featureB: z.string().min(1).optional(),
+  actionB: z.string().min(1).optional(),
+  severity: z.enum(["critical", "high", "medium", "low"]).optional(),
+  isActive: z.boolean().optional(),
+}).strict();
+
 router.patch("/sod/:id", authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    const b = zodParse(updateSodSchema.safeParse(req.body));
     const fields = ["label_ar", "feature_a", "action_a", "feature_b", "action_b", "severity", "is_active"];
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
     for (const f of fields) {
-      const camel = f.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-      if (req.body[camel] !== undefined) {
+      const camel = f.replace(/_([a-z])/g, (_, c) => c.toUpperCase()) as keyof typeof b;
+      if (b[camel] !== undefined) {
         sets.push(`${f} = $${idx++}`);
-        params.push(req.body[camel]);
+        params.push(b[camel]);
       }
     }
     if (sets.length === 0) return void res.json({ updated: 0 });
