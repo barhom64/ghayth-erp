@@ -4,6 +4,13 @@ name: guard
 # via the .githooks/pre-commit hook. This is the last line of defence:
 # even if a developer bypasses the local hook with --no-verify, this
 # workflow will refuse to merge the PR if any guard is red.
+#
+# CI also provisions a disposable Postgres so the dynamic
+# tenant-isolation harness (tests/integration/tenantIsolation.dynamic.test.ts)
+# runs against a real database. The harness auto-skips when DATABASE_URL
+# is absent, which is the dev-box default; the wiring below flips it on
+# in CI by exporting DATABASE_URL + JWT_SECRET and pre-loading
+# db/schema.sql into the postgres service container.
 
 on:
   push:
@@ -19,7 +26,37 @@ permissions:
 jobs:
   guard:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ghayth_erp
+          POSTGRES_USER: ghayth_erp
+          POSTGRES_PASSWORD: ghayth_erp
+        ports:
+          # Match the port the local docker-compose at
+          # tests/integration/postgres/docker-compose.yml uses, so the
+          # `_test`/`localhost:54329`/`127.0.0.1:54329` markers in
+          # tests/integration/_fixtures/twoCompanies.ts (assertTestDatabase)
+          # accept both CI and dev runs without code changes.
+          - 54329:5432
+        options: >-
+          --health-cmd "pg_isready -U ghayth_erp -d ghayth_erp"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      # The dynamic tenant-isolation harness asserts that DATABASE_URL
+      # contains a clear test marker before truncating tables — `54329`
+      # is the agreed marker (see tests/integration/_fixtures/twoCompanies.ts).
+      DATABASE_URL: postgres://ghayth_erp:ghayth_erp@127.0.0.1:54329/ghayth_erp
+      # auth.ts refuses to load with a JWT_SECRET shorter than 32 chars.
+      # This is a CI-only value, not a secret — it never authenticates a
+      # production session.
+      JWT_SECRET: ci-only-jwt-secret-thirty-two-chars-aaaaaaaaaaaaaaaa
 
     steps:
       - name: Checkout
@@ -42,6 +79,29 @@ jobs:
           # The root postinstall would try to set git hooks; harmless
           # inside Actions but we skip it explicitly to keep the log clean.
           HUSKY: '0'
+
+      - name: Install postgres client
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Load schema into test Postgres
+        run: |
+          set -euo pipefail
+          # The postgres service container already created the role + DB
+          # via POSTGRES_DB/POSTGRES_USER/POSTGRES_PASSWORD, so we skip
+          # db/bootstrap.sh's sudo-driven role/DB management and just load
+          # the schema dump directly via psql.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f db/schema.sql
+          # Mark every existing migration as already applied so the API
+          # server (when imported by the dynamic test harness) doesn't try
+          # to ALTER TABLE on a baseline that already has those columns.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c \
+            "CREATE TABLE IF NOT EXISTS schema_migrations (filename text PRIMARY KEY, applied_at timestamptz DEFAULT NOW());"
+          for mig in artifacts/api-server/src/migrations/*.sql; do
+            [ -f "$mig" ] || continue
+            fn="$(basename "$mig")"
+            psql "$DATABASE_URL" -q -c \
+              "INSERT INTO schema_migrations(filename) VALUES ('$fn') ON CONFLICT DO NOTHING;"
+          done
 
       - name: Run guard suite
         id: guard
@@ -68,3 +128,4 @@ jobs:
       - name: Fail if guard failed
         if: steps.guard.outcome == 'failure'
         run: exit 1
+

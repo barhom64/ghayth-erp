@@ -31,9 +31,13 @@ pnpm --filter @workspace/api-server test tests/integration/tenantIsolation.dynam
 
 Expected: all 8 scenarios pass.
 
-## How to activate in CI (the follow-up PR)
+## How to activate in CI (LANDED — see `.github/workflows/guard.yml`)
 
-`scripts/guard.sh` currently runs the static suite against the api-server workspace. To enable the dynamic suite, the follow-up PR must:
+The follow-up PR after the freeze merge wired this into CI. The current `.github/workflows/guard.yml` provisions a postgres service on port `54329`, exports `DATABASE_URL` + `JWT_SECRET`, pre-loads `db/schema.sql` via `psql`, and then runs `scripts/guard.sh` unchanged. The dynamic suite's `dbReady` gate flips on automatically, so its 8 scenarios run on every PR and on every push to `main`.
+
+The original "what the follow-up PR must do" notes are kept below as a record of the design.
+
+---
 
 1. **Add a Postgres service to `.github/workflows/guard.yml`** as a job-level `services:` block:
 
