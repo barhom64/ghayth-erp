@@ -282,19 +282,7 @@ export function RbacV2Tab() {
 
   return (
     <div className="space-y-4">
-      {violations.length > 0 && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="p-4 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
-            <div className="flex-1">
-              <p className="font-semibold text-red-800">{violations.length} انتهاك لقاعدة فصل المهام (SoD)</p>
-              <p className="text-sm text-red-600">
-                {violations.map((v) => v.rule.label_ar).join(" · ")}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {violations.length > 0 && <SodViolationsBanner violations={violations} onPickRole={(rid) => setSelectedRoleId(rid)} />}
 
       <div className="grid grid-cols-12 gap-4">
         <div className="col-span-3">
@@ -1118,5 +1106,98 @@ function TemplatesDialog({ open, onClose, onApplied }: { open: boolean; onClose:
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── SoD Violations banner ──────────────────────────────────────────────────
+interface SodViolation {
+  rule: {
+    id: number;
+    rule_key: string;
+    label_ar: string;
+    feature_a: string;
+    action_a: string;
+    feature_b: string;
+    action_b: string;
+    severity: string;
+  };
+  offenders: Array<{
+    userId: number;
+    role_id: number;
+    role_key: string;
+    label_ar: string;
+  }>;
+}
+
+const SEVERITY_LABELS: Record<string, string> = {
+  critical: "حرج",
+  high: "مرتفع",
+  medium: "متوسط",
+  low: "منخفض",
+};
+
+const SEVERITY_COLORS: Record<string, string> = {
+  critical: "bg-red-700 text-white",
+  high: "bg-red-500 text-white",
+  medium: "bg-amber-500 text-white",
+  low: "bg-yellow-500 text-white",
+};
+
+function SodViolationsBanner({ violations, onPickRole }: { violations: SodViolation[]; onPickRole: (roleId: number) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const offendersTotal = violations.reduce((sum, v) => sum + v.offenders.length, 0);
+
+  return (
+    <Card className="border-red-200 bg-red-50">
+      <CardContent className="p-4">
+        <button
+          onClick={() => setExpanded((e) => !e)}
+          className="w-full flex items-center gap-3 text-start"
+        >
+          <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold text-red-800">
+              {violations.length} انتهاك لقاعدة فصل المهام (SoD) — {offendersTotal} دور متأثر
+            </p>
+            <p className="text-sm text-red-600">
+              {violations.slice(0, 3).map((v) => v.rule.label_ar).join(" · ")}
+              {violations.length > 3 && ` · +${violations.length - 3}`}
+            </p>
+          </div>
+          {expanded ? <ChevronDown className="h-4 w-4 text-red-600" /> : <ChevronRight className="h-4 w-4 text-red-600" />}
+        </button>
+        {expanded && (
+          <div className="mt-3 space-y-2">
+            {violations.map((v) => (
+              <div key={v.rule.id} className="bg-white rounded p-3 border border-red-200">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div>
+                    <p className="font-semibold text-sm">{v.rule.label_ar}</p>
+                    <p className="text-xs text-gray-600 mt-0.5 font-mono">
+                      {v.rule.feature_a}.{v.rule.action_a} <span className="text-red-500">↔</span> {v.rule.feature_b}.{v.rule.action_b}
+                    </p>
+                  </div>
+                  <Badge className={`text-xs ${SEVERITY_COLORS[v.rule.severity] || ""}`}>
+                    {SEVERITY_LABELS[v.rule.severity] || v.rule.severity}
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  <span className="text-xs text-gray-600 me-2">الأدوار المتأثرة:</span>
+                  {v.offenders.map((o) => (
+                    <button
+                      key={o.role_id}
+                      onClick={() => onPickRole(o.role_id)}
+                      className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-red-100 text-red-700 border border-red-300 hover:bg-red-200"
+                    >
+                      {o.label_ar}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

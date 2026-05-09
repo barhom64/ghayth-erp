@@ -9,6 +9,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   createNotification,
   emitEvent,
@@ -728,7 +729,10 @@ router.get("/documents", requirePermission("hr:read"), async (req, res) => {
   }
 });
 
-router.get("/:id", requirePermission("hr:read"), async (req, res) => {
+// RBAC v2: hr.employees view + automatic field masking via maskFields().
+// Roles like "كاتب موارد بشرية (قالب)" hide salary/IBAN and mask
+// nationalId/iqama/passport/phone — the engine applies these transparently.
+router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource: { table: "employees", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -835,7 +839,7 @@ router.get("/:id", requirePermission("hr:read"), async (req, res) => {
       ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
     ]);
 
-    res.json({ ...employee, tasks, attendance, leaves, trainings, payroll, violations, loans, overtime });
+    res.json(maskFields(req, { ...employee, tasks, attendance, leaves, trainings, payroll, violations, loans, overtime }));
   } catch (err) {
     handleRouteError(err, res, "Get employee error:");
   }
