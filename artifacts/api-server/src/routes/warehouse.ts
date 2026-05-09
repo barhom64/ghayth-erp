@@ -11,6 +11,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { movingAverage } from "../lib/algorithms.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import {
@@ -357,7 +358,8 @@ router.post("/products", requirePermission("warehouse:create"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Create product error:"); }
 });
 
-router.get("/products/:id", requirePermission("warehouse:read"), async (req, res) => {
+// RBAC v2: warehouse.inventory view with branch-scope check.
+router.get("/products/:id", authorize({ feature: "warehouse.inventory", action: "view", resource: { table: "warehouse_products", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -560,7 +562,8 @@ router.get("/movements", requirePermission("warehouse:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Warehouse movements error:"); }
 });
 
-router.get("/movements/:id", requirePermission("warehouse:read"), async (req, res) => {
+// RBAC v2: warehouse.transfers view (movements between branches).
+router.get("/movements/:id", authorize({ feature: "warehouse.transfers", action: "view", resource: { table: "warehouse_movements", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

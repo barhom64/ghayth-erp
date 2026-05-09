@@ -7,6 +7,7 @@ import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { hashPassword } from "../lib/auth.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
 
 const createClientSchema = z.object({
@@ -162,7 +163,10 @@ router.post("/", requirePermission("crm:create"), async (req, res) => {
   }
 });
 
-router.get("/:id", requirePermission("crm:read"), async (req, res) => {
+// RBAC v2: crm.clients view + maskFields. Phone, email, creditLimit
+// are declared as sensitive fields so per-role policies can mask them
+// (e.g. junior sales reps see masked phone numbers).
+router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource: { table: "clients", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -259,7 +263,7 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
       openTickets: tickets.filter((t: any) => t.status === 'open' || t.status === 'in_progress'),
     };
 
-    res.json({
+    res.json(maskFields(req, {
       ...client,
       invoices,
       opportunities,
@@ -269,7 +273,7 @@ router.get("/:id", requirePermission("crm:read"), async (req, res) => {
       conversations,
       timeline,
       activeServices,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Get client error:");
   }
