@@ -992,7 +992,8 @@ router.post("/followup-check", requirePermission("crm:create"), async (req, res)
        JOIN crm_opportunities co ON co.id=ca."opportunityId" AND co."deletedAt" IS NULL
        LEFT JOIN employees e ON e.id=co."assignedTo" AND e."deletedAt" IS NULL
        WHERE co."companyId"=$1 AND ca."completedAt" IS NULL AND ca."scheduledAt" < NOW()
-       ORDER BY ca."scheduledAt" ASC`,
+       ORDER BY ca."scheduledAt" ASC
+       LIMIT 500`,
       [scope.companyId]
     );
 
