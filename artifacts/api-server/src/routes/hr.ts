@@ -2984,7 +2984,7 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
       },
     });
 
-    const [row] = await rawQuery<any>(`SELECT v.*, e.name AS "employeeName" FROM employee_violations v JOIN employee_assignments ea ON ea.id=v."assignmentId" JOIN employees e ON e.id=ea."employeeId" WHERE v.id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT v.*, e.name AS "employeeName" FROM employee_violations v JOIN employee_assignments ea ON ea.id=v."assignmentId" JOIN employees e ON e.id=ea."employeeId" WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, assignmentId: Number(assignmentId), employeeId: asn.employeeId, type, severity: effectiveSeverity, deduction: effectiveDeduction, period });
   } catch (err) { handleRouteError(err, res, "Create violation error:"); }
 });

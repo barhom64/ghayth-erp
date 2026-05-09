@@ -23,6 +23,7 @@ import {
   currentPeriod,
   generateRef,
   toDateISO,
+  roundTo2,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
@@ -456,10 +457,10 @@ journalRouter.post("/expenses", requirePermission("finance:create"), async (req,
       });
     }
 
-    const baseAmount = Number(amount);
+    const baseAmount = roundTo2(Number(amount));
     const vatRateVal = rawVatRate != null ? Number(rawVatRate) : 0;
-    const computedVat = rawVatAmount != null ? Number(rawVatAmount) : computeVat(baseAmount, vatRateVal);
-    const totalWithVat = baseAmount + computedVat;
+    const computedVat = roundTo2(rawVatAmount != null ? Number(rawVatAmount) : computeVat(baseAmount, vatRateVal));
+    const totalWithVat = roundTo2(baseAmount + computedVat);
 
     let finalDescription = description;
     if (!finalDescription || autoDescription) {
@@ -743,10 +744,10 @@ journalRouter.post("/vouchers", requirePermission("finance:create"), async (req,
       );
     }
 
-    const baseAmount = Number(amount);
+    const baseAmount = roundTo2(Number(amount));
     const vatRateVal = rawVatRate != null ? Number(rawVatRate) : 0;
-    const computedVat = rawVatAmount != null ? Number(rawVatAmount) : computeVat(baseAmount, vatRateVal);
-    const totalWithVat = baseAmount + computedVat;
+    const computedVat = roundTo2(rawVatAmount != null ? Number(rawVatAmount) : computeVat(baseAmount, vatRateVal));
+    const totalWithVat = roundTo2(baseAmount + computedVat);
 
     const isReceipt = type === "receipt";
     const prefix = isReceipt ? "RV" : "PV";
@@ -977,8 +978,9 @@ journalRouter.post("/journal", requirePermission("finance:create"), async (req, 
     const { description, lines, date } = zodParse(createJournalSchema.safeParse(req.body ?? {}));
     if (!description) throw new ValidationError("وصف القيد مطلوب", { field: "description" });
     if (!Array.isArray(lines) || lines.length < 2) throw new ValidationError("القيد يجب أن يحتوي على بندين على الأقل", { field: "lines" });
-    const totalDebit = lines.reduce((s: number, l: any) => s + (Number(l.debit) || 0), 0);
-    const totalCredit = lines.reduce((s: number, l: any) => s + (Number(l.credit) || 0), 0);
+    for (const l of lines) { l.debit = roundTo2(Number(l.debit) || 0); l.credit = roundTo2(Number(l.credit) || 0); }
+    const totalDebit = roundTo2(lines.reduce((s: number, l: any) => s + l.debit, 0));
+    const totalCredit = roundTo2(lines.reduce((s: number, l: any) => s + l.credit, 0));
     if (Math.abs(totalDebit - totalCredit) > 0.01) throw new ValidationError(`القيد غير متوازن: مدين ${totalDebit.toFixed(2)} ≠ دائن ${totalCredit.toFixed(2)}`, { field: "lines", fix: "تأكد من تساوي المدين والدائن" });
 
     await checkFinancialPeriodOpen(scope.companyId, date || new Date().toISOString());
@@ -995,7 +997,7 @@ journalRouter.post("/journal", requirePermission("finance:create"), async (req, 
       for (const l of lines) {
         await client.query(
           `INSERT INTO journal_lines ("journalId","accountCode",description,debit,credit,"costCenter","departmentId","projectId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-          [jId, l.accountCode, l.description || null, Number(l.debit) || 0, Number(l.credit) || 0, l.costCenter || null, l.departmentId || null, l.projectId || null]
+          [jId, l.accountCode, l.description || null, l.debit, l.credit, l.costCenter || null, l.departmentId || null, l.projectId || null]
         );
       }
       return jId;
