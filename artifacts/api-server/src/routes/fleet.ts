@@ -710,7 +710,7 @@ router.delete("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "d
   } catch (err) { handleRouteError(err, res, "Delete vehicle error:"); }
 });
 
-router.get("/drivers/:id", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
+router.get("/drivers/:id", authorize({ feature: "fleet", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1335,7 +1335,7 @@ router.get("/maintenance", authorize({ feature: "fleet", action: "list" }), asyn
   } catch (err) { handleRouteError(err, res, "Fleet maintenance error:"); }
 });
 
-router.get("/maintenance/:id", authorize({ feature: "fleet", action: "list" }), async (req, res): Promise<any> => {
+router.get("/maintenance/:id", authorize({ feature: "fleet", action: "view" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1751,7 +1751,7 @@ router.get("/fuel-logs", authorize({ feature: "fleet", action: "list" }), async 
   } catch (err) { handleRouteError(err, res, "Fleet fuel error:"); }
 });
 
-router.get("/fuel-logs/:id", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
+router.get("/fuel-logs/:id", authorize({ feature: "fleet", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1885,7 +1885,7 @@ router.get("/insurance", authorize({ feature: "fleet", action: "list" }), async 
   } catch (err) { handleRouteError(err, res, "Fleet insurance error:"); }
 });
 
-router.get("/insurance/:id", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
+router.get("/insurance/:id", authorize({ feature: "fleet", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2703,7 +2703,7 @@ router.get("/traffic-violations", authorize({ feature: "fleet", action: "list" }
   } catch (err) { handleRouteError(err, res, "Traffic violations error:"); }
 });
 
-router.get("/traffic-violations/:id", authorize({ feature: "fleet", action: "list" }), async (req, res): Promise<any> => {
+router.get("/traffic-violations/:id", authorize({ feature: "fleet", action: "view" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

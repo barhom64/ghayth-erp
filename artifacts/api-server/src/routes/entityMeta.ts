@@ -25,7 +25,7 @@ const bulkActionSchema = z.object({
 
 const router = Router();
 
-router.get("/comments/:entityType/:entityId", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+router.get("/comments/:entityType/:entityId", authorize({ feature: "projects", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -99,7 +99,7 @@ router.delete("/comments/:id", authorize({ feature: "admin", action: "update" })
   }
 });
 
-router.get("/tags/:entityType/:entityId", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+router.get("/tags/:entityType/:entityId", authorize({ feature: "projects", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -177,7 +177,7 @@ router.delete("/tags/:id", authorize({ feature: "admin", action: "update" }), as
   }
 });
 
-router.get("/tags-filter/:entityType", authorize({ feature: "projects", action: "list" }), async (req, res): Promise<void> => {
+router.get("/tags-filter/:entityType", authorize({ feature: "projects", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -196,7 +196,7 @@ router.get("/tags-filter/:entityType", authorize({ feature: "projects", action: 
   }
 });
 
-router.get("/tags-list/:entityType", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+router.get("/tags-list/:entityType", authorize({ feature: "projects", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;

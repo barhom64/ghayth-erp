@@ -2121,7 +2121,7 @@ router.get("/maintenance-requests", authorize({ feature: "properties", action: "
   } catch (err) { handleRouteError(err, res, "Maintenance requests error:"); }
 });
 
-router.get("/maintenance/:id", authorize({ feature: "properties", action: "list" }), async (req, res) => {
+router.get("/maintenance/:id", authorize({ feature: "properties", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2703,7 +2703,7 @@ router.get("/buildings", authorize({ feature: "properties", action: "list" }), a
   } catch (err) { handleRouteError(err, res, "Buildings list error:"); }
 });
 
-router.get("/buildings/:id", authorize({ feature: "properties", action: "list" }), async (req, res) => {
+router.get("/buildings/:id", authorize({ feature: "properties", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

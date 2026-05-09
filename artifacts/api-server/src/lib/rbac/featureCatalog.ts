@@ -126,6 +126,35 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
   { key: "hr.violations", parentKey: "hr", moduleKey: "hr", labelAr: "المخالفات",
     availableActions: ALL_ACTIONS, availableScopes: ALL_SCOPES, displayOrder: 195 },
 
+  // HR sub-features added in PR #200 — granular replacements for the
+  // bulk-migrated `feature: "hr"` calls. The catalog drives the
+  // admin UI, so each new entry shows up as its own row in the role
+  // editor with its own actions/scopes/sensitive fields.
+  { key: "hr.loans", parentKey: "hr", moduleKey: "hr", labelAr: "السلف والقروض",
+    availableActions: ALL_ACTIONS, availableScopes: ALL_SCOPES,
+    sensitiveFields: ["amount", "monthlyDeduction", "remainingAmount"],
+    approvableActions: ["approve"], displayOrder: 196 },
+  { key: "hr.loans.my", parentKey: "hr.loans", moduleKey: "hr", labelAr: "سلفي",
+    availableActions: ["view", "list", "create", "cancel"], availableScopes: ["self"],
+    selfService: true, displayOrder: 197 },
+
+  { key: "hr.overtime", parentKey: "hr", moduleKey: "hr", labelAr: "العمل الإضافي",
+    availableActions: ALL_ACTIONS, availableScopes: ALL_SCOPES,
+    sensitiveFields: ["totalAmount"],
+    approvableActions: ["approve"], displayOrder: 198 },
+  { key: "hr.overtime.my", parentKey: "hr.overtime", moduleKey: "hr", labelAr: "ساعاتي الإضافية",
+    availableActions: ["view", "list", "create"], availableScopes: ["self"],
+    selfService: true, displayOrder: 199 },
+
+  { key: "hr.contracts", parentKey: "hr", moduleKey: "hr", labelAr: "عقود الموظفين",
+    availableActions: ALL_ACTIONS, availableScopes: ALL_SCOPES,
+    sensitiveFields: ["salary", "allowances", "bonuses"], displayOrder: 200 },
+
+  { key: "hr.exit", parentKey: "hr", moduleKey: "hr", labelAr: "إنهاء الخدمة ومكافأة نهاية الخدمة",
+    availableActions: ALL_ACTIONS, availableScopes: ALL_SCOPES,
+    sensitiveFields: ["finalSettlement", "endOfServiceBenefit"],
+    approvableActions: ["approve"], systemCritical: true, displayOrder: 201 },
+
   // ═══════════════════════════════════════════════════════════════
   // Finance
   // ═══════════════════════════════════════════════════════════════

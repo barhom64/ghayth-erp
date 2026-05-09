@@ -329,7 +329,7 @@ router.get("/seasons", authorize({ feature: "umrah", action: "list" }), async (r
   } catch (err) { handleRouteError(err, res, "List seasons error"); }
 });
 
-router.get("/seasons/:id", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -357,7 +357,7 @@ router.post("/seasons", authorize({ feature: "umrah", action: "create" }), async
   } catch (err) { handleRouteError(err, res, "Create season error"); }
 });
 
-router.patch("/seasons/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+router.patch("/seasons/:id", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -423,7 +423,7 @@ router.get("/agents", authorize({ feature: "umrah", action: "list" }), async (re
   } catch (err) { handleRouteError(err, res, "List agents error"); }
 });
 
-router.get("/agents/:id", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+router.get("/agents/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -454,7 +454,7 @@ router.post("/agents", authorize({ feature: "umrah", action: "create" }), async 
   } catch (err) { handleRouteError(err, res, "Create agent error"); }
 });
 
-router.patch("/agents/:id", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
+router.patch("/agents/:id", authorize({ feature: "umrah", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -492,7 +492,7 @@ router.patch("/agents/:id", authorize({ feature: "umrah", action: "create" }), a
   } catch (err) { handleRouteError(err, res, "Update agent error"); }
 });
 
-router.delete("/agents/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+router.delete("/agents/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -533,7 +533,7 @@ router.post("/packages", authorize({ feature: "umrah", action: "create" }), asyn
   } catch (err) { handleRouteError(err, res, "Create package error"); }
 });
 
-router.get("/packages/:id", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+router.get("/packages/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -552,7 +552,7 @@ router.get("/packages/:id", authorize({ feature: "umrah", action: "list" }), asy
   } catch (err) { handleRouteError(err, res, "Get package error"); }
 });
 
-router.patch("/packages/:id", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
+router.patch("/packages/:id", authorize({ feature: "umrah", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -574,7 +574,7 @@ router.patch("/packages/:id", authorize({ feature: "umrah", action: "create" }),
   } catch (err) { handleRouteError(err, res, "Update package error"); }
 });
 
-router.delete("/packages/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+router.delete("/packages/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -716,7 +716,7 @@ router.post("/pilgrims", authorize({ feature: "umrah", action: "create" }), asyn
   } catch (err) { handleRouteError(err, res, "Create pilgrim error"); }
 });
 
-router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const b = zodParse(patchPilgrimSchema.safeParse(req.body));
@@ -790,7 +790,7 @@ router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "create" }),
   }
 });
 
-router.get("/pilgrims/:id", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+router.get("/pilgrims/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -809,7 +809,7 @@ router.get("/pilgrims/:id", authorize({ feature: "umrah", action: "list" }), asy
   } catch (err) { handleRouteError(err, res, "Get pilgrim error"); }
 });
 
-router.delete("/pilgrims/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+router.delete("/pilgrims/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1147,7 +1147,7 @@ router.get("/penalties", authorize({ feature: "umrah", action: "list" }), async 
   } catch (err) { handleRouteError(err, res, "List penalties error"); }
 });
 
-router.get("/penalties/:id", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+router.get("/penalties/:id", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1164,7 +1164,7 @@ router.get("/penalties/:id", authorize({ feature: "umrah", action: "list" }), as
   } catch (err) { handleRouteError(err, res, "Penalty detail error"); }
 });
 
-router.patch("/penalties/:id/waive", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+router.patch("/penalties/:id/waive", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1336,7 +1336,7 @@ router.get("/agent-invoices", authorize({ feature: "umrah", action: "list" }), a
   } catch (err) { handleRouteError(err, res, "List agent invoices error"); }
 });
 
-router.get("/agent-invoices/:id", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+router.get("/agent-invoices/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1377,7 +1377,7 @@ router.get("/transport", authorize({ feature: "umrah", action: "list" }), async 
   } catch (err) { handleRouteError(err, res, "List transport error"); }
 });
 
-router.get("/transport/:id", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+router.get("/transport/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1399,7 +1399,7 @@ router.get("/transport/:id", authorize({ feature: "umrah", action: "list" }), as
   } catch (err) { handleRouteError(err, res, "Get transport error"); }
 });
 
-router.delete("/transport/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+router.delete("/transport/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1467,7 +1467,7 @@ router.post("/transport", authorize({ feature: "umrah", action: "create" }), asy
   } catch (err) { handleRouteError(err, res, "Create transport error"); }
 });
 
-router.patch("/transport/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+router.patch("/transport/:id", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1617,7 +1617,7 @@ router.get("/violations", authorize({ feature: "umrah", action: "list" }), async
   } catch (err) { handleRouteError(err, res, "List violations error"); }
 });
 
-router.get("/violations/:id", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+router.get("/violations/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1653,7 +1653,7 @@ router.post("/violations", authorize({ feature: "umrah", action: "create" }), as
   } catch (err) { handleRouteError(err, res, "Create violation error"); }
 });
 
-router.patch("/violations/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+router.patch("/violations/:id", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1676,7 +1676,7 @@ router.patch("/violations/:id", authorize({ feature: "umrah", action: "create" }
   } catch (err) { handleRouteError(err, res, "Update violation error"); }
 });
 
-router.delete("/violations/:id", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+router.delete("/violations/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

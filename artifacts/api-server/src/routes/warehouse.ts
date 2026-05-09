@@ -942,7 +942,7 @@ router.get("/categories", authorize({ feature: "warehouse", action: "list" }), a
   } catch (err) { handleRouteError(err, res, "Warehouse categories error:"); }
 });
 
-router.get("/categories/:id", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
+router.get("/categories/:id", authorize({ feature: "warehouse", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1011,7 +1011,7 @@ router.get("/suppliers", authorize({ feature: "warehouse", action: "list" }), as
   } catch (err) { handleRouteError(err, res, "Suppliers error:"); }
 });
 
-router.get("/suppliers/:id", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
+router.get("/suppliers/:id", authorize({ feature: "warehouse", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

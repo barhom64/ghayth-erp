@@ -101,7 +101,7 @@ router.post("/campaigns", authorize({ feature: "marketing", action: "create" }),
   } catch (err) { handleRouteError(err, res, "Create campaign error:"); }
 });
 
-router.get("/campaigns/:id", authorize({ feature: "marketing", action: "list" }), async (req, res) => {
+router.get("/campaigns/:id", authorize({ feature: "marketing", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

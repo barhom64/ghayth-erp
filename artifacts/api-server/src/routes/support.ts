@@ -729,7 +729,7 @@ router.get("/kb", authorize({ feature: "support", action: "list" }), async (req,
   } catch (err) { handleRouteError(err, res, "KB list error:"); }
 });
 
-router.get("/kb/:id", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.get("/kb/:id", authorize({ feature: "support", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -760,7 +760,7 @@ router.post("/kb", authorize({ feature: "support", action: "create" }), async (r
   } catch (err) { handleRouteError(err, res, "KB create error:"); }
 });
 
-router.patch("/kb/:id", authorize({ feature: "support", action: "create" }), async (req, res) => {
+router.patch("/kb/:id", authorize({ feature: "support", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

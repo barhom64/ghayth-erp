@@ -146,7 +146,7 @@ router.get("/kpis", authorize({ feature: "admin", action: "list" }), async (req,
   } catch (err) { handleRouteError(err, res, "KPIs error:"); }
 });
 
-router.get("/kpis/employee/:employeeId", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
+router.get("/kpis/employee/:employeeId", authorize({ feature: "admin", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");
@@ -166,7 +166,7 @@ router.get("/daily-schedule", authorize({ feature: "admin", action: "list" }), a
   } catch (err) { handleRouteError(err, res, "Daily schedule error:"); }
 });
 
-router.get("/daily-schedule/employee/:employeeId", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
+router.get("/daily-schedule/employee/:employeeId", authorize({ feature: "admin", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");

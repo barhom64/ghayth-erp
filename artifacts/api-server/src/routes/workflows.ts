@@ -236,7 +236,7 @@ router.get("/:id/timeline", authorize({ feature: "admin", action: "list" }), asy
   } catch (err) { handleRouteError(err, res, "Workflow timeline error:"); }
 });
 
-router.get("/timeline/:refTable/:refId", authorize({ feature: "admin", action: "list" }), async (req, res) => {
+router.get("/timeline/:refTable/:refId", authorize({ feature: "admin", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const refId = parseId(req.params.refId, "refId");
@@ -321,7 +321,7 @@ router.get("/definitions", authorize({ feature: "admin", action: "list" }), asyn
   }
 });
 
-router.get("/definitions/:id", authorize({ feature: "admin", action: "list" }), async (req, res) => {
+router.get("/definitions/:id", authorize({ feature: "admin", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

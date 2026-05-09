@@ -266,7 +266,7 @@ vendorsRouter.get("/receivables", authorize({ feature: "finance", action: "list"
   }
 });
 
-vendorsRouter.get("/receivables/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+vendorsRouter.get("/receivables/:id", authorize({ feature: "finance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -322,7 +322,7 @@ vendorsRouter.get("/commitments", authorize({ feature: "finance", action: "list"
   }
 });
 
-vendorsRouter.get("/commitments/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+vendorsRouter.get("/commitments/:id", authorize({ feature: "finance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -338,7 +338,7 @@ vendorsRouter.get("/commitments/:id", authorize({ feature: "finance", action: "l
   } catch (err) { handleRouteError(err, res, "Commitment detail error:"); }
 });
 
-vendorsRouter.get("/financial-requests/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+vendorsRouter.get("/financial-requests/:id", authorize({ feature: "finance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -378,7 +378,7 @@ vendorsRouter.get("/financial-requests", authorize({ feature: "finance", action:
 // Phase 7.1 — migrated from finance.ts (canonical ownership consolidation)
 // ─────────────────────────────────────────────────────────────────────────────
 
-vendorsRouter.get("/vendors/:id", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+vendorsRouter.get("/vendors/:id", authorize({ feature: "finance", action: "view" }), async (req, res) => {
   try {
     const scope = (req as any).scope!;
     const id = parseId(req.params.id, "id");

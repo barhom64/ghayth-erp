@@ -1263,7 +1263,7 @@ router.get("/ai-insights", authorize({ feature: "bi", action: "list" }), async (
   } catch (err) { handleRouteError(err, res, "AI insights"); }
 });
 
-router.patch("/ai-insights/:id/dismiss", authorize({ feature: "bi", action: "create" }), async (req, res) => {
+router.patch("/ai-insights/:id/dismiss", authorize({ feature: "bi", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1277,7 +1277,7 @@ router.patch("/ai-insights/:id/dismiss", authorize({ feature: "bi", action: "cre
   } catch (err) { handleRouteError(err, res, "Dismiss insight"); }
 });
 
-router.patch("/ai-insights/:id/read", authorize({ feature: "bi", action: "create" }), async (req, res) => {
+router.patch("/ai-insights/:id/read", authorize({ feature: "bi", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1321,7 +1321,7 @@ router.post("/alert-fatigue/mute", authorize({ feature: "bi", action: "create" }
   } catch (err) { handleRouteError(err, res, "Mute alert type"); }
 });
 
-router.delete("/alert-fatigue/mute/:alertType", authorize({ feature: "bi", action: "create" }), async (req, res) => {
+router.delete("/alert-fatigue/mute/:alertType", authorize({ feature: "bi", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { alertType } = req.params;

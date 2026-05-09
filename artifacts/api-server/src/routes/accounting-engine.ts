@@ -183,7 +183,7 @@ router.post("/accounting-mappings/batch", authorize({ feature: "finance", action
   }
 });
 
-router.get("/accounting-mappings/:operationType", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+router.get("/accounting-mappings/:operationType", authorize({ feature: "finance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(
@@ -424,7 +424,7 @@ router.put("/journal-templates/:id", authorize({ feature: "finance", action: "cr
   }
 });
 
-router.delete("/journal-templates/:id", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+router.delete("/journal-templates/:id", authorize({ feature: "finance", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -473,7 +473,7 @@ router.get("/subsidiary-accounts", authorize({ feature: "finance", action: "list
   }
 });
 
-router.get("/subsidiary-accounts/entity/:entityType/:entityId", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+router.get("/subsidiary-accounts/entity/:entityType/:entityId", authorize({ feature: "finance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -522,7 +522,7 @@ router.post("/subsidiary-accounts", authorize({ feature: "finance", action: "cre
   }
 });
 
-router.delete("/subsidiary-accounts/:id", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+router.delete("/subsidiary-accounts/:id", authorize({ feature: "finance", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

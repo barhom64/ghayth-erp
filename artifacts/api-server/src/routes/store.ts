@@ -108,7 +108,7 @@ router.post("/products", authorize({ feature: "store", action: "create" }), asyn
   } catch (err) { handleRouteError(err, res, "Create store product"); }
 });
 
-router.get("/products/:id", authorize({ feature: "store", action: "list" }), async (req, res) => {
+router.get("/products/:id", authorize({ feature: "store", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -122,7 +122,7 @@ router.get("/products/:id", authorize({ feature: "store", action: "list" }), asy
   } catch (err) { handleRouteError(err, res, "Get store product"); }
 });
 
-router.patch("/products/:id", authorize({ feature: "store", action: "create" }), async (req, res) => {
+router.patch("/products/:id", authorize({ feature: "store", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -151,7 +151,7 @@ router.patch("/products/:id", authorize({ feature: "store", action: "create" }),
   } catch (err) { handleRouteError(err, res, "Update store product"); }
 });
 
-router.delete("/products/:id", authorize({ feature: "store", action: "create" }), async (req, res) => {
+router.delete("/products/:id", authorize({ feature: "store", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -237,7 +237,7 @@ router.post("/orders", authorize({ feature: "store", action: "create" }), async 
   } catch (err) { handleRouteError(err, res, "Create store order"); }
 });
 
-router.get("/orders/:id", authorize({ feature: "store", action: "list" }), async (req, res) => {
+router.get("/orders/:id", authorize({ feature: "store", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -261,7 +261,7 @@ router.get("/orders/:id", authorize({ feature: "store", action: "list" }), async
   } catch (err) { handleRouteError(err, res, "Get store order"); }
 });
 
-router.patch("/orders/:id", authorize({ feature: "store", action: "create" }), async (req, res) => {
+router.patch("/orders/:id", authorize({ feature: "store", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -322,7 +322,7 @@ router.patch("/orders/:id", authorize({ feature: "store", action: "create" }), a
   } catch (err) { handleRouteError(err, res, "Update store order"); }
 });
 
-router.delete("/orders/:id", authorize({ feature: "store", action: "create" }), async (req, res) => {
+router.delete("/orders/:id", authorize({ feature: "store", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

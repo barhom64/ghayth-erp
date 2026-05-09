@@ -97,7 +97,7 @@ async function getMemo(companyId: number, memoId: number) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 // List — مع فلترة اختيارية على القسم
-router.get("/regulation", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/regulation", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const section = (req.query.section as string) || null;
@@ -139,7 +139,7 @@ router.get("/regulation", authorize({ feature: "hr", action: "list" }), async (r
   }
 });
 
-router.get("/regulation/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/regulation/:id", authorize({ feature: "hr.discipline", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -263,7 +263,7 @@ const closeMemoSchema = z.object({
   note: z.string().optional().nullable(),
 });
 
-router.post("/regulation", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.post("/regulation", authorize({ feature: "hr.discipline", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const body = zodParse(createRegulationSchema.safeParse(req.body));
@@ -308,7 +308,7 @@ router.post("/regulation", authorize({ feature: "hr", action: "create" }), async
   }
 });
 
-router.patch("/regulation/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.patch("/regulation/:id", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -355,7 +355,7 @@ router.patch("/regulation/:id", authorize({ feature: "hr", action: "update" }), 
 });
 
 // إعادة استنساخ اللائحة الافتراضية (للشركات التي لم تُبذر)
-router.post("/regulation/reseed", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.post("/regulation/reseed", authorize({ feature: "hr.discipline", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<{ count: string }>(
@@ -381,7 +381,7 @@ router.post("/regulation/reseed", authorize({ feature: "hr", action: "create" })
   }
 });
 
-router.delete("/regulation/:id", authorize({ feature: "hr", action: "delete" }), async (req, res) => {
+router.delete("/regulation/:id", authorize({ feature: "hr.discipline", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -416,7 +416,7 @@ router.delete("/regulation/:id", authorize({ feature: "hr", action: "delete" }),
 // ═════════════════════════════════════════════════════════════════════════════
 
 // List
-router.get("/memos", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/memos", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const status = (req.query.status as string) || null;
@@ -453,7 +453,7 @@ router.get("/memos", authorize({ feature: "hr", action: "list" }), async (req, r
 });
 
 // Detail (with timeline)
-router.get("/memos/:id", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/memos/:id", authorize({ feature: "hr.discipline", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -471,7 +471,7 @@ router.get("/memos/:id", authorize({ feature: "hr", action: "list" }), async (re
 });
 
 // Create a new memo (manually by manager/HR)
-router.post("/memos", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.post("/memos", authorize({ feature: "hr.discipline", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const body = zodParse(createMemoSchema.safeParse(req.body));
@@ -586,7 +586,7 @@ router.post("/memos", authorize({ feature: "hr", action: "create" }), async (req
 });
 
 // Step 1: Employee justification
-router.post("/memos/:id/justify", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.post("/memos/:id/justify", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -652,7 +652,7 @@ router.post("/memos/:id/justify", authorize({ feature: "hr", action: "list" }), 
 });
 
 // Step 2: Direct manager recommendation
-router.post("/memos/:id/manager-recommendation", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.post("/memos/:id/manager-recommendation", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -841,7 +841,7 @@ router.post("/memos/:id/gm-decision", authorize({ feature: "hr.discipline", acti
 });
 
 // Cancel a memo
-router.post("/memos/:id/cancel", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.post("/memos/:id/cancel", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -885,7 +885,7 @@ router.post("/memos/:id/cancel", authorize({ feature: "hr", action: "update" }),
 // ─────────────────────────────────────────────────────────────────────────────
 // APPEAL — استئناف الموظف على قرار الجزاء
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/memos/:id/appeal", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.post("/memos/:id/appeal", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -992,7 +992,7 @@ router.post("/memos/:id/appeal-decision", authorize({ feature: "hr.discipline", 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLOSE — إقفال المحضر وأرشفته
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/memos/:id/close", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.post("/memos/:id/close", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1033,7 +1033,7 @@ router.post("/memos/:id/close", authorize({ feature: "hr", action: "update" }), 
 });
 
 // Preview penalty without creating a memo (for UI)
-router.post("/penalty-preview", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.post("/penalty-preview", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const body = zodParse(penaltyPreviewSchema.safeParse(req.body));
@@ -1075,7 +1075,7 @@ router.post("/penalty-preview", authorize({ feature: "hr", action: "list" }), as
 
 // Stats
 // ─── Per-employee violations snapshot — used by employee-detail and create form ───
-router.get("/employee/:employeeId/summary", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/employee/:employeeId/summary", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");
@@ -1112,7 +1112,7 @@ router.get("/employee/:employeeId/summary", authorize({ feature: "hr", action: "
   }
 });
 
-router.get("/stats", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [totals] = await rawQuery<any>(
@@ -1140,7 +1140,7 @@ router.get("/stats", authorize({ feature: "hr", action: "list" }), async (req, r
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** GET /hr/discipline/auto-detection/settings — إعدادات الرصد التلقائي */
-router.get("/auto-detection/settings", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/auto-detection/settings", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const settings = await getAutoDetectionSettings(scope.companyId);
@@ -1151,7 +1151,7 @@ router.get("/auto-detection/settings", authorize({ feature: "hr", action: "list"
 });
 
 /** PUT /hr/discipline/auto-detection/settings — تحديث إعدادات الرصد التلقائي */
-router.put("/auto-detection/settings", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.put("/auto-detection/settings", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!HR_ROLES.includes(scope.role)) {
@@ -1180,7 +1180,7 @@ router.put("/auto-detection/settings", authorize({ feature: "hr", action: "updat
 });
 
 /** POST /hr/discipline/auto-detection/run — تشغيل الرصد يدوياً */
-router.post("/auto-detection/run", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.post("/auto-detection/run", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!HR_ROLES.includes(scope.role)) {
@@ -1211,7 +1211,7 @@ router.post("/auto-detection/run", authorize({ feature: "hr", action: "update" }
 });
 
 /** GET /hr/discipline/auto-detection/log — سجل عمليات الرصد */
-router.get("/auto-detection/log", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/auto-detection/log", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { limit, offset, fromDate, toDate } = req.query as any;
@@ -1228,7 +1228,7 @@ router.get("/auto-detection/log", authorize({ feature: "hr", action: "list" }), 
 });
 
 /** GET /hr/discipline/auto-detection/summary — ملخص إحصائي */
-router.get("/auto-detection/summary", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/auto-detection/summary", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     // إحصائيات آخر 30 يوم

@@ -558,7 +558,7 @@ router.get("/templates", authorize({ feature: "documents", action: "list" }), as
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/templates/:id", authorize({ feature: "documents", action: "list" }), async (req, res) => {
+router.get("/templates/:id", authorize({ feature: "documents", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
