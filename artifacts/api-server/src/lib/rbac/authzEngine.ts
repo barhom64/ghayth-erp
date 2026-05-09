@@ -105,18 +105,27 @@ interface ApprovalLimitRow {
   requires_dual_control: boolean;
 }
 
+interface UserGrantRow {
+  feature_key: string;
+  action: string | null;
+  scope: string | null;
+  type: "grant" | "revoke";
+  expires_at: string | null;
+}
+
 // ─── In-process cache ───────────────────────────────────────────────────────
 // Keyed by `${userId}:${companyId}:${cacheVersion}`. The cache version is
 // bumped (in admin API) on any role mutation, so updates propagate within
 // one process without a restart. For multi-process deployments, a Redis
 // pub/sub is the next step (out of scope for v2.0).
-const grantCache = new Map<string, { grants: RoleGrantRow[]; fields: FieldPolicyRow[]; limits: ApprovalLimitRow[]; expiresAt: number }>();
+const grantCache = new Map<string, { grants: RoleGrantRow[]; fields: FieldPolicyRow[]; limits: ApprovalLimitRow[]; userGrants: UserGrantRow[]; expiresAt: number }>();
 const CACHE_TTL_MS = 30_000;
 
 async function loadEffectiveGrants(userId: number, companyId: number): Promise<{
   grants: RoleGrantRow[];
   fields: FieldPolicyRow[];
   limits: ApprovalLimitRow[];
+  userGrants: UserGrantRow[];
 }> {
   const versionRow = await rawQuery<{ version: number }>(
     `SELECT version FROM rbac_cache_version WHERE "companyId" = $1`,
@@ -154,7 +163,17 @@ async function loadEffectiveGrants(userId: number, companyId: number): Promise<{
     [userId, companyId]
   ).catch(() => [] as ApprovalLimitRow[]);
 
-  const result = { grants, fields, limits };
+  // Per-user overrides — JIT elevation grants land here. Engine must
+  // honor them or the JIT lifecycle is just bookkeeping.
+  const userGrants = await rawQuery<UserGrantRow>(
+    `SELECT feature_key, action, scope, type, expires_at
+       FROM rbac_user_grants
+      WHERE "userId" = $1 AND "companyId" = $2
+        AND (expires_at IS NULL OR expires_at > NOW())`,
+    [userId, companyId]
+  ).catch(() => [] as UserGrantRow[]);
+
+  const result = { grants, fields, limits, userGrants };
   grantCache.set(cacheKey, { ...result, expiresAt: Date.now() + CACHE_TTL_MS });
   return result;
 }
@@ -348,14 +367,51 @@ export async function checkAccess(scope: RequestScope, spec: AccessSpec, columns
     return { allowed: true, fieldPolicy: {}, scopeFilter: null, diagnostics: { matchedRoleIds: [], grantedActions: [spec.action], grantedScope: "self", requiredFix: "self-service" } };
   }
 
-  const { grants, fields, limits } = await loadEffectiveGrants(scope.userId, scope.companyId);
+  const { grants, fields, limits, userGrants } = await loadEffectiveGrants(scope.userId, scope.companyId);
   const ctx = await loadScopeContext(scope);
 
+  // Per-user revokes — pull rugs out before anything else.
+  const isRevoked = userGrants.some((u) =>
+    u.type === "revoke" &&
+    u.feature_key === spec.feature &&
+    (u.action == null || u.action === spec.action)
+  );
+  if (isRevoked) {
+    return {
+      allowed: false,
+      reasonAr: `صلاحيتك على هذه الميزة مسحوبة على مستوى المستخدم`,
+      code: "USER_REVOKED",
+      diagnostics: {
+        matchedRoleIds: [],
+        grantedActions: [],
+        requiredFix: "تواصل مع المسؤول لإعادة منح الصلاحية",
+      },
+    };
+  }
+
+  // Per-user grants — JIT elevation lands here. They augment role
+  // grants by acting as additional virtual matches with the user-grant's
+  // scope (or 'self' if unspecified).
+  const userGrantMatches = userGrants
+    .filter((u) =>
+      u.type === "grant" &&
+      u.feature_key === spec.feature &&
+      (u.action == null || u.action === spec.action)
+    )
+    .map((u): RoleGrantRow => ({
+      role_id: -1, // sentinel for "from user_grants"
+      feature_key: u.feature_key,
+      actions: [spec.action],
+      scope: u.scope || "self",
+      conditions: null,
+    }));
+
   // Find any grant that covers (feature, action). Wildcard via parent feature.
-  const matchingGrants = grants.filter((g) => {
+  const roleMatches = grants.filter((g) => {
     if (g.feature_key !== spec.feature && g.feature_key !== `${featureDef.moduleKey}.*` && g.feature_key !== "*") return false;
     return g.actions.includes(spec.action) || g.actions.includes("*");
   });
+  const matchingGrants = [...roleMatches, ...userGrantMatches];
 
   if (matchingGrants.length === 0) {
     return {
