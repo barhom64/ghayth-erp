@@ -14,6 +14,7 @@ import {
   AlertTriangle, CheckCircle, XCircle, Clock, Settings2,
   ChevronDown, ChevronUp,
 } from "lucide-react";
+import { MODULE_LABELS, moduleLabel } from "@/lib/module-labels";
 
 interface BusinessRule {
   id: number;
@@ -95,16 +96,6 @@ const OPERATOR_OPTIONS = [
   { value: "!=", label: "لا يساوي" },
 ];
 
-const MODULE_LABELS: Record<string, string> = {
-  hr: "الموارد البشرية",
-  finance: "المالية",
-  fleet: "النقليات",
-  legal: "القانونية",
-  property: "الأملاك",
-  projects: "المشاريع",
-  support: "الدعم",
-};
-
 function getModuleColor(mod: string) {
   const colors: Record<string, string> = {
     hr: "bg-blue-100 text-blue-800",
@@ -135,7 +126,7 @@ function RuleCard({ rule, onToggle, onDelete }: { rule: BusinessRule; onToggle: 
               <h3 className="font-semibold text-sm">{rule.name}</h3>
               {rule.module && (
                 <Badge variant="outline" className={`text-[10px] ${getModuleColor(rule.module)}`}>
-                  {MODULE_LABELS[rule.module] || rule.module}
+                  {moduleLabel(rule.module)}
                 </Badge>
               )}
               <Badge variant={rule.isActive ? "default" : "secondary"} className="text-[10px]">

@@ -14,13 +14,9 @@ export interface UserRoleRow {
   level: number;
 }
 
-export const MODULE_LABELS: Record<string, string> = {
-  home: "الرئيسية", hr: "الموارد البشرية", finance: "المالية", fleet: "الأسطول",
-  property: "الأملاك", operations: "العمليات", warehouse: "المستودعات", governance: "الحوكمة",
-  bi: "ذكاء الأعمال", requests: "الطلبات", documents: "المستندات", reports: "التقارير",
-  admin: "مدير النظام", comms: "التواصل", legal: "القانونية", crm: "المبيعات",
-  marketing: "التسويق", store: "المتجر", support: "الدعم", settings: "الإعدادات",
-};
+// Re-exported from the canonical location so existing imports
+// (`import { MODULE_LABELS } from "./shared"`) keep working.
+export { MODULE_LABELS } from "@/lib/module-labels";
 
 export const ROLE_OPTIONS = [
   { value: "owner", label: "مالك النظام" },

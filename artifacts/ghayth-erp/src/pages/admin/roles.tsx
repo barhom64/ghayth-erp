@@ -11,14 +11,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { roleKeyColors } from "@/contexts/app-context";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-
-const MODULE_LABELS: Record<string, string> = {
-  home: "الرئيسية", hr: "الموارد البشرية", finance: "المالية", fleet: "الأسطول",
-  property: "الأملاك", operations: "العمليات", warehouse: "المستودعات", governance: "الحوكمة",
-  bi: "ذكاء الأعمال", requests: "الطلبات", documents: "المستندات", reports: "التقارير",
-  admin: "مدير النظام", comms: "التواصل", legal: "القانونية", crm: "المبيعات",
-  marketing: "التسويق", store: "المتجر", support: "الدعم", settings: "الإعدادات",
-};
+import { MODULE_LABELS } from "@/lib/module-labels";
 
 const ALL_MODULES = Object.keys(MODULE_LABELS);
 
