@@ -384,7 +384,9 @@ router.get("/roles", requirePermission("admin:read"), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM roles WHERE "companyId" = $1 ORDER BY name LIMIT 500`, [scope.companyId]);
+    const systemRoles = await rawQuery(`SELECT * FROM roles ORDER BY name LIMIT 100`, []);
+    const customRoles = await rawQuery(`SELECT * FROM custom_roles WHERE "companyId" = $1 ORDER BY label LIMIT 500`, [scope.companyId]);
+    const rows = [...systemRoles, ...customRoles];
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (e: any) { logger.error(e, "Get roles error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
@@ -624,7 +626,7 @@ router.patch("/integrations/:id", requirePermission("admin:write"), async (req, 
     if (sets.length === 1) { throw new ValidationError("لا توجد بيانات"); }
     params.push(id); params.push(scope.companyId);
     await rawExecute(
-      `UPDATE integrations SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`,
+      `UPDATE integrations SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`,
       params
     );
     const [row] = await rawQuery(`SELECT id, "companyId", type, name, status, "lastSuccessAt", "lastFailureAt", "retryCount", "maxRetries", "createdAt", "updatedAt" FROM integrations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);

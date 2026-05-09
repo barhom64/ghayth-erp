@@ -1230,7 +1230,7 @@ router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), a
     if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
     if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
     params.push(id); params.push(caseId); params.push(scope.companyId);
-    await rawExecute(`UPDATE legal_judgments SET ${sets.join(",")} WHERE id=$${params.length - 2} AND "caseId"=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    await rawExecute(`UPDATE legal_judgments SET ${sets.join(",")} WHERE id=$${params.length - 2} AND "caseId"=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
     // Mark payment obligation met if fully paid

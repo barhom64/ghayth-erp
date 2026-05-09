@@ -526,11 +526,11 @@ router.delete("/subsidiary-accounts/:id", requirePermission("finance:write"), as
     const id = parseId(req.params.id, "id");
     requireFinance(scope);
     const [before] = await rawQuery<any>(
-      `SELECT * FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      `SELECT * FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
     await rawExecute(
-      `DELETE FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      `DELETE FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "subsidiary_accounts", entityId: id, before: before ?? null }).catch((e) => logger.error(e, "accounting-engine background task failed"));
