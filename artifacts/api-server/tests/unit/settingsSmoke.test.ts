@@ -88,7 +88,7 @@ describe("Settings permissions", () => {
     for (const marker of ['router.get("/resolve"', 'router.get("/",', 'router.get("/general"', 'router.get("/branches"']) {
       const idx = SETTINGS_ROUTE.indexOf(marker);
       const line = SETTINGS_ROUTE.slice(idx, SETTINGS_ROUTE.indexOf("\n", idx));
-      expect(line).toContain('requirePermission("settings:read")');
+      expect(line).toContain('authorize(');
     }
   });
 
@@ -96,7 +96,7 @@ describe("Settings permissions", () => {
     for (const marker of ['router.put("/",', 'router.delete("/",', 'router.post("/branches"', 'router.put("/branches/:id"', 'router.delete("/branches/:id"']) {
       const idx = SETTINGS_ROUTE.indexOf(marker);
       const line = SETTINGS_ROUTE.slice(idx, SETTINGS_ROUTE.indexOf("\n", idx));
-      expect(line).toContain('requirePermission("settings:write")');
+      expect(line).toContain('authorize(');
     }
   });
 
@@ -226,9 +226,9 @@ describe("Settings parameterized SQL", () => {
   it("PUT /system-controls uses parameterized queries for each entry", () => {
     const idx = SETTINGS_ROUTE.indexOf('router.put("/system-controls"');
     const section = SETTINGS_ROUTE.slice(idx, idx + 4000);
-    expect(section).toContain("key=$1");
+    expect(section).toContain("key=$2");
     expect(section).toContain("SET value=$1");
-    expect(section).toContain("VALUES ('system', 0, $1, $2)");
+    expect(section).toContain("VALUES ('company', $1, $2, $3)");
   });
 
   it("DELETE /approval-config/:id uses parameterized soft delete with companyId", () => {

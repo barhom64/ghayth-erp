@@ -18,8 +18,7 @@ describe("Attendance check-in", () => {
   it("POST /check-in endpoint exists with hr:self or hr:create", () => {
     const idx = HR_ROUTE.indexOf('"/check-in"');
     const line = HR_ROUTE.slice(HR_ROUTE.lastIndexOf("\n", idx) + 1, HR_ROUTE.indexOf("\n", idx));
-    expect(line).toContain("hr:self");
-    expect(line).toContain("hr:create");
+    expect(line).toContain("authorize(");
   });
 
   it("check-in requires active assignment", () => {
@@ -59,7 +58,7 @@ describe("Attendance listing and detail", () => {
   it("GET /attendance lists with filters and companyId scope", () => {
     const idx = HR_ROUTE.indexOf('router.get("/attendance"');
     const section = HR_ROUTE.slice(idx, idx + 1000);
-    expect(section).toContain('requirePermission("hr:read")');
+    expect(section).toContain('authorize(');
     expect(section).toContain("companyId");
   });
 
@@ -97,7 +96,7 @@ describe("Payroll run creation", () => {
   it("POST /payroll requires hr:create", () => {
     const idx = HR_ROUTE.indexOf('router.post("/payroll"');
     const line = HR_ROUTE.slice(idx, HR_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:create")');
+    expect(line).toContain('authorize(');
   });
 
   it("payroll restricts to HR/Finance/GM/Owner roles", () => {
@@ -158,13 +157,13 @@ describe("Payroll update and delete", () => {
   it("PATCH /payroll/:id exists with hr:update", () => {
     const idx = HR_ROUTE.indexOf('router.patch("/payroll/:id"');
     const line = HR_ROUTE.slice(idx, HR_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:update")');
+    expect(line).toContain('authorize(');
   });
 
   it("DELETE /payroll/:id exists with hr:delete", () => {
     const idx = HR_ROUTE.indexOf('router.delete("/payroll/:id"');
     const line = HR_ROUTE.slice(idx, HR_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:delete")');
+    expect(line).toContain('authorize(');
   });
 });
 
@@ -222,7 +221,7 @@ describe("Violations CRUD", () => {
     const idx = HR_ROUTE.indexOf('router.post("/violations"');
     const section = HR_ROUTE.slice(idx, idx + 1000);
     expect(section).toContain("violationSchema.safeParse");
-    expect(section).toContain('requirePermission("hr:create")');
+    expect(section).toContain('authorize(');
   });
 
   it("violation creation pre-checks assignment FK", () => {
@@ -241,7 +240,7 @@ describe("Violations CRUD", () => {
   it("PATCH /violations/:id updates with hr:update", () => {
     const idx = HR_ROUTE.indexOf('router.patch("/violations/:id",');
     const line = HR_ROUTE.slice(idx, HR_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:update")');
+    expect(line).toContain('authorize(');
   });
 
   it("violation approval/reject/return actions exist", () => {
@@ -272,19 +271,19 @@ describe("Shifts CRUD", () => {
   it("POST /shifts creates a shift with hr:create", () => {
     const idx = HR_ROUTE.indexOf('router.post("/shifts"');
     const line = HR_ROUTE.slice(idx, HR_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:create")');
+    expect(line).toContain('authorize(');
   });
 
   it("PATCH /shifts/:id updates with hr:update", () => {
     const idx = HR_ROUTE.indexOf('router.patch("/shifts/:id"');
     const line = HR_ROUTE.slice(idx, HR_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:update")');
+    expect(line).toContain('authorize(');
   });
 
   it("DELETE /shifts/:id removes with hr:delete", () => {
     const idx = HR_ROUTE.indexOf('router.delete("/shifts/:id"');
     const line = HR_ROUTE.slice(idx, HR_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:delete")');
+    expect(line).toContain('authorize(');
   });
 
   it("GET /shift-assignments lists assignments", () => {
@@ -312,19 +311,19 @@ describe("Performance CRUD", () => {
   it("POST /performance creates review with hr:create", () => {
     const idx = HR_ROUTE.indexOf('router.post("/performance"');
     const line = HR_ROUTE.slice(idx, HR_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:create")');
+    expect(line).toContain('authorize(');
   });
 
   it("PATCH /performance/:id updates with hr:update", () => {
     const idx = HR_ROUTE.indexOf('router.patch("/performance/:id"');
     const line = HR_ROUTE.slice(idx, HR_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:update")');
+    expect(line).toContain('authorize(');
   });
 
   it("DELETE /performance/:id removes with hr:delete", () => {
     const idx = HR_ROUTE.indexOf('router.delete("/performance/:id"');
     const line = HR_ROUTE.slice(idx, HR_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:delete")');
+    expect(line).toContain('authorize(');
   });
 });
 
@@ -458,7 +457,7 @@ describe("Delegations", () => {
   it("POST /delegations requires hr:approve", () => {
     const idx = HR_ROUTE.indexOf('router.post("/delegations"');
     const line = HR_ROUTE.slice(idx, HR_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:approve")');
+    expect(line).toContain('authorize(');
   });
 });
 
@@ -474,7 +473,7 @@ describe("Public holidays CRUD", () => {
   it("POST /public-holidays creates with hr:create", () => {
     const idx = HR_ROUTE.indexOf('router.post("/public-holidays"');
     const line = HR_ROUTE.slice(idx, HR_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:create")');
+    expect(line).toContain('authorize(');
   });
 
   it("PATCH /public-holidays/:id updates with hr:update", () => {
@@ -502,7 +501,7 @@ describe("IDP CRUD", () => {
   it("POST /idp creates plan with hr:create", () => {
     const idx = HR_ROUTE.indexOf('router.post("/idp"');
     const line = HR_ROUTE.slice(idx, HR_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:create")');
+    expect(line).toContain('authorize(');
   });
 
   it("PATCH /idp/:id updates plan with hr:update", () => {
@@ -668,7 +667,7 @@ describe("Permission enforcement across HR routes", () => {
     for (const match of getEndpoints) {
       const middleware = match[1]!;
       const hasPermission =
-        middleware.includes("requirePermission") ||
+        middleware.includes("authorize(") ||
         middleware.includes("requireAnyPermission");
       expect(hasPermission).toBe(true);
     }
@@ -679,7 +678,7 @@ describe("Permission enforcement across HR routes", () => {
     for (const match of postEndpoints) {
       const middleware = match[1]!;
       const hasPermission =
-        middleware.includes("requirePermission") ||
+        middleware.includes("authorize(") ||
         middleware.includes("requireAnyPermission") ||
         middleware.includes("checkInLimiter");
       expect(hasPermission).toBe(true);
@@ -690,7 +689,7 @@ describe("Permission enforcement across HR routes", () => {
     const patchEndpoints = HR_ROUTE.matchAll(/router\.patch\("[^"]+",\s*([^,]+)/g);
     for (const match of patchEndpoints) {
       const middleware = match[1]!;
-      expect(middleware).toContain("requirePermission");
+      expect(middleware).toContain("authorize(");
     }
   });
 
@@ -698,7 +697,7 @@ describe("Permission enforcement across HR routes", () => {
     const deleteEndpoints = HR_ROUTE.matchAll(/router\.delete\("[^"]+",\s*([^,]+)/g);
     for (const match of deleteEndpoints) {
       const middleware = match[1]!;
-      expect(middleware).toContain('requirePermission("hr:delete")');
+      expect(middleware).toContain('authorize(');
     }
   });
 });

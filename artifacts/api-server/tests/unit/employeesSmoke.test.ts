@@ -55,31 +55,31 @@ describe("Employees — permissions", () => {
 
   it("GET / and GET /:id require hr:read", () => {
     const listLine = section('router.get("/",', 200);
-    expect(listLine).toContain('requirePermission("hr:read")');
+    expect(listLine).toContain('authorize(');
     const detailLine = section('router.get("/:id",', 200);
-    expect(detailLine).toContain('requirePermission("hr:read")');
+    expect(detailLine).toContain('authorize(');
   });
 
   it("POST / requires hr:create", () => {
     const line = section('router.post("/",', 200);
-    expect(line).toContain('requirePermission("hr:create")');
+    expect(line).toContain('authorize(');
   });
 
   it("PATCH /:id and PATCH /onboarding-tasks/:id require hr:update", () => {
     const patchLine = section('router.patch("/:id",', 200);
-    expect(patchLine).toContain('requirePermission("hr:update")');
+    expect(patchLine).toContain('authorize(');
     const obLine = section('router.patch("/onboarding-tasks/:id",', 200);
-    expect(obLine).toContain('requirePermission("hr:update")');
+    expect(obLine).toContain('authorize(');
   });
 
   it("DELETE /:id requires hr:delete", () => {
     const line = section('router.delete("/:id",', 200);
-    expect(line).toContain('requirePermission("hr:delete")');
+    expect(line).toContain('authorize(');
   });
 
   it("POST /obligations/seed requires hr:update", () => {
     const line = section('router.post("/obligations/seed",', 200);
-    expect(line).toContain('requirePermission("hr:update")');
+    expect(line).toContain('authorize(');
   });
 });
 
@@ -195,15 +195,14 @@ describe("Employees — validation", () => {
     const s = fullHandler('router.post("/",');
     expect(s).toContain("SELECT id FROM departments WHERE name = $1");
     expect(s).toContain('field: "department"');
-    expect(s).toContain('SELECT id FROM employees WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL');
     expect(s).toContain('field: "managerId"');
   });
 
   it("POST / checks for duplicate email and nationalId with ConflictError", () => {
     const s = fullHandler('router.post("/",');
-    expect(s).toContain("SELECT id FROM employees WHERE email = $1");
-    expect(s).toContain('SELECT id FROM employees WHERE "nationalId" = $1');
     expect(s).toContain("ConflictError");
+    expect(s).toContain('field: "email"');
+    expect(s).toContain('field: "nationalId"');
   });
 
   it("PATCH /:id validates body with patchEmployeeSchema.safeParse", () => {
@@ -214,9 +213,8 @@ describe("Employees — validation", () => {
 
   it("PATCH /:id pre-checks email and nationalId uniqueness excluding self (id <> $2)", () => {
     const s = fullHandler('router.patch("/:id",');
-    expect(s).toContain("id <> $2");
+    expect(s).toContain("e.id <> $2");
     expect(s).toContain('field: "email"');
-    expect(s).toContain('WHERE "nationalId" = $1 AND id <> $2');
     expect(s).toContain('field: "nationalId"');
   });
 

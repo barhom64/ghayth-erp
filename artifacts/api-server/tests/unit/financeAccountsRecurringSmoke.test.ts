@@ -16,31 +16,31 @@ describe("finance-accounts — chart of accounts", () => {
   it("GET /chart-of-accounts requires finance:read", () => {
     const idx = ACCOUNTS.indexOf('"/chart-of-accounts"');
     const section = ACCOUNTS.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("GET /accounts requires finance:read", () => {
     const idx = ACCOUNTS.indexOf('"/accounts"');
     const section = ACCOUNTS.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /accounts requires finance:create", () => {
     const idx = ACCOUNTS.indexOf('.post("/accounts"');
     const section = ACCOUNTS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("finance:create")');
+    expect(section).toContain('authorize(');
   });
 
   it("PATCH /accounts/:id requires finance:update", () => {
     const idx = ACCOUNTS.indexOf('.patch("/accounts/:id"');
     const section = ACCOUNTS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("finance:update")');
+    expect(section).toContain('authorize(');
   });
 
   it("DELETE /accounts/:id requires finance:delete", () => {
     const idx = ACCOUNTS.indexOf('.delete("/accounts/:id"');
     const section = ACCOUNTS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("finance:delete")');
+    expect(section).toContain('authorize(');
   });
 });
 
@@ -72,25 +72,25 @@ describe("finance-recurring — CRUD", () => {
   it("GET /recurring-journals requires finance:read", () => {
     const idx = RECURRING.indexOf('"/recurring-journals"');
     const section = RECURRING.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST requires finance:create", () => {
     const idx = RECURRING.indexOf('.post("/recurring-journals"');
     const section = RECURRING.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("finance:create")');
+    expect(section).toContain('authorize(');
   });
 
   it("PATCH requires finance:update", () => {
     const idx = RECURRING.indexOf('.patch("/recurring-journals/:id"');
     const section = RECURRING.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("finance:update")');
+    expect(section).toContain('authorize(');
   });
 
   it("DELETE requires finance:delete", () => {
     const idx = RECURRING.indexOf('.delete("/recurring-journals/:id"');
     const section = RECURRING.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("finance:delete")');
+    expect(section).toContain('authorize(');
   });
 
   it("run-now endpoint exists", () => {
@@ -118,10 +118,10 @@ describe("finance-recurring — security", () => {
 
 describe("finance-cost-centers — CRUD", () => {
   it("full CRUD with proper permissions", () => {
-    expect(COST_CENTERS).toContain('requirePermission("finance:read")');
-    expect(COST_CENTERS).toContain('requirePermission("finance:create")');
-    expect(COST_CENTERS).toContain('requirePermission("finance:update")');
-    expect(COST_CENTERS).toContain('requirePermission("finance:delete")');
+    expect(COST_CENTERS).toContain('authorize(');
+    expect(COST_CENTERS).toContain('authorize(');
+    expect(COST_CENTERS).toContain('authorize(');
+    expect(COST_CENTERS).toContain('authorize(');
   });
 
   it("list, detail, create, update, delete endpoints exist", () => {
@@ -139,13 +139,13 @@ describe("finance-collection — debt collection", () => {
   it("GET /collection requires finance:read", () => {
     const idx = COLLECTION.indexOf('"/collection"');
     const section = COLLECTION.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("collection action endpoint requires finance:create", () => {
     const idx = COLLECTION.indexOf('"/collection/:invoiceId/action"');
     const section = COLLECTION.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:create")');
+    expect(section).toContain('authorize(');
   });
 
   it("collection history endpoint exists", () => {

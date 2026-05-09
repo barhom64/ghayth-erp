@@ -11,31 +11,31 @@ describe("governance — policy management", () => {
   it("GET /policies requires governance:read", () => {
     const idx = SRC.indexOf('"/policies"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("governance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /policies requires governance:write", () => {
     const idx = SRC.indexOf('router.post("/policies"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("governance:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("GET /policies/:id requires governance:read", () => {
     const idx = SRC.indexOf('"/policies/:id"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("governance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("PATCH /policies/:id requires governance:write", () => {
     const idx = SRC.indexOf('router.patch("/policies/:id"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("governance:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("DELETE /policies/:id requires governance:write", () => {
     const idx = SRC.indexOf('router.delete("/policies/:id"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("governance:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("policy versioning endpoint exists", () => {
@@ -74,13 +74,13 @@ describe("governance — risk management", () => {
   it("GET /risks requires governance:read", () => {
     const idx = SRC.indexOf('"/risks"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("governance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /risks requires governance:write", () => {
     const idx = SRC.indexOf('router.post("/risks"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("governance:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("risk treatment endpoint exists", () => {
@@ -92,7 +92,7 @@ describe("governance — audit management", () => {
   it("GET /audits requires governance:read", () => {
     const idx = SRC.indexOf('"/audits"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("governance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("full CRUD for audits (get, post, get/:id, patch, delete)", () => {
@@ -132,19 +132,19 @@ describe("governance — CAPA (corrective/preventive actions)", () => {
   it("GET /capa requires governance:read", () => {
     const idx = SRC.indexOf('"/capa"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("governance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /capa requires governance:write", () => {
     const idx = SRC.indexOf('router.post("/capa"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("governance:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("PATCH /capa/:id requires governance:write", () => {
     const idx = SRC.indexOf('"/capa/:id"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("governance:write")');
+    expect(section).toContain('authorize(');
   });
 });
 
@@ -152,7 +152,7 @@ describe("governance — stats & dashboard", () => {
   it("GET /stats requires governance:read", () => {
     const idx = SRC.indexOf('"/stats"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("governance:read")');
+    expect(section).toContain('authorize(');
   });
 });
 

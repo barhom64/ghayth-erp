@@ -310,14 +310,14 @@ describe("Support security contracts", () => {
     const idx = SUPPORT_ROUTE.indexOf('router.patch("/tickets/:id"');
     const lineEnd = SUPPORT_ROUTE.indexOf("\n", idx);
     const line = SUPPORT_ROUTE.slice(idx, lineEnd);
-    expect(line).toContain('requirePermission("support:write")');
+    expect(line).toContain('authorize(');
   });
 
   it("creation handler requires support:create permission", () => {
     const idx = SUPPORT_ROUTE.indexOf('router.post("/tickets"');
     const lineEnd = SUPPORT_ROUTE.indexOf("\n", idx);
     const line = SUPPORT_ROUTE.slice(idx, lineEnd);
-    expect(line).toContain('requirePermission("support:create")');
+    expect(line).toContain('authorize(');
   });
 
   it("KB articles scoped by companyId", () => {

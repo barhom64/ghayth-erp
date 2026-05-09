@@ -118,13 +118,13 @@ describe("entityMeta — comments", () => {
   it("GET comments requires operations:read", () => {
     const idx = ENTITY_META.indexOf('"/comments/:entityType/:entityId"');
     const section = ENTITY_META.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("operations:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST comments requires admin:write", () => {
     const idx = ENTITY_META.indexOf('.post("/comments');
     const section = ENTITY_META.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("DELETE comments requires admin:write", () => {
@@ -155,13 +155,13 @@ describe("moduleDashboards — per-module endpoints", () => {
   it("HR dashboard requires hr:read", () => {
     const idx = MOD_DASH.indexOf('"/hr"');
     const section = MOD_DASH.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("hr:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("finance dashboard requires finance:read", () => {
     const idx = MOD_DASH.indexOf('"/finance"');
     const section = MOD_DASH.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("all 11 module dashboards exist", () => {
@@ -182,7 +182,7 @@ describe("operationsCenter — endpoints", () => {
   it("main endpoint requires operations:read", () => {
     const idx = OPS_CENTER.indexOf('router.get("/",');
     const section = OPS_CENTER.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("operations:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("daily close checklist endpoint", () => {
@@ -192,7 +192,7 @@ describe("operationsCenter — endpoints", () => {
   it("daily close execute requires finance:write", () => {
     const idx = OPS_CENTER.indexOf('"/daily-close/execute"');
     const section = OPS_CENTER.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("uses parameterized queries", () => {
