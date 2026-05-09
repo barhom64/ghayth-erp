@@ -33,6 +33,7 @@ import {
 } from "./featureCatalog.js";
 import { evaluateConditions, type AbacConditions } from "./abacConditions.js";
 import { enforceSoD } from "./sodEnforcement.js";
+import { publishInvalidation, onInvalidation } from "./distributedCache.js";
 
 export interface AccessSpec {
   feature: string;
@@ -158,13 +159,32 @@ async function loadEffectiveGrants(userId: number, companyId: number): Promise<{
   return result;
 }
 
-export function bumpCacheVersion(companyId: number): Promise<void> {
-  return rawQuery(
+// Subscribe once per process: when another replica publishes an
+// invalidation, drop our local grant cache for that company so the
+// next request re-reads from Postgres.
+onInvalidation((event) => {
+  if (event.kind === "grants" || event.kind === "all" || !event.kind) {
+    for (const key of grantCache.keys()) {
+      if (key.includes(`:${event.companyId}:`)) grantCache.delete(key);
+    }
+  }
+});
+
+export async function bumpCacheVersion(companyId: number): Promise<void> {
+  await rawQuery(
     `INSERT INTO rbac_cache_version ("companyId", version, "updatedAt")
      VALUES ($1, 1, NOW())
      ON CONFLICT ("companyId") DO UPDATE SET version = rbac_cache_version.version + 1, "updatedAt" = NOW()`,
     [companyId]
-  ).then(() => undefined);
+  );
+  // Drop local cache for this company immediately (don't wait for the
+  // next request to notice the version bump — same process should see
+  // the change instantly).
+  for (const key of grantCache.keys()) {
+    if (key.includes(`:${companyId}:`)) grantCache.delete(key);
+  }
+  // Tell every other replica to drop theirs.
+  await publishInvalidation(companyId, "grants");
 }
 
 // ─── Scope evaluation ───────────────────────────────────────────────────────

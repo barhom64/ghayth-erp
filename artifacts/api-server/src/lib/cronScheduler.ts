@@ -3406,6 +3406,16 @@ async function rbacV2ExpiredGrantsCleanup(): Promise<string> {
       WHERE expires_at IS NOT NULL AND expires_at < NOW() - INTERVAL '7 days'`
   );
 
+  // Mark approved JIT requests whose grant has expired as 'expired' so
+  // the user's JIT history shows the lifecycle correctly. The matching
+  // rbac_user_grants row is already gone (deleted above) — this just
+  // updates the JIT request bookkeeping.
+  const jitExpired = await rawExecute(
+    `UPDATE rbac_jit_requests
+        SET status = 'expired', "updatedAt" = NOW()
+      WHERE status = 'approved' AND expires_at IS NOT NULL AND expires_at < NOW()`
+  );
+
   // Bump cache version on every company that lost grants/roles so the
   // engine refreshes its in-memory cache.
   if ((userGrants.affectedRows ?? 0) > 0 || (userRoles.affectedRows ?? 0) > 0) {
@@ -3414,7 +3424,7 @@ async function rbacV2ExpiredGrantsCleanup(): Promise<string> {
     );
   }
 
-  return `Removed ${userGrants.affectedRows ?? 0} expired user-grants, ${userRoles.affectedRows ?? 0} expired user-roles`;
+  return `Removed ${userGrants.affectedRows ?? 0} expired user-grants, ${userRoles.affectedRows ?? 0} expired user-roles, marked ${jitExpired.affectedRows ?? 0} JIT requests as expired`;
 }
 
 export async function seedCronJobs(): Promise<void> {

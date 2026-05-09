@@ -31,6 +31,7 @@
  */
 
 import { rawQuery } from "../rawdb.js";
+import { onInvalidation, publishInvalidation } from "./distributedCache.js";
 
 interface SodRuleRow {
   rule_key: string;
@@ -81,9 +82,22 @@ async function loadActiveRules(companyId: number): Promise<SodRuleRow[]> {
 }
 
 export function invalidateSodCache(companyId?: number): void {
-  if (companyId) sodCache.delete(companyId);
-  else sodCache.clear();
+  if (companyId) {
+    sodCache.delete(companyId);
+    // Notify other replicas to drop their copies too.
+    void publishInvalidation(companyId, "sod");
+  } else {
+    sodCache.clear();
+  }
 }
+
+// Subscribe once: when another replica publishes an SoD invalidation,
+// drop our local entry for that company.
+onInvalidation((event) => {
+  if (event.kind === "sod" || event.kind === "all" || !event.kind) {
+    sodCache.delete(event.companyId);
+  }
+});
 
 /**
  * Checks whether the action the user is about to take collides with

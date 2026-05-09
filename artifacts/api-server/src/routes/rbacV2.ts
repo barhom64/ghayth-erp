@@ -859,4 +859,170 @@ async function recordHistory(roleId: number | null, companyId: number, userId: n
   ).catch(() => undefined);
 }
 
+// ─── JIT (Just-in-Time) elevation ───────────────────────────────────────────
+//
+// An employee submits a request for a temporary permission they don't
+// normally have. A manager reviews. Approval inserts a time-bound row
+// into rbac_user_grants so the existing engine picks it up immediately,
+// and the existing expired-grants cron (PR #180) cleans up after expiry.
+
+const jitRequestSchema = z.object({
+  featureKey: z.string().min(1),
+  action: z.string().min(1),
+  scope: z.enum(["self", "team", "department", "department_tree", "branch", "branches", "company", "all"]).default("self"),
+  justification: z.string().min(10, "السبب مطلوب (10 أحرف على الأقل)").max(500),
+  requestedMinutes: z.number().int().min(5).max(1440).default(60),
+}).strict();
+
+const jitDecisionSchema = z.object({
+  reason: z.string().max(500).optional(),
+}).strict();
+
+// Anyone authenticated can submit a JIT request for themselves.
+router.post("/jit/request", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = jitRequestSchema.parse(req.body);
+    if (!FEATURE_INDEX.has(body.featureKey)) throw new ValidationError(`الميزة "${body.featureKey}" غير معروفة`);
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO rbac_jit_requests
+         ("userId", "companyId", feature_key, action, scope, justification, requested_minutes, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+       RETURNING id`,
+      [scope.userId, scope.companyId, body.featureKey, body.action, body.scope, body.justification, body.requestedMinutes]
+    );
+    res.status(201).json({ id: insertId, status: "pending" });
+  } catch (err) {
+    handleRouteError(err, res, "create JIT request");
+  }
+});
+
+router.get("/jit/my", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT id, feature_key, action, scope, justification, requested_minutes, status,
+              "approvedBy", "approvedAt", "rejectedReason", granted_at, expires_at, "createdAt"
+         FROM rbac_jit_requests
+        WHERE "userId" = $1 AND "companyId" = $2
+        ORDER BY "createdAt" DESC LIMIT 100`,
+      [scope.userId, scope.companyId]
+    );
+    res.json({ data: rows });
+  } catch (err) {
+    handleRouteError(err, res, "list my JIT requests");
+  }
+});
+
+router.get("/jit/pending", authorize({ feature: "admin.roles", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT j.id, j."userId", e.name AS "userName", j.feature_key, j.action, j.scope,
+              j.justification, j.requested_minutes, j."createdAt"
+         FROM rbac_jit_requests j
+         LEFT JOIN users u ON u.id = j."userId"
+         LEFT JOIN employees e ON e.id = u."employeeId"
+        WHERE j."companyId" = $1 AND j.status = 'pending'
+        ORDER BY j."createdAt" ASC LIMIT 200`,
+      [scope.companyId]
+    );
+    res.json({ data: rows });
+  } catch (err) {
+    handleRouteError(err, res, "list pending JIT");
+  }
+});
+
+router.post("/jit/:id/approve", authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const body = jitDecisionSchema.parse(req.body || {});
+
+    await withTransaction(async (client) => {
+      const { rows: [j] } = await client.query<any>(
+        `SELECT * FROM rbac_jit_requests WHERE id = $1 AND "companyId" = $2 FOR UPDATE`,
+        [id, scope.companyId]
+      );
+      if (!j) throw new NotFoundError("طلب JIT غير موجود");
+      if (j.status !== "pending") throw new ValidationError(`لا يمكن اعتماد طلب بحالة "${j.status}"`);
+      if (j.userId === scope.userId) throw new ValidationError("لا يمكنك اعتماد طلبك");
+
+      const expiresAt = new Date(Date.now() + j.requested_minutes * 60_000);
+
+      // Insert the time-bound user grant — engine sees it instantly.
+      await client.query(
+        `INSERT INTO rbac_user_grants
+           ("userId", "companyId", feature_key, action, scope, type, expires_at, reason, "grantedBy")
+         VALUES ($1, $2, $3, $4, $5, 'grant', $6, $7, $8)`,
+        [j.userId, scope.companyId, j.feature_key, j.action, j.scope, expiresAt,
+         `JIT #${j.id}: ${j.justification}`, scope.userId]
+      );
+      await client.query(
+        `UPDATE rbac_jit_requests
+            SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(),
+                granted_at = NOW(), expires_at = $2, "updatedAt" = NOW()
+          WHERE id = $3`,
+        [scope.userId, expiresAt, id]
+      );
+      await client.query(
+        `INSERT INTO rbac_role_history (role_id, "companyId", "changedBy", change_type, after_state, reason)
+         VALUES (NULL, $1, $2, 'jit.approve', $3, $4)`,
+        [scope.companyId, scope.userId,
+         JSON.stringify({ jitId: id, userId: j.userId, feature: j.feature_key, action: j.action, expiresAt }),
+         body.reason || null]
+      );
+    });
+    await bumpCacheVersion(scope.companyId);
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "approve JIT");
+  }
+});
+
+router.post("/jit/:id/reject", authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const body = jitDecisionSchema.parse(req.body || {});
+
+    const { affectedRows } = await rawExecute(
+      `UPDATE rbac_jit_requests
+          SET status = 'rejected', "approvedBy" = $1, "approvedAt" = NOW(),
+              "rejectedReason" = $2, "updatedAt" = NOW()
+        WHERE id = $3 AND "companyId" = $4 AND status = 'pending'`,
+      [scope.userId, body.reason || "(no reason)", id, scope.companyId]
+    );
+    if (!affectedRows) throw new NotFoundError("طلب JIT غير موجود أو ليس بانتظار قرار");
+
+    await rawExecute(
+      `INSERT INTO rbac_role_history (role_id, "companyId", "changedBy", change_type, after_state, reason)
+       VALUES (NULL, $1, $2, 'jit.reject', $3, $4)`,
+      [scope.companyId, scope.userId, JSON.stringify({ jitId: id }), body.reason || null]
+    ).catch(() => undefined);
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "reject JIT");
+  }
+});
+
+// User can cancel their own pending request.
+router.post("/jit/:id/cancel", async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(
+      `UPDATE rbac_jit_requests
+          SET status = 'cancelled', "updatedAt" = NOW()
+        WHERE id = $1 AND "userId" = $2 AND "companyId" = $3 AND status = 'pending'`,
+      [id, scope.userId, scope.companyId]
+    );
+    if (!affectedRows) throw new NotFoundError("طلب JIT غير موجود أو لا يمكن إلغاؤه");
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "cancel JIT");
+  }
+});
+
 export default router;
