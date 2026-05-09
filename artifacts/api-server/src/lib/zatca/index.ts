@@ -57,3 +57,12 @@ export {
   requeue,
   queueStats,
 } from "./retry.js";
+export type { WorkerOutcome } from "./worker.js";
+export { drainOnce, zatcaRetryDrain } from "./worker.js";
+export type {
+  TestPackInvoiceKind,
+  TestPackTemplate,
+  RunOptions as TestPackRunOptions,
+  RunOutcome as TestPackRunOutcome,
+} from "./test-pack.js";
+export { buildTestPackTemplates, runComplianceTestPack } from "./test-pack.js";
