@@ -12,6 +12,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { criticalPathLength } from "../lib/algorithms.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import {
@@ -510,7 +511,7 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create project error:"); }
 });
 
-router.get("/:id", requirePermission("projects:read"), async (req, res) => {
+router.get("/:id", authorize({ feature: "projects.list", action: "view", resource: { table: "projects", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

@@ -9,6 +9,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -282,7 +283,7 @@ router.get("/contracts/renewal-alerts", requirePermission("legal:read"), async (
   } catch (err) { handleRouteError(err, res, "Renewal alerts error:"); }
 });
 
-router.get("/contracts/:id", requirePermission("legal:read"), async (req, res) => {
+router.get("/contracts/:id", authorize({ feature: "legal.contracts", action: "view", resource: { table: "legal_contracts", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -634,7 +635,9 @@ router.post("/cases", requirePermission("legal:create"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create legal case error:"); }
 });
 
-router.get("/cases/:id", requirePermission("legal:read"), async (req, res) => {
+// RBAC v2: legal cases hold confidential notes (declared sensitive in
+// catalog) — maskFields automatically applies role-level field policies.
+router.get("/cases/:id", authorize({ feature: "legal.cases", action: "view", resource: { table: "legal_cases", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

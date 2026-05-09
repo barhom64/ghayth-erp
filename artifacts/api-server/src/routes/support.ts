@@ -11,6 +11,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { slaDeadlineForPriority, haversineKm, loadBalanceAssign } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -304,7 +305,7 @@ router.post("/tickets/check-sla", requirePermission("support:read"), async (req,
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/tickets/:id", requirePermission("support:read"), async (req, res) => {
+router.get("/tickets/:id", authorize({ feature: "support.tickets", action: "view", resource: { table: "support_tickets", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
