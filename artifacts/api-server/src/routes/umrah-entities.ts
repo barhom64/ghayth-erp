@@ -282,9 +282,9 @@ router.patch("/sub-agents/:id", authorize({ feature: "umrah", action: "create" }
     params.push(scope.userId); sets.push(`"updatedBy"=$${params.length}`);
     sets.push(`"updatedAt"=NOW()`);
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE umrah_sub_agents SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE umrah_sub_agents SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("الوكيل الفرعي غير موجود");
     const [row] = await rawQuery(`SELECT * FROM umrah_sub_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!row) throw new NotFoundError("الوكيل الفرعي غير موجود");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: id, after: b }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.updated", entity: "umrah_sub_agents", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json(row);

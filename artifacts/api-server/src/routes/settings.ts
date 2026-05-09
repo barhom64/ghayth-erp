@@ -569,7 +569,8 @@ router.put("/companies/:id", authorize({ feature: "settings", action: "update" }
     if (!scope.allowedCompanies?.includes(id) && scope.companyId !== id) {
       throw new ForbiddenError("لا يمكنك تعديل شركة لا تملك صلاحية عليها");
     }
-    await rawExecute(`UPDATE companies SET name=$1, "nameEn"=$2, "vatNumber"=$3, "crNumber"=$4 WHERE id=$5 RETURNING id`, [name, nameEn || null, taxNumber || null, crNumber || null, id]);
+    const { affectedRows } = await rawExecute(`UPDATE companies SET name=$1, "nameEn"=$2, "vatNumber"=$3, "crNumber"=$4 WHERE id=$5 RETURNING id`, [name, nameEn || null, taxNumber || null, crNumber || null, id]);
+    if (!affectedRows) throw new NotFoundError("الشركة غير موجودة");
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_company",
       entity: "companies", entityId: id,

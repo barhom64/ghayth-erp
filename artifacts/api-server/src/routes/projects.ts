@@ -866,7 +866,8 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects", a
     const tasks = await rawQuery<any>(`SELECT * FROM project_tasks WHERE "projectId"=$1 AND "deletedAt" IS NULL LIMIT 500`, [projectId]);
     const doneTasks = tasks.filter((t: any) => t.status === 'done').length;
     const progressPct = tasks.length > 0 ? Math.round((doneTasks / tasks.length) * 100) : 0;
-    await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [progressPct, projectId, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [progressPct, projectId, scope.companyId]);
+    if (!affectedRows) logger.warn({ projectId, progressPct }, "Project progress update matched no rows (possible race condition)");
 
     res.json({ message: 'تم إكمال المرحلة', phase, milestoneInvoiceCreated, progressPct });
   } catch (err) { handleRouteError(err, res, "Complete phase error:"); }

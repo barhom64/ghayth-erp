@@ -257,7 +257,8 @@ router.patch("/users/:id", authorize({ feature: "admin", action: "update" }), as
     if (employeeId !== undefined) { params.push(employeeId || null); sets.push(`"employeeId"=$${params.length}`); }
     if (!sets.length) { throw new ValidationError("لا توجد بيانات للتحديث"); }
     params.push(id);
-    await rawExecute(`UPDATE users SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    const { affectedRows } = await rawExecute(`UPDATE users SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    if (!affectedRows) throw new NotFoundError("المستخدم غير موجود");
     // Revoke all refresh tokens when user is deactivated
     if (isActive === false) {
       await rawExecute(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`, [id]);
@@ -1279,7 +1280,8 @@ router.delete("/governance/event-dlq/:id", authorize({ feature: "admin", action:
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    await rawExecute(`UPDATE event_dlq SET "resolvedAt"=NOW() WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE event_dlq SET "resolvedAt"=NOW() WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     res.json({ resolved: true });
   } catch (err) { handleRouteError(err, res, "DLQ resolve error:"); }
 });
