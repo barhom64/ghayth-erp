@@ -31,6 +31,7 @@ import { getRedisRateLimitStatus, type RedisRateLimitStatus } from "./rateLimitS
 import { zatcaRetryDrain } from "./zatca/worker.js";
 import { dailyFxRateFetchCron } from "./fx/jobs.js";
 import { fxStalenessCheckCron } from "./fx/staleness-alert.js";
+import { lotExpiryScanCron } from "./inventory/lots.js";
 
 async function getSystemTimezone(): Promise<string> {
   try {
@@ -3375,6 +3376,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "zatca_retry_drain", description: "محاولة إعادة إرسال فواتير ZATCA المعلقة", schedule: "* * * * *", handler: zatcaRetryDrain },
   { name: "daily_fx_rate_fetch", description: "تحديث أسعار الصرف اليومية من المصادر الرسمية", schedule: "0 5 * * *", handler: dailyFxRateFetchCron },
   { name: "fx_staleness_check", description: "تنبيه أسعار الصرف القديمة", schedule: "0 6 * * *", handler: fxStalenessCheckCron },
+  { name: "lot_expiry_scan", description: "تحويل الدفعات المنتهية تلقائياً إلى expired", schedule: "0 4 * * *", handler: lotExpiryScanCron },
   { name: "sms_queue_worker", description: "معالجة قائمة انتظار الرسائل النصية", schedule: "* * * * *", handler: processSmsQueue },
   { name: "whatsapp_queue_worker", description: "معالجة قائمة انتظار واتساب", schedule: "* * * * *", handler: processWhatsAppQueue },
   { name: "weekly_logs_archiving", description: "أرشفة السجلات القديمة أسبوعياً", schedule: "0 3 * * 0", handler: weeklyLogsArchiving },
