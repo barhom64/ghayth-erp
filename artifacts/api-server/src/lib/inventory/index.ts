@@ -15,3 +15,18 @@ export {
   computeWeightedAverage,
   pickWithMethod,
 } from "./valuation/index.js";
+export {
+  assertLotTransition,
+  nextStatusAfterQc,
+  shouldExpire,
+  IllegalLotTransitionError,
+} from "./lots-fsm.js";
+export type { ReceiveLotInput, ExpireScanOutcome } from "./lots.js";
+export {
+  receiveLot,
+  qcApprove,
+  qcReject,
+  recallLot,
+  expireDueLots,
+  lotExpiryScanCron,
+} from "./lots.js";
