@@ -138,7 +138,8 @@ function ProtectedRoutes() {
 }
 
 function Router() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) return <PageLoader />;
   return (
     <Switch>
       <Route path="/login" component={Login} />
