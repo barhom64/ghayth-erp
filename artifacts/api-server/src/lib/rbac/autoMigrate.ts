@@ -228,12 +228,30 @@ async function syncCompany(companyId: number): Promise<CompanySync> {
 
       for (const [featureKey, actions] of grantsByFeature) {
         const actionsArray = Array.from(actions);
+        // Clamp scope to feature's availableScopes — without this,
+        // auto-migrate would happily assign scope="company" to a feature
+        // whose catalog only allows ["self"] (e.g. hr.attendance.checkin),
+        // producing a bogus grant the engine would still try to evaluate.
+        const featureDef = FEATURE_CATALOG.find((f) => f.key === featureKey);
+        let scope: Scope = defaultScope;
+        if (featureDef && !featureDef.availableScopes.includes(scope)) {
+          // Pick the most permissive available scope ≤ defaultScope.
+          const SCOPE_RANK: Record<Scope, number> = {
+            self: 1, team: 2, department: 3, department_tree: 4,
+            branch: 5, branches: 6, company: 7, multi_company: 8, all: 9,
+          };
+          const targetRank = SCOPE_RANK[defaultScope] || 0;
+          const fallback = (featureDef.availableScopes as Scope[])
+            .filter((s) => (SCOPE_RANK[s] || 0) <= targetRank)
+            .sort((a, b) => (SCOPE_RANK[b] || 0) - (SCOPE_RANK[a] || 0))[0];
+          scope = fallback || (featureDef.availableScopes[0] as Scope);
+        }
         await client.query(
           `INSERT INTO rbac_role_grants (role_id, feature_key, actions, scope)
            VALUES ($1, $2, $3, $4)
            ON CONFLICT (role_id, feature_key)
            DO UPDATE SET actions = EXCLUDED.actions, scope = EXCLUDED.scope, "updatedAt" = NOW()`,
-          [roleId, featureKey, actionsArray, defaultScope]
+          [roleId, featureKey, actionsArray, scope]
         );
         out.grantsCreated++;
       }
