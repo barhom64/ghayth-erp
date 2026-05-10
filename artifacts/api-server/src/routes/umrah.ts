@@ -711,7 +711,7 @@ router.post("/pilgrims", authorize({ feature: "umrah", action: "create" }), asyn
       ]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_pilgrims", entityId: rows[0]?.id, after: { fullName: String(b.fullName).trim() } }).catch((e) => logger.error(e, "umrah background task failed"));
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.pilgrim.created", entity: "umrah_pilgrims", entityId: rows[0]?.id, after: { fullName: String(b.fullName).trim() } }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.pilgrim.created", entity: "umrah_pilgrims", entityId: rows[0]?.id, pilgrimId: Number(rows[0]?.id), packageId: b.packageId ? Number(b.packageId) : 0, passportNo: passportPlain, after: { fullName: String(b.fullName).trim() } }).catch((e) => logger.error(e, "umrah background task failed"));
     res.status(201).json(decryptPilgrimRow(rows[0]));
   } catch (err) { handleRouteError(err, res, "Create pilgrim error"); }
 });
