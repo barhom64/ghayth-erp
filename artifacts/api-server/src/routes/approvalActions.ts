@@ -3,6 +3,42 @@ import { APPROVAL_AUDIT_ROLES } from "../lib/rbacCatalog.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError, ForbiddenError, parseId } from "../lib/errorHandler.js";
 
+// Local row shapes — neither table has a Drizzle definition yet, so the
+// types live next to the route file. Move to dbTypes.ts when ≥3 routes
+// reference them.
+
+interface AuditLogRow {
+  id: number;
+  companyId: number;
+  branchId?: number | null;
+  userId: number;
+  userEmail?: string | null;
+  action: string;
+  entity: string;
+  entityId?: number | null;
+  before?: unknown;
+  after?: unknown;
+  changes?: unknown;
+  reason?: string | null;
+  scope?: unknown;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  createdAt: string;
+}
+
+interface ApprovalActionRow {
+  id: number;
+  companyId: number;
+  entityType: string;
+  entityId: number;
+  actionBy: number | null;
+  actionByEmail?: string | null;
+  action: string;
+  decision?: string | null;
+  notes?: string | null;
+  createdAt: string;
+}
+
 const router = Router();
 
 router.get("/overrides/report", async (req, res) => {
@@ -14,7 +50,7 @@ router.get("/overrides/report", async (req, res) => {
     }
     const { from, to } = req.query as { from?: string; to?: string };
     let dateFilter = "";
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (from) {
       params.push(from);
       dateFilter += ` AND al."createdAt" >= $${params.length}`;
@@ -23,7 +59,7 @@ router.get("/overrides/report", async (req, res) => {
       params.push(to);
       dateFilter += ` AND al."createdAt" <= $${params.length}`;
     }
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<AuditLogRow>(
       `SELECT al.*, u.email as "userEmail"
        FROM audit_logs al
        LEFT JOIN users u ON u.id = al."userId"
@@ -43,7 +79,7 @@ router.get("/:entityType/:entityId", async (req, res) => {
     const scope = req.scope!;
     const { entityType } = req.params;
     const entityId = parseId(req.params.entityId, "entityId");
-    const rows = await rawQuery(
+    const rows = await rawQuery<ApprovalActionRow>(
       `SELECT aa.*, u.email as "actionByEmail"
        FROM approval_actions aa
        LEFT JOIN users u ON aa."actionBy" = u.id

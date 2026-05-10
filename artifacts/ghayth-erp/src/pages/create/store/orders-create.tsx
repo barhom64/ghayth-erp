@@ -128,10 +128,8 @@ export default function OrdersCreate() {
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="pending">قيد الانتظار</SelectItem>
-              <SelectItem value="confirmed">مؤكد</SelectItem>
               <SelectItem value="processing">قيد التجهيز</SelectItem>
-              <SelectItem value="shipped">تم الشحن</SelectItem>
-              <SelectItem value="delivered">تم التسليم</SelectItem>
+              <SelectItem value="completed">مكتمل</SelectItem>
               <SelectItem value="cancelled">ملغي</SelectItem>
             </SelectContent>
           </Select>

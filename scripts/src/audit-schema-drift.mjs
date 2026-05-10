@@ -58,7 +58,12 @@ import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
-const SCHEMA_FILE = join(REPO_ROOT, "db/schema.sql");
+// db/schema.sql is a tiny wrapper that `\ir`s schema_pre.sql + schema_post.sql
+// (split because the proxied GitHub upload path tops out around 800 KB).
+// For static-text analysis we read both halves and concatenate them so the
+// regex parser sees the full DDL surface.
+const SCHEMA_PRE = join(REPO_ROOT, "db/schema_pre.sql");
+const SCHEMA_POST = join(REPO_ROOT, "db/schema_post.sql");
 const API_SRC = join(REPO_ROOT, "artifacts/api-server/src");
 
 // Postgres built-ins, aliases, and identifiers that appear in raw SQL
@@ -94,7 +99,11 @@ async function walk(dir, acc = []) {
 // identifiers. The dump wraps camelCase names in double quotes, which
 // is exactly the form we're checking against.
 async function loadSchemaIdentifiers() {
-  const text = await readFile(SCHEMA_FILE, "utf8");
+  const [pre, post] = await Promise.all([
+    readFile(SCHEMA_PRE, "utf8"),
+    readFile(SCHEMA_POST, "utf8"),
+  ]);
+  const text = pre + "\n" + post;
   const columns = new Set();
   const tables = new Set();
 

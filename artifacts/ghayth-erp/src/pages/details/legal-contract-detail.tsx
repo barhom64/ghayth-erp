@@ -149,27 +149,27 @@ export default function LegalContractDetail() {
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            {contract?.contractNumber && (
+            {contract?.ref && (
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">رقم العقد</p>
-                <span className="text-gray-800 font-mono text-xs">{contract.contractNumber}</span>
+                <span className="text-gray-800 font-mono text-xs">{contract.ref}</span>
               </div>
             )}
-            {contract?.type && (
+            {contract?.contractType && (
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">نوع العقد</p>
                 <Badge variant="outline">
-                  {CONTRACT_TYPE_LABELS[contract.type] || contract.type}
+                  {CONTRACT_TYPE_LABELS[contract.contractType] || contract.contractType}
                 </Badge>
               </div>
             )}
-            {contract?.partyA && (
+            {contract?.partyName && (
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">الطرف الأول</p>
                 <span className="text-gray-800">{contract.partyA}</span>
               </div>
             )}
-            {contract?.partyB && (
+            {contract?.partyContact && (
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">الطرف الثاني</p>
                 <span className="text-gray-800">{contract.partyB}</span>
@@ -213,7 +213,7 @@ export default function LegalContractDetail() {
 
       <div className="space-y-3">
         {/* Approval actions */}
-        {id && contract && ["pending", "under_review", "returned"].includes(contract.status) && (
+        {id && contract && ["draft", "active"].includes(contract.status) && (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>

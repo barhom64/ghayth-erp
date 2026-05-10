@@ -151,24 +151,16 @@ export default function LegalSessionDetail() {
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div className="grid grid-cols-2 gap-3">
-            {session?.caseReference && (
+            {session?.caseNumber && (
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">مرجع القضية</p>
-                <span className="text-gray-800 font-mono text-xs">{session.caseReference}</span>
+                <span className="text-gray-800 font-mono text-xs">{session.caseNumber}</span>
               </div>
             )}
-            {session?.sessionType && (
+            {session?.caseTitle && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نوع الجلسة</p>
-                <Badge variant="outline">
-                  {SESSION_TYPE_LABELS[session.sessionType] || session.sessionType}
-                </Badge>
-              </div>
-            )}
-            {session?.courtName && (
-              <div>
-                <p className="text-xs text-gray-500 mb-0.5">المحكمة</p>
-                <span className="text-gray-800">{session.courtName}</span>
+                <p className="text-xs text-gray-500 mb-0.5">عنوان القضية</p>
+                <span className="text-gray-800">{session.caseTitle}</span>
               </div>
             )}
             {session?.judge && (
