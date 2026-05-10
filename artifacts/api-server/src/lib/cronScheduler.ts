@@ -32,6 +32,8 @@ import { zatcaRetryDrain } from "./zatca/worker.js";
 import { dailyFxRateFetchCron } from "./fx/jobs.js";
 import { fxStalenessCheckCron } from "./fx/staleness-alert.js";
 import { lotExpiryScanCron } from "./inventory/lots.js";
+import { iqamaDailyAlertCron } from "./saudi-compliance/iqama-cron.js";
+import { saudizationMonthlySnapshotCron } from "./saudi-compliance/saudization-snapshot.js";
 
 async function getSystemTimezone(): Promise<string> {
   try {
@@ -3377,6 +3379,8 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "daily_fx_rate_fetch", description: "تحديث أسعار الصرف اليومية من المصادر الرسمية", schedule: "0 5 * * *", handler: dailyFxRateFetchCron },
   { name: "fx_staleness_check", description: "تنبيه أسعار الصرف القديمة", schedule: "0 6 * * *", handler: fxStalenessCheckCron },
   { name: "lot_expiry_scan", description: "تحويل الدفعات المنتهية تلقائياً إلى expired", schedule: "0 4 * * *", handler: lotExpiryScanCron },
+  { name: "iqama_daily_alert", description: "تنبيه انتهاء الإقامات (90/60/30/14/7/1 يوم)", schedule: "0 7 * * *", handler: iqamaDailyAlertCron },
+  { name: "saudization_monthly_snapshot", description: "لقطة شهرية للسعودة (نطاقات)", schedule: "0 2 1 * *", handler: saudizationMonthlySnapshotCron },
   { name: "sms_queue_worker", description: "معالجة قائمة انتظار الرسائل النصية", schedule: "* * * * *", handler: processSmsQueue },
   { name: "whatsapp_queue_worker", description: "معالجة قائمة انتظار واتساب", schedule: "* * * * *", handler: processWhatsAppQueue },
   { name: "weekly_logs_archiving", description: "أرشفة السجلات القديمة أسبوعياً", schedule: "0 3 * * 0", handler: weeklyLogsArchiving },
