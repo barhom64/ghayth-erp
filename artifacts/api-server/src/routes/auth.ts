@@ -251,7 +251,7 @@ router.post("/login", loginLimiter, async (req, res) => {
     setAccessTokenCookie(res, token);
     setRefreshTokenCookie(res, refreshToken);
 
-    emitEvent({ companyId: primary.companyId, branchId: primary.branchId, userId: user.id, action: "auth.login.success", entity: "users", entityId: user.id, details: JSON.stringify({ email, assignmentId: primary.id }) }).catch((e) => logger.error(e, "auth background task failed"));
+    emitEvent({ companyId: primary.companyId, branchId: primary.branchId, userId: user.id, action: "auth.login.success", entity: "users", entityId: user.id, ip: ipAddress || "unknown", details: JSON.stringify({ email, assignmentId: primary.id }) }).catch((e) => logger.error(e, "auth background task failed"));
     res.json({ assignments, userRoles });
   } catch (err) {
     handleRouteError(err, res, "Login error:");
