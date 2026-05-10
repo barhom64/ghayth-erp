@@ -357,7 +357,6 @@ router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (item.status !== "pending") throw new ConflictError("لا يمكن اعتماد طلب بحالة: " + item.status);
 
-    // منع الموظف من اعتماد طلبه الخاص
     if (item.assignmentId === scope.activeAssignmentId) {
       throw new ForbiddenError("لا يمكنك اعتماد طلبك الخاص");
     }
@@ -379,21 +378,19 @@ router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action
         type: "overtime_rejected", title: "تم رفض طلب الوقت الإضافي",
         body: `تم رفض الطلب ${item.requestNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
         priority: "normal", refType: "hr_overtime_request", refId: item.id,
-      }).catch((e) => logger.error(e, "hr-overtime background task failed"));
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: "hr.overtime.rejected",
-        entity: "hr_overtime_requests",
-        entityId: item.id,
-        details: JSON.stringify({ requestNumber: item.requestNumber, reason: rejectionReason }),
-      }).catch((e) => logger.error(e, "hr-overtime background task failed"));
+      }).catch(console.error);
+      try {
+        await rawExecute(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_overtime_request',$1,'rejected',$2,$3,$4)`,
+          [item.id, rejectionReason || null, scope.userId, scope.companyId]
+        );
+      } catch (e) { console.error("Failed to log approval action:", e); }
+      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "hr.overtime.rejected", entity: "hr_overtime_requests", entityId: item.id, details: JSON.stringify({ requestNumber: item.requestNumber, reason: rejectionReason }) }).catch((e) => logger.error(e, "hr-overtime background task failed"));
       res.json({ success: true, message: "تم رفض الطلب" });
       return;
     }
 
-    // ── معالجة خطوة الموافقة في السلسلة ──
+    // ── معالجة خطوة الموافقة ──
     const chainResult = await processApprovalStep({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -426,6 +423,13 @@ router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action
       body: `تمت الموافقة على ${item.hours} ساعات إضافية — ${item.requestNumber}`,
       priority: "normal", refType: "hr_overtime_request", refId: item.id,
     }).catch((e) => logger.error(e, "hr-overtime background task failed"));
+
+    try {
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_overtime_request',$1,'approved',$2,$3,$4)`,
+        [item.id, notes || null, scope.userId, scope.companyId]
+      );
+    } catch (e) { console.error("Failed to log approval action:", e); }
 
     await createAuditLog({
       companyId: scope.companyId, userId: scope.userId,

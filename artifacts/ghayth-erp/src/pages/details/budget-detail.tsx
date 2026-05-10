@@ -12,8 +12,7 @@ import { EntityPrintButton, type PrintSection } from "@/components/shared/entity
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { ApprovalTimeline } from "@/components/shared/approval-timeline";
+
 import { Edit, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -287,18 +286,6 @@ export default function BudgetDetail() {
         )}
       </div>
 
-      {/* Documents */}
-      {id && (
-        <EntityDocuments entityType="budget" entityId={id} />
-      )}
-
-      {/* Approval Timeline */}
-      {id && (
-        <ApprovalTimeline entityType="budget" entityId={id} />
-      )}
-
-      {id && <EntityComments entityType="budget" entityId={id} />}
-      {id && <EntityTags entityType="budget" entityId={id} />}
     </div>
   );
 

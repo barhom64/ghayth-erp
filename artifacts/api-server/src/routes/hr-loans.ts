@@ -364,7 +364,6 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
     if (!loan) throw new NotFoundError("السلفة غير موجودة");
     if (loan.status !== "pending") throw new ConflictError("لا يمكن اعتماد سلفة بحالة: " + loan.status);
 
-    // منع الموظف من اعتماد سلفته الخاصة
     if (loan.assignmentId === scope.activeAssignmentId) {
       throw new ForbiddenError("لا يمكنك اعتماد سلفتك الخاصة");
     }
@@ -386,29 +385,23 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
         type: "loan_rejected", title: "تم رفض طلب السلفة",
         body: `تم رفض السلفة ${loan.loanNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
         priority: "normal", refType: "hr_employee_loan", refId: loan.id,
-      }).catch((e) => logger.error(e, "hr-loans background task failed"));
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: "hr.loan.rejected",
-        entity: "hr_employee_loans",
-        entityId: loan.id,
-        details: JSON.stringify({ loanNumber: loan.loanNumber, reason: rejectionReason }),
-      }).catch((e) => logger.error(e, "hr-loans background task failed"));
+      }).catch(console.error);
+      try {
+        await rawExecute(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_employee_loan',$1,'rejected',$2,$3,$4)`,
+          [loan.id, rejectionReason || null, scope.userId, scope.companyId]
+        );
+      } catch (e) { console.error("Failed to log approval action:", e); }
+      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "hr.loan.rejected", entity: "hr_employee_loans", entityId: loan.id, details: JSON.stringify({ loanNumber: loan.loanNumber, reason: rejectionReason }) }).catch((e) => logger.error(e, "hr-loans background task failed"));
       res.json({ success: true, message: "تم رفض السلفة" });
       return;
     }
 
-    // ── معالجة خطوة الموافقة في سلسلة الموافقات ──
+    // ── معالجة خطوة الموافقة ──
     const chainResult = await processApprovalStep({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      refType: "hr_employee_loan",
-      refId: loan.id,
-      approved: true,
-      decidedBy: scope.activeAssignmentId,
-      requesterId: loan.assignmentId,
+      companyId: scope.companyId, branchId: scope.branchId,
+      refType: "hr_employee_loan", refId: loan.id,
+      approved: true, decidedBy: scope.activeAssignmentId, requesterId: loan.assignmentId,
     }).catch((e) => { logger.error(e, "hr loans approval failed"); return { status: "approved" as const, message: "" }; });
 
     // إذا بقيت خطوات موافقة إضافية
@@ -460,6 +453,13 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
       body: `تمت الموافقة على السلفة ${loan.loanNumber} بمبلغ ${Number(loan.amount).toLocaleString()} ريال — سيبدأ الخصم من فترة ${loan.startDeductionPeriod}`,
       priority: "high", refType: "hr_employee_loan", refId: loan.id,
     }).catch((e) => logger.error(e, "hr-loans background task failed"));
+
+    try {
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_employee_loan',$1,'approved',$2,$3,$4)`,
+        [loan.id, notes || null, scope.userId, scope.companyId]
+      );
+    } catch (e) { console.error("Failed to log approval action:", e); }
 
     await createAuditLog({
       companyId: scope.companyId, userId: scope.userId,

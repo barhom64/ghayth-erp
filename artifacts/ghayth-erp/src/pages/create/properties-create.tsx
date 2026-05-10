@@ -11,15 +11,13 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { getCurrencySymbol } from "@/lib/formatters";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function PropertiesCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [isDirty, setIsDirty] = useState(false);
-  useUnsavedChanges(isDirty);
   const addUnit = useApiMutation("/properties/units", "POST", [["property-units"], ["properties-stats"]]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { data: buildingsResp, isLoading: loadingB, isError: errorB } = useApiQuery<any>(["property-buildings"], "/properties/buildings");
@@ -30,7 +28,7 @@ export default function PropertiesCreate() {
 
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
-  const [form, setForm] = useState({
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("properties_create", {
     unitNumber: "",
     buildingId: "",
     buildingName: "",
@@ -64,7 +62,6 @@ export default function PropertiesCreate() {
   ];
 
   const toggleAmenity = (amenity: string) => {
-    setIsDirty(true);
     setForm(prev => ({
       ...prev,
       amenities: prev.amenities.includes(amenity)
@@ -74,7 +71,6 @@ export default function PropertiesCreate() {
   };
 
   const set = (field: string, value: string) => {
-    setIsDirty(true);
     setForm(prev => {
       const normalizedValue = (field === "buildingId" || field === "direction" || field === "finishing") && value === "none" ? "" : value;
       const update: any = { [field]: normalizedValue };
@@ -123,7 +119,7 @@ export default function PropertiesCreate() {
       ownerId: form.ownerId ? Number(form.ownerId) : undefined,
       ...(attachments.length > 0 ? { attachments } : {}),
     }, {
-      onSuccess: () => { toast({ title: "تمت إضافة الوحدة بنجاح" }); setIsDirty(false); setLocation("/properties"); },
+      onSuccess: () => { toast({ title: "تمت إضافة الوحدة بنجاح" }); clearDraft(); setLocation("/properties"); },
       onError: (err: any) => {
         setApiError(err);
         toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة الوحدة", description: err?.fix ?? err?.message });
@@ -133,6 +129,12 @@ export default function PropertiesCreate() {
 
   return (
     <CreatePageLayout title="إضافة وحدة عقارية" backPath="/properties">
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button type="button" variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <TextField label="رقم الوحدة" required value={form.unitNumber} onChange={(v) => set("unitNumber", v)} placeholder="مثل: A-101" error={fieldErrors.unitNumber} />
@@ -245,7 +247,7 @@ export default function PropertiesCreate() {
             </Select>
           </FormFieldWrapper>
           <div className="flex items-end gap-2 pb-1">
-            <Checkbox id="hasKitchen" checked={form.hasKitchen} onCheckedChange={(v) => { setIsDirty(true); setForm(prev => ({ ...prev, hasKitchen: v === true })); }} />
+            <Checkbox id="hasKitchen" checked={form.hasKitchen} onCheckedChange={(v) => { setForm(prev => ({ ...prev, hasKitchen: v === true })); }} />
             <Label htmlFor="hasKitchen">مطبخ مجهز</Label>
           </div>
           <FormFieldWrapper label="المالك">

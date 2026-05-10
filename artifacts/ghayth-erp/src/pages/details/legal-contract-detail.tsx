@@ -6,9 +6,8 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+
 import { ApprovalActions } from "@/components/approval-actions";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -97,10 +96,10 @@ export default function LegalContractDetail() {
       {
         kind: "info-grid",
         items: [
-          { label: "رقم العقد", value: contract.ref || `LC-${id}` },
-          { label: "نوع العقد", value: CONTRACT_TYPE_LABELS[contract.contractType] || contract.contractType || "-" },
-          { label: "الطرف الأول", value: contract.partyName || "-" },
-          { label: "الطرف الثاني", value: contract.partyContact || "-" },
+          { label: "رقم العقد", value: contract.contractNumber || `LC-${id}` },
+          { label: "نوع العقد", value: CONTRACT_TYPE_LABELS[contract.type] || contract.type || "-" },
+          { label: "الطرف الأول", value: contract.partyA || "-" },
+          { label: "الطرف الثاني", value: contract.partyB || "-" },
           { label: "تاريخ البداية", value: formatDateAr(contract.startDate) },
           { label: "تاريخ النهاية", value: formatDateAr(contract.endDate) },
           { label: "القيمة", value: formatCurrency(contract.value || 0) },
@@ -118,8 +117,8 @@ export default function LegalContractDetail() {
     sections.push({
       kind: "signature",
       parties: [
-        { label: "الطرف الأول", name: contract.partyName || "" },
-        { label: "الطرف الثاني", name: contract.partyContact || "" },
+        { label: "الطرف الأول", name: contract.partyA || "" },
+        { label: "الطرف الثاني", name: contract.partyB || "" },
       ],
     });
     return sections;
@@ -167,13 +166,13 @@ export default function LegalContractDetail() {
             {contract?.partyName && (
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">الطرف الأول</p>
-                <span className="text-gray-800">{contract.partyName}</span>
+                <span className="text-gray-800">{contract.partyA}</span>
               </div>
             )}
             {contract?.partyContact && (
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">الطرف الثاني</p>
-                <span className="text-gray-800">{contract.partyContact}</span>
+                <span className="text-gray-800">{contract.partyB}</span>
               </div>
             )}
             {contract?.startDate && (
@@ -224,17 +223,17 @@ export default function LegalContractDetail() {
                 entityType="legal-contract"
                 entityId={id}
                 currentStatus={contract.status}
-                approveEndpoint={`/legal/contracts/${id}`}
-                rejectEndpoint={`/legal/contracts/${id}`}
-                returnEndpoint={`/legal/contracts/${id}`}
+                approveEndpoint={`/legal/contracts/${id}/approve`}
+                rejectEndpoint={`/legal/contracts/${id}/approve`}
+                returnEndpoint={`/legal/contracts/${id}/approve`}
                 approveMethod="PATCH"
                 rejectMethod="PATCH"
                 returnMethod="PATCH"
-                approveBody={(notes) => ({ status: "active", notes: notes || undefined })}
-                rejectBody={(notes) => ({ status: "draft", notes })}
-                returnBody={(notes) => ({ status: "draft", notes })}
+                approveBody={(notes: string) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes: string) => ({ approved: false, notes })}
+                returnBody={(notes: string) => ({ approved: "returned", notes })}
                 pendingStatuses={["pending", "under_review", "returned"]}
-                invalidateKeys={[["legal-contract"]]}
+                invalidateKeys={[["legal-cases"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث العقد" });
@@ -266,18 +265,6 @@ export default function LegalContractDetail() {
         </Card>
       </div>
 
-      {/* Documents */}
-      {id && (
-        <EntityDocuments entityType="legal-contract" entityId={id} />
-      )}
-
-      {/* Approval Timeline */}
-      {id && (
-        <ApprovalTimeline entityType="legal-contract" entityId={id} />
-      )}
-
-      {id && <EntityComments entityType="legal-contract" entityId={id} />}
-      {id && <EntityTags entityType="legal-contract" entityId={id} />}
     </div>
   );
 

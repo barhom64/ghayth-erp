@@ -8,14 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import {
-  Building, FileText, Banknote, Wrench, Users, Clock, DollarSign,
+  Building, FileText, Banknote, Wrench, Users, DollarSign,
   AlertTriangle, XCircle, Info, Pencil,
   Compass, Paintbrush, Star, Image as ImageIcon, MapPin, BedDouble, Bath, Maximize2
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { EntityTimeline } from "@/components/shared/entity-timeline";
+
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
@@ -33,8 +32,6 @@ const TABS = [
   { key: "maintenance", label: "الصيانة", icon: Wrench },
   { key: "finance", label: "الملف المالي", icon: BookOpen },
   { key: "tasks", label: "المهام", icon: CheckSquare },
-  { key: "documents", label: "المستندات", icon: FileText },
-  { key: "timeline", label: "السجل الزمني", icon: Clock },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -642,25 +639,6 @@ export default function UnitDetail() {
         <LinkedTasks entityType="property-unit" entityId={id} includeMaintenanceTasks />
       )}
 
-      {activeTab === "documents" && id && (
-        <div className="space-y-4">
-          <EntityObligations entityType="property-unit" entityId={id} hideWhenEmpty />
-          <EntityDocuments entityType="property-unit" entityId={id} />
-        </div>
-      )}
-
-      {activeTab === "timeline" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Clock className="h-5 w-5 text-muted-foreground" /> السجل الزمني
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {id && <EntityTimeline entityType="property-unit" entityId={id} maxItems={30} />}
-          </CardContent>
-        </Card>
-      )}
 
       {id && <EntityComments entityType="unit" entityId={id} />}
       {id && <EntityTags entityType="unit" entityId={id} />}
